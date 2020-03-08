@@ -73,7 +73,6 @@ void change_camera_zoom(float delta,camera * c);
 void initialise_camera(int screen_w,int screen_h,float fov,float near,float focal_distance,camera * c);
 
 void update_camera(int screen_w,int screen_h,camera * c);
-void update_camera(int screen_w,int screen_h,camera * c);
 
 static inline GLfloat * get_view_matrix_buffer(camera * c)
 {
