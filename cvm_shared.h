@@ -34,15 +34,12 @@ along with cvm_shared.  If not, see <https://www.gnu.org/licenses/>.
 #include <limits.h>
 #include <float.h>
 
-
 #include <SDL2/SDL.h>
 #include <SDL2/SDL_image.h>
 #include <SDL2/SDL_ttf.h>
 
-
 #include <dirent.h>
 #include <sys/stat.h>
-
 
 #include <GL/gl.h>
 #include <GL/glext.h>
