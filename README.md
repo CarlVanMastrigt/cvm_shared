@@ -1,5 +1,3 @@
-# cvm_shared
-
 Shared library of useful functions used across multiple projects.
 
 Features: (not yet an exhaustive list)
