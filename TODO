@@ -1,0 +1,3 @@
+-Actually use cvm_lists data structures everywhere applicable, especially binary heap.
+-rename matrix*f to mat*f
+-Provide to convert float structures matrix4f,vec3f &c to GLfloat arrays
