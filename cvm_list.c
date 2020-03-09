@@ -19,219 +19,212 @@ along with cvm_shared.  If not, see <https://www.gnu.org/licenses/>.
 
 #include "cvm_shared.h"
 
-//vector_converter_data vcd;
-
-static cvm_coherent_large_data_mp_mc_list_element * cvm_coherent_large_data_mp_mc_list_element_ini( cvm_coherent_large_data_mp_mc_list * list )
-{
-    uint32_t i;
-    cvm_coherent_large_data_mp_mc_list_element * elem=malloc(sizeof(cvm_coherent_large_data_mp_mc_list_element));
-    elem->data=malloc(list->block_size*list->type_size);
-
-    for(i=0;i<list->block_size;i++)atomic_init(elem->data+i*list->type_size,CVM_ZERO_8);
-
-    elem->next_element=NULL;
-    return elem;
-}
-
-void cvm_coherent_large_data_mp_mc_list_ini( cvm_coherent_large_data_mp_mc_list * list , uint32_t block_size , size_t type_size )
-{
-    block_size--;
-    block_size |= block_size >> 1;
-    block_size |= block_size >> 2;
-    block_size |= block_size >> 4;
-    block_size |= block_size >> 8;
-    block_size |= block_size >> 16;
-    block_size++;
-
-    list->type_size=type_size+sizeof(_Atomic uint8_t);
-    list->block_size=block_size;
-    list->active_chunks=1;
-    list->total_chunks=1;
-    list->min_total_chunks=4;
-    list->del_denominator=3;
-    list->del_numerator=1;
-
-    cvm_coherent_large_data_mp_mc_list_element * elem1=cvm_coherent_large_data_mp_mc_list_element_ini(list);
-    cvm_coherent_large_data_mp_mc_list_element * elem2=cvm_coherent_large_data_mp_mc_list_element_ini(list);
-    elem1->next_element=elem2;
-
-    list->in_element=elem1;
-    list->out_element=elem1;
-    list->end_element=elem2;
-
-    atomic_init(&list->spinlock,CVM_ZERO_32);
-    atomic_init(&list->in,CVM_ZERO_32);
-    atomic_init(&list->out,CVM_ZERO_32);
-    atomic_init(&list->in_fence,block_size);
-    atomic_init(&list->in_op_count,CVM_ZERO_32);
-    atomic_init(&list->out_op_count,CVM_ZERO_32);
-}
-
-void cvm_coherent_large_data_mp_mc_list_set_deletion_data( cvm_coherent_large_data_mp_mc_list * list , uint32_t numerator , uint32_t denominator , uint32_t min_total_chunks )
-{
-    list->del_denominator=denominator;
-    list->del_numerator=numerator;
-    list->min_total_chunks=min_total_chunks;
-}
-
-void cvm_coherent_large_data_mp_mc_list_add( cvm_coherent_large_data_mp_mc_list * list , void * value )
-{
-    cvm_coherent_large_data_mp_mc_list_element *elem,*next_elem;
-
-    uint32_t index=atomic_fetch_add(&list->in,CVM_ONE_32);
-    uint32_t lock;
-
-    if(index > (atomic_load(&list->in_fence)+CVM_QTR_32))
-    {
-        while(index+CVM_MID_32>=atomic_load(&list->in_fence)+CVM_MID_32);
-    }
-    else
-    {
-        while(index>=atomic_load(&list->in_fence));
-    }
-
-    elem=list->in_element;
-
-    uint8_t * data_ptr=elem->data+(index%list->block_size)*list->type_size;
-
-    memcpy(data_ptr+sizeof(_Atomic uint8_t),value,list->type_size-sizeof(_Atomic uint8_t));
-
-    atomic_store((_Atomic uint8_t*)data_ptr,CVM_ONE_8);
-
-    if((index%list->block_size)==(list->block_size-CVM_ONE_32))
-    {
-        do
-        {
-            lock=CVM_ZERO_32;
-        }
-        while(!atomic_compare_exchange_weak(&list->spinlock,&lock,CVM_ONE_32));
-
-        next_elem=elem->next_element;
-        if(next_elem==NULL)
-        {
-            list->total_chunks++;
-            next_elem=cvm_coherent_large_data_mp_mc_list_element_ini(list);
-            elem->next_element=next_elem;
-            list->end_element=next_elem;
-        }
-
-        while(atomic_load(&list->in_op_count)!=list->block_size-CVM_ONE_32);
-
-        list->in_element=next_elem;
-
-        atomic_store(&list->in_op_count,CVM_ZERO_32);
-        atomic_fetch_add(&list->in_fence,list->block_size);
-        list->active_chunks++;
-
-        atomic_store(&list->spinlock,CVM_ZERO_32);
-    }
-    else
-    {
-        atomic_fetch_add(&list->in_op_count,CVM_ONE_32);
-    }
-}
-
-int cvm_coherent_large_data_mp_mc_list_get( cvm_coherent_large_data_mp_mc_list * list , void * value )
-{
-    cvm_coherent_large_data_mp_mc_list_element *next_elem,*elem;
-    uint32_t index=atomic_load(&list->out);
-    uint32_t lock;
-    int last=0;
-
-    do
-    {
-        if(  (index==atomic_load(&list->in))  ||  (index==atomic_load(&list->in_fence)-CVM_ONE_32)  )
-        {
-            return 0;
-        }
-        if((index%list->block_size)==(list->block_size-CVM_ONE_32))
-        {
-            do
-            {
-                lock=CVM_ZERO_32;
-            }
-            while(!atomic_compare_exchange_weak(&list->spinlock,&lock,CVM_ONE_32));
-
-            index=atomic_load(&list->out);
-
-            if(  (index==atomic_load(&list->in))  ||  (index==atomic_load(&list->in_fence)-CVM_ONE_32)  )
-            {
-                atomic_store(&list->spinlock,CVM_ZERO_32);
-                return 0;
-            }
-
-            if((index%list->block_size)==(list->block_size-CVM_ONE_32))
-            {
-                last=1;
-                break;
-            }
-            else
-            {
-                atomic_store(&list->spinlock,CVM_ZERO_32);
-            }
-        }
-    }
-    while(!atomic_compare_exchange_weak(&list->out,&index,index+CVM_ONE_32));
-
-    elem=list->out_element;
-
-    uint8_t * data_ptr=elem->data+(index%list->block_size)*list->type_size;
-
-    while(atomic_load((_Atomic uint8_t*)data_ptr)==CVM_ZERO_8);
-
-    memcpy(value,data_ptr+sizeof(_Atomic uint8_t),list->type_size-sizeof(_Atomic uint8_t));
-
-    atomic_store((_Atomic uint8_t*)data_ptr,CVM_ZERO_8);
-
-    if(last)
-    {
-        next_elem=elem->next_element;
-
-        while(atomic_load(&list->out_op_count)!=list->block_size-CVM_ONE_32);
-
-        list->out_element=next_elem;
-        atomic_store(&list->out_op_count,CVM_ZERO_32);
-        atomic_fetch_add(&list->out,CVM_ONE_32);
-        list->active_chunks--;
-
-        if( ( (list->total_chunks*list->del_numerator)>(list->active_chunks*list->del_denominator) ) && (list->total_chunks>list->min_total_chunks) )
-        {
-            atomic_store(&list->spinlock,CVM_ZERO_32);
-
-            list->total_chunks--;
-            free(elem->data);
-            free(elem);
-        }
-        else
-        {
-            elem->next_element=NULL;
-            list->end_element->next_element=elem;
-            list->end_element=elem;
-
-            atomic_store(&list->spinlock,CVM_ZERO_32);
-        }
-    }
-    else
-    {
-        atomic_fetch_add(&list->out_op_count,CVM_ONE_32);
-    }
-
-    return 1;
-}
-
-void cvm_coherent_large_data_mp_mc_list_del( cvm_coherent_large_data_mp_mc_list * list )
-{
-    cvm_coherent_large_data_mp_mc_list_element *next,*elem=list->out_element;
-
-    do
-    {
-        free(elem->data);
-        next=elem->next_element;
-        free(elem);
-        elem=next;
-    }
-    while(elem!=NULL);
-}
+//static cvm_coherent_large_data_mp_mc_list_element * cvm_coherent_large_data_mp_mc_list_element_ini( cvm_coherent_large_data_mp_mc_list * list )
+//{
+//    uint32_t i;
+//    cvm_coherent_large_data_mp_mc_list_element * elem=malloc(sizeof(cvm_coherent_large_data_mp_mc_list_element));
+//    elem->data=malloc(list->block_size*(list->type_size+sizeof(_Atomic uint8_t)));
+//
+//    for(i=0;i<list->block_size;i++)atomic_init(elem->data+i*(list->type_size+sizeof(_Atomic uint8_t)),0);
+//
+//    elem->next_element=NULL;
+//    return elem;
+//}
+//
+//void cvm_coherent_large_data_mp_mc_list_ini( cvm_coherent_large_data_mp_mc_list * list , uint32_t block_size , size_t type_size )
+//{
+//    block_size--;
+//    block_size |= block_size >> 1;
+//    block_size |= block_size >> 2;
+//    block_size |= block_size >> 4;
+//    block_size |= block_size >> 8;
+//    block_size |= block_size >> 16;
+//    block_size++;
+//
+//    ///type size will generally form memory pad for the atomic lock
+//    ///should really round this data to ensure memory alignment of contained data, but as only memcpy is used ~should~ be okay (as memcpy operates on single bytes)
+//    list->type_size=type_size;
+//    list->block_size=block_size;
+//    list->active_chunks=1;
+//    list->total_chunks=1;
+//    ///by default ensure there are at least 4 chunks and remove chunks when less than 1/3 are used
+//    list->min_total_chunks=4;
+//    list->del_denominator=3;
+//    list->del_numerator=1;
+//
+//    cvm_coherent_large_data_mp_mc_list_element * elem1=cvm_coherent_large_data_mp_mc_list_element_ini(list);
+//    cvm_coherent_large_data_mp_mc_list_element * elem2=cvm_coherent_large_data_mp_mc_list_element_ini(list);
+//    elem1->next_element=elem2;
+//
+//    list->in_element=elem1;
+//    list->out_element=elem1;
+//    list->end_element=elem2;
+//
+//    atomic_init(&list->spinlock,0);
+//    atomic_init(&list->in,0);
+//    atomic_init(&list->out,0);
+//    atomic_init(&list->in_fence ,block_size);
+//    atomic_init(&list->in_op_count,0);
+//    atomic_init(&list->out_op_count,0);
+//}
+//
+//void cvm_coherent_large_data_mp_mc_list_set_deletion_data( cvm_coherent_large_data_mp_mc_list * list , uint32_t numerator , uint32_t denominator , uint32_t min_total_chunks )
+//{
+//    list->del_denominator=denominator;
+//    list->del_numerator=numerator;
+//    list->min_total_chunks=min_total_chunks;
+//}
+//
+//void cvm_coherent_large_data_mp_mc_list_add( cvm_coherent_large_data_mp_mc_list * list , void * value )
+//{
+//    cvm_coherent_large_data_mp_mc_list_element *elem,*next_elem;
+//
+//    uint32_t index=atomic_fetch_add(&list->in,1);
+//    uint32_t lock;
+//    uint32_t index_in_block=index&(list->block_size-1);///this works b/c list->block_size is always power of 2
+//
+//    /// if in fence has overflowed(past uint_max) need way to properly test if index is an within "in_element", add 1/2 range to force index to oveflow as well, allows up to 2^30 threads contesting resource
+//    if(index > (atomic_load(&list->in_fence)+0x40000000)) while(index+0x80000000 >= atomic_load(&list->in_fence)+0x80000000);
+//    else while(index>=atomic_load(&list->in_fence));///regular version when neither would overflow
+//
+//    elem=list->in_element;///above ensures in element is set properly, (in_fence forms memory barrier)
+//
+//    uint8_t * data_ptr=elem->data+index_in_block*(list->type_size+sizeof(_Atomic uint8_t));
+//
+//    memcpy(data_ptr+sizeof(_Atomic uint8_t),value,list->type_size);
+//
+//    atomic_store((_Atomic uint8_t*)data_ptr,1);///mark entry as having been written (data_ptr atomic is memory barrier)
+//
+//    if(index_in_block == list->block_size-1)///last element in block
+//    {
+//        do lock=0;
+//        while(!atomic_compare_exchange_weak(&list->spinlock,&lock,1));
+//
+//        next_elem=elem->next_element;
+//
+//        if(next_elem==NULL)
+//        {
+//            list->total_chunks++;
+//            next_elem=cvm_coherent_large_data_mp_mc_list_element_ini(list);
+//            elem->next_element=next_elem;
+//            list->end_element=next_elem;
+//        }
+//
+//        #warning could change to atomic_compare_exchange_weak for in_op_count
+//        while(atomic_load(&list->in_op_count) != list->block_size-1);///how much of block has finished writing
+//
+//        list->in_element=next_elem;
+//
+//
+//        #warning atomic ops inside spinlock is not pretty
+//        atomic_store(&list->in_op_count,0);
+//        atomic_fetch_add(&list->in_fence,list->block_size);
+//        list->active_chunks++;
+//
+//        atomic_store(&list->spinlock,0);
+//    }
+//    else atomic_fetch_add(&list->in_op_count,1);
+//}
+//
+//bool cvm_coherent_large_data_mp_mc_list_get( cvm_coherent_large_data_mp_mc_list * list , void * value )
+//{
+//    cvm_coherent_large_data_mp_mc_list_element *next_elem,*elem;
+//    uint32_t index=atomic_load(&list->out);
+//    uint32_t lock;
+//    uint32_t index_in_block=index&(list->block_size-1);///this works b/c list->block_size is always power of 2
+//    bool last=false;
+//
+//    do
+//    {
+//        if(  (index==atomic_load(&list->in))  ||  (index == atomic_load(&list->in_fence)-1)  )///dont think in_fence test is necessary
+//        {
+//            return false;
+//        }
+//        if((index%list->block_size)==(list->block_size-1))
+//        {
+//            do lock=0;
+//            while(!atomic_compare_exchange_weak(&list->spinlock,&lock,1));
+//
+//            index=atomic_load(&list->out);
+//
+//            if(  (index==atomic_load(&list->in))  ||  (index==atomic_load(&list->in_fence)-1)  )
+//            {
+//                atomic_store(&list->spinlock,0);
+//                return false;
+//            }
+//
+//            if((index%list->block_size)==(list->block_size-1))
+//            {
+//                last=true;
+//                break;
+//            }
+//            else
+//            {
+//                atomic_store(&list->spinlock,0);
+//            }
+//        }
+//    }
+//    while(!atomic_compare_exchange_weak(&list->out,&index,index+1));
+//
+//    elem=list->out_element;
+//
+//    uint8_t * data_ptr=elem->data+index_in_block*(list->type_size+sizeof(_Atomic uint8_t));
+//
+//    while(atomic_load((_Atomic uint8_t*)data_ptr)==0);///wait for data to finish writing when necessary
+//
+//    memcpy(value,data_ptr+sizeof(_Atomic uint8_t),list->type_size);
+//
+//    atomic_store((_Atomic uint8_t*)data_ptr,0);
+//
+//    if(last)
+//    {
+//        next_elem=elem->next_element;
+//
+//        while(atomic_load(&list->out_op_count)!=list->block_size-1);
+//
+//        list->out_element=next_elem;
+//        atomic_store(&list->out_op_count,0);
+//        atomic_fetch_add(&list->out,1);
+//        list->active_chunks--;
+//
+//        if( ( (list->total_chunks*list->del_numerator)>(list->active_chunks*list->del_denominator) ) && (list->total_chunks>list->min_total_chunks) )
+//        {
+//            atomic_store(&list->spinlock,0);
+//
+//            list->total_chunks--;
+//            free(elem->data);
+//            free(elem);
+//        }
+//        else
+//        {
+//            elem->next_element=NULL;
+//            list->end_element->next_element=elem;
+//            list->end_element=elem;
+//
+//            atomic_store(&list->spinlock,0);
+//        }
+//    }
+//    else
+//    {
+//        atomic_fetch_add(&list->out_op_count,0);
+//    }
+//
+//    return 1;
+//}
+//
+//void cvm_coherent_large_data_mp_mc_list_del( cvm_coherent_large_data_mp_mc_list * list )
+//{
+//    cvm_coherent_large_data_mp_mc_list_element *next,*elem=list->out_element;
+//
+//    do
+//    {
+//        free(elem->data);
+//        next=elem->next_element;
+//        free(elem);
+//        elem=next;
+//    }
+//    while(elem!=NULL);
+//}
 
 
 
@@ -249,23 +242,16 @@ void cvm_coherent_large_data_mp_mc_list_del( cvm_coherent_large_data_mp_mc_list 
 
 static cvm_coherent_mp_mc_list_element * cvm_coherent_mp_mc_list_element_ini( cvm_coherent_mp_mc_list * list )
 {
-//    cvm_coherent_mp_mc_list_element * elem=malloc(sizeof(cvm_coherent_mp_mc_list_element));
-//    elem->data=malloc(list->block_size*list->type_size);
-//    elem->next_element=NULL;
-//    return elem;
-
     cvm_coherent_mp_mc_list_element * elem=malloc(sizeof(cvm_coherent_mp_mc_list_element)+list->block_size*list->type_size);
     elem->next_element=NULL;
     elem->data=((uint8_t*)elem)+sizeof(uint8_t*)+sizeof(cvm_coherent_mp_mc_list_element*);
     return elem;
 }
 
-
-
-
-
 void cvm_coherent_mp_mc_list_ini( cvm_coherent_mp_mc_list * list , uint32_t block_size , size_t type_size )
 {
+    ///block size must always be power of 2
+
     block_size--;
     block_size |= block_size >> 1;
     block_size |= block_size >> 2;
@@ -273,7 +259,6 @@ void cvm_coherent_mp_mc_list_ini( cvm_coherent_mp_mc_list * list , uint32_t bloc
     block_size |= block_size >> 8;
     block_size |= block_size >> 16;
     block_size++;
-
 
     list->type_size=type_size;
     list->block_size=block_size;
@@ -286,49 +271,37 @@ void cvm_coherent_mp_mc_list_ini( cvm_coherent_mp_mc_list * list , uint32_t bloc
     list->out_element=elem1;
     list->end_element=elem2;
 
-    atomic_init(&list->spinlock,CVM_ZERO_32);
-    atomic_init(&list->in,CVM_ZERO_32);
-    atomic_init(&list->out,CVM_ZERO_32);
+    atomic_init(&list->spinlock,0);
+    atomic_init(&list->in,0);
+    atomic_init(&list->out,0);
     atomic_init(&list->in_buffer_fence,block_size);
     atomic_init(&list->out_buffer_fence,block_size);
-    atomic_init(&list->out_fence,CVM_ZERO_32);
-    atomic_init(&list->out_completions,CVM_ZERO_32);
-    //atomic_init(&list->in_op_count,CVM_ZERO_32);
-    //atomic_init(&list->out_op_count,CVM_ZERO_32);
+    atomic_init(&list->out_fence,0);
+    atomic_init(&list->out_completions,0);
 }
 
 void cvm_coherent_mp_mc_list_add( cvm_coherent_mp_mc_list * list , void * value )
 {
     cvm_coherent_mp_mc_list_element *elem,*next_elem;
 
-    uint32_t lock,fence,index=atomic_fetch_add(&list->in,CVM_ONE_32);
+    uint32_t lock,fence,index,index_in_block;
 
-    if(index > ((uint32_t)(atomic_load(&list->in_buffer_fence)+CVM_QTR_32)))
-    {
-        while(((uint32_t)(index+CVM_MID_32)) >= ((uint32_t)(atomic_load(&list->in_buffer_fence)+CVM_MID_32)));
-    }
-    else
-    {
-        while(index >= ((uint32_t)atomic_load(&list->in_buffer_fence)));
-    }
+    index=atomic_fetch_add(&list->in,1);
+    index_in_block=index&(list->block_size-1);///this works b/c list->block_size is always power of 2
 
-
+    ///investigate if its possible to use index to do following test, avoiding need for atomic_load
+    /// if in_buffer_fence has overflowed need way to properly test if index is an within "in_element", thus add 1/2 range to force index to oveflow as well, allows up to 2^30 threads contesting resource
+    ///wait for fence condition to be met (buffer that contains index becomes active)
+    if(index > atomic_load(&list->in_buffer_fence)+0x40000000) while(index+0x80000000 >= atomic_load(&list->in_buffer_fence)+0x80000000);
+    else  while(index >= atomic_load(&list->in_buffer_fence));///regular version when neither would overflow
 
     elem=list->in_element;
+    memcpy(elem->data+index_in_block*list->type_size,value,list->type_size);
 
-    uint8_t * data_ptr=elem->data+(index%list->block_size)*list->type_size;
-
-    memcpy(data_ptr,value,list->type_size);
-
-
-
-    if((index%list->block_size) == (list->block_size-CVM_ONE_32))
+    if(index_in_block == list->block_size-1)
     {
-        do
-        {
-            lock=CVM_ZERO_32;
-        }
-        while(!atomic_compare_exchange_weak(&list->spinlock,&lock,CVM_ONE_32));
+        do lock=0;
+        while(!atomic_compare_exchange_weak(&list->spinlock,&lock,1));
 
         next_elem=elem->next_element;
         if(next_elem == NULL)
@@ -338,69 +311,51 @@ void cvm_coherent_mp_mc_list_add( cvm_coherent_mp_mc_list * list , void * value 
             list->end_element=next_elem;
         }
 
+        ///could change to atomic_compare_exchange_weak for out_fence, as below (need to test that this dont cause problems w/ buffer synchronisation, shouldn't as is inside spinlock)
         while(((uint32_t)(atomic_load(&list->out_fence))) != index);
 
         list->in_element=next_elem;
 
-        atomic_store(&list->spinlock,CVM_ZERO_32);
+        atomic_store(&list->spinlock,0);
 
         atomic_fetch_add(&list->in_buffer_fence,list->block_size);
 
-        atomic_fetch_add(&list->out_fence,CVM_ONE_32);
+        atomic_fetch_add(&list->out_fence,1);
     }
     else
     {
-        do
-        {
-            fence=index;
-        }
-        while(!atomic_compare_exchange_weak(&list->out_fence,&fence,((uint32_t)(index+CVM_ONE_32))));
+        do fence=index;
+        while(!atomic_compare_exchange_weak(&list->out_fence,&fence,index+1));
     }
 }
 
-int  cvm_coherent_mp_mc_list_get( cvm_coherent_mp_mc_list * list , void * value )
+bool cvm_coherent_mp_mc_list_get( cvm_coherent_mp_mc_list * list , void * value )
 {
     cvm_coherent_mp_mc_list_element *next_elem,*elem;
-    uint32_t lock,fence,index=atomic_load(&list->out);
+    uint32_t lock,fence,index,index_in_block;
 
-    do
-    {
-        if(index == ((uint32_t)atomic_load(&list->out_fence)))
-        {
-            return 0;
-        }
-    }
-    while(!atomic_compare_exchange_weak(&list->out,&index,((uint32_t)(index+CVM_ONE_32))));
+    index=atomic_load(&list->out);
 
-    if(index > ((uint32_t)(atomic_load(&list->out_buffer_fence)+CVM_QTR_32)))
-    {
-        while(((uint32_t)(index+CVM_MID_32)) >= ((uint32_t)(atomic_load(&list->out_buffer_fence)+CVM_MID_32)));
-    }
-    else
-    {
-        while(index >= ((uint32_t)atomic_load(&list->out_buffer_fence)));
-    }
+    do if(index == atomic_load(&list->out_fence)) return false;///none left to get
+    while(!atomic_compare_exchange_weak(&list->out,&index,index+1));
 
+    index_in_block=index&(list->block_size-1);///this works b/c list->block_size is always power of 2
 
+    ///investigate if its possible to use index to do following test, avoiding need for atomic_load
+    /// if out_buffer_fence has overflowed need way to properly test if index is an within "out_element", thus add 1/2 range to force index to oveflow as well, allows up to 2^30 threads contesting resource
+    ///wait for fence condition to be met (buffer that contains index becomes active)
+    if(index > atomic_load(&list->out_buffer_fence)+0x40000000) while(index+0x80000000 >= atomic_load(&list->out_buffer_fence)+0x80000000);
+    else while(index >= atomic_load(&list->out_buffer_fence));///regular version when neither would overflow
 
 
     elem=list->out_element;
-
-    uint8_t * data_ptr=elem->data+(index%list->block_size)*list->type_size;
-
-    memcpy(value,data_ptr,list->type_size);
+    memcpy(value,elem->data+index_in_block*list->type_size,list->type_size);
 
 
-
-
-
-    if((index%list->block_size) == (list->block_size-CVM_ONE_32))
+    if(index_in_block == list->block_size-1)
     {
-        do
-        {
-            lock=CVM_ZERO_32;
-        }
-        while(!atomic_compare_exchange_weak(&list->spinlock,&lock,CVM_ONE_32));
+        do lock=0;
+        while(!atomic_compare_exchange_weak(&list->spinlock,&lock,1));
 
         next_elem=elem->next_element;
 
@@ -408,23 +363,20 @@ int  cvm_coherent_mp_mc_list_get( cvm_coherent_mp_mc_list * list , void * value 
         list->end_element=elem;
         elem->next_element=NULL;
 
-        while(((uint32_t)atomic_load(&list->out_completions))!=index);
+        while(atomic_load(&list->out_completions) != index);
 
         list->out_element=next_elem;
 
-        atomic_store(&list->spinlock,CVM_ZERO_32);
+        atomic_store(&list->spinlock,0);
 
         atomic_fetch_add(&list->out_buffer_fence,list->block_size);
 
-        atomic_fetch_add(&list->out_completions,CVM_ONE_32);
+        atomic_fetch_add(&list->out_completions,1);
     }
     else
     {
-        do
-        {
-            fence=index;
-        }
-        while(!atomic_compare_exchange_weak(&list->out_completions,&fence,((uint32_t)(index+CVM_ONE_32))));
+        do fence=index;
+        while(!atomic_compare_exchange_weak(&list->out_completions,&fence,index+1));
     }
 
     return 1;
@@ -586,118 +538,118 @@ void cvm_lockfree_mp_mc_stack_del( cvm_lockfree_mp_mc_stack * stack )
 
 
 
-
-void cvm_fast_unsafe_mp_mc_list_ini( cvm_fast_unsafe_mp_mc_list * list , uint32_t list_size , size_t type_size )
-{
-    list_size--;
-    list_size |= list_size >> 1;
-    list_size |= list_size >> 2;
-    list_size |= list_size >> 4;
-    list_size |= list_size >> 8;
-    list_size |= list_size >> 16;
-    list_size++;
-
-    uint32_t i;
-
-    type_size+=sizeof(_Atomic uint8_t);
-    list->data=malloc(list_size*type_size);
-    for(i=0;i<list_size;i++)atomic_init(list->data+i*type_size,CVM_ZERO_8);
-    atomic_init(&list->in,CVM_ZERO_32);
-    atomic_init(&list->out,CVM_ZERO_32);
-    list->list_size=list_size;
-    list->type_size=type_size;
-}
-
-void cvm_fast_unsafe_mp_mc_list_add( cvm_fast_unsafe_mp_mc_list * list , void * value )
-{
-    uint32_t index=atomic_fetch_add(&list->in,CVM_ONE_32);
-
-    uint8_t * data_ptr=list->data+(index%list->list_size)*list->type_size;
-
-    memcpy(data_ptr+sizeof(_Atomic uint8_t),value,list->type_size-sizeof(_Atomic uint8_t));
-
-    atomic_store((_Atomic uint8_t*)data_ptr,CVM_ONE_8);
-}
-
-int cvm_fast_unsafe_mp_mc_list_get( cvm_fast_unsafe_mp_mc_list * list , void * value )
-{
-    uint32_t index=atomic_load(&list->out);
-
-    do
-    {
-        if(index==atomic_load(&list->in))
-        {
-            return 0;
-        }
-    }
-    while(!atomic_compare_exchange_weak(&list->out,&index,index+CVM_ONE_32));
-
-    uint8_t * data_ptr=list->data+(index%list->list_size)*list->type_size;
-
-    while(atomic_load((_Atomic uint8_t*)data_ptr)==CVM_ZERO_8);
-
-    memcpy(value,data_ptr+sizeof(_Atomic uint8_t),list->type_size-sizeof(_Atomic uint8_t));
-
-    atomic_store((_Atomic uint8_t*)data_ptr,CVM_ZERO_8);
-
-    return 1;
-}
-
-void cvm_fast_unsafe_mp_mc_list_del( cvm_fast_unsafe_mp_mc_list * list )
-{
-    free(list->data);
-}
-
-
-
-
-void cvm_fast_unsafe_sp_mc_list_ini( cvm_fast_unsafe_sp_mc_list * list , uint32_t list_size , size_t type_size )
-{
-    list_size--;
-    list_size |= list_size >> 1;
-    list_size |= list_size >> 2;
-    list_size |= list_size >> 4;
-    list_size |= list_size >> 8;
-    list_size |= list_size >> 16;
-    list_size++;
-
-    list->data=malloc(list_size*type_size);
-    atomic_init(&list->in,CVM_ZERO_32);
-    atomic_init(&list->fence,CVM_ZERO_32);
-    atomic_init(&list->out,CVM_ZERO_32);
-    list->list_size=list_size;
-    list->type_size=type_size;
-}
-
-void cvm_fast_unsafe_sp_mc_list_add( cvm_fast_unsafe_sp_mc_list * list , void * value )
-{
-    uint32_t index=atomic_fetch_add(&list->in,CVM_ONE_32);
-
-    memcpy(list->data+(index%list->list_size)*list->type_size,value,list->type_size);
-
-    atomic_fetch_add(&list->fence,CVM_ONE_32);
-}
-
-int  cvm_fast_unsafe_sp_mc_list_get( cvm_fast_unsafe_sp_mc_list * list , void * value )
-{
-    uint32_t index=atomic_load(&list->out);
-
-    do
-    {
-        if(index==atomic_load(&list->fence))
-        {
-            return 0;
-        }
-    }
-    while(!atomic_compare_exchange_weak(&list->out,&index,index+CVM_ONE_32));
-
-    memcpy(value,list->data+(index%list->list_size)*list->type_size,list->type_size);
-
-    return 1;
-}
-
-void cvm_fast_unsafe_sp_mc_list_del( cvm_fast_unsafe_sp_mc_list * list )
-{
-    free(list->data);
-}
+//
+//void cvm_fast_unsafe_mp_mc_list_ini( cvm_fast_unsafe_mp_mc_list * list , uint32_t list_size , size_t type_size )
+//{
+//    list_size--;
+//    list_size |= list_size >> 1;
+//    list_size |= list_size >> 2;
+//    list_size |= list_size >> 4;
+//    list_size |= list_size >> 8;
+//    list_size |= list_size >> 16;
+//    list_size++;
+//
+//    uint32_t i;
+//
+//    type_size+=sizeof(_Atomic uint8_t);
+//    list->data=malloc(list_size*type_size);
+//    for(i=0;i<list_size;i++)atomic_init(list->data+i*type_size,CVM_ZERO_8);
+//    atomic_init(&list->in,CVM_ZERO_32);
+//    atomic_init(&list->out,CVM_ZERO_32);
+//    list->list_size=list_size;
+//    list->type_size=type_size;
+//}
+//
+//void cvm_fast_unsafe_mp_mc_list_add( cvm_fast_unsafe_mp_mc_list * list , void * value )
+//{
+//    uint32_t index=atomic_fetch_add(&list->in,CVM_ONE_32);
+//
+//    uint8_t * data_ptr=list->data+(index%list->list_size)*list->type_size;
+//
+//    memcpy(data_ptr+sizeof(_Atomic uint8_t),value,list->type_size-sizeof(_Atomic uint8_t));
+//
+//    atomic_store((_Atomic uint8_t*)data_ptr,CVM_ONE_8);
+//}
+//
+//int cvm_fast_unsafe_mp_mc_list_get( cvm_fast_unsafe_mp_mc_list * list , void * value )
+//{
+//    uint32_t index=atomic_load(&list->out);
+//
+//    do
+//    {
+//        if(index==atomic_load(&list->in))
+//        {
+//            return 0;
+//        }
+//    }
+//    while(!atomic_compare_exchange_weak(&list->out,&index,index+CVM_ONE_32));
+//
+//    uint8_t * data_ptr=list->data+(index%list->list_size)*list->type_size;
+//
+//    while(atomic_load((_Atomic uint8_t*)data_ptr)==CVM_ZERO_8);
+//
+//    memcpy(value,data_ptr+sizeof(_Atomic uint8_t),list->type_size-sizeof(_Atomic uint8_t));
+//
+//    atomic_store((_Atomic uint8_t*)data_ptr,CVM_ZERO_8);
+//
+//    return 1;
+//}
+//
+//void cvm_fast_unsafe_mp_mc_list_del( cvm_fast_unsafe_mp_mc_list * list )
+//{
+//    free(list->data);
+//}
+//
+//
+//
+//
+//void cvm_fast_unsafe_sp_mc_list_ini( cvm_fast_unsafe_sp_mc_list * list , uint32_t list_size , size_t type_size )
+//{
+//    list_size--;
+//    list_size |= list_size >> 1;
+//    list_size |= list_size >> 2;
+//    list_size |= list_size >> 4;
+//    list_size |= list_size >> 8;
+//    list_size |= list_size >> 16;
+//    list_size++;
+//
+//    list->data=malloc(list_size*type_size);
+//    atomic_init(&list->in,CVM_ZERO_32);
+//    atomic_init(&list->fence,CVM_ZERO_32);
+//    atomic_init(&list->out,CVM_ZERO_32);
+//    list->list_size=list_size;
+//    list->type_size=type_size;
+//}
+//
+//void cvm_fast_unsafe_sp_mc_list_add( cvm_fast_unsafe_sp_mc_list * list , void * value )
+//{
+//    uint32_t index=atomic_fetch_add(&list->in,CVM_ONE_32);
+//
+//    memcpy(list->data+(index%list->list_size)*list->type_size,value,list->type_size);
+//
+//    atomic_fetch_add(&list->fence,CVM_ONE_32);
+//}
+//
+//int  cvm_fast_unsafe_sp_mc_list_get( cvm_fast_unsafe_sp_mc_list * list , void * value )
+//{
+//    uint32_t index=atomic_load(&list->out);
+//
+//    do
+//    {
+//        if(index==atomic_load(&list->fence))
+//        {
+//            return 0;
+//        }
+//    }
+//    while(!atomic_compare_exchange_weak(&list->out,&index,index+CVM_ONE_32));
+//
+//    memcpy(value,list->data+(index%list->list_size)*list->type_size,list->type_size);
+//
+//    return 1;
+//}
+//
+//void cvm_fast_unsafe_sp_mc_list_del( cvm_fast_unsafe_sp_mc_list * list )
+//{
+//    free(list->data);
+//}
 

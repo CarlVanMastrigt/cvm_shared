@@ -121,7 +121,6 @@ static inline type * name##_list_ensure_space                                   
 ///E   LIST
 
 CVM_LIST(uint32_t,uint)
-//CVM_LIST(ptrdiff_t,ptrdiff)
 CVM_LIST(uintptr_t,uintptr)
 
 
@@ -258,28 +257,28 @@ CVM_BIN_HEAP(uint32_t,uint32_t,uint_min,<)
 
 
 
-#define CVM_ZERO_8  0x00
-#define CVM_ZERO_16 0x0000
-#define CVM_ZERO_32 0x00000000
-#define CVM_ZERO_64 0x0000000000000000
+//#define CVM_ZERO_8  0x00
+//#define CVM_ZERO_16 0x0000
+//#define CVM_ZERO_32 0x00000000
+//#define CVM_ZERO_64 0x0000000000000000
+//
+//#define CVM_ONE_8  0x01
+//#define CVM_ONE_16 0x0001
+//#define CVM_ONE_32 0x00000001
+//#define CVM_ONE_64 0x0000000000000001
+//
+//#define CVM_MID_8  0x80
+//#define CVM_MID_16 0x8000
+//#define CVM_MID_32 0x80000000
+//#define CVM_MID_64 0x8000000000000000
+//
+//#define CVM_QTR_8  0x40
+//#define CVM_QTR_16 0x4000
+//#define CVM_QTR_32 0x40000000
+//#define CVM_QTR_64 0x4000000000000000
 
-#define CVM_ONE_8  0x01
-#define CVM_ONE_16 0x0001
-#define CVM_ONE_32 0x00000001
-#define CVM_ONE_64 0x0000000000000001
 
-#define CVM_MID_8  0x80
-#define CVM_MID_16 0x8000
-#define CVM_MID_32 0x80000000
-#define CVM_MID_64 0x8000000000000000
-
-#define CVM_QTR_8  0x40
-#define CVM_QTR_16 0x4000
-#define CVM_QTR_32 0x40000000
-#define CVM_QTR_64 0x4000000000000000
-
-
-typedef uint8_t cvm_atomic_pad[128];
+typedef uint8_t cvm_atomic_pad[124];///+sizeof(uint32_t) is 128, required memory separation on most, if not all CPU's test this for actual performance difference
 
 
 
@@ -297,48 +296,48 @@ typedef uint8_t cvm_atomic_pad[128];
         -total stored datum goes above 2^32 (this can be increased to 2^64 by changing all 32 refrences in code to 64, which comes at the cost of about 5-20% time increase).
 */
 
-typedef struct cvm_coherent_large_data_mp_mc_list_element cvm_coherent_large_data_mp_mc_list_element;
-
-struct cvm_coherent_large_data_mp_mc_list_element
-{
-    cvm_coherent_large_data_mp_mc_list_element * next_element;
-    uint8_t * data;
-};
-
-typedef struct
-{
-    size_t type_size;
-    uint32_t block_size;
-    uint32_t active_chunks;
-    uint32_t total_chunks;
-    uint32_t del_numerator;
-    uint32_t del_denominator;
-    uint32_t min_total_chunks;
-    cvm_coherent_large_data_mp_mc_list_element * in_element;
-    cvm_coherent_large_data_mp_mc_list_element * out_element;
-    cvm_coherent_large_data_mp_mc_list_element * end_element;
-    cvm_atomic_pad start_pad;
-    _Atomic uint32_t spinlock;
-    cvm_atomic_pad spinlock_pad;
-    _Atomic uint32_t in;
-    cvm_atomic_pad in_pad;
-    _Atomic uint32_t out;
-    cvm_atomic_pad out_pad;
-    _Atomic uint32_t in_fence;
-    cvm_atomic_pad in_fence_pad;
-    _Atomic uint32_t in_op_count;
-    cvm_atomic_pad in_op_count_pad;
-    _Atomic uint32_t out_op_count;
-    cvm_atomic_pad out_op_count_pad;
-}
-cvm_coherent_large_data_mp_mc_list;
-
-void cvm_coherent_large_data_mp_mc_list_ini( cvm_coherent_large_data_mp_mc_list * list , uint32_t block_size , size_t type_size );///not coherent
-void cvm_coherent_large_data_mp_mc_list_add( cvm_coherent_large_data_mp_mc_list * list , void * value );
-int  cvm_coherent_large_data_mp_mc_list_get( cvm_coherent_large_data_mp_mc_list * list , void * value );
-void cvm_coherent_large_data_mp_mc_list_del( cvm_coherent_large_data_mp_mc_list * list );///not coherent
-
-void cvm_coherent_large_data_mp_mc_list_set_deletion_data( cvm_coherent_large_data_mp_mc_list * list , uint32_t numerator , uint32_t denominator , uint32_t min_total_chunks );
+//typedef struct cvm_coherent_large_data_mp_mc_list_element cvm_coherent_large_data_mp_mc_list_element;
+//
+//struct cvm_coherent_large_data_mp_mc_list_element
+//{
+//    cvm_coherent_large_data_mp_mc_list_element * next_element;
+//    uint8_t * data;
+//};
+//
+//typedef struct
+//{
+//    size_t type_size;
+//    uint32_t block_size;
+//    uint32_t active_chunks;
+//    uint32_t total_chunks;
+//    uint32_t del_numerator;
+//    uint32_t del_denominator;
+//    uint32_t min_total_chunks;
+//    cvm_coherent_large_data_mp_mc_list_element * in_element;
+//    cvm_coherent_large_data_mp_mc_list_element * out_element;
+//    cvm_coherent_large_data_mp_mc_list_element * end_element;
+//    cvm_atomic_pad start_pad;
+//    _Atomic uint32_t spinlock;
+//    cvm_atomic_pad spinlock_pad;
+//    _Atomic uint32_t in;
+//    cvm_atomic_pad in_pad;
+//    _Atomic uint32_t out;
+//    cvm_atomic_pad out_pad;
+//    _Atomic uint32_t in_fence;
+//    cvm_atomic_pad in_fence_pad;
+//    _Atomic uint32_t in_op_count;
+//    cvm_atomic_pad in_op_count_pad;
+//    _Atomic uint32_t out_op_count;
+//    cvm_atomic_pad out_op_count_pad;
+//}
+//cvm_coherent_large_data_mp_mc_list;
+//
+//void cvm_coherent_large_data_mp_mc_list_ini( cvm_coherent_large_data_mp_mc_list * list , uint32_t block_size , size_t type_size );///not coherent
+//void cvm_coherent_large_data_mp_mc_list_add( cvm_coherent_large_data_mp_mc_list * list , void * value );
+//bool cvm_coherent_large_data_mp_mc_list_get( cvm_coherent_large_data_mp_mc_list * list , void * value );
+//void cvm_coherent_large_data_mp_mc_list_del( cvm_coherent_large_data_mp_mc_list * list );///not coherent
+//
+//void cvm_coherent_large_data_mp_mc_list_set_deletion_data( cvm_coherent_large_data_mp_mc_list * list , uint32_t numerator , uint32_t denominator , uint32_t min_total_chunks );
 
 
 
@@ -390,7 +389,7 @@ cvm_coherent_mp_mc_list;
 
 void cvm_coherent_mp_mc_list_ini( cvm_coherent_mp_mc_list * list , uint32_t block_size , size_t type_size );///not coherent
 void cvm_coherent_mp_mc_list_add( cvm_coherent_mp_mc_list * list , void * value );
-int  cvm_coherent_mp_mc_list_get( cvm_coherent_mp_mc_list * list , void * value );
+bool cvm_coherent_mp_mc_list_get( cvm_coherent_mp_mc_list * list , void * value );
 void cvm_coherent_mp_mc_list_del( cvm_coherent_mp_mc_list * list );///not coherent
 
 
@@ -443,20 +442,6 @@ void cvm_lockfree_mp_mc_stack_del( cvm_lockfree_mp_mc_stack * stack );///not loc
 
 
 
-/*typedef struct
-{
-    cvm_general_mp_mc_list_element * elem;
-    uint32_t index;
-}
-cvm_general_mp_mc_list_access_key;
-
-void cvm_general_mp_mc_list_add_begin( cvm_general_mp_mc_list * list , cvm_general_mp_mc_list_access_key * key , void ** data);
-void cvm_general_mp_mc_list_add_cease( cvm_general_mp_mc_list * list , cvm_general_mp_mc_list_access_key key );
-int  cvm_general_mp_mc_list_get_begin( cvm_general_mp_mc_list * list , cvm_general_mp_mc_list_access_key * key , void ** data);
-void cvm_general_mp_mc_list_get_cease( cvm_general_mp_mc_list * list , cvm_general_mp_mc_list_access_key key );*/
-
-
-
 
 /**
     fast unsafe multi-producer multi-consumer concurrent list
@@ -488,12 +473,6 @@ void cvm_fast_unsafe_mp_mc_list_ini( cvm_fast_unsafe_mp_mc_list * list , uint32_
 void cvm_fast_unsafe_mp_mc_list_add( cvm_fast_unsafe_mp_mc_list * list , void * value );
 int  cvm_fast_unsafe_mp_mc_list_get( cvm_fast_unsafe_mp_mc_list * list , void * value );
 void cvm_fast_unsafe_mp_mc_list_del( cvm_fast_unsafe_mp_mc_list * list );
-
-/*void cvm_fast_unsafe_mp_mc_list_add_begin( cvm_fast_unsafe_mp_mc_list * list , uint32_t * index , void ** value );
-void cvm_fast_unsafe_mp_mc_list_add_cease( cvm_fast_unsafe_mp_mc_list * list , uint32_t   index );
-int  cvm_fast_unsafe_mp_mc_list_get_begin( cvm_fast_unsafe_mp_mc_list * list , uint32_t * index , void ** value );
-void cvm_fast_unsafe_mp_mc_list_get_cease( cvm_fast_unsafe_mp_mc_list * list , uint32_t   index );*/
-
 
 
 
@@ -529,11 +508,5 @@ void cvm_fast_unsafe_sp_mc_list_ini( cvm_fast_unsafe_sp_mc_list * list , uint32_
 void cvm_fast_unsafe_sp_mc_list_add( cvm_fast_unsafe_sp_mc_list * list , void * value );
 int  cvm_fast_unsafe_sp_mc_list_get( cvm_fast_unsafe_sp_mc_list * list , void * value );
 void cvm_fast_unsafe_sp_mc_list_del( cvm_fast_unsafe_sp_mc_list * list );
-
-/*void cvm_fast_unsafe_sp_mc_list_add_begin( cvm_fast_unsafe_sp_mc_list * list , uint32_t * index , void ** value );
-void cvm_fast_unsafe_sp_mc_list_add_cease( cvm_fast_unsafe_sp_mc_list * list , uint32_t   index );
-int  cvm_fast_unsafe_sp_mc_list_get_begin( cvm_fast_unsafe_sp_mc_list * list , uint32_t * index , void ** value );
-void cvm_fast_unsafe_sp_mc_list_get_cease( cvm_fast_unsafe_sp_mc_list * list , uint32_t   index );*/
-
 
 #endif
