@@ -359,7 +359,7 @@ struct cvm_coherent_mp_mc_list_element
     uint8_t * data;
 };
 
-typedef struct
+typedef struct cvm_coherent_mp_mc_list
 {
     size_t type_size;
     uint32_t block_size;
@@ -377,13 +377,10 @@ typedef struct
     cvm_atomic_pad in_buffer_fence_pad;
     _Atomic uint32_t out_buffer_fence;
     cvm_atomic_pad out_buffer_fence_pad;
-    _Atomic uint32_t out_fence;
+    _Atomic uint32_t in_completions;
     cvm_atomic_pad out_fence_pad;
     _Atomic uint32_t out_completions;
-    cvm_atomic_pad out_completions_pad;/*_Atomic uint32_t in_op_count;
-    cvm_atomic_pad in_op_count_pad;
-    _Atomic uint32_t out_op_count;
-    cvm_atomic_pad out_op_count_pad;*/
+    cvm_atomic_pad out_completions_pad;
 }
 cvm_coherent_mp_mc_list;
 
@@ -455,7 +452,7 @@ void cvm_lockfree_mp_mc_stack_del( cvm_lockfree_mp_mc_stack * stack );///not loc
         -total stored datum goes above the ammount set at startup (unsafe because of this).
 */
 
-typedef struct
+typedef struct cvm_fast_unsafe_mp_mc_list
 {
     size_t type_size;
     uint32_t list_size;
@@ -489,7 +486,7 @@ void cvm_fast_unsafe_mp_mc_list_del( cvm_fast_unsafe_mp_mc_list * list );
         -cvm_fast_unsafe_sp_mc_list_add is called from more than 1 thread simultaneously for the same cvm_fast_unsafe_sp_mc_list object
 */
 
-typedef struct
+typedef struct cvm_fast_unsafe_sp_mc_list
 {
     size_t type_size;
     uint32_t list_size;
@@ -508,5 +505,9 @@ void cvm_fast_unsafe_sp_mc_list_ini( cvm_fast_unsafe_sp_mc_list * list , uint32_
 void cvm_fast_unsafe_sp_mc_list_add( cvm_fast_unsafe_sp_mc_list * list , void * value );
 int  cvm_fast_unsafe_sp_mc_list_get( cvm_fast_unsafe_sp_mc_list * list , void * value );
 void cvm_fast_unsafe_sp_mc_list_del( cvm_fast_unsafe_sp_mc_list * list );
+
+
+
+void test_coherent_data_structures(void);
 
 #endif
