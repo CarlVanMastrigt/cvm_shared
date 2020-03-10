@@ -206,10 +206,7 @@ static inline int name##_bin_heap_get( name##_bin_heap * h , data_type * data ) 
                                                                                 \
     while((child=(current<<1)+1) comparison (h->count))                         \
     {                                                                           \
-        if((child+1) comparison (h->count))                                     \
-        {                                                                       \
-            if(h->heap[child+1].test < h->heap[child].test)child++;             \
-        }                                                                       \
+        child+=((child+1 < h->count)&&(h->heap[child+1].test < h->heap[child].test));\
                                                                                 \
         if(removed.test comparison h->heap[child].test) break;                  \
                                                                                 \
@@ -257,28 +254,8 @@ CVM_BIN_HEAP(uint32_t,uint32_t,uint_min,<)
 
 
 
-//#define CVM_ZERO_8  0x00
-//#define CVM_ZERO_16 0x0000
-//#define CVM_ZERO_32 0x00000000
-//#define CVM_ZERO_64 0x0000000000000000
-//
-//#define CVM_ONE_8  0x01
-//#define CVM_ONE_16 0x0001
-//#define CVM_ONE_32 0x00000001
-//#define CVM_ONE_64 0x0000000000000001
-//
-//#define CVM_MID_8  0x80
-//#define CVM_MID_16 0x8000
-//#define CVM_MID_32 0x80000000
-//#define CVM_MID_64 0x8000000000000000
-//
-//#define CVM_QTR_8  0x40
-//#define CVM_QTR_16 0x4000
-//#define CVM_QTR_32 0x40000000
-//#define CVM_QTR_64 0x4000000000000000
 
-
-typedef uint8_t cvm_atomic_pad[124];///+sizeof(uint32_t) is 128, required memory separation on most, if not all CPU's test this for actual performance difference
+typedef uint8_t cvm_atomic_pad[252];///+sizeof(uint32_t) is 128, required memory separation on most, if not all CPU's test this for actual performance difference
 
 
 
@@ -346,52 +323,59 @@ typedef uint8_t cvm_atomic_pad[124];///+sizeof(uint32_t) is 128, required memory
 
 
 
-
-
-
-
-
-typedef struct cvm_coherent_mp_mc_list_element cvm_coherent_mp_mc_list_element;
-
-struct cvm_coherent_mp_mc_list_element
-{
-    cvm_coherent_mp_mc_list_element * next_element;
-    uint8_t * data;
-};
-
-typedef struct cvm_coherent_mp_mc_list
+typedef struct cvm_expanding_mp_mc_list
 {
     size_t type_size;
-    uint32_t block_size;
-    cvm_coherent_mp_mc_list_element * in_element;
-    cvm_coherent_mp_mc_list_element * out_element;
-    cvm_coherent_mp_mc_list_element * end_element;
+    uint_fast32_t block_size;
+    char * in_block;
+    char * out_block;
+    char * end_block;
     cvm_atomic_pad start_pad;
-    _Atomic uint32_t spinlock;
+    atomic_uint_fast32_t spinlock;
     cvm_atomic_pad spinlock_pad;
-    _Atomic uint32_t in;
+    atomic_uint_fast32_t in;
     cvm_atomic_pad in_pad;
-    _Atomic uint32_t out;
+    atomic_uint_fast32_t out;
     cvm_atomic_pad out_pad;
-    _Atomic uint32_t in_buffer_fence;
+    atomic_uint_fast32_t in_buffer_fence;
     cvm_atomic_pad in_buffer_fence_pad;
-    _Atomic uint32_t out_buffer_fence;
+    atomic_uint_fast32_t out_buffer_fence;
     cvm_atomic_pad out_buffer_fence_pad;
-    _Atomic uint32_t in_completions;
+    atomic_uint_fast32_t in_completions;
     cvm_atomic_pad out_fence_pad;
-    _Atomic uint32_t out_completions;
+    atomic_uint_fast32_t out_completions;
     cvm_atomic_pad out_completions_pad;
 }
-cvm_coherent_mp_mc_list;
+cvm_expanding_mp_mc_list;
 
-void cvm_coherent_mp_mc_list_ini( cvm_coherent_mp_mc_list * list , uint32_t block_size , size_t type_size );///not coherent
-void cvm_coherent_mp_mc_list_add( cvm_coherent_mp_mc_list * list , void * value );
-bool cvm_coherent_mp_mc_list_get( cvm_coherent_mp_mc_list * list , void * value );
-void cvm_coherent_mp_mc_list_del( cvm_coherent_mp_mc_list * list );///not coherent
-
-
+void cvm_expanding_mp_mc_list_ini( cvm_expanding_mp_mc_list * list , uint_fast32_t block_size , size_t type_size );///not coherent
+void cvm_expanding_mp_mc_list_add( cvm_expanding_mp_mc_list * list , void * value );
+bool cvm_expanding_mp_mc_list_get( cvm_expanding_mp_mc_list * list , void * value );
+void cvm_expanding_mp_mc_list_del( cvm_expanding_mp_mc_list * list );///not coherent
 
 
+
+typedef struct cvm_fixed_size_mp_mc_list
+{
+    size_t type_size;
+    uint_fast32_t max_entry_count;
+    char * data;
+    cvm_atomic_pad start_pad;
+    atomic_uint_fast32_t in;
+    cvm_atomic_pad in_pad;
+    atomic_uint_fast32_t out;
+    cvm_atomic_pad out_pad;
+    atomic_uint_fast32_t in_fence;
+    cvm_atomic_pad in_fence_pad;
+    atomic_uint_fast32_t out_fence;
+    cvm_atomic_pad out_fence_pad;
+}
+cvm_fixed_size_mp_mc_list;
+
+void cvm_fixed_size_mp_mc_list_ini( cvm_fixed_size_mp_mc_list * list , uint_fast32_t max_entry_count , size_t type_size );///not coherent
+bool cvm_fixed_size_mp_mc_list_add( cvm_fixed_size_mp_mc_list * list , void * value );
+bool cvm_fixed_size_mp_mc_list_get( cvm_fixed_size_mp_mc_list * list , void * value );
+void cvm_fixed_size_mp_mc_list_del( cvm_fixed_size_mp_mc_list * list );///not coherent
 
 
 
@@ -412,6 +396,7 @@ struct cvm_lockfree_mp_mc_stack_head
     void * top;
 };
 
+///not recently tested
 ///allocate memory in chunks (to improve performance) and record to free accordingly (maybe mark each element as start of block, record # of blocks in atomic, then go through list at end adding starts to alloced list and free when through all)
 typedef struct cvm_lockfree_mp_mc_stack
 {
@@ -468,7 +453,7 @@ cvm_fast_unsafe_mp_mc_list;
 
 void cvm_fast_unsafe_mp_mc_list_ini( cvm_fast_unsafe_mp_mc_list * list , uint32_t list_size , size_t type_size );
 void cvm_fast_unsafe_mp_mc_list_add( cvm_fast_unsafe_mp_mc_list * list , void * value );
-int  cvm_fast_unsafe_mp_mc_list_get( cvm_fast_unsafe_mp_mc_list * list , void * value );
+bool cvm_fast_unsafe_mp_mc_list_get( cvm_fast_unsafe_mp_mc_list * list , void * value );
 void cvm_fast_unsafe_mp_mc_list_del( cvm_fast_unsafe_mp_mc_list * list );
 
 
@@ -503,7 +488,7 @@ cvm_fast_unsafe_sp_mc_list;
 
 void cvm_fast_unsafe_sp_mc_list_ini( cvm_fast_unsafe_sp_mc_list * list , uint32_t list_size , size_t type_size );
 void cvm_fast_unsafe_sp_mc_list_add( cvm_fast_unsafe_sp_mc_list * list , void * value );
-int  cvm_fast_unsafe_sp_mc_list_get( cvm_fast_unsafe_sp_mc_list * list , void * value );
+bool cvm_fast_unsafe_sp_mc_list_get( cvm_fast_unsafe_sp_mc_list * list , void * value );
 void cvm_fast_unsafe_sp_mc_list_del( cvm_fast_unsafe_sp_mc_list * list );
 
 
