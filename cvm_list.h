@@ -244,81 +244,7 @@ CVM_BIN_HEAP(uint32_t,uint32_t,uint_min,<)
 
 
 
-
-
-
-
-
-
-
-
-
-
-
-typedef uint8_t cvm_atomic_pad[252];///+sizeof(uint32_t) is 128, required memory separation on most, if not all CPU's test this for actual performance difference
-
-
-
-
-/**
-    general multi-producer multi-consumer concurrent list
-
-    allocates memory as needed.
-
-    starts deleting free chunks when fraction in use is below some threshold and total chunks allocated is above some threshold.
-        -these threshold should be set at creation time after initialisation.
-
-    will work forever unless:
-        -a thread unexpectedly dies in the middle of an add/get operation.
-        -total stored datum goes above 2^32 (this can be increased to 2^64 by changing all 32 refrences in code to 64, which comes at the cost of about 5-20% time increase).
-*/
-
-//typedef struct cvm_coherent_large_data_mp_mc_list_element cvm_coherent_large_data_mp_mc_list_element;
-//
-//struct cvm_coherent_large_data_mp_mc_list_element
-//{
-//    cvm_coherent_large_data_mp_mc_list_element * next_element;
-//    uint8_t * data;
-//};
-//
-//typedef struct
-//{
-//    size_t type_size;
-//    uint32_t block_size;
-//    uint32_t active_chunks;
-//    uint32_t total_chunks;
-//    uint32_t del_numerator;
-//    uint32_t del_denominator;
-//    uint32_t min_total_chunks;
-//    cvm_coherent_large_data_mp_mc_list_element * in_element;
-//    cvm_coherent_large_data_mp_mc_list_element * out_element;
-//    cvm_coherent_large_data_mp_mc_list_element * end_element;
-//    cvm_atomic_pad start_pad;
-//    _Atomic uint32_t spinlock;
-//    cvm_atomic_pad spinlock_pad;
-//    _Atomic uint32_t in;
-//    cvm_atomic_pad in_pad;
-//    _Atomic uint32_t out;
-//    cvm_atomic_pad out_pad;
-//    _Atomic uint32_t in_fence;
-//    cvm_atomic_pad in_fence_pad;
-//    _Atomic uint32_t in_op_count;
-//    cvm_atomic_pad in_op_count_pad;
-//    _Atomic uint32_t out_op_count;
-//    cvm_atomic_pad out_op_count_pad;
-//}
-//cvm_coherent_large_data_mp_mc_list;
-//
-//void cvm_coherent_large_data_mp_mc_list_ini( cvm_coherent_large_data_mp_mc_list * list , uint32_t block_size , size_t type_size );///not coherent
-//void cvm_coherent_large_data_mp_mc_list_add( cvm_coherent_large_data_mp_mc_list * list , void * value );
-//bool cvm_coherent_large_data_mp_mc_list_get( cvm_coherent_large_data_mp_mc_list * list , void * value );
-//void cvm_coherent_large_data_mp_mc_list_del( cvm_coherent_large_data_mp_mc_list * list );///not coherent
-//
-//void cvm_coherent_large_data_mp_mc_list_set_deletion_data( cvm_coherent_large_data_mp_mc_list * list , uint32_t numerator , uint32_t denominator , uint32_t min_total_chunks );
-
-
-
-
+typedef uint8_t cvm_atomic_pad[256-sizeof(atomic_uint_fast32_t)];///+sizeof(uint32_t) is 128, required memory separation on most, if not all CPU's test this for actual performance difference
 
 
 
@@ -342,7 +268,7 @@ typedef struct cvm_expanding_mp_mc_list
     atomic_uint_fast32_t out_buffer_fence;
     cvm_atomic_pad out_buffer_fence_pad;
     atomic_uint_fast32_t in_completions;
-    cvm_atomic_pad out_fence_pad;
+    cvm_atomic_pad in_completions_pad;
     atomic_uint_fast32_t out_completions;
     cvm_atomic_pad out_completions_pad;
 }
@@ -381,19 +307,12 @@ void cvm_fixed_size_mp_mc_list_del( cvm_fixed_size_mp_mc_list * list );///not co
 
 
 
-
-
-
-
-
-
-
 typedef struct cvm_lockfree_mp_mc_stack_head cvm_lockfree_mp_mc_stack_head;
 
 struct cvm_lockfree_mp_mc_stack_head
 {
-    uintptr_t count;
-    void * top;
+    uint_fast64_t change_count;
+    char * first;
 };
 
 ///not recently tested
@@ -411,88 +330,41 @@ typedef struct cvm_lockfree_mp_mc_stack
 cvm_lockfree_mp_mc_stack;
 
 void cvm_lockfree_mp_mc_stack_ini( cvm_lockfree_mp_mc_stack * stack , uint32_t num_units , size_t type_size );///not lockfree
-int  cvm_lockfree_mp_mc_stack_add( cvm_lockfree_mp_mc_stack * stack , void * value );
-int  cvm_lockfree_mp_mc_stack_get( cvm_lockfree_mp_mc_stack * stack , void * value );
+bool cvm_lockfree_mp_mc_stack_add( cvm_lockfree_mp_mc_stack * stack , void * value );
+bool cvm_lockfree_mp_mc_stack_get( cvm_lockfree_mp_mc_stack * stack , void * value );
 void cvm_lockfree_mp_mc_stack_del( cvm_lockfree_mp_mc_stack * stack );///not lockfree
 
 
 
 
-
-
-
-
-
-
-
-/**
-    fast unsafe multi-producer multi-consumer concurrent list
-
-    allocates set amount of memory at initialisation.
-
-    is faster than the general type under all usage patterns.
-
-    will work forever unless:
-        -a thread unexpectedly dies in the middle of an add/get operation.
-        -total stored datum goes above the ammount set at startup (unsafe because of this).
-*/
+///    is faster than the general type under all usage patterns.
+///
+///    will work forever unless:
+///        -a thread unexpectedly dies in the middle of an add/get operation.
+///        -total stored entries exceed max_entry_count (unsafe because of this).
 
 typedef struct cvm_fast_unsafe_mp_mc_list
 {
     size_t type_size;
-    uint32_t list_size;
-    cvm_atomic_pad start_pad;
+    uint_fast32_t max_entry_count;
+
     uint8_t * data;
-    cvm_atomic_pad fence_status_pad;
-    _Atomic uint32_t in;
+    cvm_atomic_pad start_pad;
+    atomic_uint_fast32_t fence;
+    cvm_atomic_pad fence_pad;
+    atomic_uint_fast32_t in;
     cvm_atomic_pad in_pad;
-    _Atomic uint32_t out;
+    atomic_uint_fast32_t out;
     cvm_atomic_pad out_pad;
 }
 cvm_fast_unsafe_mp_mc_list;
 
-void cvm_fast_unsafe_mp_mc_list_ini( cvm_fast_unsafe_mp_mc_list * list , uint32_t list_size , size_t type_size );
+void cvm_fast_unsafe_mp_mc_list_ini( cvm_fast_unsafe_mp_mc_list * list , uint_fast32_t max_entry_count , size_t type_size );
 void cvm_fast_unsafe_mp_mc_list_add( cvm_fast_unsafe_mp_mc_list * list , void * value );
 bool cvm_fast_unsafe_mp_mc_list_get( cvm_fast_unsafe_mp_mc_list * list , void * value );
 void cvm_fast_unsafe_mp_mc_list_del( cvm_fast_unsafe_mp_mc_list * list );
 
 
 
-/**
-    fast unsafe single-producer multi-consumer concurrent list
-
-    allocates set amount of memory at initialisation.
-
-    is faster than the general type under all usage patterns.
-
-    will work forever unless:
-        -a thread unexpectedly dies in the middle of an add/get operation.
-        -total stored datum goes above the ammount set at startup (unsafe because of this).
-        -cvm_fast_unsafe_sp_mc_list_add is called from more than 1 thread simultaneously for the same cvm_fast_unsafe_sp_mc_list object
-*/
-
-typedef struct cvm_fast_unsafe_sp_mc_list
-{
-    size_t type_size;
-    uint32_t list_size;
-    uint8_t * data;
-    cvm_atomic_pad start_pad;
-    _Atomic uint32_t in;
-    cvm_atomic_pad in_pad;
-    _Atomic uint32_t fence;
-    cvm_atomic_pad fence_pad;
-    _Atomic uint32_t out;
-    cvm_atomic_pad out_pad;
-}
-cvm_fast_unsafe_sp_mc_list;
-
-void cvm_fast_unsafe_sp_mc_list_ini( cvm_fast_unsafe_sp_mc_list * list , uint32_t list_size , size_t type_size );
-void cvm_fast_unsafe_sp_mc_list_add( cvm_fast_unsafe_sp_mc_list * list , void * value );
-bool cvm_fast_unsafe_sp_mc_list_get( cvm_fast_unsafe_sp_mc_list * list , void * value );
-void cvm_fast_unsafe_sp_mc_list_del( cvm_fast_unsafe_sp_mc_list * list );
-
-
-
-void test_coherent_data_structures(void);
 
 #endif
