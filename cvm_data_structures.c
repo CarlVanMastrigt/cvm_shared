@@ -19,7 +19,7 @@ along with cvm_shared.  If not, see <https://www.gnu.org/licenses/>.
 
 #include "cvm_shared.h"
 
-void cvm_expanding_mp_mc_list_ini( cvm_expanding_mp_mc_list * list , uint_fast32_t block_size , size_t type_size )
+void cvm_thread_safe_expanding_queue_ini( cvm_thread_safe_expanding_queue * list , uint_fast32_t block_size , size_t type_size )
 {
     ///block size must always be power of 2
 
@@ -50,7 +50,7 @@ void cvm_expanding_mp_mc_list_ini( cvm_expanding_mp_mc_list * list , uint_fast32
     atomic_init(&list->out_completions,0);
 }
 
-void cvm_expanding_mp_mc_list_add( cvm_expanding_mp_mc_list * list , void * value )
+void cvm_thread_safe_expanding_queue_add( cvm_thread_safe_expanding_queue * list , void * value )
 {
     char *block,*next_block;
 
@@ -99,7 +99,7 @@ void cvm_expanding_mp_mc_list_add( cvm_expanding_mp_mc_list * list , void * valu
     }
 }
 
-bool cvm_expanding_mp_mc_list_get( cvm_expanding_mp_mc_list * list , void * value )
+bool cvm_thread_safe_expanding_queue_get( cvm_thread_safe_expanding_queue * list , void * value )
 {
     char *block,*next_block;
     uint_fast32_t lock,fence,index,index_in_block;
@@ -151,7 +151,7 @@ bool cvm_expanding_mp_mc_list_get( cvm_expanding_mp_mc_list * list , void * valu
     return true;
 }
 
-void cvm_expanding_mp_mc_list_del( cvm_expanding_mp_mc_list * list )
+void cvm_thread_safe_expanding_queue_del( cvm_thread_safe_expanding_queue * list )
 {
     char *block,*next_block;
 
@@ -167,7 +167,7 @@ void cvm_expanding_mp_mc_list_del( cvm_expanding_mp_mc_list * list )
 
 
 ///slower than expanding due to 2x CAS needed in both add/get, rather than just ADD & CAS in add
-void cvm_fixed_size_mp_mc_list_ini( cvm_fixed_size_mp_mc_list * list , uint_fast32_t max_entry_count , size_t type_size )
+void cvm_thread_safe_queue_ini( cvm_thread_safe_queue * list , uint_fast32_t max_entry_count , size_t type_size )
 {
     ///block size must always be power of 2
 
@@ -187,7 +187,7 @@ void cvm_fixed_size_mp_mc_list_ini( cvm_fixed_size_mp_mc_list * list , uint_fast
     atomic_init(&list->out_fence,0);
 }
 
-bool cvm_fixed_size_mp_mc_list_add( cvm_fixed_size_mp_mc_list * list , void * value )
+bool cvm_thread_safe_queue_add( cvm_thread_safe_queue * list , void * value )
 {
     uint_fast32_t index,fence;
 
@@ -203,7 +203,7 @@ bool cvm_fixed_size_mp_mc_list_add( cvm_fixed_size_mp_mc_list * list , void * va
     return true;
 }
 
-bool cvm_fixed_size_mp_mc_list_get( cvm_fixed_size_mp_mc_list * list , void * value )
+bool cvm_thread_safe_queue_get( cvm_thread_safe_queue * list , void * value )
 {
     uint_fast32_t index,fence;
 
@@ -219,7 +219,7 @@ bool cvm_fixed_size_mp_mc_list_get( cvm_fixed_size_mp_mc_list * list , void * va
     return true;
 }
 
-void cvm_fixed_size_mp_mc_list_del( cvm_fixed_size_mp_mc_list * list )
+void cvm_thread_safe_queue_del( cvm_thread_safe_queue * list )
 {
     free(list->data);
 }
@@ -229,7 +229,7 @@ void cvm_fixed_size_mp_mc_list_del( cvm_fixed_size_mp_mc_list * list )
 
 
 
-void cvm_lockfree_mp_mc_stack_ini( cvm_lockfree_mp_mc_stack * stack , uint32_t num_units , size_t type_size )
+void cvm_lock_free_stack_ini( cvm_lock_free_stack * stack , uint32_t num_units , size_t type_size )
 {
     stack->type_size=type_size;
 
@@ -239,8 +239,8 @@ void cvm_lockfree_mp_mc_stack_ini( cvm_lockfree_mp_mc_stack * stack , uint32_t n
 
     uint32_t i;
 
-    atomic_init(&stack->allocated,((cvm_lockfree_mp_mc_stack_head){.change_count=0,.first=NULL}));
-    atomic_init(&stack->available,((cvm_lockfree_mp_mc_stack_head){.change_count=0,.first=ptr}));
+    atomic_init(&stack->allocated,((cvm_lock_free_stack_head){.change_count=0,.first=NULL}));
+    atomic_init(&stack->available,((cvm_lock_free_stack_head){.change_count=0,.first=ptr}));
 
     for(i=1;i<num_units;i++)
     {
@@ -249,9 +249,9 @@ void cvm_lockfree_mp_mc_stack_ini( cvm_lockfree_mp_mc_stack * stack , uint32_t n
     *((char**)(ptr+(i-1)*type_size))=NULL;
 }
 
-bool cvm_lockfree_mp_mc_stack_add( cvm_lockfree_mp_mc_stack * stack , void * value )
+bool cvm_lock_free_stack_add( cvm_lock_free_stack * stack , void * value )
 {
-    cvm_lockfree_mp_mc_stack_head current,replacement;
+    cvm_lock_free_stack_head current,replacement;
     char * ptr;
 
     current=atomic_load(&stack->available);
@@ -280,9 +280,9 @@ bool cvm_lockfree_mp_mc_stack_add( cvm_lockfree_mp_mc_stack * stack , void * val
     return true;
 }
 
-bool cvm_lockfree_mp_mc_stack_get( cvm_lockfree_mp_mc_stack * stack , void * value )
+bool cvm_lock_free_stack_get( cvm_lock_free_stack * stack , void * value )
 {
-    cvm_lockfree_mp_mc_stack_head current,replacement;
+    cvm_lock_free_stack_head current,replacement;
     char * ptr;
 
     current=atomic_load(&stack->allocated);
@@ -310,7 +310,7 @@ bool cvm_lockfree_mp_mc_stack_get( cvm_lockfree_mp_mc_stack * stack , void * val
     return true;
 }
 
-void cvm_lockfree_mp_mc_stack_del( cvm_lockfree_mp_mc_stack * stack )
+void cvm_lock_free_stack_del( cvm_lock_free_stack * stack )
 {
     free(stack->unit_allocation);
 }
@@ -320,7 +320,7 @@ void cvm_lockfree_mp_mc_stack_del( cvm_lockfree_mp_mc_stack * stack )
 
 
 
-void cvm_fast_unsafe_mp_mc_list_ini( cvm_fast_unsafe_mp_mc_list * list , uint_fast32_t max_entry_count , size_t type_size )
+void cvm_coherent_limted_queue_ini( cvm_coherent_limted_queue * list , uint_fast32_t max_entry_count , size_t type_size )
 {
     ///max_entry_count must always be power of 2
 
@@ -338,7 +338,7 @@ void cvm_fast_unsafe_mp_mc_list_ini( cvm_fast_unsafe_mp_mc_list * list , uint_fa
     list->type_size=type_size;
 }
 
-void cvm_fast_unsafe_mp_mc_list_add( cvm_fast_unsafe_mp_mc_list * list , void * value )
+void cvm_coherent_limted_queue_add( cvm_coherent_limted_queue * list , void * value )
 {
     uint_fast32_t index,fence;
     index=atomic_fetch_add(&list->in,1);
@@ -349,7 +349,7 @@ void cvm_fast_unsafe_mp_mc_list_add( cvm_fast_unsafe_mp_mc_list * list , void * 
     while( ! atomic_compare_exchange_weak(&list->fence,&fence,index+1));
 }
 
-bool cvm_fast_unsafe_mp_mc_list_get( cvm_fast_unsafe_mp_mc_list * list , void * value )
+bool cvm_coherent_limted_queue_get( cvm_coherent_limted_queue * list , void * value )
 {
     uint_fast32_t index=atomic_load(&list->out);
 
@@ -361,7 +361,7 @@ bool cvm_fast_unsafe_mp_mc_list_get( cvm_fast_unsafe_mp_mc_list * list , void * 
     return true;
 }
 
-void cvm_fast_unsafe_mp_mc_list_del( cvm_fast_unsafe_mp_mc_list * list )
+void cvm_coherent_limted_queue_del( cvm_coherent_limted_queue * list )
 {
     free(list->data);
 }
@@ -374,7 +374,7 @@ void cvm_fast_unsafe_mp_mc_list_del( cvm_fast_unsafe_mp_mc_list * list )
 
 //typedef struct coherent_list_test_data
 //{
-//    cvm_fast_unsafe_mp_mc_list list;
+//    cvm_coherent_limted_queue list;
 //    _Atomic uint32_t test_total;
 //
 //    bool running;
@@ -391,8 +391,8 @@ void cvm_fast_unsafe_mp_mc_list_del( cvm_fast_unsafe_mp_mc_list * list )
 //    for(i=0;i < 83*data->cycle_count;i++)
 //    {
 //        tmp=i%83;
-//        //while( ! cvm_fast_unsafe_mp_mc_list_add(&data->list,&tmp));
-//        cvm_fast_unsafe_mp_mc_list_add(&data->list,&tmp);
+//        //while( ! cvm_coherent_limted_queue_add(&data->list,&tmp));
+//        cvm_coherent_limted_queue_add(&data->list,&tmp);
 //    }
 //
 //    return 0;
@@ -408,12 +408,12 @@ void cvm_fast_unsafe_mp_mc_list_del( cvm_fast_unsafe_mp_mc_list * list )
 //    {
 //        if(data->running)
 //        {
-//            if(cvm_fast_unsafe_mp_mc_list_get(&data->list,&j))atomic_fetch_add(&data->test_total,j);
+//            if(cvm_coherent_limted_queue_get(&data->list,&j))atomic_fetch_add(&data->test_total,j);
 //            else k++;
 //        }
 //        else
 //        {
-//            if(cvm_fast_unsafe_mp_mc_list_get(&data->list,&j))atomic_fetch_add(&data->test_total,j);
+//            if(cvm_coherent_limted_queue_get(&data->list,&j))atomic_fetch_add(&data->test_total,j);
 //            else break;
 //        }
 //    }
@@ -432,7 +432,7 @@ void cvm_fast_unsafe_mp_mc_list_del( cvm_fast_unsafe_mp_mc_list * list )
 //    coherent_list_test_data data;
 //
 //
-//    cvm_fast_unsafe_mp_mc_list_ini(&data.list,50000000,sizeof(uint32_t));
+//    cvm_coherent_limted_queue_ini(&data.list,50000000,sizeof(uint32_t));
 //    atomic_init(&data.test_total,0);
 //    data.running=true;
 //    data.cycle_count=60000/in_tc;
@@ -456,13 +456,13 @@ void cvm_fast_unsafe_mp_mc_list_del( cvm_fast_unsafe_mp_mc_list * list )
 //
 //    printf("thread test: %d  %u\n",t_tot,atomic_load(&data.test_total));
 //
-//    cvm_fast_unsafe_mp_mc_list_del(&data.list);
+//    cvm_coherent_limted_queue_del(&data.list);
 //}
 
 
 //typedef struct coherent_stack_test_data
 //{
-//    cvm_lockfree_mp_mc_stack stack;
+//    cvm_lock_free_stack stack;
 //    _Atomic uint32_t test_total;
 //
 //    bool running;
@@ -479,8 +479,8 @@ void cvm_fast_unsafe_mp_mc_list_del( cvm_fast_unsafe_mp_mc_list * list )
 //    for(i=0;i < 83*data->cycle_count;i++)
 //    {
 //        tmp=i%83;
-//        while( ! cvm_lockfree_mp_mc_stack_add(&data->stack,&tmp));
-//        //cvm_lockfree_mp_mc_stack_add(&data->stack,&tmp);
+//        while( ! cvm_lock_free_stack_add(&data->stack,&tmp));
+//        //cvm_lock_free_stack_add(&data->stack,&tmp);
 //    }
 //
 //    return 0;
@@ -496,12 +496,12 @@ void cvm_fast_unsafe_mp_mc_list_del( cvm_fast_unsafe_mp_mc_list * list )
 //    {
 //        if(data->running)
 //        {
-//            if(cvm_lockfree_mp_mc_stack_get(&data->stack,&j))atomic_fetch_add(&data->test_total,j);
+//            if(cvm_lock_free_stack_get(&data->stack,&j))atomic_fetch_add(&data->test_total,j);
 //            else k++;
 //        }
 //        else
 //        {
-//            if(cvm_lockfree_mp_mc_stack_get(&data->stack,&j))atomic_fetch_add(&data->test_total,j);
+//            if(cvm_lock_free_stack_get(&data->stack,&j))atomic_fetch_add(&data->test_total,j);
 //            else break;
 //        }
 //    }
@@ -520,7 +520,7 @@ void cvm_fast_unsafe_mp_mc_list_del( cvm_fast_unsafe_mp_mc_list * list )
 //    coherent_stack_test_data data;
 //
 //
-//    cvm_lockfree_mp_mc_stack_ini(&data.stack,500000,sizeof(uint32_t));
+//    cvm_lock_free_stack_ini(&data.stack,500000,sizeof(uint32_t));
 //    atomic_init(&data.test_total,0);
 //    data.running=true;
 //    data.cycle_count=60000/in_tc;
@@ -544,5 +544,5 @@ void cvm_fast_unsafe_mp_mc_list_del( cvm_fast_unsafe_mp_mc_list * list )
 //
 //    printf("thread test: %d  %u\n",t_tot,atomic_load(&data.test_total));
 //
-//    cvm_lockfree_mp_mc_stack_del(&data.stack);
+//    cvm_lock_free_stack_del(&data.stack);
 //}

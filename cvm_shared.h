@@ -48,7 +48,7 @@ along with cvm_shared.  If not, see <https://www.gnu.org/licenses/>.
 ///own headers
 
 #include "cvm_math.h"
-#include "cvm_list.h"
+#include "cvm_data_structures.h"
 #include "cvm_random.h"
 #include "cvm_gl_functions.h"
 #include "cvm_shader.h"

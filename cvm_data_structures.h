@@ -21,11 +21,13 @@ along with cvm_shared.  If not, see <https://www.gnu.org/licenses/>.
 #include "cvm_shared.h"
 #endif
 
-#ifndef CVM_LIST_H
-#define CVM_LIST_H
+#ifndef CVM_DATA_STRUCTURES_H
+#define CVM_DATA_STRUCTURES_H
 
 
-///S   LIST
+
+
+
 #ifndef CVM_LIST
 #define CVM_LIST(type,name)                                                     \
                                                                                 \
@@ -115,18 +117,7 @@ static inline type * name##_list_ensure_space                                   
     return (l->list+l->count);                                                  \
 }                                                                               \
 
-
-
 #endif
-///E   LIST
-
-CVM_LIST(uint32_t,uint)
-CVM_LIST(uintptr_t,uintptr)
-
-
-
-
-
 
 
 
@@ -139,54 +130,39 @@ CVM_LIST(uintptr_t,uintptr)
 
 
 #ifndef CVM_BIN_HEAP
-#define CVM_BIN_HEAP(data_type,test_type,name,comparison)                       \
-                                                                                \
-typedef struct name##_bin_heap_entry                                            \
-{                                                                               \
-    data_type data;                                                             \
-    test_type test;                                                             \
-}                                                                               \
-name##_bin_heap_entry;                                                          \
+#define CVM_BIN_HEAP(type,name,cmp_func)                                        \
                                                                                 \
 typedef struct name##_bin_heap                                                  \
 {                                                                               \
-    name##_bin_heap_entry * heap;                                               \
-    uint32_t space;                                                             \
-    uint32_t count;                                                             \
+    type * heap;                                                                \
+    uint_fast32_t space;                                                        \
+    uint_fast32_t count;                                                        \
 }                                                                               \
 name##_bin_heap;                                                                \
                                                                                 \
-                                                                                \
 static inline void name##_bin_heap_ini( name##_bin_heap * h )                   \
 {                                                                               \
-    h->heap=malloc( sizeof( name##_bin_heap_entry ) );                          \
+    h->heap=malloc( sizeof( type ) );                                           \
     h->space=1;                                                                 \
     h->count=0;                                                                 \
 }                                                                               \
                                                                                 \
-static inline void name##_bin_heap_add( name##_bin_heap * h , data_type data , test_type test) \
+static inline void name##_bin_heap_add( name##_bin_heap * h ,   type data )     \
 {                                                                               \
-    if(h->count==h->space)                                                      \
-    {                                                                           \
-        h->heap=realloc( h->heap , sizeof( name##_bin_heap_entry ) * ( h->space*=2 ) ); \
-    }                                                                           \
+    if(h->count==h->space)h->heap=realloc(h->heap,sizeof(type)*(h->space*=2));  \
                                                                                 \
-    uint32_t i1,i2;                                                             \
-    i1=h->count++;                                                              \
+    uint32_t u,d;                                                               \
+    d=h->count++;                                                               \
                                                                                 \
-    while(i1)                                                                   \
+    while(d)                                                                    \
     {                                                                           \
-        i2=(i1-1)>>1;                                                           \
-        if( test comparison h->heap[i2].test)                                   \
-        {                                                                       \
-            h->heap[i1]=h->heap[i2];                                            \
-        }                                                                       \
+        u=(d-1)>>1;                                                             \
+        if(cmp_func(data,h->heap[u])) h->heap[d]=h->heap[u];                    \
         else break;                                                             \
-        i1=i2;                                                                  \
+        d=u;                                                                    \
     }                                                                           \
                                                                                 \
-    h->heap[i1].data=data;                                                      \
-    h->heap[i1].test=test;                                                      \
+    h->heap[d]=data;                                                            \
 }                                                                               \
                                                                                 \
 static inline void name##_bin_heap_clr( name##_bin_heap * h )                   \
@@ -194,27 +170,25 @@ static inline void name##_bin_heap_clr( name##_bin_heap * h )                   
     h->count=0;                                                                 \
 }                                                                               \
                                                                                 \
-static inline int name##_bin_heap_get( name##_bin_heap * h , data_type * data ) \
+static inline bool name##_bin_heap_get( name##_bin_heap * h , type * data )     \
 {                                                                               \
-    if(h->count==0)return 0;                                                    \
+    if(h->count==0)return false;                                                \
                                                                                 \
-    *data=h->heap[0].data;                                                      \
+    *data=h->heap[0];                                                           \
                                                                                 \
-    uint32_t current,child;                                                     \
-    name##_bin_heap_entry removed=h->heap[--(h->count)];                        \
-    current=0;                                                                  \
+    uint32_t u,d;                                                               \
+    type r=h->heap[--(h->count)];                                               \
+    u=0;                                                                        \
                                                                                 \
-    while((child=(current<<1)+1) comparison (h->count))                         \
+    while((d=(u<<1)+1) < (h->count))                                            \
     {                                                                           \
-        child+=((child+1 < h->count)&&(h->heap[child+1].test < h->heap[child].test));\
-                                                                                \
-        if(removed.test comparison h->heap[child].test) break;                  \
-                                                                                \
-        h->heap[current]=h->heap[child];                                        \
-        current=child;                                                          \
+        d+=((d+1 < h->count)&&(cmp_func(h->heap[d+1],h->heap[d])));             \
+        if(cmp_func(r,h->heap[d])) break;                                       \
+        h->heap[u]=h->heap[d];                                                  \
+        u=d;                                                                    \
     }                                                                           \
                                                                                 \
-    h->heap[current]=removed;                                                   \
+    h->heap[u]=r;                                                               \
     return 1;                                                                   \
 }                                                                               \
                                                                                 \
@@ -222,15 +196,9 @@ static inline void name##_bin_heap_del( name##_bin_heap * h )                   
 {                                                                               \
     free(h->heap);                                                              \
 }                                                                               \
-                                                                                \
-
-
 
 #endif
 
-
-
-CVM_BIN_HEAP(uint32_t,uint32_t,uint_min,<)
 
 
 
@@ -249,7 +217,7 @@ typedef uint8_t cvm_atomic_pad[256-sizeof(atomic_uint_fast32_t)];///+sizeof(uint
 
 
 
-typedef struct cvm_expanding_mp_mc_list
+typedef struct cvm_thread_safe_expanding_queue
 {
     size_t type_size;
     uint_fast32_t block_size;
@@ -272,16 +240,16 @@ typedef struct cvm_expanding_mp_mc_list
     atomic_uint_fast32_t out_completions;
     cvm_atomic_pad out_completions_pad;
 }
-cvm_expanding_mp_mc_list;
+cvm_thread_safe_expanding_queue;
 
-void cvm_expanding_mp_mc_list_ini( cvm_expanding_mp_mc_list * list , uint_fast32_t block_size , size_t type_size );///not coherent
-void cvm_expanding_mp_mc_list_add( cvm_expanding_mp_mc_list * list , void * value );
-bool cvm_expanding_mp_mc_list_get( cvm_expanding_mp_mc_list * list , void * value );
-void cvm_expanding_mp_mc_list_del( cvm_expanding_mp_mc_list * list );///not coherent
+void cvm_thread_safe_expanding_queue_ini( cvm_thread_safe_expanding_queue * list , uint_fast32_t block_size , size_t type_size );///not coherent
+void cvm_thread_safe_expanding_queue_add( cvm_thread_safe_expanding_queue * list , void * value );
+bool cvm_thread_safe_expanding_queue_get( cvm_thread_safe_expanding_queue * list , void * value );
+void cvm_thread_safe_expanding_queue_del( cvm_thread_safe_expanding_queue * list );///not coherent
 
 
 
-typedef struct cvm_fixed_size_mp_mc_list
+typedef struct cvm_thread_safe_queue
 {
     size_t type_size;
     uint_fast32_t max_entry_count;
@@ -296,54 +264,49 @@ typedef struct cvm_fixed_size_mp_mc_list
     atomic_uint_fast32_t out_fence;
     cvm_atomic_pad out_fence_pad;
 }
-cvm_fixed_size_mp_mc_list;
+cvm_thread_safe_queue;
 
-void cvm_fixed_size_mp_mc_list_ini( cvm_fixed_size_mp_mc_list * list , uint_fast32_t max_entry_count , size_t type_size );///not coherent
-bool cvm_fixed_size_mp_mc_list_add( cvm_fixed_size_mp_mc_list * list , void * value );
-bool cvm_fixed_size_mp_mc_list_get( cvm_fixed_size_mp_mc_list * list , void * value );
-void cvm_fixed_size_mp_mc_list_del( cvm_fixed_size_mp_mc_list * list );///not coherent
-
-
+void cvm_thread_safe_queue_ini( cvm_thread_safe_queue * list , uint_fast32_t max_entry_count , size_t type_size );///not coherent
+bool cvm_thread_safe_queue_add( cvm_thread_safe_queue * list , void * value );
+bool cvm_thread_safe_queue_get( cvm_thread_safe_queue * list , void * value );
+void cvm_thread_safe_queue_del( cvm_thread_safe_queue * list );///not coherent
 
 
 
-typedef struct cvm_lockfree_mp_mc_stack_head cvm_lockfree_mp_mc_stack_head;
 
-struct cvm_lockfree_mp_mc_stack_head
+
+
+typedef struct cvm_lock_free_stack_head
 {
     uint_fast64_t change_count;
     char * first;
-};
+}
+cvm_lock_free_stack_head;
 
-///not recently tested
-///allocate memory in chunks (to improve performance) and record to free accordingly (maybe mark each element as start of block, record # of blocks in atomic, then go through list at end adding starts to alloced list and free when through all)
-typedef struct cvm_lockfree_mp_mc_stack
+typedef struct cvm_lock_free_stack
 {
     void * unit_allocation;
     size_t type_size;
     cvm_atomic_pad start_pad;
-    _Atomic cvm_lockfree_mp_mc_stack_head allocated;
+    _Atomic cvm_lock_free_stack_head allocated;
     cvm_atomic_pad allocated_pad;
-    _Atomic cvm_lockfree_mp_mc_stack_head available;
+    _Atomic cvm_lock_free_stack_head available;
     cvm_atomic_pad available_pad;
 }
-cvm_lockfree_mp_mc_stack;
+cvm_lock_free_stack;
 
-void cvm_lockfree_mp_mc_stack_ini( cvm_lockfree_mp_mc_stack * stack , uint32_t num_units , size_t type_size );///not lockfree
-bool cvm_lockfree_mp_mc_stack_add( cvm_lockfree_mp_mc_stack * stack , void * value );
-bool cvm_lockfree_mp_mc_stack_get( cvm_lockfree_mp_mc_stack * stack , void * value );
-void cvm_lockfree_mp_mc_stack_del( cvm_lockfree_mp_mc_stack * stack );///not lockfree
+void cvm_lock_free_stack_ini( cvm_lock_free_stack * stack , uint32_t num_units , size_t type_size );///not lockfree
+bool cvm_lock_free_stack_add( cvm_lock_free_stack * stack , void * value );
+bool cvm_lock_free_stack_get( cvm_lock_free_stack * stack , void * value );
+void cvm_lock_free_stack_del( cvm_lock_free_stack * stack );///not lockfree
 
 
 
 
 ///    is faster than the general type under all usage patterns.
-///
-///    will work forever unless:
-///        -a thread unexpectedly dies in the middle of an add/get operation.
-///        -total stored entries exceed max_entry_count (unsafe because of this).
+///    thread safe unless total stored entries exceed max_entry_count (not thread-safe because of this).
 
-typedef struct cvm_fast_unsafe_mp_mc_list
+typedef struct cvm_coherent_limted_queue
 {
     size_t type_size;
     uint_fast32_t max_entry_count;
@@ -357,12 +320,12 @@ typedef struct cvm_fast_unsafe_mp_mc_list
     atomic_uint_fast32_t out;
     cvm_atomic_pad out_pad;
 }
-cvm_fast_unsafe_mp_mc_list;
+cvm_coherent_limted_queue;
 
-void cvm_fast_unsafe_mp_mc_list_ini( cvm_fast_unsafe_mp_mc_list * list , uint_fast32_t max_entry_count , size_t type_size );
-void cvm_fast_unsafe_mp_mc_list_add( cvm_fast_unsafe_mp_mc_list * list , void * value );
-bool cvm_fast_unsafe_mp_mc_list_get( cvm_fast_unsafe_mp_mc_list * list , void * value );
-void cvm_fast_unsafe_mp_mc_list_del( cvm_fast_unsafe_mp_mc_list * list );
+void cvm_coherent_limted_queue_ini( cvm_coherent_limted_queue * list , uint_fast32_t max_entry_count , size_t type_size );
+void cvm_coherent_limted_queue_add( cvm_coherent_limted_queue * list , void * value );
+bool cvm_coherent_limted_queue_get( cvm_coherent_limted_queue * list , void * value );
+void cvm_coherent_limted_queue_del( cvm_coherent_limted_queue * list );
 
 
 
