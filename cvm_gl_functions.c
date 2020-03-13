@@ -20,6 +20,97 @@ along with cvm_shared.  If not, see <https://www.gnu.org/licenses/>.
 #include "cvm_shared.h"
 
 
+
+
+gl_functions * get_gl_functions(void)
+{
+    gl_functions * glf=malloc(sizeof(gl_functions));
+
+    if((glf->glGenVertexArrays=SDL_GL_GetProcAddress("glGenVertexArrays"))==NULL)puts("Can't load glGenVertexArrays");
+    if((glf->glGenBuffers=SDL_GL_GetProcAddress("glGenBuffers"))==NULL)puts("Can't load glGenBuffers");
+    if((glf->glBindBuffer=SDL_GL_GetProcAddress("glBindBuffer"))==NULL)puts("Can't load glBindBuffer");
+    if((glf->glBufferData=SDL_GL_GetProcAddress("glBufferData"))==NULL)puts("Can't load glBufferData");
+    if((glf->glEnableVertexAttribArray=SDL_GL_GetProcAddress("glEnableVertexAttribArray"))==NULL)puts("Can't load glEnableVertexAttribArray");
+    if((glf->glVertexAttribPointer=SDL_GL_GetProcAddress("glVertexAttribPointer"))==NULL)puts("Can't load glVertexAttribPointer");
+    if((glf->glVertexAttribIPointer=SDL_GL_GetProcAddress("glVertexAttribIPointer"))==NULL)puts("Can't load glVertexAttribIPointer");
+    if((glf->glDisableVertexAttribArray=SDL_GL_GetProcAddress("glDisableVertexAttribArray"))==NULL)puts("Can't load glDisableVertexAttribArray");
+    if((glf->glBufferSubData=SDL_GL_GetProcAddress("glBufferSubData"))==NULL)puts("Can't load glBufferSubData");
+    if((glf->glCreateShader=SDL_GL_GetProcAddress("glCreateShader"))==NULL)puts("Can't load glCreateShader");
+    if((glf->glCreateProgram=SDL_GL_GetProcAddress("glCreateProgram"))==NULL)puts("Can't load glCreateProgram");
+    if((glf->glShaderSource=SDL_GL_GetProcAddress("glShaderSource"))==NULL)puts("Can't load glShaderSource");
+    if((glf->glCompileShader=SDL_GL_GetProcAddress("glCompileShader"))==NULL)puts("Can't load glCompileShader");
+    if((glf->glGetShaderiv=SDL_GL_GetProcAddress("glGetShaderiv"))==NULL)puts("Can't load glGetShaderiv");
+    if((glf->glGetShaderInfoLog=SDL_GL_GetProcAddress("glGetShaderInfoLog"))==NULL)puts("Can't load glGetShaderInfoLog");
+    if((glf->glAttachShader=SDL_GL_GetProcAddress("glAttachShader"))==NULL)puts("Can't load glAttachShader");
+    if((glf->glDetachShader=SDL_GL_GetProcAddress("glDetachShader"))==NULL)puts("Can't load glDetachShader");
+    if((glf->glDeleteShader=SDL_GL_GetProcAddress("glDeleteShader"))==NULL)puts("Can't load glDeleteShader");
+    if((glf->glLinkProgram=SDL_GL_GetProcAddress("glLinkProgram"))==NULL)puts("Can't load glLinkProgram");
+    if((glf->glGetProgramiv=SDL_GL_GetProcAddress("glGetProgramiv"))==NULL)puts("Can't load glGetProgramiv");
+    if((glf->glGetProgramInfoLog=SDL_GL_GetProcAddress("glGetProgramInfoLog"))==NULL)puts("Can't load glGetProgramInfoLog");
+    if((glf->glValidateProgram=SDL_GL_GetProcAddress("glValidateProgram"))==NULL)puts("Can't load glValidateProgram");
+    if((glf->glUseProgram=SDL_GL_GetProcAddress("glUseProgram"))==NULL)puts("Can't load glUseProgram");
+    if((glf->glGetString=SDL_GL_GetProcAddress("glGetString"))==NULL)puts("Can't load glGetString");
+    if((glf->glGenTextures=SDL_GL_GetProcAddress("glGenTextures"))==NULL)puts("Can't load glGenTextures");
+    if((glf->glBindTexture=SDL_GL_GetProcAddress("glBindTexture"))==NULL)puts("Can't load glBindTexture");
+    if((glf->glTexParameteri=SDL_GL_GetProcAddress("glTexParameteri"))==NULL)puts("Can't load glTexParameteri");
+    if((glf->glTexBuffer=SDL_GL_GetProcAddress("glTexBuffer"))==NULL)puts("Can't load glTexBuffer");
+    if((glf->glMapBufferRange=SDL_GL_GetProcAddress("glMapBufferRange"))==NULL)puts("Can't load glMapBufferRange");
+    if((glf->glUnmapBuffer=SDL_GL_GetProcAddress("glUnmapBuffer"))==NULL)puts("Can't load glUnmapBuffer");
+    if((glf->glActiveTexture=SDL_GL_GetProcAddress("glActiveTexture"))==NULL)puts("Can't load glActiveTexture");
+    if((glf->glBindImageTexture=SDL_GL_GetProcAddress("glBindImageTexture"))==NULL)puts("Can't load glBindImageTexture");
+    if((glf->glVertexAttribDivisor=SDL_GL_GetProcAddress("glVertexAttribDivisor"))==NULL)puts("Can't load glVertexAttribDivisor");
+    if((glf->glBindVertexArray=SDL_GL_GetProcAddress("glBindVertexArray"))==NULL)puts("Can't load glBindVertexArray");
+    if((glf->glGetAttribLocation=SDL_GL_GetProcAddress("glGetAttribLocation"))==NULL)puts("Can't load glGetAttribLocation");
+    if((glf->glBindFramebuffer=SDL_GL_GetProcAddress("glBindFramebuffer"))==NULL)puts("Can't load glBindFramebuffer");
+    if((glf->glDrawBuffer=SDL_GL_GetProcAddress("glDrawBuffer"))==NULL)puts("Can't load glDrawBuffer");
+    if((glf->glViewport=SDL_GL_GetProcAddress("glViewport"))==NULL)puts("Can't load glViewport");
+    if((glf->glEnable=SDL_GL_GetProcAddress("glEnable"))==NULL)puts("Can't load glEnable");
+    if((glf->glDisable=SDL_GL_GetProcAddress("glDisable"))==NULL)puts("Can't load glDisable");
+    if((glf->glBlendFunc=SDL_GL_GetProcAddress("glBlendFunc"))==NULL)puts("Can't load glBlendFunc");
+    if((glf->glGetUniformLocation=SDL_GL_GetProcAddress("glGetUniformLocation"))==NULL)puts("Can't load glGetUniformLocation");
+    if((glf->glDrawArraysInstanced=SDL_GL_GetProcAddress("glDrawArraysInstanced"))==NULL)puts("Can't load glDrawArraysInstanced");
+    if((glf->glDrawArrays=SDL_GL_GetProcAddress("glDrawArrays"))==NULL)puts("Can't load glDrawArrays");
+    if((glf->glGetError=SDL_GL_GetProcAddress("glGetError"))==NULL)puts("Can't load glGetError");
+    if((glf->glLineWidth=SDL_GL_GetProcAddress("glLineWidth"))==NULL)puts("Can't load glLineWidth");
+    if((glf->glPointSize=SDL_GL_GetProcAddress("glPointSize"))==NULL)puts("Can't load glPointSize");
+
+
+    if((glf->glUniform1i=SDL_GL_GetProcAddress("glUniform1i"))==NULL)puts("Can't load glUniform1i");
+    if((glf->glUniform2i=SDL_GL_GetProcAddress("glUniform2i"))==NULL)puts("Can't load glUniform2i");
+    if((glf->glUniform3i=SDL_GL_GetProcAddress("glUniform3i"))==NULL)puts("Can't load glUniform3i");
+    if((glf->glUniform4i=SDL_GL_GetProcAddress("glUniform4i"))==NULL)puts("Can't load glUniform4i");
+    if((glf->glUniform1iv=SDL_GL_GetProcAddress("glUniform1iv"))==NULL)puts("Can't load glUniform1iv");
+    if((glf->glUniform2iv=SDL_GL_GetProcAddress("glUniform2iv"))==NULL)puts("Can't load glUniform2iv");
+    if((glf->glUniform3iv=SDL_GL_GetProcAddress("glUniform3iv"))==NULL)puts("Can't load glUniform3iv");
+    if((glf->glUniform4iv=SDL_GL_GetProcAddress("glUniform4iv"))==NULL)puts("Can't load glUniform4iv");
+    if((glf->glUniform1ui=SDL_GL_GetProcAddress("glUniform1ui"))==NULL)puts("Can't load glUniform1ui");
+    if((glf->glUniform2ui=SDL_GL_GetProcAddress("glUniform2ui"))==NULL)puts("Can't load glUniform2ui");
+    if((glf->glUniform3ui=SDL_GL_GetProcAddress("glUniform3ui"))==NULL)puts("Can't load glUniform3ui");
+    if((glf->glUniform4ui=SDL_GL_GetProcAddress("glUniform4ui"))==NULL)puts("Can't load glUniform4ui");
+    if((glf->glUniform1uiv=SDL_GL_GetProcAddress("glUniform1uiv"))==NULL)puts("Can't load glUniform1uiv");
+    if((glf->glUniform2uiv=SDL_GL_GetProcAddress("glUniform2uiv"))==NULL)puts("Can't load glUniform2uiv");
+    if((glf->glUniform3uiv=SDL_GL_GetProcAddress("glUniform3uiv"))==NULL)puts("Can't load glUniform3uiv");
+    if((glf->glUniform4uiv=SDL_GL_GetProcAddress("glUniform4uiv"))==NULL)puts("Can't load glUniform4uiv");
+    if((glf->glUniform1f=SDL_GL_GetProcAddress("glUniform1f"))==NULL)puts("Can't load glUniform1f");
+    if((glf->glUniform2f=SDL_GL_GetProcAddress("glUniform2f"))==NULL)puts("Can't load glUniform2f");
+    if((glf->glUniform3f=SDL_GL_GetProcAddress("glUniform3f"))==NULL)puts("Can't load glUniform3f");
+    if((glf->glUniform4f=SDL_GL_GetProcAddress("glUniform4f"))==NULL)puts("Can't load glUniform4f");
+    if((glf->glUniform1fv=SDL_GL_GetProcAddress("glUniform1fv"))==NULL)puts("Can't load glUniform1fv");
+    if((glf->glUniform2fv=SDL_GL_GetProcAddress("glUniform2fv"))==NULL)puts("Can't load glUniform2fv");
+    if((glf->glUniform3fv=SDL_GL_GetProcAddress("glUniform3fv"))==NULL)puts("Can't load glUniform3fv");
+    if((glf->glUniform4fv=SDL_GL_GetProcAddress("glUniform4fv"))==NULL)puts("Can't load glUniform4fv");
+
+
+    return glf;
+}
+
+void free_gl_functions(gl_functions * glf)
+{
+    ///perhaps relinquish resources/links if necessary
+    free(glf);
+}
+
+
 int load_contextual_resources()
 {
     glGenVertexArrays_ptr= 0;

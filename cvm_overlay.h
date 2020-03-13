@@ -237,7 +237,7 @@ char * shorten_text_to_fit_width_end_ellipses(overlay_theme * theme,int width,ch
 
 
 
-overlay_theme create_overlay_theme(uint32_t shaded_texture_size,uint32_t coloured_texture_size);
+overlay_theme create_overlay_theme(uint32_t shaded_texture_size,uint32_t coloured_texture_size);///make malloced pointer
 void delete_overlay_theme(overlay_theme * theme);
 void load_font_to_overlay(overlay_theme * theme,char * ttf_file,int size,int font_index);
 
@@ -259,12 +259,12 @@ typedef enum
 }
 overlay_element_type;
 
-void initialise_overlay(void);
-void render_overlay(overlay_data * od,overlay_theme * theme,int screen_w,int screen_h,vec4f * overlay_colours);
+void initialise_overlay(gl_functions * glf);
+void render_overlay(gl_functions * glf,overlay_data * od,overlay_theme * theme,int screen_w,int screen_h,vec4f * overlay_colours);
 
 
 
-void initialise_overlay_data(overlay_data * od);
+void initialise_overlay_data(overlay_data * od);///make malloced pointer instead
 void delete_overlay_data(overlay_data * od);
 
 

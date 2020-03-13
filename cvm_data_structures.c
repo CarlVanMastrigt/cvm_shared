@@ -269,8 +269,7 @@ bool cvm_lock_free_stack_add( cvm_lock_free_stack * stack , void * value )
     current=atomic_load(&stack->allocated);
     do
     {
-        ///+1 technically not needed here as pointer would change anyway and change count would be forced to increment before extracting and re-inserting same pointer
-        replacement.change_count=current.change_count+1;
+        replacement.change_count=current.change_count;
         replacement.first=ptr;
         *((char**)ptr)=current.first;
     }
@@ -300,8 +299,7 @@ bool cvm_lock_free_stack_get( cvm_lock_free_stack * stack , void * value )
     current=atomic_load(&stack->available);
     do
     {
-        ///+1 technically not needed here as pointer would change anyway and change count would be forced to increment before extracting and re-inserting same pointer
-        replacement.change_count=current.change_count+1;
+        replacement.change_count=current.change_count;
         replacement.first=ptr;
         *((void**)ptr)=current.first;
     }

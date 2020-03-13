@@ -30,6 +30,11 @@ void set_shader_version_and_defines(char * svad)
     shader_version_and_defines_length=strlen(svad);
 }
 
+void free_shader_version_and_defines(void)
+{
+    free(shader_version_and_defines);
+}
+
 static int load_shader_file(const char * filename,char ** code,int * lengths)///returns number of new files
 {
     char c;
@@ -70,18 +75,9 @@ static int load_shader_file(const char * filename,char ** code,int * lengths)///
             }
             fn[i-2]='\0';
 
-            //puts(fn);
             new_files+=load_shader_file(fn,code+new_files,lengths+new_files);
         }
-        else
-        {
-            while(line[i])
-            {
-                new_string[length]=line[i];
-                length++;
-                i++;
-            }
-        }
+        else while(line[i]) new_string[length++]=line[i++];
     }
     fclose(f_in);
 
@@ -92,14 +88,14 @@ static int load_shader_file(const char * filename,char ** code,int * lengths)///
     return new_files+1;
 }
 
-static int load_shader(GLuint shader_object,const char * file,const char * defines)
+static int load_shader(gl_functions * glf,GLuint shader_object,const char * file,const char * defines)
 {
     int result;
     result = glGetError();
     if(result) { printf("derpx %d\n",result);}
 
 
-    unsigned int part_count;
+    int i,part_count;
 
     int length[MAX_SHADER_INCLUDES+2];
     char * code[MAX_SHADER_INCLUDES+2];
@@ -121,108 +117,99 @@ static int load_shader(GLuint shader_object,const char * file,const char * defin
 
 
 
-    glShaderSource_ptr(shader_object,part_count,(const GLchar**)code,length);
-    glCompileShader_ptr(shader_object);
+    glf->glShaderSource(shader_object,part_count,(const GLchar**)code,length);
+    glf->glCompileShader(shader_object);
     GLint sucess;
 
 
-    glGetShaderiv_ptr(shader_object, GL_COMPILE_STATUS, &sucess);
+    glf->glGetShaderiv(shader_object, GL_COMPILE_STATUS, &sucess);
 
     if (!sucess)
     {
         printf("\nerror>  %s\n",file);
-        char InfoLog[65536];
-        glGetShaderInfoLog_ptr(shader_object, 65536, NULL, InfoLog);
-        fprintf(stderr, "\nError compiling shader : '%s'\n", InfoLog);
+        char info[65536];
+        glf->glGetShaderInfoLog(shader_object,65536,NULL,info);
+        fprintf(stderr,"\nError compiling shader : '%s'\n",info);
         exit(1);
     }
 
-    int i;
-    for(i=1;i<part_count;i++)
-    {
-        if(code[i] != defines)
-        {
-            free(code[i]);
-        }
-    }
-
-
+    for(i=1;i<part_count;i++) if(code[i] != defines) free(code[i]);
 
     return 0;
 }
 
 
 
-GLuint initialise_shader_program(const char * defines,const char * vert_file,const char * geom_file,const char * frag_file)
+GLuint initialise_shader_program(gl_functions * glf,const char * defines,const char * vert_file,const char * geom_file,const char * frag_file)
 {
     GLuint sp;
     GLuint vs,gs,fs;
 
-    sp=glCreateProgram_ptr();
+    sp=glf->glCreateProgram();
 
 
     if(vert_file!=NULL)
     {
-        vs=glCreateShader_ptr(GL_VERTEX_SHADER);
-        load_shader(vs,vert_file,defines);
-        glAttachShader_ptr(sp,vs);
+        vs=glf->glCreateShader(GL_VERTEX_SHADER);
+        load_shader(glf,vs,vert_file,defines);
+        glf->glAttachShader(sp,vs);
     }
 
     if(geom_file!=NULL)
     {
-        gs=glCreateShader_ptr(GL_GEOMETRY_SHADER);
-        load_shader(gs,geom_file,defines);
-        glAttachShader_ptr(sp,gs);
+        gs=glf->glCreateShader(GL_GEOMETRY_SHADER);
+        load_shader(glf,gs,geom_file,defines);
+        glf->glAttachShader(sp,gs);
     }
 
     if(frag_file!=NULL)
     {
-        fs=glCreateShader_ptr(GL_FRAGMENT_SHADER);
-        load_shader(fs,frag_file,defines);
-        glAttachShader_ptr(sp,fs);
+        fs=glf->glCreateShader(GL_FRAGMENT_SHADER);
+        load_shader(glf,fs,frag_file,defines);
+        glf->glAttachShader(sp,fs);
     }
 
 
 
-    GLint Success = 0;
-    GLchar ErrorLog[65536];
+    GLint success = 0;
+    GLchar info_log[65536];
 
 
 
-    glLinkProgram_ptr(sp);
-    glGetProgramiv_ptr(sp, GL_LINK_STATUS, &Success);
-    if (!Success)
+    glf->glLinkProgram(sp);
+    glf->glGetProgramiv(sp, GL_LINK_STATUS, &success);
+    if(!success)
     {
-      glGetProgramInfoLog_ptr(sp, sizeof(ErrorLog), NULL, ErrorLog);
-      fprintf(stderr, "Error linking shader program: '%s'\n", ErrorLog);
-          exit(1);
+        glf->glGetProgramInfoLog(sp, sizeof(info_log),NULL,info_log);
+        fprintf(stderr,"Error linking shader program: '%s'\n",info_log);
+        exit(1);
     }
 
-    glValidateProgram_ptr(sp);
-    glGetProgramiv_ptr(sp, GL_VALIDATE_STATUS, &Success);
-    if (!Success)
+    glf->glValidateProgram(sp);
+    glf->glGetProgramiv(sp, GL_VALIDATE_STATUS, &success);
+    if(!success)
     {
-        glGetProgramInfoLog_ptr(sp, sizeof(ErrorLog), NULL, ErrorLog);
-        fprintf(stderr, "Invalid shader program: '%s'\n", ErrorLog);
+        glf->glGetProgramInfoLog(sp, sizeof(info_log),NULL,info_log);
+        fprintf(stderr,"Invalid shader program: '%s'\n",info_log);
         exit(1);
     }
 
     if(vert_file!=NULL)
     {
-        glDetachShader_ptr(sp,vs);
-        glDeleteShader_ptr(vs);
+        glf->glDetachShader(sp,vs);
+        glf->glDeleteShader(vs);
     }
 
     if(geom_file!=NULL)
     {
-        glDetachShader_ptr(sp,gs);
-        glDeleteShader_ptr(gs);
+        glf->glDetachShader(sp,gs);
+        glf->glDeleteShader(gs);
     }
 
     if(frag_file!=NULL)
     {
-        glDetachShader_ptr(sp,fs);
-        glDeleteShader_ptr(fs);
+        glf->glDetachShader(sp,fs);
+        glf->glDeleteShader(fs);
     }
 
     return sp;

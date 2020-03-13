@@ -30,21 +30,22 @@ along with cvm_shared.  If not, see <https://www.gnu.org/licenses/>.
 
 
 void set_shader_version_and_defines(char * svad);
-GLuint initialise_shader_program(const char * defines,const char * vert_file,const char * geom_file,const char * frag_file);
+void free_shader_version_and_defines(void);
+GLuint initialise_shader_program(gl_functions * glf,const char * defines,const char * vert_file,const char * geom_file,const char * frag_file);
 
 
-static inline void set_instanced_attribute_f(GLuint index,GLint size,GLsizei stride,const GLvoid * pointer)
+static inline void set_instanced_attribute_f(gl_functions * glf,GLuint index,GLint size,GLsizei stride,const GLvoid * pointer)
 {
-    glEnableVertexAttribArray_ptr(index);
-    glVertexAttribPointer_ptr(index,size,GL_FLOAT,GL_FALSE,stride,pointer);
-    glVertexAttribDivisor_ptr(index,1);
+    glf->glEnableVertexAttribArray(index);
+    glf->glVertexAttribPointer(index,size,GL_FLOAT,GL_FALSE,stride,pointer);
+    glf->glVertexAttribDivisor(index,1);
 }
 
-static inline void set_instanced_attribute_i(GLuint index,GLint size,GLsizei stride,const GLvoid * pointer)
+static inline void set_instanced_attribute_i(gl_functions * glf,GLuint index,GLint size,GLsizei stride,const GLvoid * pointer)
 {
-    glEnableVertexAttribArray_ptr(index);
-    glVertexAttribIPointer_ptr(index,size,GL_UNSIGNED_INT,stride,pointer);
-    glVertexAttribDivisor_ptr(index,1);
+    glf->glEnableVertexAttribArray(index);
+    glf->glVertexAttribIPointer(index,size,GL_UNSIGNED_INT,stride,pointer);
+    glf->glVertexAttribDivisor(index,1);
 }
 
 

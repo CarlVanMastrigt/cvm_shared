@@ -19,7 +19,7 @@ along with cvm_shared.  If not, see <https://www.gnu.org/licenses/>.
 
 #include "cvm_shared.h"
 
-void create_managed_buffer(managed_buffer * mb,GLenum usage,uint32_t size_delta)
+void create_managed_buffer(gl_functions * glf,managed_buffer * mb,GLenum usage,uint32_t size_delta)
 {
     mb->size=0;
     mb->binding=GL_ARRAY_BUFFER;
@@ -27,12 +27,12 @@ void create_managed_buffer(managed_buffer * mb,GLenum usage,uint32_t size_delta)
     mb->size_delta=size_delta;
 
     mb->buffer=0;
-    glGenBuffers_ptr(1,&mb->buffer);
+    glf->glGenBuffers(1,&mb->buffer);
 
     mb->mapped=false;
 }
 
-void create_managed_texture_buffer(managed_buffer * mb,GLenum format,GLenum usage,uint32_t size_delta)
+void create_managed_texture_buffer(gl_functions * glf,managed_buffer * mb,GLenum format,GLenum usage,uint32_t size_delta)
 {
     mb->size=size_delta;
     mb->binding=GL_TEXTURE_BUFFER;
@@ -41,58 +41,58 @@ void create_managed_texture_buffer(managed_buffer * mb,GLenum format,GLenum usag
     mb->size_delta=size_delta;
 
     mb->buffer=0;
-    glGenBuffers_ptr(1,&mb->buffer);
-    glBindBuffer_ptr(mb->binding,mb->buffer);
-    glBufferData_ptr(mb->binding,size_delta,NULL,mb->usage);
-    glBindBuffer_ptr(mb->binding,0);
+    glf->glGenBuffers(1,&mb->buffer);
+    glf->glBindBuffer(mb->binding,mb->buffer);
+    glf->glBufferData(mb->binding,size_delta,NULL,mb->usage);
+    glf->glBindBuffer(mb->binding,0);
 
     mb->texture_buffer=0;
-    glGenTextures(1,&mb->texture_buffer);
+    glf->glGenTextures(1,&mb->texture_buffer);
 
-    glBindTexture(mb->binding,mb->texture_buffer);
-    glTexBuffer_ptr(mb->binding,mb->texture_buffer_format,mb->buffer);
-    glBindTexture(mb->binding,0);
+    glf->glBindTexture(mb->binding,mb->texture_buffer);
+    glf->glTexBuffer(mb->binding,mb->texture_buffer_format,mb->buffer);
+    glf->glBindTexture(mb->binding,0);
 
     mb->mapped=false;
 }
 
-void delete_managed_buffer(managed_buffer * mb)
+void delete_managed_buffer(gl_functions * glf,managed_buffer * mb)
 {
     ///Finish
 }
 
-void ensure_managed_buffer_size(managed_buffer * mb,uint32_t size)
+void ensure_managed_buffer_size(gl_functions * glf,managed_buffer * mb,uint32_t size)
 {
     if(size>mb->size)
     {
         mb->size=(((size-1)/mb->size_delta)+2)*mb->size_delta;
 
-        glBindBuffer_ptr(mb->binding,mb->buffer);
-        glBufferData_ptr(mb->binding,mb->size,NULL,mb->usage);
-        glBindBuffer_ptr(mb->binding,0);
+        glf->glBindBuffer(mb->binding,mb->buffer);
+        glf->glBufferData(mb->binding,mb->size,NULL,mb->usage);
+        glf->glBindBuffer(mb->binding,0);
     }
 }
 
-void upload_managed_buffer_data(managed_buffer * mb,uint32_t size,void * data)
+void upload_managed_buffer_data(gl_functions * glf,managed_buffer * mb,uint32_t size,void * data)
 {
     if(size>mb->size)
     {
         mb->size=(((size-1)/mb->size_delta)+2)*mb->size_delta;
 
-        glBindBuffer_ptr(mb->binding,mb->buffer);
-        glBufferData_ptr(mb->binding,mb->size,NULL,mb->usage);
-        glBufferSubData_ptr(mb->binding,0,size,data);
-        glBindBuffer_ptr(mb->binding,0);
+        glf->glBindBuffer(mb->binding,mb->buffer);
+        glf->glBufferData(mb->binding,mb->size,NULL,mb->usage);
+        glf->glBufferSubData(mb->binding,0,size,data);
+        glf->glBindBuffer(mb->binding,0);
     }
     else
     {
-        glBindBuffer_ptr(mb->binding,mb->buffer);
-        glBufferSubData_ptr(mb->binding,0,size,data);
-        glBindBuffer_ptr(mb->binding,0);
+        glf->glBindBuffer(mb->binding,mb->buffer);
+        glf->glBufferSubData(mb->binding,0,size,data);
+        glf->glBindBuffer(mb->binding,0);
     }
 }
 
-void * map_managed_buffer_write(managed_buffer * mb,uint32_t size)///update to only map buffer amount that is needed:      ,uint32_t required_size);
+void * map_managed_buffer_write(gl_functions * glf,managed_buffer * mb,uint32_t size)///update to only map buffer amount that is needed:      ,uint32_t required_size);
 {
     void * ptr;
 
@@ -107,27 +107,27 @@ void * map_managed_buffer_write(managed_buffer * mb,uint32_t size)///update to o
         printf("error: trying to map mapped managed_buffer\n");
     }
 
-    glBindBuffer_ptr(mb->binding, mb->buffer);
-    ptr=glMapBufferRange_ptr(mb->binding,0,size,GL_MAP_WRITE_BIT);
-    glBindBuffer_ptr(mb->binding, 0);
+    glf->glBindBuffer(mb->binding, mb->buffer);
+    ptr=glf->glMapBufferRange(mb->binding,0,size,GL_MAP_WRITE_BIT);
+    glf->glBindBuffer(mb->binding,0);
     mb->mapped=true;
 
     return ptr;
 }
 
-void * get_correct_managed_buffer_write_map(managed_buffer * mb,uint32_t size)
+void * get_correct_managed_buffer_write_map(gl_functions * glf,managed_buffer * mb,uint32_t size)
 {
-    ensure_managed_buffer_size(mb,size);
-    return map_managed_buffer_write(mb,size);
+    ensure_managed_buffer_size(glf,mb,size);
+    return map_managed_buffer_write(glf,mb,size);
 }
 
-void unmap_managed_buffer(managed_buffer * mb)
+void unmap_managed_buffer(gl_functions * glf,managed_buffer * mb)
 {
     if(mb->mapped)
     {
-        glBindBuffer_ptr(mb->binding, mb->buffer);
-        glUnmapBuffer_ptr(mb->binding);
-        glBindBuffer_ptr(mb->binding,0);
+        glf->glBindBuffer(mb->binding, mb->buffer);
+        glf->glUnmapBuffer(mb->binding);
+        glf->glBindBuffer(mb->binding,0);
 
         mb->mapped=false;
     }
@@ -137,120 +137,34 @@ void unmap_managed_buffer(managed_buffer * mb)
     }
 }
 
-void bind_managed_buffer(managed_buffer * mb)
+void bind_managed_buffer(gl_functions * glf,managed_buffer * mb)
 {
-    glBindBuffer_ptr(mb->binding, mb->buffer);
+    glf->glBindBuffer(mb->binding, mb->buffer);
 }
 
-void unbind_managed_buffer(managed_buffer * mb)
+void unbind_managed_buffer(gl_functions * glf,managed_buffer * mb)
 {
-    glBindBuffer_ptr(mb->binding, 0);
+    glf->glBindBuffer(mb->binding, 0);
 }
 
-void bind_managed_texture_buffer(managed_buffer * mb,GLenum texture_id)
+void bind_managed_texture_buffer(gl_functions * glf,managed_buffer * mb,GLenum texture_id)
 {
-    ensure_managed_buffer_size(mb,4);
+    ensure_managed_buffer_size(glf,mb,4);
 
-    glActiveTexture(texture_id);
-    glBindTexture(mb->binding,mb->texture_buffer);
+    glf->glActiveTexture(texture_id);
+    glf->glBindTexture(mb->binding,mb->texture_buffer);
 }
 
-void unbind_managed_texture_buffer(managed_buffer * mb,GLenum texture_id)
+void unbind_managed_texture_buffer(gl_functions * glf,managed_buffer * mb,GLenum texture_id)
 {
-    glActiveTexture(texture_id);
-    glBindTexture(mb->binding,0);
+    glf->glActiveTexture(texture_id);
+    glf->glBindTexture(mb->binding,0);
 }
 
-void bind_managed_texture_buffer_as_image(managed_buffer * mb,GLuint unit,GLenum access)
+void bind_managed_texture_buffer_as_image(gl_functions * glf,managed_buffer * mb,GLuint unit,GLenum access)
 {
-    glBindImageTexture_ptr(unit,mb->texture_buffer,0,GL_FALSE,0,access,mb->texture_buffer_format);
+    glf->glBindImageTexture(unit,mb->texture_buffer,0,GL_FALSE,0,access,mb->texture_buffer_format);
 }
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-/*void create_managed_ssbo(managed_ssbo * ms,GLenum usage,GLsizeiptr delta_size)
-{
-    delta_size--;
-    delta_size |= delta_size >> 1;
-    delta_size |= delta_size >> 2;
-    delta_size |= delta_size >> 4;
-    delta_size |= delta_size >> 8;
-    delta_size |= delta_size >> 16;
-    delta_size |= delta_size >> 32;
-    delta_size++;
-
-    ms->size=delta_size;
-    ms->usage=usage;
-    ms->delta_size=delta_size;
-
-    glGenBuffers_ptr(1,&ms->ssbo);
-    glBindBuffer_ptr(GL_SHADER_STORAGE_BUFFER,ms->ssbo);
-    glBufferData_ptr(GL_SHADER_STORAGE_BUFFER,delta_size,NULL,usage);
-    glBindBuffer_ptr(GL_SHADER_STORAGE_BUFFER,0);
-}
-
-void ensure_managed_ssbo_size(managed_ssbo * ms,GLsizeiptr size)
-{
-    if(size>ms->size)
-    {
-        size--;
-        size=((size/ms->delta_size)+2)*ms->delta_size;
-        ms->size=size;
-
-        glBindBuffer_ptr(GL_SHADER_STORAGE_BUFFER,ms->ssbo);
-        glBufferData_ptr(GL_SHADER_STORAGE_BUFFER,size,NULL,ms->usage);
-        glBindBuffer_ptr(GL_SHADER_STORAGE_BUFFER,0);
-    }
-}
-
-void upload_managed_ssbo_data(managed_ssbo * ms,GLsizeiptr size,void * data)
-{
-    if(size>ms->size)
-    {
-        ms->size=(((size-1)/ms->delta_size)+2)*ms->delta_size;
-
-        glBindBuffer_ptr(GL_SHADER_STORAGE_BUFFER,ms->ssbo);
-        glBufferData_ptr(GL_SHADER_STORAGE_BUFFER,ms->size,NULL,ms->usage);
-        glBufferSubData_ptr(GL_SHADER_STORAGE_BUFFER,0,size,data);
-        glBindBuffer_ptr(GL_SHADER_STORAGE_BUFFER,0);
-    }
-    else
-    {
-        glBindBuffer_ptr(GL_SHADER_STORAGE_BUFFER,ms->ssbo);
-        glBufferSubData_ptr(GL_SHADER_STORAGE_BUFFER,0,size,data);
-        glBindBuffer_ptr(GL_SHADER_STORAGE_BUFFER,0);
-    }
-}
-
-void bind_managed_ssbo(managed_ssbo * ms,GLuint binding_point)
-{
-    glBindBuffer_ptr(GL_SHADER_STORAGE_BUFFER,ms->ssbo);
-    glBindBufferBase_ptr(GL_SHADER_STORAGE_BUFFER,binding_point,ms->ssbo);
-    glBindBuffer_ptr(GL_SHADER_STORAGE_BUFFER,0);
-}*/
-
-
-
-
-
 
 
 

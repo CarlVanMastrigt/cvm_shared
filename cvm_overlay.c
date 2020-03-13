@@ -457,22 +457,22 @@ void delete_overlay_theme(overlay_theme * theme)
 
 
 
-void initialise_overlay(void)
+void initialise_overlay(gl_functions * glf)
 {
     char defines[1024];
     sprintf(defines,"#define NUM_OVERLAY_COLOURS %d \n\n",NUM_OVERLAY_COLOURS);
 
 
-    overlay_shader=initialise_shader_program(defines,"shaders/overlay_vert.glsl",NULL,"shaders/overlay_frag.glsl" );
+    overlay_shader=initialise_shader_program(glf,defines,"shaders/overlay_vert.glsl",NULL,"shaders/overlay_frag.glsl" );
 
 
-    glUseProgram_ptr(overlay_shader);
+    glf->glUseProgram(overlay_shader);
 
     GLint text_image_indices[4]={0,1,2,3};
 
-    glUniform1iv_ptr(glGetUniformLocation_ptr(overlay_shader,"text_images"),4,text_image_indices);
-    glUniform1i_ptr(glGetUniformLocation_ptr(overlay_shader,"shaded_image"),4);
-    glUniform1i_ptr(glGetUniformLocation_ptr(overlay_shader,"coloured_image"),5);
+    glf->glUniform1iv(glGetUniformLocation_ptr(overlay_shader,"text_images"),4,text_image_indices);
+    glf->glUniform1i(glGetUniformLocation_ptr(overlay_shader,"shaded_image"),4);
+    glf->glUniform1i(glGetUniformLocation_ptr(overlay_shader,"coloured_image"),5);
 
 
     glUseProgram_ptr(0);
@@ -482,98 +482,98 @@ void initialise_overlay(void)
     GLuint attrib_location;
 
 
-    glGenVertexArrays_ptr(1,&overlay_vao);
-    glBindVertexArray_ptr(overlay_vao);
+    glf->glGenVertexArrays(1,&overlay_vao);
+    glf->glBindVertexArray(overlay_vao);
 
-    glGenBuffers_ptr(1,&overlay_vbo);
-    glBindBuffer_ptr(GL_ARRAY_BUFFER,overlay_vbo);
-    glBufferData_ptr(GL_ARRAY_BUFFER,sizeof(float)*8,v,GL_STATIC_DRAW);
-
-
-    attrib_location=glGetAttribLocation_ptr(overlay_shader,"vertex");
-
-    glEnableVertexAttribArray_ptr(attrib_location);
-    glVertexAttribPointer_ptr(attrib_location, 2, GL_FLOAT, GL_FALSE, 0, 0);
+    glf->glGenBuffers(1,&overlay_vbo);
+    glf->glBindBuffer(GL_ARRAY_BUFFER,overlay_vbo);
+    glf->glBufferData(GL_ARRAY_BUFFER,sizeof(float)*8,v,GL_STATIC_DRAW);
 
 
-    glGenBuffers_ptr(1,&overlay_buffer);
-    glBindBuffer_ptr(GL_ARRAY_BUFFER,overlay_buffer);
+    attrib_location=glf->glGetAttribLocation(overlay_shader,"vertex");
+
+    glf->glEnableVertexAttribArray(attrib_location);
+    glf->glVertexAttribPointer(attrib_location,2, GL_FLOAT, GL_FALSE, 0, 0);
+
+
+    glf->glGenBuffers(1,&overlay_buffer);
+    glf->glBindBuffer(GL_ARRAY_BUFFER,overlay_buffer);
     overlay_buffer_size=0;
 
-    attrib_location=glGetAttribLocation_ptr(overlay_shader,"data1");
-    glEnableVertexAttribArray_ptr   (attrib_location);
-    glVertexAttribIPointer_ptr      (attrib_location,4,GL_SHORT,sizeof(overlay_render_data),(const GLvoid*)offsetof(overlay_render_data,data1));
-    glVertexAttribDivisor_ptr       (attrib_location,1);
+    attrib_location=glf->glGetAttribLocation(overlay_shader,"data1");
+    glf->glEnableVertexAttribArray(attrib_location);
+    glf->glVertexAttribIPointer(attrib_location,4,GL_SHORT,sizeof(overlay_render_data),(const GLvoid*)offsetof(overlay_render_data,data1));
+    glf->glVertexAttribDivisor(attrib_location,1);
 
-    attrib_location=glGetAttribLocation_ptr(overlay_shader,"data2");
-    glEnableVertexAttribArray_ptr   (attrib_location);
-    glVertexAttribIPointer_ptr      (attrib_location,4,GL_SHORT,sizeof(overlay_render_data),(const GLvoid*)offsetof(overlay_render_data,data2));
-    glVertexAttribDivisor_ptr       (attrib_location,1);
+    attrib_location=glf->glGetAttribLocation(overlay_shader,"data2");
+    glf->glEnableVertexAttribArray(attrib_location);
+    glf->glVertexAttribIPointer(attrib_location,4,GL_SHORT,sizeof(overlay_render_data),(const GLvoid*)offsetof(overlay_render_data,data2));
+    glf->glVertexAttribDivisor(attrib_location,1);
 
-    attrib_location=glGetAttribLocation_ptr(overlay_shader,"data3");
-    glEnableVertexAttribArray_ptr   (attrib_location);
-    glVertexAttribIPointer_ptr      (attrib_location,4,GL_SHORT,sizeof(overlay_render_data),(const GLvoid*)offsetof(overlay_render_data,data3));
-    glVertexAttribDivisor_ptr       (attrib_location,1);
+    attrib_location=glf->glGetAttribLocation(overlay_shader,"data3");
+    glf->glEnableVertexAttribArray(attrib_location);
+    glf->glVertexAttribIPointer(attrib_location,4,GL_SHORT,sizeof(overlay_render_data),(const GLvoid*)offsetof(overlay_render_data,data3));
+    glf->glVertexAttribDivisor(attrib_location,1);
 
     glBindVertexArray_ptr(0);
 }
 
-void render_overlay(overlay_data * od,overlay_theme * theme,int screen_w,int screen_h,vec4f * overlay_colours)
+void render_overlay(gl_functions * glf,overlay_data * od,overlay_theme * theme,int screen_w,int screen_h,vec4f * overlay_colours)
 {
     int i;
 
-    glBindFramebuffer_ptr(GL_FRAMEBUFFER,0);
-    glDrawBuffer(GL_BACK);
+    glf->glBindFramebuffer(GL_FRAMEBUFFER,0);
+    glf->glDrawBuffer(GL_BACK);
 
-    glViewport(0,0,screen_w,screen_h);
+    glf->glViewport(0,0,screen_w,screen_h);
 
-    glEnable(GL_BLEND);
-    glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
+    glf->glEnable(GL_BLEND);
+    glf->glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
 
     if(od->count)
     {
-        glBindBuffer_ptr(GL_ARRAY_BUFFER,overlay_buffer);
+        glf->glBindBuffer(GL_ARRAY_BUFFER,overlay_buffer);
         if(sizeof(overlay_render_data)*od->count > overlay_buffer_size)
         {
             overlay_buffer_size=sizeof(overlay_render_data)*od->count;
-            glBufferData_ptr(GL_ARRAY_BUFFER,overlay_buffer_size,od->data,GL_STREAM_DRAW);
+            glf->glBufferData(GL_ARRAY_BUFFER,overlay_buffer_size,od->data,GL_STREAM_DRAW);
         }
         else
         {
-            glBufferSubData_ptr(GL_ARRAY_BUFFER,0,sizeof(overlay_render_data)*od->count,od->data);
+            glf->glBufferSubData(GL_ARRAY_BUFFER,0,sizeof(overlay_render_data)*od->count,od->data);
         }
-        glBindBuffer_ptr(GL_ARRAY_BUFFER,0);
+        glf->glBindBuffer(GL_ARRAY_BUFFER,0);
 
 
-        glUseProgram_ptr(overlay_shader);
+        glf->glUseProgram(overlay_shader);
 
-        glUniform2f_ptr(glGetUniformLocation_ptr(overlay_shader,"inv_window_size"),1.0/((float)screen_w),1.0/((float)screen_h));
-        glUniform1i_ptr(glGetUniformLocation_ptr(overlay_shader,"window_height"),screen_h);
+        glf->glUniform2f(glf->glGetUniformLocation(overlay_shader,"inv_window_size"),1.0/((float)screen_w),1.0/((float)screen_h));
+        glf->glUniform1i(glf->glGetUniformLocation(overlay_shader,"window_height"),screen_h);
 
         ///make overlay colours use GLfloat instead
 
         overlay_colours[OVERLAY_MAIN_HIGHLIGHTED_COLOUR]=vec4f_blend(overlay_colours[OVERLAY_MAIN_COLOUR],overlay_colours[OVERLAY_HIGHLIGHTING_COLOUR]);///apply highlighting colour
-        glUniform4fv_ptr(glGetUniformLocation_ptr(overlay_shader,"colours"),NUM_OVERLAY_COLOURS-1,(GLfloat*)(overlay_colours+1));
+        glf->glUniform4fv(glGetUniformLocation(overlay_shader,"colours"),NUM_OVERLAY_COLOURS-1,(GLfloat*)(overlay_colours+1));
 
 
         for(i=0;i<4;i++)
         {
-            glActiveTexture(GL_TEXTURE0+i);
-            glBindTexture(GL_TEXTURE_2D,theme->fonts[i].text_image);
+            glf->glActiveTexture(GL_TEXTURE0+i);
+            glf->glBindTexture(GL_TEXTURE_2D,theme->fonts[i].text_image);
         }
 
-        glActiveTexture(GL_TEXTURE4);
-        glBindTexture(GL_TEXTURE_2D,theme->shaded_texture);
+        glf->glActiveTexture(GL_TEXTURE4);
+        glf->glBindTexture(GL_TEXTURE_2D,theme->shaded_texture);
 
-        glActiveTexture(GL_TEXTURE5);
-        glBindTexture(GL_TEXTURE_2D,theme->coloured_texture);
+        glf->glActiveTexture(GL_TEXTURE5);
+        glf->glBindTexture(GL_TEXTURE_2D,theme->coloured_texture);
 
-        glBindVertexArray_ptr(overlay_vao);
-        glDrawArraysInstanced_ptr(GL_TRIANGLE_FAN,0 ,4 ,od->count);
-        glBindVertexArray_ptr(0);
+        glf->glBindVertexArray(overlay_vao);
+        glf->glDrawArraysInstanced(GL_TRIANGLE_FAN,0 ,4 ,od->count);
+        glf->glBindVertexArray(0);
     }
 
-    glDisable(GL_BLEND);
+    glf->glDisable(GL_BLEND);
 
     od->count=0;
 }
