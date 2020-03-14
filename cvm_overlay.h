@@ -237,11 +237,11 @@ char * shorten_text_to_fit_width_end_ellipses(overlay_theme * theme,int width,ch
 
 
 
-overlay_theme create_overlay_theme(uint32_t shaded_texture_size,uint32_t coloured_texture_size);///make malloced pointer
+overlay_theme create_overlay_theme(gl_functions * glf,uint32_t shaded_texture_size,uint32_t coloured_texture_size);///make malloced pointer
 void delete_overlay_theme(overlay_theme * theme);
-void load_font_to_overlay(overlay_theme * theme,char * ttf_file,int size,int font_index);
+void load_font_to_overlay(gl_functions * glf,overlay_theme * theme,char * ttf_file,int size,int font_index);
 
-void update_theme_textures_on_videocard(overlay_theme * theme);
+void update_theme_textures_on_videocard(gl_functions * glf,overlay_theme * theme);
 
 
 
@@ -299,7 +299,7 @@ void render_overlay_text(overlay_data * od,overlay_theme * theme,char * text,int
 
 
 
-void initialise_cubic_theme(overlay_theme * theme);
+void initialise_cubic_theme(gl_functions * glf,overlay_theme * theme);
 
 overlay_sprite_data create_overlay_sprite(overlay_theme * theme,char * name,int max_w,int max_h,overlay_sprite_type type);
 overlay_sprite_data get_overlay_sprite_data(overlay_theme * theme,char * name);

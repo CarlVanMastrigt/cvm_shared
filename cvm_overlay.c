@@ -48,7 +48,7 @@ void ensure_overlay_data_space(overlay_data * od)
     }
 }
 
-void load_font_to_overlay(overlay_theme * theme,char * ttf_file,int size,int font_index)
+void load_font_to_overlay(gl_functions * glf,overlay_theme * theme,char * ttf_file,int size,int font_index)
 {
     int i,j,k,w;
     SDL_Surface *surf;
@@ -182,11 +182,11 @@ void load_font_to_overlay(overlay_theme * theme,char * ttf_file,int size,int fon
 
 
 
-    glBindTexture(GL_TEXTURE_2D,font->text_image);
-    glTexImage2D(GL_TEXTURE_2D,0,GL_RED,total_width,font->font_height,0,GL_RED,GL_UNSIGNED_BYTE,pixels+miny*total_width);
-    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
-    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
-    glBindTexture(GL_TEXTURE_2D,0);
+    glf->glBindTexture(GL_TEXTURE_2D,font->text_image);
+    glf->glTexImage2D(GL_TEXTURE_2D,0,GL_RED,total_width,font->font_height,0,GL_RED,GL_UNSIGNED_BYTE,pixels+miny*total_width);
+    glf->glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
+    glf->glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
+    glf->glBindTexture(GL_TEXTURE_2D,0);
 
     free(pixels);
 
@@ -365,14 +365,14 @@ overlay_sprite_data get_overlay_sprite_data(overlay_theme * theme,char * name)
 ///if elem not found return 0,0 which should be first thing added (error icon)
 
 
-overlay_theme create_overlay_theme(uint32_t shaded_texture_size,uint32_t coloured_texture_size)
+overlay_theme create_overlay_theme(gl_functions * glf,uint32_t shaded_texture_size,uint32_t coloured_texture_size)
 {
     int i;
     overlay_theme ot;
 
     for(i=0;i<4;i++)
     {
-        glGenTextures(1,&ot.fonts[i].text_image);
+        glf->glGenTextures(1,&ot.fonts[i].text_image);
     }
 
     ot.sprite_data=malloc(sizeof(overlay_sprite_data));
@@ -389,19 +389,19 @@ overlay_theme create_overlay_theme(uint32_t shaded_texture_size,uint32_t coloure
     ot.coloured_texture_tier=5;
     ot.coloured_texture_data=calloc(4*ot.coloured_texture_size*ot.coloured_texture_size,sizeof(uint8_t));///RGBA
 
-    glGenTextures(1,&ot.shaded_texture);
-    glBindTexture(GL_TEXTURE_2D,ot.shaded_texture);
-    glTexImage2D(GL_TEXTURE_2D,0,GL_R8,ot.shaded_texture_size,ot.shaded_texture_size,0,GL_RED,GL_UNSIGNED_BYTE,NULL);
-    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
-    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
-    glBindTexture(GL_TEXTURE_2D,0);
+    glf->glGenTextures(1,&ot.shaded_texture);
+    glf->glBindTexture(GL_TEXTURE_2D,ot.shaded_texture);
+    glf->glTexImage2D(GL_TEXTURE_2D,0,GL_R8,ot.shaded_texture_size,ot.shaded_texture_size,0,GL_RED,GL_UNSIGNED_BYTE,NULL);
+    glf->glTexParameteri(GL_TEXTURE_2D,GL_TEXTURE_MIN_FILTER,GL_NEAREST);
+    glf->glTexParameteri(GL_TEXTURE_2D,GL_TEXTURE_MAG_FILTER,GL_NEAREST);
+    glf->glBindTexture(GL_TEXTURE_2D,0);
 
-    glGenTextures(1,&ot.coloured_texture);
-    glBindTexture(GL_TEXTURE_2D,ot.coloured_texture);
-    glTexImage2D(GL_TEXTURE_2D,0,GL_RGBA8,ot.coloured_texture_size,ot.coloured_texture_size,0,GL_RGBA,GL_UNSIGNED_BYTE,NULL);
-    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
-    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
-    glBindTexture(GL_TEXTURE_2D,0);
+    glf->glGenTextures(1,&ot.coloured_texture);
+    glf->glBindTexture(GL_TEXTURE_2D,ot.coloured_texture);
+    glf->glTexImage2D(GL_TEXTURE_2D,0,GL_RGBA8,ot.coloured_texture_size,ot.coloured_texture_size,0,GL_RGBA,GL_UNSIGNED_BYTE,NULL);
+    glf->glTexParameteri(GL_TEXTURE_2D,GL_TEXTURE_MIN_FILTER,GL_NEAREST);
+    glf->glTexParameteri(GL_TEXTURE_2D,GL_TEXTURE_MAG_FILTER,GL_NEAREST);
+    glf->glBindTexture(GL_TEXTURE_2D,0);
 
     for(i=0;i<NUM_OVERLAY_SPRITE_LEVELS;i++)
     {
@@ -420,23 +420,23 @@ overlay_theme create_overlay_theme(uint32_t shaded_texture_size,uint32_t coloure
     return ot;
 }
 
-void update_theme_textures_on_videocard(overlay_theme * theme)
+void update_theme_textures_on_videocard(gl_functions * glf,overlay_theme * theme)
 {
     /// possibly allow writing of textures directly to avoid need for this step (possibly via opengl texture as well) e.g. for map widget in games, (wouldn't allow changes of texture size though)
 
     if(theme->shaded_texture_updated)
     {
-        glBindTexture(GL_TEXTURE_2D,theme->shaded_texture);
-        glTexSubImage2D(GL_TEXTURE_2D,0,0,0,theme->shaded_texture_size,theme->shaded_texture_size,GL_RED,GL_UNSIGNED_BYTE,theme->shaded_texture_data);
-        glBindTexture(GL_TEXTURE_2D,0);
+        glf->glBindTexture(GL_TEXTURE_2D,theme->shaded_texture);
+        glf->glTexSubImage2D(GL_TEXTURE_2D,0,0,0,theme->shaded_texture_size,theme->shaded_texture_size,GL_RED,GL_UNSIGNED_BYTE,theme->shaded_texture_data);
+        glf->glBindTexture(GL_TEXTURE_2D,0);
 
         theme->shaded_texture_updated=false;
     }
     if(theme->coloured_texture_updated)
     {
-        glBindTexture(GL_TEXTURE_2D,theme->coloured_texture);
-        glTexSubImage2D(GL_TEXTURE_2D,0,0,0,theme->coloured_texture_size,theme->coloured_texture_size,GL_RGBA,GL_UNSIGNED_BYTE,theme->coloured_texture_data);
-        glBindTexture(GL_TEXTURE_2D,0);
+        glf->glBindTexture(GL_TEXTURE_2D,theme->coloured_texture);
+        glf->glTexSubImage2D(GL_TEXTURE_2D,0,0,0,theme->coloured_texture_size,theme->coloured_texture_size,GL_RGBA,GL_UNSIGNED_BYTE,theme->coloured_texture_data);
+        glf->glBindTexture(GL_TEXTURE_2D,0);
 
         theme->coloured_texture_updated=false;
     }

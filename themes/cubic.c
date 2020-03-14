@@ -483,13 +483,13 @@ void cubic_panel_render(rectangle r,int x_off,int y_off,uint32_t status,overlay_
     render_rectangle(od,r,bounds,colour);
 }
 
-void initialise_cubic_theme(overlay_theme * theme)
+void initialise_cubic_theme(gl_functions * glf,overlay_theme * theme)
 {
     uint8_t * shaded_sprite_buffer=malloc(sizeof(uint8_t)*cubic_sprite_buffer_size*cubic_sprite_buffer_size);
     overlay_sprite_data osd;
     int d;
 
-    load_font_to_overlay(theme,"resources/CVM_font_1.ttf",16,0);
+    load_font_to_overlay(glf,theme,"resources/CVM_font_1.ttf",16,0);
     SDL_Surface * icons_surface=IMG_Load("resources/icons_alpha.png");
 
     if(icons_surface==NULL)

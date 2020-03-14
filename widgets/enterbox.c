@@ -470,6 +470,8 @@ static void render_enterbox_text_highlighting(overlay_data * od,overlay_theme * 
     int x=0;
     char prev=0;
 
+    x1=x2=0;
+
 
     if(sb==se)
     {

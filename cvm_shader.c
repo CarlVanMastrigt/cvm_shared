@@ -90,11 +90,6 @@ static int load_shader_file(const char * filename,char ** code,int * lengths)///
 
 static int load_shader(gl_functions * glf,GLuint shader_object,const char * file,const char * defines)
 {
-    int result;
-    result = glGetError();
-    if(result) { printf("derpx %d\n",result);}
-
-
     int i,part_count;
 
     int length[MAX_SHADER_INCLUDES+2];

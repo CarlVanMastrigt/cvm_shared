@@ -1037,8 +1037,8 @@ void render_meshes(gl_functions * glf,mesh_group group_to_render)
     }
     else
     {
-        glActiveTexture(GL_TEXTURE0);
-        glBindTexture(GL_TEXTURE_1D,mesh_cbo);
+        glf->glActiveTexture(GL_TEXTURE0);
+        glf->glBindTexture(GL_TEXTURE_1D,mesh_cbo);
 
         glf->glMultiDrawElementsIndirect(GL_TRIANGLES,GL_UNSIGNED_SHORT,(const void*)(mesh_draw_data_offset[group_to_render]*sizeof(draw_elements_indirect_command_data)),mesh_draw_data_count[group_to_render],0);
     }
