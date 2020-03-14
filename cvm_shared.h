@@ -28,11 +28,7 @@ along with cvm_shared.  If not, see <https://www.gnu.org/licenses/>.
 #include <string.h>
 #include <stdlib.h>
 #include <math.h>
-#include <time.h>
-#include <sys/time.h>
-#include <pthread.h>
-#include <limits.h>
-#include <float.h>
+
 
 #include <SDL2/SDL.h>
 #include <SDL2/SDL_image.h>
@@ -42,7 +38,6 @@ along with cvm_shared.  If not, see <https://www.gnu.org/licenses/>.
 #include <sys/stat.h>
 
 #include <GL/gl.h>
-#include <GL/glext.h>
 
 
 ///own headers

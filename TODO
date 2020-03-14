@@ -5,4 +5,6 @@
 -Change widget text to use UTF-8 format rather than ascii
 -update file_search widget to be able to run on windows
 -managed buffer needs cleanup and renaming (maybe instance_buffer) also review size_delta in it and look at how it's actually used and whether some of its functions are really needed
--load_shader needs to better recognise include & report errors (find deliniating "s) 
+-load_shader needs to better recognise include & report errors (find deliniating "s)
+-remove mesh groups as specified, create static mesh_group objects as needed and with features as necessary (adjacent &c.)
+-condider using uint32_t in meshes for indexes (allows more than 65k vertex meshes)

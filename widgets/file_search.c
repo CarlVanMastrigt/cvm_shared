@@ -673,7 +673,7 @@ static void populate_file_search_buttons(file_search_instance * fsi)
         current=current->base.next;
     }
 
-    *fsi->file_box->contiguous_box.offset=INT_MAX;///will be reverted to contiguous_box.max_offset when actually organised (following will not be fully called if parent widget inactive)
+    *fsi->file_box->contiguous_box.offset=100000;///will be reverted to contiguous_box.max_offset when actually organised (following will not be fully called if parent widget inactive)
 
     organise_toplevel_widget(fsi->file_box);
 }

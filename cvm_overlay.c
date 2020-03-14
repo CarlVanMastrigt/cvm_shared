@@ -470,12 +470,12 @@ void initialise_overlay(gl_functions * glf)
 
     GLint text_image_indices[4]={0,1,2,3};
 
-    glf->glUniform1iv(glGetUniformLocation_ptr(overlay_shader,"text_images"),4,text_image_indices);
-    glf->glUniform1i(glGetUniformLocation_ptr(overlay_shader,"shaded_image"),4);
-    glf->glUniform1i(glGetUniformLocation_ptr(overlay_shader,"coloured_image"),5);
+    glf->glUniform1iv(glf->glGetUniformLocation(overlay_shader,"text_images"),4,text_image_indices);
+    glf->glUniform1i(glf->glGetUniformLocation(overlay_shader,"shaded_image"),4);
+    glf->glUniform1i(glf->glGetUniformLocation(overlay_shader,"coloured_image"),5);
 
 
-    glUseProgram_ptr(0);
+    glf->glUseProgram(0);
 
 
     float v[8]={0.0f,0.0f,0.0f,1.0f,1.0f,1.0f,1.0f,0.0f};
@@ -515,7 +515,7 @@ void initialise_overlay(gl_functions * glf)
     glf->glVertexAttribIPointer(attrib_location,4,GL_SHORT,sizeof(overlay_render_data),(const GLvoid*)offsetof(overlay_render_data,data3));
     glf->glVertexAttribDivisor(attrib_location,1);
 
-    glBindVertexArray_ptr(0);
+    glf->glBindVertexArray(0);
 }
 
 void render_overlay(gl_functions * glf,overlay_data * od,overlay_theme * theme,int screen_w,int screen_h,vec4f * overlay_colours)
@@ -553,7 +553,7 @@ void render_overlay(gl_functions * glf,overlay_data * od,overlay_theme * theme,i
         ///make overlay colours use GLfloat instead
 
         overlay_colours[OVERLAY_MAIN_HIGHLIGHTED_COLOUR]=vec4f_blend(overlay_colours[OVERLAY_MAIN_COLOUR],overlay_colours[OVERLAY_HIGHLIGHTING_COLOUR]);///apply highlighting colour
-        glf->glUniform4fv(glGetUniformLocation(overlay_shader,"colours"),NUM_OVERLAY_COLOURS-1,(GLfloat*)(overlay_colours+1));
+        glf->glUniform4fv(glf->glGetUniformLocation(overlay_shader,"colours"),NUM_OVERLAY_COLOURS-1,(GLfloat*)(overlay_colours+1));
 
 
         for(i=0;i<4;i++)

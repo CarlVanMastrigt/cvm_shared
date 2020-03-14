@@ -28,95 +28,95 @@ along with cvm_shared.  If not, see <https://www.gnu.org/licenses/>.
 
 
 
-#define CVM_UINT_MAX_FLOAT (1.0/((double)UINT_MAX))
+#define CVM_INV_UINT_MAX_FLOAT (1.0/4294967295.0)
 
-static inline unsigned int rng_lcg0(unsigned int b)
+static inline uint32_t rng_lcg0(uint32_t b)
 {
     return b*1103515245+12345;
 }
-static inline unsigned int rng_lcg0_uint(unsigned int * seed)
+static inline uint32_t rng_lcg0_uint(uint32_t * seed)
 {
     return (*seed=rng_lcg0(*seed));
 }
-static inline float rng_lcg0_float(unsigned int * seed)
+static inline float rng_lcg0_float(uint32_t * seed)
 {
-    return (float)(((double)rng_lcg0_uint(seed))*CVM_UINT_MAX_FLOAT);
+    return (float)(((double)rng_lcg0_uint(seed))*CVM_INV_UINT_MAX_FLOAT);
 }
 
 
 
-static inline unsigned int rng_lcg1(unsigned int b)
+static inline uint32_t rng_lcg1(uint32_t b)
 {
     return b*1664525+1013904223;
 }
-static inline unsigned int rng_lcg1_uint(unsigned int * seed)
+static inline uint32_t rng_lcg1_uint(uint32_t * seed)
 {
     return (*seed=rng_lcg1(*seed));
 }
-static inline float rng_lcg1_float(unsigned int * seed)
+static inline float rng_lcg1_float(uint32_t * seed)
 {
-    return (float)(((double)rng_lcg1_uint(seed))*CVM_UINT_MAX_FLOAT);
+    return (float)(((double)rng_lcg1_uint(seed))*CVM_INV_UINT_MAX_FLOAT);
 }
 
 
 
-static inline unsigned int rng_lcg2(unsigned int b)
+static inline uint32_t rng_lcg2(uint32_t b)
 {
     return b*134775813+1;
 }
-static inline unsigned int rng_lcg2_uint(unsigned int * seed)
+static inline uint32_t rng_lcg2_uint(uint32_t * seed)
 {
     return (*seed=rng_lcg2(*seed));
 }
-static inline float rng_lcg2_float(unsigned int * seed)
+static inline float rng_lcg2_float(uint32_t * seed)
 {
-    return (float)(((double)rng_lcg2_uint(seed))*CVM_UINT_MAX_FLOAT);
+    return (float)(((double)rng_lcg2_uint(seed))*CVM_INV_UINT_MAX_FLOAT);
 }
 
 
 
-static inline unsigned int rng_lfsr0(unsigned int b)
+static inline uint32_t rng_lfsr0(uint32_t b)
 {
     return ((b>>1)|( ((b) ^ (b>>2) ^ (b>>6) ^ (b>>7)) <<31));
 }
-static inline unsigned int rng_lfsr0_uint(unsigned int * seed)
+static inline uint32_t rng_lfsr0_uint(uint32_t * seed)
 {
     return (*seed=rng_lfsr0(*seed));
 }
-static inline float rng_lfsr0_float(unsigned int * seed)
+static inline float rng_lfsr0_float(uint32_t * seed)
 {
-  return (float)(((double)rng_lfsr0_uint(seed))*CVM_UINT_MAX_FLOAT);
+  return (float)(((double)rng_lfsr0_uint(seed))*CVM_INV_UINT_MAX_FLOAT);
 }
 
 
 
-static inline unsigned int rng_lfsr1(unsigned int b)
+static inline uint32_t rng_lfsr1(uint32_t b)
 {
     return ((b>>1)|( ((b) ^ (b>>7) ^ (b>>10) ^ (b>>17)) <<31));
 }
-static inline unsigned int rng_lfsr1_uint(unsigned int * seed)
+static inline uint32_t rng_lfsr1_uint(uint32_t * seed)
 {
     return (*seed=rng_lfsr1(*seed));
 }
-static inline float rng_lfsr1_float(unsigned int * seed)
+static inline float rng_lfsr1_float(uint32_t * seed)
 {
-  return (float)(((double)rng_lfsr1_uint(seed))*CVM_UINT_MAX_FLOAT);
+  return (float)(((double)rng_lfsr1_uint(seed))*CVM_INV_UINT_MAX_FLOAT);
 }
 
 
 
 
-static inline unsigned int rng_lfsr2(unsigned int b)
+static inline uint32_t rng_lfsr2(uint32_t b)
 {
     return ((b>>1)|( ((b) ^ (b>>13) ^ (b>>14) ^ (b>>19)) <<31));
 }
-static inline unsigned int rng_lfsr2_uint(unsigned int * seed)
+static inline uint32_t rng_lfsr2_uint(uint32_t * seed)
 {
     return (*seed=rng_lfsr2(*seed));
 }
-static inline float rng_lfsr2_float(unsigned int * seed)
+static inline float rng_lfsr2_float(uint32_t * seed)
 {
-  return (float)(((double)rng_lfsr2_uint(seed))*CVM_UINT_MAX_FLOAT);
+  return (float)(((double)rng_lfsr2_uint(seed))*CVM_INV_UINT_MAX_FLOAT);
 }
 
 

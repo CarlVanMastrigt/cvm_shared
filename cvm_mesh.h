@@ -64,36 +64,42 @@ draw_elements_indirect_command_data;
 uint32_t get_mesh_group_count(mesh_group group);
 
 void initialise_mesh_buffers(void);
-void transfer_mesh_draw_data(void);
+void transfer_mesh_draw_data(gl_functions * glf);
 
 mesh load_mesh_file(char * filename,mesh_group group);
 mesh load_mesh_adjacency_file(char * filename);
 mesh load_mesh_transparent_adjacency_file(char * filename);
 
-draw_elements_indirect_command_data * map_mesh_dcbo_for_writing(mesh_group group);
-void unmap_mesh_dcbo(void);
+draw_elements_indirect_command_data * map_mesh_dcbo_for_writing(gl_functions * glf,mesh_group group);
+void unmap_mesh_dcbo(gl_functions * glf);
 
-void render_meshes(mesh_group group_to_render);
-void bind_mesh_buffers_for_vao(void);
-
-
+void render_meshes(gl_functions * glf,mesh_group group_to_render);
+void bind_mesh_buffers_for_vao(gl_functions * glf);
 
 
-void initialise_assorted_meshes(void);
-void bind_assorted_for_vao_vec3(void);
-void bind_assorted_for_vao_vec2(void);
 
-void render_octahedron_colour(uint32_t count);
-void render_octahedron_shadow(uint32_t count);
 
-void render_triangular_antiprism_colour(uint32_t count);
-void render_triangular_antiprism_shadow(uint32_t count);
+void initialise_assorted_meshes(gl_functions * glf);
+void bind_assorted_for_vao_vec3(gl_functions * glf);
+void bind_assorted_for_vao_vec2(gl_functions * glf);
 
-void render_square(uint32_t count);
+void render_octahedron_colour(gl_functions * glf,uint32_t count);
+void render_octahedron_shadow(gl_functions * glf,uint32_t count);
 
-void render_circle_lines(uint32_t count);
-void render_cross_lines(uint32_t count);
-void render_square_lines(uint32_t count);
+void render_triangular_antiprism_colour(gl_functions * glf,uint32_t count);
+void render_triangular_antiprism_shadow(gl_functions * glf,uint32_t count);
+
+void render_square(gl_functions * glf,uint32_t count);
+
+void render_circle_lines(gl_functions * glf,uint32_t count);
+void render_cross_lines(gl_functions * glf,uint32_t count);
+void render_square_lines(gl_functions * glf,uint32_t count);
+
+
+
+
+
+
 
 #endif
 

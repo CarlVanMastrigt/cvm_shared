@@ -443,16 +443,16 @@ int generate_mesh_with_adjacent_from_objs(const char * name,float scale)
     }
 
 
-    printf("%zu,",fwrite(&num_faces,    sizeof(uint32_t), 1, f_out));
-    printf("%zu,",fwrite(&num_verts,    sizeof(uint32_t), 1, f_out));
-    printf("%zu,",fwrite(&num_parts,    sizeof(uint32_t), 1, f_out));
+    printf("%zu,",fwrite(&num_faces,sizeof(uint32_t),1,f_out));
+    printf("%zu,",fwrite(&num_verts,sizeof(uint32_t),1,f_out));
+    printf("%zu,",fwrite(&num_parts,sizeof(uint32_t),1,f_out));
 
-    printf("%zu,",fwrite(part_ids , sizeof(uint32_t), num_parts, f_out));
-    printf("%zu,",fwrite(part_face_counts, sizeof(uint32_t), num_parts, f_out));
+    printf("%zu,",fwrite(part_ids,sizeof(uint32_t),num_parts,f_out));
+    printf("%zu,",fwrite(part_face_counts,sizeof(uint32_t),num_parts,f_out));
 
 
-    printf("%zu,",fwrite(faces, sizeof(uint16_t), num_faces*6, f_out));
-    printf("%zu,",fwrite(verts, sizeof(float), num_verts*3, f_out));
+    printf("%zu,",fwrite(faces,sizeof(uint16_t),num_faces*6,f_out));
+    printf("%zu,",fwrite(verts,sizeof(float),num_verts*3,f_out));
 
     for(i=0;i<num_parts;i++)
     {
@@ -513,8 +513,6 @@ void initialise_mesh_buffers(void)
         mesh_draw_data_space[i]=1;
         mesh_draw_data[i]=malloc(sizeof(draw_elements_indirect_command_data)*mesh_draw_data_space[i]);
     }
-
-
 }
 
 
@@ -955,30 +953,24 @@ static GLuint mesh_vbo=0;
 static GLuint mesh_cbo=0;
 static GLuint mesh_dcbo=0;
 
-void transfer_mesh_draw_data(void)
+void transfer_mesh_draw_data(gl_functions * glf)
 {
-    glGenBuffers_ptr(1,&mesh_ibo);
-    glBindBuffer_ptr(GL_ELEMENT_ARRAY_BUFFER,mesh_ibo);
-    glBufferData_ptr(GL_ELEMENT_ARRAY_BUFFER,sizeof(uint16_t)*mesh_index_count,mesh_indices,GL_STATIC_DRAW);
-    glBindBuffer_ptr(GL_ELEMENT_ARRAY_BUFFER,0);
+    glf->glGenBuffers(1,&mesh_ibo);
+    glf->glBindBuffer(GL_ELEMENT_ARRAY_BUFFER,mesh_ibo);
+    glf->glBufferData(GL_ELEMENT_ARRAY_BUFFER,sizeof(uint16_t)*mesh_index_count,mesh_indices,GL_STATIC_DRAW);
+    glf->glBindBuffer(GL_ELEMENT_ARRAY_BUFFER,0);
 
-    glGenBuffers_ptr(1,&mesh_vbo);
-    glBindBuffer_ptr(GL_ARRAY_BUFFER,mesh_vbo);
-    glBufferData_ptr(GL_ARRAY_BUFFER,sizeof(float)*mesh_vertex_count*3,mesh_vertices,GL_STATIC_DRAW);
-    glBindBuffer_ptr(GL_ARRAY_BUFFER,0);
+    glf->glGenBuffers(1,&mesh_vbo);
+    glf->glBindBuffer(GL_ARRAY_BUFFER,mesh_vbo);
+    glf->glBufferData(GL_ARRAY_BUFFER,sizeof(float)*mesh_vertex_count*3,mesh_vertices,GL_STATIC_DRAW);
+    glf->glBindBuffer(GL_ARRAY_BUFFER,0);
 
-    glGenTextures(1,&mesh_cbo);
-    glBindTexture(GL_TEXTURE_1D,mesh_cbo);
-    glTexImage1D(GL_TEXTURE_1D,0,GL_R16UI,mesh_colour_count,0,GL_RED_INTEGER,GL_UNSIGNED_SHORT,mesh_colours);
-    glTexParameteri(GL_TEXTURE_1D, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
-    glTexParameteri(GL_TEXTURE_1D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
-    glBindTexture(GL_TEXTURE_1D,0);
-
-
-
-
-
-
+    glf->glGenTextures(1,&mesh_cbo);
+    glf->glBindTexture(GL_TEXTURE_1D,mesh_cbo);
+    glf->glTexImage1D(GL_TEXTURE_1D,0,GL_R16UI,mesh_colour_count,0,GL_RED_INTEGER,GL_UNSIGNED_SHORT,mesh_colours);
+    glf->glTexParameteri(GL_TEXTURE_1D, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
+    glf->glTexParameteri(GL_TEXTURE_1D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
+    glf->glBindTexture(GL_TEXTURE_1D,0);
 
 
 
@@ -992,10 +984,10 @@ void transfer_mesh_draw_data(void)
     }
     total_size*=sizeof(draw_elements_indirect_command_data);
 
-    glGenBuffers_ptr(1,&mesh_dcbo);
-    glBindBuffer_ptr(GL_DRAW_INDIRECT_BUFFER,mesh_dcbo);
-    glBufferStorage_ptr(GL_DRAW_INDIRECT_BUFFER,total_size,NULL,GL_MAP_WRITE_BIT);
-    draw_elements_indirect_command_data * dcd=glMapBufferRange_ptr(GL_DRAW_INDIRECT_BUFFER,0,total_size,GL_MAP_WRITE_BIT);
+    glf->glGenBuffers(1,&mesh_dcbo);
+    glf->glBindBuffer(GL_DRAW_INDIRECT_BUFFER,mesh_dcbo);
+    glf->glBufferStorage(GL_DRAW_INDIRECT_BUFFER,total_size,NULL,GL_MAP_WRITE_BIT);
+    draw_elements_indirect_command_data * dcd=glf->glMapBufferRange(GL_DRAW_INDIRECT_BUFFER,0,total_size,GL_MAP_WRITE_BIT);
 
     for(i=0;i<NUM_MESH_GROUPS;i++)
     {
@@ -1003,8 +995,8 @@ void transfer_mesh_draw_data(void)
         dcd+=mesh_draw_data_count[i];
     }
 
-    glUnmapBuffer_ptr(GL_DRAW_INDIRECT_BUFFER);
-    glBindBuffer_ptr(GL_DRAW_INDIRECT_BUFFER,0);
+    glf->glUnmapBuffer(GL_DRAW_INDIRECT_BUFFER);
+    glf->glBindBuffer(GL_DRAW_INDIRECT_BUFFER,0);
 
 
 
@@ -1015,53 +1007,52 @@ void transfer_mesh_draw_data(void)
     free(mesh_indices);
     free(mesh_vertices);
     free(mesh_colours);
-
 }
 
-draw_elements_indirect_command_data * map_mesh_dcbo_for_writing(mesh_group group)
+draw_elements_indirect_command_data * map_mesh_dcbo_for_writing(gl_functions * glf,mesh_group group)
 {
-    glBindBuffer_ptr(GL_DRAW_INDIRECT_BUFFER, mesh_dcbo);
-    draw_elements_indirect_command_data * dcd=glMapBufferRange_ptr(GL_DRAW_INDIRECT_BUFFER,
+    glf->glBindBuffer(GL_DRAW_INDIRECT_BUFFER, mesh_dcbo);
+    draw_elements_indirect_command_data * dcd=glf->glMapBufferRange(GL_DRAW_INDIRECT_BUFFER,
         mesh_draw_data_offset[group]*sizeof(draw_elements_indirect_command_data),
         mesh_draw_data_count[group]*sizeof(draw_elements_indirect_command_data),GL_MAP_WRITE_BIT);
-    glBindBuffer_ptr(GL_DRAW_INDIRECT_BUFFER, 0);
+    glf->glBindBuffer(GL_DRAW_INDIRECT_BUFFER, 0);
     return dcd;
 }
 
-void unmap_mesh_dcbo(void)
+void unmap_mesh_dcbo(gl_functions * glf)
 {
-    glBindBuffer_ptr(GL_DRAW_INDIRECT_BUFFER, mesh_dcbo);
-    glUnmapBuffer_ptr(GL_DRAW_INDIRECT_BUFFER);
-    glBindBuffer_ptr(GL_DRAW_INDIRECT_BUFFER,0);
+    glf->glBindBuffer(GL_DRAW_INDIRECT_BUFFER, mesh_dcbo);
+    glf->glUnmapBuffer(GL_DRAW_INDIRECT_BUFFER);
+    glf->glBindBuffer(GL_DRAW_INDIRECT_BUFFER,0);
 }
 
 
-void render_meshes(mesh_group group_to_render)
+void render_meshes(gl_functions * glf,mesh_group group_to_render)
 {
-    glBindBuffer_ptr(GL_DRAW_INDIRECT_BUFFER,mesh_dcbo);
+    glf->glBindBuffer(GL_DRAW_INDIRECT_BUFFER,mesh_dcbo);
 
     if((group_to_render==SHADOW_MESH_GROUP)||(group_to_render==TRANSPARENT_SHADOW_MESH_GROUP))
     {
-        glMultiDrawElementsIndirect_ptr(GL_TRIANGLES_ADJACENCY,GL_UNSIGNED_SHORT,(const void*)(mesh_draw_data_offset[group_to_render]*sizeof(draw_elements_indirect_command_data)),mesh_draw_data_count[group_to_render],0);
+        glf->glMultiDrawElementsIndirect(GL_TRIANGLES_ADJACENCY,GL_UNSIGNED_SHORT,(const void*)(mesh_draw_data_offset[group_to_render]*sizeof(draw_elements_indirect_command_data)),mesh_draw_data_count[group_to_render],0);
     }
     else
     {
         glActiveTexture(GL_TEXTURE0);
         glBindTexture(GL_TEXTURE_1D,mesh_cbo);
 
-        glMultiDrawElementsIndirect_ptr(GL_TRIANGLES,GL_UNSIGNED_SHORT,(const void*)(mesh_draw_data_offset[group_to_render]*sizeof(draw_elements_indirect_command_data)),mesh_draw_data_count[group_to_render],0);
+        glf->glMultiDrawElementsIndirect(GL_TRIANGLES,GL_UNSIGNED_SHORT,(const void*)(mesh_draw_data_offset[group_to_render]*sizeof(draw_elements_indirect_command_data)),mesh_draw_data_count[group_to_render],0);
     }
 
-    glBindBuffer_ptr(GL_DRAW_INDIRECT_BUFFER,0);
+    glf->glBindBuffer(GL_DRAW_INDIRECT_BUFFER,0);
 }
 
-void bind_mesh_buffers_for_vao(void)
+void bind_mesh_buffers_for_vao(gl_functions * glf)
 {
-    glBindBuffer_ptr(GL_ELEMENT_ARRAY_BUFFER, mesh_ibo);
+    glf->glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, mesh_ibo);
 
-    glBindBuffer_ptr(GL_ARRAY_BUFFER, mesh_vbo);
-    glEnableVertexAttribArray_ptr(0);
-    glVertexAttribPointer_ptr(0, 3, GL_FLOAT, GL_FALSE, 0, 0);
+    glf->glBindBuffer(GL_ARRAY_BUFFER, mesh_vbo);
+    glf->glEnableVertexAttribArray(0);
+    glf->glVertexAttribPointer(0,3,GL_FLOAT,GL_FALSE,0,0);
 }
 
 
@@ -1228,17 +1219,17 @@ static GLfloat assorted_line_vertices[]=
     1.0,1.0
 };
 
-void initialise_assorted_meshes(void)
+void initialise_assorted_meshes(gl_functions * glf)
 {
-    glGenBuffers_ptr(1,&assorted_vbo);
-    glBindBuffer_ptr(GL_ARRAY_BUFFER,assorted_vbo);
-    glBufferData_ptr(GL_ARRAY_BUFFER,sizeof(GLfloat)*36,assorted_vertices,GL_STATIC_DRAW);
-    glBindBuffer_ptr(GL_ARRAY_BUFFER, 0);
+    glf->glGenBuffers(1,&assorted_vbo);
+    glf->glBindBuffer(GL_ARRAY_BUFFER,assorted_vbo);
+    glf->glBufferData(GL_ARRAY_BUFFER,sizeof(GLfloat)*36,assorted_vertices,GL_STATIC_DRAW);
+    glf->glBindBuffer(GL_ARRAY_BUFFER, 0);
 
-    glGenBuffers_ptr(1,&assorted_ibo);
-    glBindBuffer_ptr(GL_ELEMENT_ARRAY_BUFFER,assorted_ibo);
-    glBufferData_ptr(GL_ELEMENT_ARRAY_BUFFER,sizeof(GLushort)*144,assorted_indices,GL_STATIC_DRAW);
-    glBindBuffer_ptr(GL_ELEMENT_ARRAY_BUFFER,0);
+    glf->glGenBuffers(1,&assorted_ibo);
+    glf->glBindBuffer(GL_ELEMENT_ARRAY_BUFFER,assorted_ibo);
+    glf->glBufferData(GL_ELEMENT_ARRAY_BUFFER,sizeof(GLushort)*144,assorted_indices,GL_STATIC_DRAW);
+    glf->glBindBuffer(GL_ELEMENT_ARRAY_BUFFER,0);
 
 
 
@@ -1260,69 +1251,66 @@ void initialise_assorted_meshes(void)
     }
 
 
-    glGenBuffers_ptr(1,&assorted_line_vbo);
-    glBindBuffer_ptr(GL_ARRAY_BUFFER,assorted_line_vbo);
-    glBufferData_ptr(GL_ARRAY_BUFFER,sizeof(GLfloat)*(36+2*circle_divisions),line_verts,GL_STATIC_DRAW);
-    glBindBuffer_ptr(GL_ARRAY_BUFFER, 0);
+    glf->glGenBuffers(1,&assorted_line_vbo);
+    glf->glBindBuffer(GL_ARRAY_BUFFER,assorted_line_vbo);
+    glf->glBufferData(GL_ARRAY_BUFFER,sizeof(GLfloat)*(36+2*circle_divisions),line_verts,GL_STATIC_DRAW);
+    glf->glBindBuffer(GL_ARRAY_BUFFER, 0);
 }
 
-void bind_assorted_for_vao_vec3(void)
+void bind_assorted_for_vao_vec3(gl_functions * glf)
 {
-    glBindBuffer_ptr(GL_ELEMENT_ARRAY_BUFFER, assorted_ibo);
+    glf->glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, assorted_ibo);
 
-    glBindBuffer_ptr(GL_ARRAY_BUFFER,assorted_vbo);
-    glEnableVertexAttribArray_ptr(0);
-    glVertexAttribPointer_ptr(0, 3, GL_FLOAT, GL_FALSE, 0, 0);
+    glf->glBindBuffer(GL_ARRAY_BUFFER,assorted_vbo);
+    glf->glEnableVertexAttribArray(0);
+    glf->glVertexAttribPointer(0,3,GL_FLOAT,GL_FALSE,0,0);
 }
 
-void bind_assorted_for_vao_vec2(void)
+void bind_assorted_for_vao_vec2(gl_functions * glf)
 {
-    glBindBuffer_ptr(GL_ARRAY_BUFFER,assorted_line_vbo);
-    glEnableVertexAttribArray_ptr(0);
-    glVertexAttribPointer_ptr(0, 2, GL_FLOAT, GL_FALSE, 0, 0);
+    glf->glBindBuffer(GL_ARRAY_BUFFER,assorted_line_vbo);
+    glf->glEnableVertexAttribArray(0);
+    glf->glVertexAttribPointer(0,2,GL_FLOAT,GL_FALSE,0,0);
 }
 
-void render_octahedron_colour(uint32_t count)
+void render_octahedron_colour(gl_functions * glf,uint32_t count)
 {
-    glDrawElementsInstanced_ptr(GL_TRIANGLES,24,GL_UNSIGNED_SHORT,NULL,count);
+    glf->glDrawElementsInstanced(GL_TRIANGLES,24,GL_UNSIGNED_SHORT,NULL,count);
 }
 
-void render_octahedron_shadow(uint32_t count)
+void render_octahedron_shadow(gl_functions * glf,uint32_t count)
 {
-    glDrawElementsInstanced_ptr(GL_TRIANGLES_ADJACENCY,48,GL_UNSIGNED_SHORT,(const void *)(24*sizeof(GLushort)),count);
+    glf->glDrawElementsInstanced(GL_TRIANGLES_ADJACENCY,48,GL_UNSIGNED_SHORT,(const void *)(24*sizeof(GLushort)),count);
 }
 
-void render_triangular_antiprism_colour(uint32_t count)
+void render_triangular_antiprism_colour(gl_functions * glf,uint32_t count)
 {
-    glDrawElementsInstanced_ptr(GL_TRIANGLES,24,GL_UNSIGNED_SHORT,(const void *)(72*sizeof(GLushort)),count);
+    glf->glDrawElementsInstanced(GL_TRIANGLES,24,GL_UNSIGNED_SHORT,(const void *)(72*sizeof(GLushort)),count);
 }
 
-void render_triangular_antiprism_shadow(uint32_t count)
+void render_triangular_antiprism_shadow(gl_functions * glf,uint32_t count)
 {
-    glDrawElementsInstanced_ptr(GL_TRIANGLES_ADJACENCY,48,GL_UNSIGNED_SHORT,(const void *)(96*sizeof(GLushort)),count);
+    glf->glDrawElementsInstanced(GL_TRIANGLES_ADJACENCY,48,GL_UNSIGNED_SHORT,(const void *)(96*sizeof(GLushort)),count);
 }
 
 
 
-
-
-
-void render_cross_lines(uint32_t count)
+void render_cross_lines(gl_functions * glf,uint32_t count)
 {
-    glDrawArraysInstanced_ptr(GL_LINES,0,8,count);
+    glf->glDrawArraysInstanced(GL_LINES,0,8,count);
 }
 
-void render_square_lines(uint32_t count)
+void render_square_lines(gl_functions * glf,uint32_t count)
 {
-    glDrawArraysInstanced_ptr(GL_LINE_LOOP,8,4,count);
+    glf->glDrawArraysInstanced(GL_LINE_LOOP,8,4,count);
 }
 
-void render_square(uint32_t count)
+void render_square(gl_functions * glf,uint32_t count)
 {
-    glDrawArraysInstanced_ptr(GL_TRIANGLES,12,6,count);
+    glf->glDrawArraysInstanced(GL_TRIANGLES,12,6,count);
 }
 
-void render_circle_lines(uint32_t count)
+void render_circle_lines(gl_functions * glf,uint32_t count)
 {
-    glDrawArraysInstanced_ptr(GL_LINE_LOOP,36,circle_divisions,count);
+    glf->glDrawArraysInstanced(GL_LINE_LOOP,36,circle_divisions,count);
 }
