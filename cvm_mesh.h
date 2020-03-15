@@ -47,10 +47,6 @@ typedef struct mesh
 }
 mesh;
 
-
-
-
-
 typedef struct draw_elements_indirect_command_data///Should probably be put in another file, but here is fine for now
 {
     GLuint  count;
@@ -60,6 +56,35 @@ typedef struct draw_elements_indirect_command_data///Should probably be put in a
     GLuint  base_instance;
 }
 draw_elements_indirect_command_data;
+
+typedef struct mesh_group_
+{
+    GLuint dcbo;
+    GLuint ibo;
+    GLuint vbo;
+    GLuint cbo;
+
+    uint32_t indexed_colour:1;
+    uint32_t adjacents_present:1;
+    /// need to also include texture coordinate lookup and
+
+    draw_elements_indirect_command_data * draw_command_buffer;
+    uint32_t draw_command_count;
+    uint32_t draw_command_space;
+
+    GLshort * index_buffer;
+    uint32_t index_count;
+    uint32_t index_space;
+
+    GLfloat * vertex_buffer;
+    uint32_t vertex_count;
+    uint32_t vertex_space;
+
+    GLshort * colour_buffer;
+    uint32_t colour_count;
+    uint32_t colour_space;
+}
+mesh_group_;
 
 uint32_t get_mesh_group_count(mesh_group group);
 

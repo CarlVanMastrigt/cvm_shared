@@ -41,10 +41,10 @@ static inline void set_instanced_attribute_f(gl_functions * glf,GLuint index,GLi
     glf->glVertexAttribDivisor(index,1);
 }
 
-static inline void set_instanced_attribute_i(gl_functions * glf,GLuint index,GLint size,GLsizei stride,const GLvoid * pointer)
+static inline void set_instanced_attribute_i(gl_functions * glf,GLuint index,GLint size,GLsizei stride,const GLvoid * pointer,GLenum type)
 {
     glf->glEnableVertexAttribArray(index);
-    glf->glVertexAttribIPointer(index,size,GL_UNSIGNED_INT,stride,pointer);
+    glf->glVertexAttribIPointer(index,size,type,stride,pointer);
     glf->glVertexAttribDivisor(index,1);
 }
 
