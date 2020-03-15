@@ -47,7 +47,7 @@ static void progress_lines(widget * w,cvm_font * font,int * x,int num_characters
 static void process_textbox_contents(overlay_theme * theme,widget * w,int width,int font_index)///returns required height to fit text
 {
     int x=0;
-    cvm_font * font=theme->fonts+font_index;
+    cvm_font * font= &theme->font;
     char * text=w->textbox.text;
 
 
@@ -273,7 +273,7 @@ static void render_textbox_text(overlay_data * od,overlay_theme * theme,widget *
 
     bool caret_only=(h_begin==h_end);
 
-    int line_spacing=theme->fonts[w->textbox.font_index].line_spacing;
+    int line_spacing=theme->font.line_spacing;///w->textbox.font_index
 
     for(i=0;i<w->textbox.render_lines_count;i++)
     {
@@ -366,7 +366,7 @@ static void render_textbox_text(overlay_data * od,overlay_theme * theme,widget *
             if(highlight_x_start!=-1)
             {
                 #warning .h should be set to text_height not line spacing
-                render_rectangle(od,(rectangle){.x=highlight_x_start+x_off,.y=y_off+offset,.w=highlight_x_finish-highlight_x_start,.h=theme->fonts[w->textbox.font_index].line_spacing},bounds,OVERLAY_TEXT_HIGHLIGHT_COLOUR);
+                render_rectangle(od,(rectangle){.x=highlight_x_start+x_off,.y=y_off+offset,.w=highlight_x_finish-highlight_x_start,.h=theme->font.line_spacing},bounds,OVERLAY_TEXT_HIGHLIGHT_COLOUR);///w->textbox.font_index
 
             }
         }
@@ -385,7 +385,7 @@ static int find_textbox_character_index_from_position(overlay_theme * theme,widg
     int x,i,line_id;
     bool beyond_end=false;
 
-    if(mouse_y<0) return w->textbox.render_lines[w->textbox.offset/theme->fonts[w->textbox.font_index].line_spacing].character_start;
+    if(mouse_y<0) return w->textbox.render_lines[w->textbox.offset/theme->font.line_spacing].character_start;///w->textbox.font_index
     if(mouse_y >= w->textbox.visible_size)
     {
         mouse_y=w->textbox.visible_size-1;
@@ -394,12 +394,12 @@ static int find_textbox_character_index_from_position(overlay_theme * theme,widg
 
     mouse_y+=w->textbox.offset;
 
-    line_id=mouse_y/theme->fonts[w->textbox.font_index].line_spacing;
+    line_id=mouse_y/theme->font.line_spacing;///w->textbox.font_index
 
     if(line_id >= w->textbox.render_lines_count)return w->textbox.render_lines[w->textbox.render_lines_count-1].character_finish;
     if(beyond_end)return w->textbox.render_lines[line_id].character_finish;
 
-    cvm_font * font=theme->fonts+w->textbox.font_index;
+    cvm_font * font= &theme->font;///w->textbox.font_index;
     char * text=w->textbox.text;
     char prev=0;
 
@@ -562,12 +562,12 @@ static widget * textbox_widget_select(overlay_theme * theme,widget * w,int x_in,
 static void textbox_widget_min_w(overlay_theme * theme,widget * w)
 {
     w->textbox.font_index=0;
-    w->base.min_w=w->textbox.min_horizontal_glyphs * theme->fonts[w->textbox.font_index].max_glyph_width;
+    w->base.min_w=w->textbox.min_horizontal_glyphs * theme->font.max_glyph_width;///w->textbox.font_index
 }
 
 static void textbox_widget_min_h(overlay_theme * theme,widget * w)
 {
-    cvm_font * font=theme->fonts+w->textbox.font_index;
+    cvm_font * font= &theme->font;///w->textbox.font_index
 
     process_textbox_contents(theme,w,w->base.r.w-theme->x_box_offset*2,0);
 
@@ -587,7 +587,7 @@ static void textbox_widget_min_h(overlay_theme * theme,widget * w)
 
 static void textbox_widget_set_h(overlay_theme * theme,widget * w)
 {
-    w->textbox.wheel_delta= -theme->fonts[w->textbox.font_index].line_spacing;
+    w->textbox.wheel_delta= -theme->font.line_spacing;///w->textbox.font_index
     w->textbox.visible_size= w->base.r.h-2*theme->y_box_offset;
 
     if(w->textbox.min_visible_lines)

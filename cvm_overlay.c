@@ -48,12 +48,12 @@ void ensure_overlay_data_space(overlay_data * od)
     }
 }
 
-void load_font_to_overlay(gl_functions * glf,overlay_theme * theme,char * ttf_file,int size,int font_index)
+void load_font_to_overlay(gl_functions * glf,overlay_theme * theme,char * ttf_file,int size)
 {
     int i,j,k,w;
     SDL_Surface *surf;
 
-    cvm_font * font=&theme->fonts[font_index];
+    cvm_font * font= &theme->font;
 
     TTF_Font * this_font = TTF_OpenFont(ttf_file,size);
 
@@ -370,10 +370,8 @@ overlay_theme create_overlay_theme(gl_functions * glf,uint32_t shaded_texture_si
     int i;
     overlay_theme ot;
 
-    for(i=0;i<4;i++)
-    {
-        glf->glGenTextures(1,&ot.fonts[i].text_image);
-    }
+
+    glf->glGenTextures(1,&ot.font.text_image);
 
     ot.sprite_data=malloc(sizeof(overlay_sprite_data));
     ot.sprite_count=0;///1 reserved
@@ -463,23 +461,10 @@ void initialise_overlay(gl_functions * glf)
     sprintf(defines,"#define NUM_OVERLAY_COLOURS %d \n\n",NUM_OVERLAY_COLOURS);
 
 
-    overlay_shader=initialise_shader_program(glf,defines,"shaders/overlay_vert.glsl",NULL,"shaders/overlay_frag.glsl" );
-
-
-    glf->glUseProgram(overlay_shader);
-
-    GLint text_image_indices[4]={0,1,2,3};
-
-    glf->glUniform1iv(glf->glGetUniformLocation(overlay_shader,"text_images"),4,text_image_indices);
-    glf->glUniform1i(glf->glGetUniformLocation(overlay_shader,"shaded_image"),4);
-    glf->glUniform1i(glf->glGetUniformLocation(overlay_shader,"coloured_image"),5);
-
-
-    glf->glUseProgram(0);
+    overlay_shader=initialise_shader_program(glf,defines,"cvm_shared/shaders/overlay_vert.glsl",NULL,"cvm_shared/shaders/overlay_frag.glsl" );
 
 
     float v[8]={0.0f,0.0f,0.0f,1.0f,1.0f,1.0f,1.0f,0.0f};
-    GLuint attrib_location;
 
 
     glf->glGenVertexArrays(1,&overlay_vao);
@@ -489,31 +474,17 @@ void initialise_overlay(gl_functions * glf)
     glf->glBindBuffer(GL_ARRAY_BUFFER,overlay_vbo);
     glf->glBufferData(GL_ARRAY_BUFFER,sizeof(float)*8,v,GL_STATIC_DRAW);
 
-
-    attrib_location=glf->glGetAttribLocation(overlay_shader,"vertex");
-
-    glf->glEnableVertexAttribArray(attrib_location);
-    glf->glVertexAttribPointer(attrib_location,2, GL_FLOAT, GL_FALSE, 0, 0);
+    glf->glEnableVertexAttribArray(0);
+    glf->glVertexAttribPointer(0,2,GL_FLOAT,GL_FALSE,0,0);
 
 
     glf->glGenBuffers(1,&overlay_buffer);
     glf->glBindBuffer(GL_ARRAY_BUFFER,overlay_buffer);
     overlay_buffer_size=0;
 
-    attrib_location=glf->glGetAttribLocation(overlay_shader,"data1");
-    glf->glEnableVertexAttribArray(attrib_location);
-    glf->glVertexAttribIPointer(attrib_location,4,GL_SHORT,sizeof(overlay_render_data),(const GLvoid*)offsetof(overlay_render_data,data1));
-    glf->glVertexAttribDivisor(attrib_location,1);
-
-    attrib_location=glf->glGetAttribLocation(overlay_shader,"data2");
-    glf->glEnableVertexAttribArray(attrib_location);
-    glf->glVertexAttribIPointer(attrib_location,4,GL_SHORT,sizeof(overlay_render_data),(const GLvoid*)offsetof(overlay_render_data,data2));
-    glf->glVertexAttribDivisor(attrib_location,1);
-
-    attrib_location=glf->glGetAttribLocation(overlay_shader,"data3");
-    glf->glEnableVertexAttribArray(attrib_location);
-    glf->glVertexAttribIPointer(attrib_location,4,GL_SHORT,sizeof(overlay_render_data),(const GLvoid*)offsetof(overlay_render_data,data3));
-    glf->glVertexAttribDivisor(attrib_location,1);
+    set_instanced_attribute_i(glf,1,4,sizeof(overlay_render_data),(const GLvoid*)offsetof(overlay_render_data,data1),GL_SHORT);
+    set_instanced_attribute_i(glf,2,4,sizeof(overlay_render_data),(const GLvoid*)offsetof(overlay_render_data,data2),GL_SHORT);
+    set_instanced_attribute_i(glf,3,4,sizeof(overlay_render_data),(const GLvoid*)offsetof(overlay_render_data,data3),GL_SHORT);
 
     glf->glBindVertexArray(0);
 }
@@ -556,16 +527,13 @@ void render_overlay(gl_functions * glf,overlay_data * od,overlay_theme * theme,i
         glf->glUniform4fv(glf->glGetUniformLocation(overlay_shader,"colours"),NUM_OVERLAY_COLOURS-1,(GLfloat*)(overlay_colours+1));
 
 
-        for(i=0;i<4;i++)
-        {
-            glf->glActiveTexture(GL_TEXTURE0+i);
-            glf->glBindTexture(GL_TEXTURE_2D,theme->fonts[i].text_image);
-        }
+        glf->glActiveTexture(GL_TEXTURE0);
+        glf->glBindTexture(GL_TEXTURE_2D,theme->font.text_image);
 
-        glf->glActiveTexture(GL_TEXTURE4);
+        glf->glActiveTexture(GL_TEXTURE1);
         glf->glBindTexture(GL_TEXTURE_2D,theme->shaded_texture);
 
-        glf->glActiveTexture(GL_TEXTURE5);
+        glf->glActiveTexture(GL_TEXTURE2);
         glf->glBindTexture(GL_TEXTURE_2D,theme->coloured_texture);
 
         glf->glBindVertexArray(overlay_vao);
@@ -756,7 +724,7 @@ int calculate_text_length(overlay_theme * theme,char * text,int font_index)
     {
         for(i=0;text[i];i++)
         {
-            offset=get_new_text_offset(theme->fonts+font_index,prev,text[i],offset);
+            offset=get_new_text_offset(&theme->font,prev,text[i],offset);
             prev=text[i];
         }
     }
@@ -767,7 +735,7 @@ int calculate_text_length(overlay_theme * theme,char * text,int font_index)
 
 char * shorten_text_to_fit_width_start_ellipses(overlay_theme * theme,int width,char * text,int font_index,char * buffer,int buffer_size,int * x_offset)
 {
-    cvm_font * f=theme->fonts+font_index;
+    cvm_font * f= &theme->font;
     int i,bi,d,l,offset=0;
 
     l=strlen(text);
@@ -821,7 +789,7 @@ char * shorten_text_to_fit_width_start_ellipses(overlay_theme * theme,int width,
 
 char * shorten_text_to_fit_width_end_ellipses(overlay_theme * theme,int width,char * text,int font_index,char * buffer,int buffer_size)//,int * x_offset
 {
-    cvm_font * f=theme->fonts+font_index;
+    cvm_font * f= &theme->font;
     int i,d,offset=0;
     char prev=0;
 
@@ -868,7 +836,7 @@ void render_overlay_text(overlay_data * od,overlay_theme * theme,char * text,int
 {
     int offset=0;
     char prev=0;
-    int i;//fonts[font_index].
+    int i;//font.
 
     rectangle r;
 
@@ -876,20 +844,20 @@ void render_overlay_text(overlay_data * od,overlay_theme * theme,char * text,int
 
     for(i=0;text[i];i++)
     {
-        offset=get_new_text_offset(&theme->fonts[font_index],prev,text[i],offset);
+        offset=get_new_text_offset(&theme->font,prev,text[i],offset);
         prev=text[i];
 
         if( (text[i]>='!') && (text[i]<='~') )
         {
             r=(rectangle)
             {
-                .x=x_off+offset+theme->fonts[font_index].glyphs[text[i]-'!'].bearingX-theme->fonts[font_index].glyphs[text[i]-'!'].advance,
+                .x=x_off+offset+theme->font.glyphs[text[i]-'!'].bearingX-theme->font.glyphs[text[i]-'!'].advance,
                 .y=y_off,
-                .w=theme->fonts[font_index].glyphs[text[i]-'!'].width,
-                .h=theme->fonts[font_index].font_height
+                .w=theme->font.glyphs[text[i]-'!'].width,
+                .h=theme->font.font_height
             };
 
-            render_character(od,r,bounds,theme->fonts[font_index].glyphs[text[i]-'!'].offset,font_index,OVERLAY_TEXT_COLOUR_0+colour);
+            render_character(od,r,bounds,theme->font.glyphs[text[i]-'!'].offset,font_index,OVERLAY_TEXT_COLOUR_0+colour);
         }
     }
 }

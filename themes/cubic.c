@@ -232,7 +232,7 @@ void cubic_h_text_bar_render(rectangle r,int x_off,int y_off,uint32_t status,ove
     /// use x_off and y_off here for cleanlyness/legibility purposes ??? also for text placement when on border
 
     x_off=r.x+theme->h_bar_text_offset;
-    y_off=r.y+(r.h-theme->fonts[0].font_height)/2;
+    y_off=r.y+(r.h-theme->font.font_height)/2;
     int text_w=r.w-2*theme->h_bar_text_offset;
 
     if(!(status&WIDGET_H_FIRST))///not the first
@@ -250,7 +250,7 @@ void cubic_h_text_bar_render(rectangle r,int x_off,int y_off,uint32_t status,ove
 
     render_rectangle(od,r,bounds,colour);
 
-    if((text)&&(get_rectangle_overlap(&bounds,(rectangle){.x=x_off,.y=y_off,.w=text_w,.h=theme->fonts[0].font_height})))render_overlay_text(od,theme,text,x_off,y_off,bounds,0,0);
+    if((text)&&(get_rectangle_overlap(&bounds,(rectangle){.x=x_off,.y=y_off,.w=text_w,.h=theme->font.font_height})))render_overlay_text(od,theme,text,x_off,y_off,bounds,0,0);
 }
 
 void cubic_h_icon_text_bar_render(rectangle r,int x_off,int y_off,uint32_t status,overlay_theme * theme,overlay_data * od,rectangle bounds,overlay_colour colour,char * text,char * icon_name,overlay_colour icon_colour)
@@ -262,7 +262,7 @@ void cubic_h_icon_text_bar_render(rectangle r,int x_off,int y_off,uint32_t statu
     /// use x_off and y_off here for cleanlyness/legibility purposes ??? also for text placement when on border
 
     x_off=r.x+theme->h_bar_text_offset+theme->icon_bar_extra_w;
-    y_off=r.y+(r.h-theme->fonts[0].font_height)/2;
+    y_off=r.y+(r.h-theme->font.font_height)/2;
     int text_w=r.w-2*theme->h_bar_text_offset- theme->icon_bar_extra_w;
 
     if(!(status&WIDGET_H_FIRST))///not the first
@@ -283,7 +283,7 @@ void cubic_h_icon_text_bar_render(rectangle r,int x_off,int y_off,uint32_t statu
     if(text)
     {
         rectangle text_bounds=bounds;
-        if(get_rectangle_overlap(&text_bounds,(rectangle){.x=x_off,.y=y_off,.w=text_w,.h=theme->fonts[0].font_height}))render_overlay_text(od,theme,text,x_off,y_off,text_bounds,0,0);
+        if(get_rectangle_overlap(&text_bounds,(rectangle){.x=x_off,.y=y_off,.w=text_w,.h=theme->font.font_height}))render_overlay_text(od,theme,text,x_off,y_off,text_bounds,0,0);
     }
 
     if(icon_name)
@@ -305,7 +305,7 @@ void cubic_h_text_icon_bar_render(rectangle r,int x_off,int y_off,uint32_t statu
     /// use x_off and y_off here for cleanlyness/legibility purposes ??? also for text placement when on border
 
     x_off=r.x+theme->h_bar_text_offset;
-    y_off=r.y+(r.h-theme->fonts[0].font_height)/2;
+    y_off=r.y+(r.h-theme->font.font_height)/2;
     int text_w=r.w-2*theme->h_bar_text_offset-theme->icon_bar_extra_w;
 
     if(!(status&WIDGET_H_FIRST))///not the first
@@ -326,7 +326,7 @@ void cubic_h_text_icon_bar_render(rectangle r,int x_off,int y_off,uint32_t statu
     if(text)
     {
         rectangle text_bounds=bounds;
-        if(get_rectangle_overlap(&text_bounds,(rectangle){.x=x_off,.y=y_off,.w=text_w,.h=theme->fonts[0].font_height}))render_overlay_text(od,theme,text,x_off,y_off,text_bounds,0,0);
+        if(get_rectangle_overlap(&text_bounds,(rectangle){.x=x_off,.y=y_off,.w=text_w,.h=theme->font.font_height}))render_overlay_text(od,theme,text,x_off,y_off,text_bounds,0,0);
     }
 
     if(icon_name)
@@ -489,7 +489,7 @@ void initialise_cubic_theme(gl_functions * glf,overlay_theme * theme)
     overlay_sprite_data osd;
     int d;
 
-    load_font_to_overlay(glf,theme,"resources/CVM_font_1.ttf",16,0);
+    load_font_to_overlay(glf,theme,"resources/CVM_font_1.ttf",16);
     SDL_Surface * icons_surface=IMG_Load("resources/icons_alpha.png");
 
     if(icons_surface==NULL)

@@ -448,7 +448,7 @@ static void file_search_button_func(widget * w)
 
 static int file_search_button_widget_w(overlay_theme * theme)
 {
-    return 16*theme->fonts[0].max_glyph_width+2*theme->h_bar_text_offset+theme->icon_bar_extra_w;
+    return 16*theme->font.max_glyph_width+2*theme->h_bar_text_offset+theme->icon_bar_extra_w;
 }
 
 static int file_search_button_widget_h(overlay_theme * theme)

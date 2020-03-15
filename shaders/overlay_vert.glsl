@@ -17,14 +17,13 @@ You should have received a copy of the GNU Affero General Public License
 along with cvm_shared.  If not, see <https://www.gnu.org/licenses/>.
 */
 
-in vec2 vertex;
-in ivec4 data1;
-in ivec4 data2;
-in ivec4 data3;
+layout (location = 0) in vec2 vertex;
+layout (location = 1) in ivec4 data1;
+layout (location = 2) in ivec4 data2;
+layout (location = 3) in ivec4 data3;
 
 uniform vec2 inv_window_size;
 
-flat out ivec4 data1_;
 flat out ivec4 data2_;
 flat out ivec4 data3_;
 
@@ -32,9 +31,7 @@ void main()
 {
     vec4 ps=vec4(data1);
     gl_Position=vec4( ((ps.xy+ps.zw*vertex)*inv_window_size-0.5)*vec2(1.0,-1.0) ,0.0,0.5);
-    //gl_Position=vec4( vertex ,0.0,0.5);
 
-    data1_=data1;
     data2_=data2;
     data3_=data3;
 }

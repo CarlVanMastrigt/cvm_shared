@@ -134,7 +134,7 @@ static void enterbox_check_visible_offset(widget * w,overlay_theme * theme)
     int i,text_length,caret_offset=0,e=w->enterbox.selection_end;
     char prev=0;
 
-    cvm_font * font=theme->fonts+0;
+    cvm_font * font= &theme->font;
     char * text=w->enterbox.text;
 
     int side_space=2*theme->h_bar_text_offset;
@@ -186,7 +186,7 @@ static int find_enterbox_character_index_from_position(overlay_theme * theme,wid
     //mouse_x-= //w->enterbox.text_x_offset;
     char prev=0;
 
-    cvm_font * font=theme->fonts+0;
+    cvm_font * font= &theme->font;
     char * text=w->enterbox.text;
 
     for(i=0;text[i];i++)
@@ -458,7 +458,7 @@ static void render_enterbox_text_highlighting(overlay_data * od,overlay_theme * 
 
     int i;
 
-    cvm_font * font=theme->fonts+font_index;
+    cvm_font * font= &theme->font;
     char * text=w->enterbox.text;
 
     int x1,x2;
@@ -486,7 +486,7 @@ static void render_enterbox_text_highlighting(overlay_data * od,overlay_theme * 
             prev=text[i];
         }
 
-        render_rectangle(od,(rectangle){.x=x+x_off,.y=y_off,.w=1,.h=theme->fonts[font_index].font_height},bounds,OVERLAY_TEXT_COLOUR_0);
+        render_rectangle(od,(rectangle){.x=x+x_off,.y=y_off,.w=1,.h=theme->font.font_height},bounds,OVERLAY_TEXT_COLOUR_0);
     }
     else
     {
@@ -512,7 +512,7 @@ static void render_enterbox_text_highlighting(overlay_data * od,overlay_theme * 
 
         if(highlighting)x2=x;
 
-        render_rectangle(od,(rectangle){.x=x1+x_off,.y=y_off,.w=x2-x1,.h=theme->fonts[font_index].font_height},bounds,OVERLAY_TEXT_HIGHLIGHT_COLOUR);
+        render_rectangle(od,(rectangle){.x=x1+x_off,.y=y_off,.w=x2-x1,.h=theme->font.font_height},bounds,OVERLAY_TEXT_HIGHLIGHT_COLOUR);
     }
 }
 
@@ -531,9 +531,9 @@ static void enterbox_widget_render(overlay_data * od,overlay_theme * theme,widge
 {
 	theme->h_text_bar_render(w->base.r,x_off,y_off,w->base.status,theme,od,bounds,OVERLAY_MAIN_COLOUR,NULL);
 
-    y_off+=w->base.r.y+(w->base.r.h-theme->fonts[0].font_height)/2;
+    y_off+=w->base.r.y+(w->base.r.h-theme->font.font_height)/2;
     x_off+=w->base.r.x+theme->h_bar_text_offset;
-    get_rectangle_overlap(&bounds,(rectangle){.x=x_off,.y=y_off,.w=w->base.r.w-2*theme->h_bar_text_offset,.h=theme->fonts[0].font_height});
+    get_rectangle_overlap(&bounds,(rectangle){.x=x_off,.y=y_off,.w=w->base.r.w-2*theme->h_bar_text_offset,.h=theme->font.font_height});
 
     x_off-=w->enterbox.visible_offset;
 
@@ -550,7 +550,7 @@ static widget * enterbox_widget_select(overlay_theme * theme,widget * w,int x_in
 
 static void enterbox_widget_min_w(overlay_theme * theme,widget * w)
 {
-    w->base.min_w = 2*theme->h_bar_text_offset+theme->fonts[0].max_glyph_width*w->enterbox.text_min_visible+1;///+1 for caret, only necessary when bearingX is 0
+    w->base.min_w = 2*theme->h_bar_text_offset+theme->font.max_glyph_width*w->enterbox.text_min_visible+1;///+1 for caret, only necessary when bearingX is 0
 }
 
 static void enterbox_widget_min_h(overlay_theme * theme,widget * w)

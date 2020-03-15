@@ -156,7 +156,7 @@ struct overlay_theme
 {
     char * name;
 
-    cvm_font fonts[4];
+    cvm_font font;
 
     overlay_sprite_data * sprite_data;
     uint32_t sprite_count;
@@ -239,7 +239,7 @@ char * shorten_text_to_fit_width_end_ellipses(overlay_theme * theme,int width,ch
 
 overlay_theme create_overlay_theme(gl_functions * glf,uint32_t shaded_texture_size,uint32_t coloured_texture_size);///make malloced pointer
 void delete_overlay_theme(overlay_theme * theme);
-void load_font_to_overlay(gl_functions * glf,overlay_theme * theme,char * ttf_file,int size,int font_index);
+void load_font_to_overlay(gl_functions * glf,overlay_theme * theme,char * ttf_file,int size);
 
 void update_theme_textures_on_videocard(gl_functions * glf,overlay_theme * theme);
 

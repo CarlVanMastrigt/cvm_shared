@@ -64,7 +64,7 @@ static void text_bar_widget_render(overlay_data * od,overlay_theme * theme,widge
 
             text_ptr=shorten_text_to_fit_width_start_ellipses(theme,w->base.r.w - 2*theme->h_bar_text_offset,w->text_bar.text,0,text_buffer,256,&sub_x_off);
 
-            render_overlay_text(od,theme,text_ptr,x_off+w->base.r.x+theme->h_bar_text_offset+sub_x_off,y_off+w->base.r.y+(w->base.r.h-theme->fonts[0].font_height)/2,bounds,0,0);
+            render_overlay_text(od,theme,text_ptr,x_off+w->base.r.x+theme->h_bar_text_offset+sub_x_off,y_off+w->base.r.y+(w->base.r.h-theme->font.font_height)/2,bounds,0,0);
 
             return;
         }
@@ -76,7 +76,7 @@ static void text_bar_widget_render(overlay_data * od,overlay_theme * theme,widge
 
 static void text_bar_widget_min_w(overlay_theme * theme,widget * w)
 {
-    if(w->text_bar.min_glyph_render_count) w->base.min_w = 2*theme->h_bar_text_offset + w->text_bar.min_glyph_render_count * theme->fonts[0].max_glyph_width;
+    if(w->text_bar.min_glyph_render_count) w->base.min_w = 2*theme->h_bar_text_offset + w->text_bar.min_glyph_render_count * theme->font.max_glyph_width;
     else
     {
         if(w->text_bar.set_text)w->text_bar.set_text(w);
