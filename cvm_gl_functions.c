@@ -28,6 +28,7 @@ gl_functions * get_gl_functions(void)
 
     glf->glGenVertexArrays=SDL_GL_GetProcAddress("glGenVertexArrays");
     glf->glGenBuffers=SDL_GL_GetProcAddress("glGenBuffers");
+    glf->glDeleteBuffers=SDL_GL_GetProcAddress("glDeleteBuffers");
     glf->glBindBuffer=SDL_GL_GetProcAddress("glBindBuffer");
     glf->glBufferData=SDL_GL_GetProcAddress("glBufferData");
     glf->glEnableVertexAttribArray=SDL_GL_GetProcAddress("glEnableVertexAttribArray");
@@ -51,6 +52,7 @@ gl_functions * get_gl_functions(void)
     glf->glUseProgram=SDL_GL_GetProcAddress("glUseProgram");
     glf->glGetString=SDL_GL_GetProcAddress("glGetString");
     glf->glGenTextures=SDL_GL_GetProcAddress("glGenTextures");
+    glf->glDeleteTextures=SDL_GL_GetProcAddress("glDeleteTextures");
     glf->glBindTexture=SDL_GL_GetProcAddress("glBindTexture");
     glf->glTexParameteri=SDL_GL_GetProcAddress("glTexParameteri");
     glf->glTexBuffer=SDL_GL_GetProcAddress("glTexBuffer");

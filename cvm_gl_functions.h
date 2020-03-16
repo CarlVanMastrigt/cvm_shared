@@ -29,6 +29,7 @@ typedef struct gl_functions
 {
     void(*glGenVertexArrays)(GLsizei n,GLuint * arrays);
     void(*glGenBuffers)(GLsizei n,GLuint * buffers);
+    void(*glDeleteBuffers)(GLsizei n,GLuint * buffers);
     void(*glBindBuffer)(GLenum target,GLuint buffer);
     void(*glBufferData)(GLenum target,GLsizeiptr size,const GLvoid * data,GLenum usage);
     void(*glEnableVertexAttribArray)(GLuint index);
@@ -52,6 +53,7 @@ typedef struct gl_functions
     void(*glUseProgram)(GLuint program);
     GLubyte*(*glGetString)(GLenum name);
     void(*glGenTextures)(GLsizei n,GLuint * textures);
+    void(*glDeleteTextures)(GLsizei n,GLuint * textures);
     void(*glBindTexture)(GLenum target,GLuint texture);
     void(*glTexParameteri)(GLenum target,GLenum pname,GLint param);
     void(*glTexBuffer)(GLenum target,GLenum internalFormat,GLuint buffer);

@@ -26,6 +26,7 @@ along with cvm_shared.  If not, see <https://www.gnu.org/licenses/>.
 
 int generate_mesh_from_objs(const char * name,float scale);
 int generate_mesh_with_adjacent_from_objs(const char * name,float scale);
+int generate_mesh_from_objs_(const char * name,uint32_t flags);
 
 typedef enum
 {
@@ -57,32 +58,43 @@ typedef struct draw_elements_indirect_command_data///Should probably be put in a
 }
 draw_elements_indirect_command_data;
 
+#define MESH_GROUP_SIMPLE           0x00000000
+#define MESH_GROUP_ADGACENCY        0x00000001
+#define MESH_GROUP_PER_FACE_COLOUR  0x00000002
+//#define MESH_GROUP_VERTEX_NORMS     0x00000004
+//#define MESH_GROUP_UV               0x00000008
+
 typedef struct mesh_group_
 {
-    GLuint dcbo;
+//    GLuint dcbo;
     GLuint ibo;
+    GLuint adj_ibo;
     GLuint vbo;
-    GLuint cbo;
+    GLuint cbo;///colour buffer
+    GLuint cto;///colour texture
+//    GLuint nbo;
+//    GLuint uvbo;
 
-    uint32_t indexed_colour:1;
-    uint32_t adjacents_present:1;
-    /// need to also include texture coordinate lookup and
+    uint32_t flags;
 
+    draw_elements_indirect_command_data * adjacent_draw_command_buffer;
     draw_elements_indirect_command_data * draw_command_buffer;
-    uint32_t draw_command_count;
-    uint32_t draw_command_space;
+    uint32_t mesh_count;
+    uint32_t mesh_space;
 
+    ///per face data
     GLshort * index_buffer;
-    uint32_t index_count;
-    uint32_t index_space;
+    GLshort * adjacent_index_buffer;
+    GLshort * colour_buffer;
+    uint32_t face_count;
+    uint32_t face_space;
 
+    ///per vertex data
     GLfloat * vertex_buffer;
+    GLfloat * normal_buffer;
+    GLfloat * uv_buffer;
     uint32_t vertex_count;
     uint32_t vertex_space;
-
-    GLshort * colour_buffer;
-    uint32_t colour_count;
-    uint32_t colour_space;
 }
 mesh_group_;
 
@@ -102,9 +114,8 @@ void render_meshes(gl_functions * glf,mesh_group group_to_render);
 void bind_mesh_buffers_for_vao(gl_functions * glf);
 
 
-
-
 void initialise_assorted_meshes(gl_functions * glf);
+
 void bind_assorted_for_vao_vec3(gl_functions * glf);
 void bind_assorted_for_vao_vec2(gl_functions * glf);
 
@@ -122,6 +133,20 @@ void render_square_lines(gl_functions * glf,uint32_t count);
 
 
 
+
+
+
+
+void initialise_mesh_group(gl_functions * glf,mesh_group_ * mg,uint32_t flags);
+mesh load_mesh_file_to_group(mesh_group_ * mg,const char * filename);///type specifier in mesh file (for adjacency &c.)?
+
+void bind_mesh_group_vertex_buffer(gl_functions * glf,mesh_group_ * mg,GLuint attribute_index);
+void bind_mesh_group_adjacent_vertex_buffer(gl_functions * glf,mesh_group_ * mg,GLuint attribute_index);
+void bind_mesh_group_normal_buffer(gl_functions * glf,mesh_group_ * mg,GLuint attribute_index);
+void bind_mesh_group_uv_buffer(gl_functions * glf,mesh_group_ * mg,GLuint attribute_index);
+
+void transfer_mesh_group_buffer_data(gl_functions * glf,mesh_group_ * mg);
+void delete_mesh_group(gl_functions * glf,mesh_group_ * mg);
 
 
 
