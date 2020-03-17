@@ -34,7 +34,7 @@ typedef enum
     COLOUR_MESH_GROUP,
     TRANSPARENT_SHADOW_MESH_GROUP,
     TRANSPARENT_COLOUR_MESH_GROUP,
-    STICKER_BASIC_MESH_GROUP,
+//    STICKER_BASIC_MESH_GROUP,
     STICKER_CIRCLE_MESH_GROUP,
     STICKER_CONSTRAINED_CIRCLE_MESH_GROUP,
     NUM_MESH_GROUPS
@@ -66,7 +66,8 @@ draw_elements_indirect_command_data;
 
 typedef struct mesh_group_
 {
-//    GLuint dcbo;
+    GLuint dcbo;
+    GLuint adj_dcbo;
     GLuint ibo;
     GLuint adj_ibo;
     GLuint vbo;
@@ -146,6 +147,7 @@ void bind_mesh_group_normal_buffer(gl_functions * glf,mesh_group_ * mg,GLuint at
 void bind_mesh_group_uv_buffer(gl_functions * glf,mesh_group_ * mg,GLuint attribute_index);
 
 void transfer_mesh_group_buffer_data(gl_functions * glf,mesh_group_ * mg);
+void transfer_mesh_group_draw_commands(gl_functions * glf,mesh_group_ * mg);
 void delete_mesh_group(gl_functions * glf,mesh_group_ * mg);
 
 

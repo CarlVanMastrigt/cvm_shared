@@ -476,7 +476,7 @@ int generate_mesh_from_objs_(const char * name,uint32_t flags)
 
     FILE *f_in,*f_out;
 
-    uint32_t i,k,l,current_colour,pm,pa,n,adj_count;
+    uint32_t i,j,k,current_colour,pm,pa,n,adj_count;
 
     char c;
 
@@ -555,20 +555,20 @@ int generate_mesh_from_objs_(const char * name,uint32_t flags)
 
         adj_count=0;
 
-        for(k=0;k<num_faces;k++) if(i!=k)
+        for(j=0;j<num_faces;j++) if(i!=j)
         {
             pm=0;pa=3;n=0;
-            for(l=0;l<3;l++)
+            for(k=0;k<3;k++)
             {
-                if(indices[i*3+0]==indices[k*3+l])pm+=2,pa-=l,n++;
-                if(indices[i*3+1]==indices[k*3+l])pm+=0,pa-=l,n++;
-                if(indices[i*3+2]==indices[k*3+l])pm+=4,pa-=l,n++;
+                if(indices[i*3+0]==indices[j*3+k])pm+=2,pa-=k,n++;
+                if(indices[i*3+1]==indices[j*3+k])pm+=0,pa-=k,n++;
+                if(indices[i*3+2]==indices[j*3+k])pm+=4,pa-=k,n++;
             }
             if(n==2)
             {
                 adj_count+=pm;
-                adj_indices[i*6+pm-1]=indices[k*3+pa];
-                break;
+                adj_indices[i*6+pm-1]=indices[j*3+pa];
+                ///if(adj_count==12)breaj;///if not included is good test of if manifolded mesh
             }
         }
 
@@ -1231,20 +1231,31 @@ void initialise_mesh_group(gl_functions * glf,mesh_group_ * mg,uint32_t flags)
     mg->vertex_space=1;
 
     mg->draw_command_buffer=malloc(sizeof(draw_elements_indirect_command_data)*mg->mesh_space);
+    glf->glGenBuffers(1,&mg->dcbo);
+    glf->glBindBuffer(GL_DRAW_INDIRECT_BUFFER,mg->dcbo);
+    glf->glBindBuffer(GL_DRAW_INDIRECT_BUFFER,0);
 
     mg->index_buffer=malloc(sizeof(GLshort)*3*mg->face_space);
     glf->glGenBuffers(1,&mg->ibo);
-
+    glf->glBindBuffer(GL_ELEMENT_ARRAY_BUFFER,mg->ibo);
+    glf->glBindBuffer(GL_ELEMENT_ARRAY_BUFFER,0);
 
     mg->vertex_buffer=malloc(sizeof(GLfloat)*3*mg->vertex_space);
     glf->glGenBuffers(1,&mg->vbo);
+    glf->glBindBuffer(GL_ARRAY_BUFFER,mg->vbo);
+    glf->glBindBuffer(GL_ARRAY_BUFFER,0);
 
     if(mg->flags&MESH_GROUP_ADGACENCY)
     {
         mg->adjacent_draw_command_buffer=malloc(sizeof(draw_elements_indirect_command_data)*mg->mesh_space);
+        glf->glGenBuffers(1,&mg->adj_dcbo);
+        glf->glBindBuffer(GL_DRAW_INDIRECT_BUFFER,mg->adj_dcbo);
+        glf->glBindBuffer(GL_DRAW_INDIRECT_BUFFER,0);
 
         mg->adjacent_index_buffer=malloc(sizeof(GLshort)*6*mg->face_space);
         glf->glGenBuffers(1,&mg->adj_ibo);
+        glf->glBindBuffer(GL_ELEMENT_ARRAY_BUFFER,mg->adj_ibo);
+        glf->glBindBuffer(GL_ELEMENT_ARRAY_BUFFER,0);
     }
 
     if(mg->flags&MESH_GROUP_PER_FACE_COLOUR)
@@ -1252,7 +1263,12 @@ void initialise_mesh_group(gl_functions * glf,mesh_group_ * mg,uint32_t flags)
         mg->colour_buffer=malloc(sizeof(GLshort)*mg->face_space);
 
         glf->glGenBuffers(1,&mg->cbo);
+        glf->glBindBuffer(GL_TEXTURE_BUFFER,mg->cbo);///bind the name to a buffer object (why tf is this necessary)
+        glf->glBindBuffer(GL_TEXTURE_BUFFER,0);
+
         glf->glGenTextures(1,&mg->cto);
+
+        /// use glTextureBuffer instead
 
         glf->glBindTexture(GL_TEXTURE_BUFFER,mg->cto);
         glf->glTexBuffer(GL_TEXTURE_BUFFER,GL_R16UI,mg->cbo);
@@ -1285,7 +1301,13 @@ mesh load_mesh_file_to_group(mesh_group_ * mg,const char * filename)
     FILE * f_in;
     f_in=fopen(filename,"rb");
 
-    if(fread(&flags,sizeof(uint32_t),1,f_in)!=1) goto MESH_FILE_INVALID;
+    if(f_in==NULL)
+    {
+        puts("MESH FILE DOES NOT EXIST");
+        goto MESH_FILE_INVALID;
+    }
+
+    if(fread(&flags,sizeof(uint32_t),1,f_in) != 1) goto MESH_FILE_INVALID;
     if(fread(&num_faces,sizeof(uint32_t),1,f_in)!=1) goto MESH_FILE_INVALID;
     if(fread(&num_verts,sizeof(uint32_t),1,f_in)!=1) goto MESH_FILE_INVALID;
 
@@ -1318,7 +1340,7 @@ mesh load_mesh_file_to_group(mesh_group_ * mg,const char * filename)
     ///check uvs required
 
 
-    while(mg->vertex_count+num_verts < mg->vertex_space)
+    while(mg->vertex_count+num_verts > mg->vertex_space)
     {
         mg->vertex_space*=2;
         mg->vertex_buffer=realloc(mg->vertex_buffer,sizeof(GLfloat)*3*mg->vertex_space);
@@ -1326,7 +1348,7 @@ mesh load_mesh_file_to_group(mesh_group_ * mg,const char * filename)
         ///conditional uv realloc here
     }
 
-    while(mg->face_count+num_faces < mg->face_space)
+    while(mg->face_count+num_faces > mg->face_space)
     {
         mg->face_space*=2;
         mg->index_buffer=realloc(mg->index_buffer,sizeof(GLshort)*3*mg->face_space);
@@ -1370,7 +1392,6 @@ mesh load_mesh_file_to_group(mesh_group_ * mg,const char * filename)
 
     mesh m=(mesh){.index=mg->mesh_count,.colour_offset=mg->face_count};///face count used in rendering MESH_GROUP_PER_FACE_COLOUR
 
-
     mg->mesh_count++;
     mg->vertex_count+=num_verts;
     mg->face_count+=num_faces;
@@ -1395,6 +1416,10 @@ mesh load_mesh_file_to_group(mesh_group_ * mg,const char * filename)
 
 void transfer_mesh_group_buffer_data(gl_functions * glf,mesh_group_ * mg)
 {
+    glf->glBindBuffer(GL_DRAW_INDIRECT_BUFFER,mg->dcbo);
+    glf->glBufferData(GL_DRAW_INDIRECT_BUFFER,sizeof(draw_elements_indirect_command_data)*mg->mesh_count,mg->draw_command_buffer,GL_DYNAMIC_DRAW);
+    glf->glBindBuffer(GL_DRAW_INDIRECT_BUFFER,0);
+
     glf->glBindBuffer(GL_ELEMENT_ARRAY_BUFFER,mg->ibo);
     glf->glBufferData(GL_ELEMENT_ARRAY_BUFFER,sizeof(GLshort)*mg->face_count*3,mg->index_buffer,GL_STATIC_DRAW);
     glf->glBindBuffer(GL_ELEMENT_ARRAY_BUFFER,0);
@@ -1406,6 +1431,10 @@ void transfer_mesh_group_buffer_data(gl_functions * glf,mesh_group_ * mg)
 
     if(mg->flags&MESH_GROUP_ADGACENCY)
     {
+        glf->glBindBuffer(GL_DRAW_INDIRECT_BUFFER,mg->adj_dcbo);
+        glf->glBufferData(GL_DRAW_INDIRECT_BUFFER,sizeof(draw_elements_indirect_command_data)*mg->mesh_count,mg->adjacent_draw_command_buffer,GL_DYNAMIC_DRAW);
+        glf->glBindBuffer(GL_DRAW_INDIRECT_BUFFER,0);
+
         glf->glBindBuffer(GL_ELEMENT_ARRAY_BUFFER,mg->adj_ibo);
         glf->glBufferData(GL_ELEMENT_ARRAY_BUFFER,sizeof(GLshort)*mg->face_count*6,mg->adjacent_index_buffer,GL_STATIC_DRAW);
         glf->glBindBuffer(GL_ELEMENT_ARRAY_BUFFER,0);
@@ -1446,8 +1475,13 @@ void bind_mesh_group_vertex_buffer(gl_functions * glf,mesh_group_ * mg,GLuint at
 
 void bind_mesh_group_adjacent_vertex_buffer(gl_functions * glf,mesh_group_ * mg,GLuint attribute_index)
 {
-    if(mg->flags&MESH_GROUP_ADGACENCY)glf->glBindBuffer(GL_ELEMENT_ARRAY_BUFFER,mg->adj_ibo);
-    else puts("MESH GROUP ADJACENCY NOT PRESENT TO BIND");
+    if(!(mg->flags&MESH_GROUP_ADGACENCY))
+    {
+        puts("MESH GROUP ADJACENCY NOT PRESENT TO BIND");
+        return;
+    }
+
+    glf->glBindBuffer(GL_ELEMENT_ARRAY_BUFFER,mg->adj_ibo);
 
     glf->glBindBuffer(GL_ARRAY_BUFFER,mg->vbo);
     glf->glEnableVertexAttribArray(attribute_index);
@@ -1595,74 +1629,6 @@ static GLushort assorted_indices[]=
     11,10,9,7,6,8,
     11,8,10,7,9,6
 };
-
-
-
-//static GLfloat assorted_vertices[]=
-//{
-//    ///octahedron
-//    0.0,0.0,SQRT_3,
-//    -SQRT_3,0.0,0.0,
-//    0.0,SQRT_3,0.0,
-//    SQRT_3,0.0,0.0,
-//    0.0,0.0,-SQRT_3,
-//    0.0,-SQRT_3,0.0,
-//    ///half cuboid
-//    1.0,1.0,-0.0,
-//    1.0,-1.0,-0.0,
-//    -1.0,-1.0,-0.0,
-//    -1.0,1.0,-0.0,
-//    1.0,1.0,1.0,
-//    1.0,-1.0,1.0,
-//    -1.0,-1.0,1.0,
-//    -1.0,1.0,1.0,
-//};
-//
-//static GLushort assorted_indices[]=
-//{
-//    ///octahedron
-//    1,0,2,
-//    3,2,0,
-//    3,4,2,
-//    1,2,4,
-//    3,0,5,
-//    1,5,0,
-//    3,5,4,
-//    1,4,5,
-//    1,5,0,3,2,4,
-//    3,4,2,1,0,5,
-//    3,5,4,1,2,0,
-//    1,0,2,3,4,5,
-//    3,2,0,1,5,4,
-//    1,4,5,3,0,2,
-//    3,0,5,1,4,2,
-//    1,2,4,3,5,0,
-//    ///half cuboid
-//    6,7,8,
-//    10,13,11,
-//    6,10,7,
-//    7,11,8,
-//    8,12,13,
-//    10,6,13,
-//    9,6,8,
-//    10,11,7,
-//    6,9,13,
-//    13,12,11,
-//    9,8,13,
-//    11,12,8,
-//    6,10,7,11,8,9,
-//    10,6,13,12,11,7,
-//    6,13,10,11,7,8,
-//    7,10,11,12,8,6,
-//    8,11,12,11,13,9,
-//    10,7,6,9,13,11,
-//    9,13,6,7,8,13,
-//    10,13,11,8,7,6,
-//    6,8,9,8,13,10,
-//    13,8,12,8,11,10,
-//    9,6,8,12,13,6,
-//    11,13,12,13,8,7,
-//};
 
 static const uint32_t circle_divisions=64;
 

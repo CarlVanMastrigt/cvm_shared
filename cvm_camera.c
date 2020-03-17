@@ -41,7 +41,7 @@ void change_camera_zoom(float delta,camera * c)
 
 void initialise_camera(int screen_w,int screen_h,float fov, float near,float focal_distance,camera * c)
 {
-    c->min_focal_distance=5.0f;
+    c->min_focal_distance=2.0f;
     c->max_focal_distance=5000.0f;
 
     if(focal_distance<0.0)puts("ERROR CAMERA FOCAL DISTANCE MUST BE POSITIVE");

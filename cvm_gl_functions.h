@@ -101,6 +101,11 @@ typedef struct gl_functions
     void(*glClearStencil)(GLint s);
     void(*glStencilFunc)(GLenum func,GLint ref,GLuint mask);
     void(*glStencilOp)(GLenum sfail,GLenum dpfail,GLenum dppass);
+    void(*glGetIntegerv)(GLenum pname,GLint * params);
+    void(*glDrawElementsInstancedBaseVertexBaseInstance)(GLenum mode,GLsizei count,GLenum type,void *indices,GLsizei instancecount,GLint basevertex,GLuint baseinstance);
+    void*(*glMapNamedBuffer)(GLuint buffer,GLenum access);
+    GLboolean(*glUnmapNamedBuffer)(GLuint buffer);
+
 
 
     void(*glUniform1i)(GLint location,GLint v0);

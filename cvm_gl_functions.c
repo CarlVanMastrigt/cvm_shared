@@ -100,6 +100,10 @@ gl_functions * get_gl_functions(void)
     glf->glClearStencil=SDL_GL_GetProcAddress("glClearStencil");
     glf->glStencilFunc=SDL_GL_GetProcAddress("glStencilFunc");
     glf->glStencilOp=SDL_GL_GetProcAddress("glStencilOp");
+    glf->glGetIntegerv=SDL_GL_GetProcAddress("glGetIntegerv");
+    glf->glDrawElementsInstancedBaseVertexBaseInstance=SDL_GL_GetProcAddress("glDrawElementsInstancedBaseVertexBaseInstance");
+    glf->glMapNamedBuffer=SDL_GL_GetProcAddress("glMapNamedBuffer");
+    glf->glUnmapNamedBuffer=SDL_GL_GetProcAddress("glUnmapNamedBuffer");
 
 
     glf->glUniform1i=SDL_GL_GetProcAddress("glUniform1i");

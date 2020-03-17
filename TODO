@@ -9,4 +9,5 @@
 -remove mesh groups as specified, create static mesh_group objects as needed and with features as necessary (adjacent &c.)
 -condider using uint32_t in meshes for indexes (allows more than 65k vertex meshes)
 -add uv/norm support to meshes
--allow meshed to have uv/normals set as well as adjacency information, (if different data is required depending on provoking triangle, need dupltcated verts with the variant data (uv/norm) and mesh indices to use these alternate data but still use correct vertexes for adjacents (if adjacents present)) 
+-allow meshed to have uv/normals set as well as adjacency information, (if different data is required depending on provoking triangle, need dupltcated verts with the variant data (uv/norm) and mesh indices to use these alternate data but still use correct vertexes for adjacents (if adjacents present))
+-scrollbar reset function (sets offset to minimum (top of list) 
