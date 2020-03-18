@@ -33,11 +33,13 @@ along with cvm_shared.  If not, see <https://www.gnu.org/licenses/>.
 #include <SDL2/SDL.h>
 #include <SDL2/SDL_image.h>
 #include <SDL2/SDL_ttf.h>
+#include <SDL2/SDL_vulkan.h>
 
 #include <dirent.h>
 #include <sys/stat.h>
 
-#include <GL/gl.h>
+#include <GL/gl.h>///remove eventually
+#include <vulkan/vulkan.h>
 
 
 ///own headers
