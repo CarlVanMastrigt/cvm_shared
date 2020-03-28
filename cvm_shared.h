@@ -48,6 +48,7 @@ along with cvm_shared.  If not, see <https://www.gnu.org/licenses/>.
 #include "cvm_data_structures.h"
 #include "cvm_random.h"
 #include "cvm_gl_functions.h"
+#include "cvm_gfx.h"
 #include "cvm_shader.h"
 #include "cvm_overlay.h"
 #include "cvm_widget.h"
