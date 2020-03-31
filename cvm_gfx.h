@@ -38,38 +38,30 @@ along with cvm_shared.  If not, see <https://www.gnu.org/licenses/>.
 
 #endif
 
+typedef struct gfx_data gfx_data;
 
+typedef struct gfx_swapchain_image_data
+{
+    VkImageView image_view;
+    VkImage image;
+}
+gfx_swapchain_image_data;
 
 typedef struct gfx_presentation_instance
 {
-    VkImageView image_view;
-    VkFramebuffer framebuffer;
-    VkCommandBuffer command_buffer;///remove from here (use gfx_primary_render_buffer instead)
+    VkFramebuffer * framebuffers;
+    VkFence completion_fence;
+    VkSemaphore acquire_image_semaphore;
+    VkSemaphore render_finished_semaphore;
+    ///command buffers come from respective pools
+    VkCommandBuffer graphics_command_buffer;
+    VkCommandBuffer transfer_command_buffer;
 }
 gfx_presentation_instance;
 
-typedef struct gfx_primary_render_buffer
-{
-    VkCommandBuffer command_buffer;///uses main command pool
+typedef void(*gfx_function)(gfx_data*);
 
-    VkFence fence;
-}
-gfx_primary_render_buffer;
-
-//typedef struct gfx_secondary_render_buffer
-//{
-//    VkCommandPool command_pool;
-//    VkCommandBuffer * command_buffers;///all secondary command buffers executed inside gfx_primary_render_buffer's command buffer
-//    uint32_t buffer_count;
-//    uint32_t update_count;///make sure command buffers with outdated pipeline aren't executed
-//
-//    ///needs instance/texture buffers, may need to instead have function to call, data buffer and update_count
-//
-//    ///maintain queue for these separately, as more than 2 may be needed if filled in separate thread
-//}
-//gfx_secondary_render_buffer;
-
-typedef struct gfx_data
+struct gfx_data
 {
     VkInstance instance;
     VkPhysicalDevice physical_device;
@@ -78,39 +70,75 @@ typedef struct gfx_data
     VkPhysicalDeviceFeatures device_features;
 
 
-    VkCommandPool command_pool;
-    uint32_t queue_family;///split into backend and present family queues? probably not, (maybe) very difficult to achieve
-    VkQueue queue;
+//    VkCommandPool command_pool;
+//    uint32_t queue_family;///split into backend and present family queues? probably not, (maybe) very difficult to achieve
+//    VkQueue queue;
     /// NO! go full hog - separate transfer, render and present queues/queue_families/command_pools
+
+
+    gfx_presentation_instance * presentation_instances;
+    uint32_t presentation_instance_index;
+    uint32_t presentation_instance_count;
+
+//    VkFence previous_fence;
+//    VkFence current_fence;
 
     VkCommandPool graphics_command_pool;
     uint32_t graphics_queue_family;
     VkQueue graphics_queue;
+//    VkCommandBuffer previous_graphics_command_buffer;
+//    VkCommandBuffer current_graphics_command_buffer;
 
-    VkCommandPool transfer_command_pool;///for primary command buffer of transfer operations (provided by
+    VkCommandPool transfer_command_pool;///transfer ops are memory barrier synched before graphics commands so fences for their ops shouldn't be necessary ?? (need to check spec)
     uint32_t transfer_queue_family;
     VkQueue transfer_queue;
+//    VkCommandBuffer previous_transfer_command_buffer;
+//    VkCommandBuffer current_transfer_command_buffer;
 
     ///present queue does not use commands (at least not any provided by application)
     uint32_t present_queue_family;
     VkQueue present_queue;
 
+    /// MUST be called in critical section, currently just used for pipelines but has potential for more uses
+    uint32_t pipeline_op_count;///per resize ops?
+    gfx_function * pipeline_create_ops;
+    gfx_function * pipeline_destroy_ops;
 
 
     bool separate_present_queue_family;
     bool separate_transfer_queue_family;
 
 
-    uint32_t presentation_instance_count;
-    gfx_presentation_instance * presentation_instances;
+    uint32_t swapchain_image_count;
+    gfx_swapchain_image_data * swapchain_images;
     ///move to local data as necessary (unless requires cleanup?)
     //VkCommandBuffer * presentation_command_buffers;
 
 
     VkPipeline test_pipeline;
+    VkBuffer test_buffer;
+    VkDeviceMemory  test_buffer_memory;
 
 
-    VkFence submission_finished_fence;///remove from here (use gfx_primary_render_buffer instead)
+    VkRenderPass render_pass;
+
+    uint32_t attachment_count;
+    VkAttachmentDescription * attachments;
+    VkClearValue * clear_values;
+    ///next ones must be re-set when resizing window, and before calling initialise_gfx_swapchain
+    ///ignore 0 as it's swapchain image location
+    ///get format and sample rate for these from [VkAttachmentDescription * attachments] above ??
+    VkImage * attachment_images;
+    VkImageView * attachment_image_views;
+
+
+
+    uint32_t subpass_count;
+    VkSubpassDescription * subpasses;
+
+
+
+//    VkFence submission_finished_fence;///remove from here (use gfx_primary_render_buffer instead)
 
 
     VkSurfaceKHR surface;
@@ -119,16 +147,16 @@ typedef struct gfx_data
 
     ///presentation
     VkSwapchainKHR swapchain;
-    VkSemaphore acquire_image_semaphore;
-    VkSemaphore render_finished_semaphore;
-    VkRenderPass render_pass;
+//    VkSemaphore acquire_image_semaphore;
+//    VkSemaphore render_finished_semaphore;
 
-
-    VkRect2D screen_rectangle;
+    ///below shared/used by lots of / all pipelines
+    VkRect2D screen_rectangle;///extent
+    VkViewport screen_viewport;
+    VkPipelineViewportStateCreateInfo screen_viewport_state;
 
     uint32_t update_count;
-}
-gfx_data;
+};
 
 
 
@@ -138,11 +166,26 @@ gfx_data;
 gfx_data * create_gfx_data(SDL_Window * window);
 void destroy_gfx_data(gfx_data * gfx);
 
-void initialise_gfx_swapchain(gfx_data * gfx);///needs secondary (main & overlay) command buffers to be set before being called
-void recreate_gfx_swapchain(gfx_data * gfx);
 
-bool present_gfx_data(gfx_data * gfx);
+uint32_t add_gfx_colour_attachment(gfx_data * gfx,VkFormat format,VkSampleCountFlagBits samples);
+uint32_t add_gfx_depth_stencil_attachment(gfx_data * gfx,VkFormat format,VkSampleCountFlagBits samples);
+uint32_t add_gfx_subpass(gfx_data * gfx);
+uint32_t add_gfx_pipeline_op(gfx_data * gfx,gfx_function * create,gfx_function * destroy);///actual pipeline variable must be stored elsewhere (usually static variable)
+void initialise_gfx_render_pass(gfx_data * gfx);
+
+//void initialise_gfx_swapchain(gfx_data * gfx);///needs secondary (main & overlay) command buffers to be set before being called
+//void recreate_gfx_swapchain(gfx_data * gfx);/// re-create all pipelines as well, MUST be called in critical section
+
+void initialise_gfx_display_data(gfx_data * gfx);
+void recreate_gfx_display_data(gfx_data * gfx);
+
+
+void present_gfx_data(gfx_data * gfx);
+
+
+
 
 void create_pipeline(gfx_data * gfx,const char * vert_file,const char * geom_file,const char * frag_file);
+void create_vertex_buffer(gfx_data * gfx);
 
 #endif
