@@ -30,6 +30,19 @@ along with cvm_shared.  If not, see <https://www.gnu.org/licenses/>.
 #define NUM_OVERLAY_SPRITE_LEVELS 11
 /// 0=16 10=16k
 
+typedef struct overlay_presentation_instance
+{
+    ///map and write both buffers at same time
+    VkDeviceMemory memory;///stream allocation for uniforms colour and instance data
+    VkBuffer instance_buffer;
+    VkBuffer colour_buffer;///colour data, put "real uniforms" in push constant
+    VkCommandBuffer command_buffer;
+
+    uint32_t update_count;///is pipeline used in this command_buffer up to date
+}
+overlay_presentation_instance;
+
+
 
 typedef struct cvm_glyph
 {

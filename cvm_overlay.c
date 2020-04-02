@@ -19,6 +19,63 @@ along with cvm_shared.  If not, see <https://www.gnu.org/licenses/>.
 
 #include "cvm_shared.h"
 
+
+static VkPipeline overlay_pipeline;
+static uint32_t overlay_update_count;///for now only applies to pipelines
+
+static VkImage overlay_fixed_shaded_image;
+static VkImageView overlay_fixed_shaded_image_view;
+static VkImage overlay_fixed_colour_image;
+static VkImageView overlay_fixed_colour_image_view;
+static VkDeviceMemory overlay_fixed_image_memory;///shared by above images
+static VkCommandPool overlay_command_pool;
+static VkRenderPass overlay_render_pass;
+
+static uint32_t overlay_subpass_index;
+
+static void create_overlay_swapchain_dependent(VkDevice * device,VkViewport * viewport,VkRect2D * screen_rectangle)
+{
+}
+
+static void destroy_overlay_pipeline(VkDevice * device)
+{
+    //
+}
+
+void initialise_overlay_render_data()
+{
+    VkAttachmentReference attachment_reference=(VkAttachmentReference)
+    {
+        .attachment=0,///0th image attachment index reserved for swapchain image index
+        .layout=VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL,
+    };
+
+    VkSubpassDescription subpass_description=(VkSubpassDescription)
+    {
+        .flags=0,
+        .pipelineBindPoint=VK_PIPELINE_BIND_POINT_GRAPHICS,
+        .inputAttachmentCount=0,
+        .pInputAttachments=NULL,
+        .colorAttachmentCount=1,
+        .pColorAttachments= &attachment_reference,
+        .pResolveAttachments=NULL,
+        .pDepthStencilAttachment=NULL,
+        .preserveAttachmentCount=0,
+        .pPreserveAttachments=NULL
+    };
+
+
+}
+
+
+
+
+
+
+
+
+
+
 static GLuint overlay_buffer;
 static size_t overlay_buffer_size;
 
@@ -139,10 +196,10 @@ void load_font_to_overlay(gl_functions * glf,overlay_theme * theme,char * ttf_fi
             //font->glyphs[i].kerning[j]=TTF_GetFontKerningSize(font->font, i+'!', j+'!');
             font->glyphs[i].kerning[j]=xx-minx-font->glyphs[i].advance-font->glyphs[j].advance;
 
-            /*if(font->glyphs[i].kerning[j]!=0)
-            {
-                printf("%d %c %c\n",font->glyphs[i].kerning[j],i+'!', j+'!');
-            }*/
+//            if(font->glyphs[i].kerning[j]!=0)
+//            {
+//                printf("%d %c %c\n",font->glyphs[i].kerning[j],i+'!', j+'!');
+//            }
         }
     }
 
@@ -169,11 +226,11 @@ void load_font_to_overlay(gl_functions * glf,overlay_theme * theme,char * ttf_fi
         }
     }
 
-    /*for(i=0;i<total_width;i++)
-    {
-        pixels[miny*total_width+i]=255;
-        pixels[maxy*total_width+i]=255;
-    }*/
+//    for(i=0;i<total_width;i++)
+//    {
+//        pixels[miny*total_width+i]=255;
+//        pixels[maxy*total_width+i]=255;
+//    }
 
 
     font->font_height=maxy-miny+1;
@@ -491,8 +548,6 @@ void initialise_overlay(gl_functions * glf)
 
 void render_overlay(gl_functions * glf,overlay_data * od,overlay_theme * theme,int screen_w,int screen_h,vec4f * overlay_colours)
 {
-    int i;
-
     glf->glBindFramebuffer(GL_FRAMEBUFFER,0);
     glf->glDrawBuffer(GL_BACK);
 

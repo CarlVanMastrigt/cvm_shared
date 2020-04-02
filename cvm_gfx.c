@@ -21,15 +21,68 @@ along with cvm_shared.  If not, see <https://www.gnu.org/licenses/>.
 
 
 
+static uint32_t cvm_vk_update_count;///test if render op/buffer intended to be called is up to date
 
 
-typedef struct test_render_data
+static VkInstance cvm_vk_instance;
+static VkPhysicalDevice cvm_vk_physical_device;
+static VkDevice cvm_vk_device;///"logical" device
+static VkSurfaceKHR cvm_vk_surface;
+
+static VkSurfaceFormatKHR cvm_vk_surface_format;
+static VkPresentModeKHR cvm_vk_surface_present_mode;
+
+///may make more sense to put just above in struct (useful for "one time" initialisation functions, like vertex buffer)
+///ALTERNATIVELY have functions to allocate these external objects? -- probably just use this option
+
+
+
+
+
+
+
+
+static uint32_t cvm_vk_graphics_queue_family;
+static VkCommandPool cvm_vk_graphics_command_pool;
+static VkQueue cvm_vk_graphics_queue;
+
+static uint32_t cvm_vk_present_queue_family;
+static VkCommandPool cvm_vk_present_command_pool;
+static VkQueue cvm_vk_present_queue;
+
+/// (for now) transfer queue only used at startup, before fiirst graphics render op, so only need 1 and can call vkDeviceWaitIdle after to avoid need to sync
+/// presently all runtime uploads are stream so better to make them all be host visible anyway (ergo no need for transfer in render)
+static uint32_t cvm_vk_transfer_queue_family;
+static VkCommandPool cvm_vk_transfer_command_pool;
+static VkQueue cvm_vk_transfer_queue;
+VkCommandBuffer cvm_vk_transfer_command_buffer;
+
+///submit transfer ops?
+
+static struct
 {
-    vec3f pos;
-    vec3f c;
-}
-test_render_data;
+    VkFence completion_fence;
 
+    VkSemaphore acquire_semaphore;
+    VkSemaphore graphics_semaphore;
+    VkSemaphore present_semaphore;
+
+    VkCommandBuffer graphics_command_buffer;///allocated from cvm_vk_graphics_command_pool above
+    VkCommandBuffer present_command_buffer;///allocated from cvm_vk_present_command_pool above
+}
+cvm_vk_presentation_instances[CVM_VK_PRESENTATION_INSTANCE_COUNT];
+
+static uint32_t cvm_vk_presentation_instance_index;
+
+static VkImage * cvm_vk_swapchain_images;
+static VkImageView * cvm_vk_swapchain_image_views;
+static uint32_t cvm_vk_swapchain_image_count;
+
+
+static cvm_vk_external_initialise cvm_vk_initialise_ops[CVM_VK_MAX_EXTERNAL];
+static cvm_vk_external_terminate cvm_vk_terminate_ops[CVM_VK_MAX_EXTERNAL];
+static cvm_vk_external_render cvm_vk_render_ops[CVM_VK_MAX_EXTERNAL];
+static uint32_t external_op_count;
 
 
 static void initialise_gfx_instance(gfx_data * gfx,SDL_Window * window)
@@ -71,21 +124,23 @@ static void initialise_gfx_instance(gfx_data * gfx,SDL_Window * window)
         .ppEnabledExtensionNames=extension_names
     };
 
-    CVM_VK_CHECK(vkCreateInstance(&instance_creation_info,NULL,&gfx->instance));
+    CVM_VK_CHECK(vkCreateInstance(&instance_creation_info,NULL,&cvm_vk_instance));
 
     free(extension_names);
 }
 
+
+
 static void initialise_gfx_surface(gfx_data * gfx,SDL_Window * window)
 {
-    if(!SDL_Vulkan_CreateSurface(window,gfx->instance,&gfx->surface))
+    if(!SDL_Vulkan_CreateSurface(window,cvm_vk_instance,&cvm_vk_surface))
     {
         fprintf(stderr,"COULD NOT CREATE SDL VULKAN SURFACE\n");
         exit(-1);
     }
 }
 
-static bool check_physical_device_appropriate(gfx_data * gfx,bool dedicated_gpu_required)
+static bool check_physical_device_appropriate(gfx_data * gfx,VkPhysicalDevice physical_device,bool dedicated_gpu_required)
 {
     VkPhysicalDeviceProperties properties;
     uint32_t i,queue_family_count;
@@ -97,8 +152,7 @@ static bool check_physical_device_appropriate(gfx_data * gfx,bool dedicated_gpu_
     ///add more if more back-end queues are desired (add them to back-end family)
     ///also potentially add transfer queue for quicker data transfer?
 
-    vkGetPhysicalDeviceProperties(gfx->physical_device,&properties);
-    vkGetPhysicalDeviceFeatures(gfx->physical_device,&gfx->device_features);
+    vkGetPhysicalDeviceProperties(physical_device,&properties);
 
     if((dedicated_gpu_required)&&(properties.deviceType!=VK_PHYSICAL_DEVICE_TYPE_DISCRETE_GPU))return false;
 
@@ -106,11 +160,11 @@ static bool check_physical_device_appropriate(gfx_data * gfx,bool dedicated_gpu_
 
     #warning test for required features. need comparitor struct to do this?   enable all by default for time being?
 
-    //printf("geometry shader: %d\n",gfx->device_features.geometryShader);
+    //printf("geometry shader: %d\n",cvm_vk_device_features.geometryShader);
 
-    vkGetPhysicalDeviceQueueFamilyProperties(gfx->physical_device,&queue_family_count,NULL);
+    vkGetPhysicalDeviceQueueFamilyProperties(physical_device,&queue_family_count,NULL);
     queue_family_properties=malloc(sizeof(VkQueueFamilyProperties)*queue_family_count);
-    vkGetPhysicalDeviceQueueFamilyProperties(gfx->physical_device,&queue_family_count,queue_family_properties);
+    vkGetPhysicalDeviceQueueFamilyProperties(physical_device,&queue_family_count,queue_family_properties);
 
     ///use first queue family to support each desired operation
 
@@ -137,7 +191,7 @@ static bool check_physical_device_appropriate(gfx_data * gfx,bool dedicated_gpu_
 
         if(gfx->present_queue_family==queue_family_count)
         {
-            CVM_VK_CHECK(vkGetPhysicalDeviceSurfaceSupportKHR(gfx->physical_device,i,gfx->surface,&surface_supported));
+            CVM_VK_CHECK(vkGetPhysicalDeviceSurfaceSupportKHR(physical_device,i,cvm_vk_surface,&surface_supported));
             if(surface_supported==VK_TRUE)gfx->present_queue_family=i;
         }
     }
@@ -159,20 +213,26 @@ static void initialise_gfx_physical_device(gfx_data * gfx)
     VkSurfaceFormatKHR * formats=NULL;
     VkPresentModeKHR * present_modes=NULL;
 
-    CVM_VK_CHECK(vkEnumeratePhysicalDevices(gfx->instance,&device_count,NULL));
+    CVM_VK_CHECK(vkEnumeratePhysicalDevices(cvm_vk_instance,&device_count,NULL));
     physical_devices=malloc(sizeof(VkPhysicalDevice)*device_count);
-    CVM_VK_CHECK(vkEnumeratePhysicalDevices(gfx->instance,&device_count,physical_devices));
+    CVM_VK_CHECK(vkEnumeratePhysicalDevices(cvm_vk_instance,&device_count,physical_devices));
 
     for(i=0;i<device_count;i++)///check for dedicated gfx cards first
     {
-        gfx->physical_device=physical_devices[i];
-        if(check_physical_device_appropriate(gfx,true))break;
+        if(check_physical_device_appropriate(gfx,physical_devices[i],true))
+        {
+            cvm_vk_physical_device=physical_devices[i];
+            break;
+        }
     }
 
     if(i==device_count)for(i=0;i<device_count;i++)///check for dedicated gfx cards first
     {
-        gfx->physical_device=physical_devices[i];
-        if(check_physical_device_appropriate(gfx,false))break;
+        if(check_physical_device_appropriate(gfx,physical_devices[i],false))
+        {
+            cvm_vk_physical_device=physical_devices[i];
+            break;
+        }
     }
 
     free(physical_devices);
@@ -185,25 +245,25 @@ static void initialise_gfx_physical_device(gfx_data * gfx)
 
 
     ///select screen image format
-    CVM_VK_CHECK(vkGetPhysicalDeviceSurfaceFormatsKHR(gfx->physical_device,gfx->surface,&format_count,NULL));
+    CVM_VK_CHECK(vkGetPhysicalDeviceSurfaceFormatsKHR(cvm_vk_physical_device,cvm_vk_surface,&format_count,NULL));
     formats=malloc(sizeof(VkSurfaceFormatKHR)*format_count);
-    CVM_VK_CHECK(vkGetPhysicalDeviceSurfaceFormatsKHR(gfx->physical_device,gfx->surface,&format_count,formats));
+    CVM_VK_CHECK(vkGetPhysicalDeviceSurfaceFormatsKHR(cvm_vk_physical_device,cvm_vk_surface,&format_count,formats));
 
-    gfx->surface_format=formats[0];
+    cvm_vk_surface_format=formats[0];
 
     free(formats);
 
 
     ///select screen present mode
-    CVM_VK_CHECK(vkGetPhysicalDeviceSurfacePresentModesKHR(gfx->physical_device,gfx->surface,&present_mode_count,NULL));
+    CVM_VK_CHECK(vkGetPhysicalDeviceSurfacePresentModesKHR(cvm_vk_physical_device,cvm_vk_surface,&present_mode_count,NULL));
     present_modes=malloc(sizeof(VkPresentModeKHR)*present_mode_count);
-    CVM_VK_CHECK(vkGetPhysicalDeviceSurfacePresentModesKHR(gfx->physical_device,gfx->surface,&present_mode_count,present_modes));
+    CVM_VK_CHECK(vkGetPhysicalDeviceSurfacePresentModesKHR(cvm_vk_physical_device,cvm_vk_surface,&present_mode_count,present_modes));
 
-    gfx->surface_present_mode=VK_PRESENT_MODE_FIFO_KHR;
+    cvm_vk_surface_present_mode=VK_PRESENT_MODE_FIFO_KHR;///guaranteed to exist
 //    gfx->surface_present_mode=VK_PRESENT_MODE_IMMEDIATE_KHR;
 
-    if(gfx->surface_present_mode==VK_PRESENT_MODE_FIFO_KHR)for(i=0;i<present_mode_count;i++)if(present_modes[i]==VK_PRESENT_MODE_MAILBOX_KHR) gfx->surface_present_mode=VK_PRESENT_MODE_MAILBOX_KHR;
-    if(gfx->surface_present_mode==VK_PRESENT_MODE_FIFO_KHR)for(i=0;i<present_mode_count;i++)if(present_modes[i]==VK_PRESENT_MODE_FIFO_RELAXED_KHR) gfx->surface_present_mode=VK_PRESENT_MODE_FIFO_RELAXED_KHR;
+//    if(cvm_vk_surface_present_mode==VK_PRESENT_MODE_FIFO_KHR)for(i=0;i<present_mode_count;i++)if(present_modes[i]==VK_PRESENT_MODE_MAILBOX_KHR) cvm_vk_surface_present_mode=VK_PRESENT_MODE_MAILBOX_KHR;
+//    if(cvm_vk_surface_present_mode==VK_PRESENT_MODE_FIFO_KHR)for(i=0;i<present_mode_count;i++)if(present_modes[i]==VK_PRESENT_MODE_FIFO_RELAXED_KHR) cvm_vk_surface_present_mode=VK_PRESENT_MODE_FIFO_RELAXED_KHR;
 
     free(present_modes);
 }
@@ -221,7 +281,7 @@ static void initialise_gfx_logical_device(gfx_data * gfx)
     features.sampleRateShading=VK_TRUE;
     features.fillModeNonSolid=VK_TRUE;
     features.fragmentStoresAndAtomics=VK_TRUE;
-//    features=gfx->device_features;
+//    features=cvm_vk_device_features;
 
     VkDeviceQueueCreateInfo device_queue_creation_infos[3];///3 is max queues
     uint32_t queue_family_count=0;
@@ -275,115 +335,25 @@ static void initialise_gfx_logical_device(gfx_data * gfx)
         .pEnabledFeatures= &features
     };
 
-    CVM_VK_CHECK(vkCreateDevice(gfx->physical_device,&device_creation_info,NULL,&gfx->device));
+    CVM_VK_CHECK(vkCreateDevice(cvm_vk_physical_device,&device_creation_info,NULL,&cvm_vk_device));
 
-    vkGetDeviceQueue(gfx->device,gfx->graphics_queue_family,0,&gfx->graphics_queue);
-    vkGetDeviceQueue(gfx->device,gfx->transfer_queue_family,0,&gfx->transfer_queue);
-    vkGetDeviceQueue(gfx->device,gfx->present_queue_family,0,&gfx->present_queue);
+    vkGetDeviceQueue(cvm_vk_device,gfx->graphics_queue_family,0,&gfx->graphics_queue);
+    vkGetDeviceQueue(cvm_vk_device,gfx->transfer_queue_family,0,&gfx->transfer_queue);
+    vkGetDeviceQueue(cvm_vk_device,gfx->present_queue_family,0,&gfx->present_queue);
 }
 
-static void iniyialise_gfx_default_attachment_and_subpass(gfx_data * gfx)
-{
-}
 
-uint32_t add_gfx_colour_attachment(gfx_data * gfx,VkFormat format,VkSampleCountFlagBits samples)
-{
-    puts("add_gfx_colour_attachment NYI");
-}
-
-uint32_t add_gfx_depth_stencil_attachment(gfx_data * gfx,VkFormat format,VkSampleCountFlagBits samples)
-{
-    puts("add_gfx_depth_stencil_attachment NYI");
-}
-
-uint32_t add_gfx_subpass(gfx_data * gfx)
-{
-    puts("add_gfx_subpass NYI");
-}
-
-uint32_t add_gfx_pipeline_op(gfx_data * gfx,gfx_function * create,gfx_function * destroy)
-{
-    puts("add_gfx_pipeline_op NYI");
-}
-
-void initialise_gfx_render_pass(gfx_data * gfx)
-{
-    ///move following to default attachment descriptions
-
-    ///render pass (requires format of surface so must go after swapchain creation)
-    VkAttachmentDescription attachment_description=(VkAttachmentDescription)
-    {
-        .flags=0,
-        .format=gfx->surface_format.format,
-        .samples=VK_SAMPLE_COUNT_1_BIT,
-        .loadOp=VK_ATTACHMENT_LOAD_OP_CLEAR,
-        .storeOp=VK_ATTACHMENT_STORE_OP_STORE,
-        .stencilLoadOp=VK_ATTACHMENT_LOAD_OP_DONT_CARE,
-        .stencilStoreOp=VK_ATTACHMENT_STORE_OP_DONT_CARE,
-        .initialLayout=VK_IMAGE_LAYOUT_UNDEFINED,///VK_IMAGE_LAYOUT_PRESENT_SRC_KHR , VK_IMAGE_LAYOUT_UNDEFINED//contents are disregarded anyway but this gets incorrectly detected as a bug by validation layer w/o image barrier?
-        .finalLayout=VK_IMAGE_LAYOUT_PRESENT_SRC_KHR
-    };
-
-    VkAttachmentReference attachment_reference=(VkAttachmentReference)
-    {
-        .attachment=0,
-        .layout=VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL,
-    };
-
-    VkSubpassDescription subpass_description=(VkSubpassDescription)
-    {
-        .flags=0,
-        .pipelineBindPoint=VK_PIPELINE_BIND_POINT_GRAPHICS,
-        .inputAttachmentCount=0,
-        .pInputAttachments=NULL,
-        .colorAttachmentCount=1,
-        .pColorAttachments= &attachment_reference,
-        .pResolveAttachments=NULL,
-        .pDepthStencilAttachment=NULL,
-        .preserveAttachmentCount=0,
-        .pPreserveAttachments=NULL
-    };
-
-    VkSubpassDependency subpass_dependencies[2];
-
-    subpass_dependencies[0]=(VkSubpassDependency)
-    {
-        .srcSubpass=VK_SUBPASS_EXTERNAL,
-        .dstSubpass=0,
-        .srcStageMask=VK_PIPELINE_STAGE_ALL_COMMANDS_BIT,
-        .dstStageMask=VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT,
-        .srcAccessMask=VK_ACCESS_MEMORY_READ_BIT,
-        .dstAccessMask=VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT,
-        .dependencyFlags=VK_DEPENDENCY_BY_REGION_BIT
-    };
-
-    subpass_dependencies[1]=(VkSubpassDependency)
-    {
-        .srcSubpass=0,
-        .dstSubpass=VK_SUBPASS_EXTERNAL,
-        .srcStageMask=VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT,
-        .dstStageMask=VK_PIPELINE_STAGE_ALL_COMMANDS_BIT,
-        .srcAccessMask=VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT,
-        .dstAccessMask=VK_ACCESS_MEMORY_READ_BIT,
-        .dependencyFlags=VK_DEPENDENCY_BY_REGION_BIT
-    };
+//uint32_t add_cvm_vk_swapchain_dependent_functions(gfx_data * gfx,cvm_vk_function * create,cvm_vk_function * destroy)
+//{
+//    ///for creating/deleting/recreating    pipelines, render passes, framebuffers and images used in framebuffers
+//    puts("add_gfx_pipeline_op NYI");
+//}
 
 
-    VkRenderPassCreateInfo render_pass_creation_info=(VkRenderPassCreateInfo)
-    {
-        .sType=VK_STRUCTURE_TYPE_RENDER_PASS_CREATE_INFO,
-        .pNext=NULL,
-        .flags=0,
-        .attachmentCount=1,
-        .pAttachments= &attachment_description,
-        .subpassCount=1,
-        .pSubpasses= &subpass_description,
-        .dependencyCount=2,
-        .pDependencies=subpass_dependencies
-    };
 
-    CVM_VK_CHECK(vkCreateRenderPass(gfx->device,&render_pass_creation_info,NULL,&gfx->render_pass));
-}
+///temp/test function
+
+
 
 
 
@@ -393,7 +363,7 @@ static void initialise_gfx_swapchain(gfx_data * gfx)
     VkSurfaceCapabilitiesKHR surface_capabilities;
 
     ///swapchain
-    CVM_VK_CHECK(vkGetPhysicalDeviceSurfaceCapabilitiesKHR(gfx->physical_device,gfx->surface,&surface_capabilities));
+    CVM_VK_CHECK(vkGetPhysicalDeviceSurfaceCapabilitiesKHR(cvm_vk_physical_device,cvm_vk_surface,&surface_capabilities));
 
     gfx->screen_rectangle.offset.x=0;
     gfx->screen_rectangle.offset.y=0;
@@ -409,16 +379,16 @@ static void initialise_gfx_swapchain(gfx_data * gfx)
         .maxDepth=1.0
     };
 
-    gfx->screen_viewport_state=(VkPipelineViewportStateCreateInfo)
-    {
-        .sType=VK_STRUCTURE_TYPE_PIPELINE_VIEWPORT_STATE_CREATE_INFO,
-        .pNext=NULL,
-        .flags=0,
-        .viewportCount=1,
-        .pViewports= &gfx->screen_viewport,
-        .scissorCount=1,
-        .pScissors= &gfx->screen_rectangle
-    };
+//    gfx->screen_viewport_state=(VkPipelineViewportStateCreateInfo)
+//    {
+//        .sType=VK_STRUCTURE_TYPE_PIPELINE_VIEWPORT_STATE_CREATE_INFO,
+//        .pNext=NULL,
+//        .flags=0,
+//        .viewportCount=1,
+//        .pViewports= &gfx->screen_viewport,
+//        .scissorCount=1,
+//        .pScissors= &gfx->screen_rectangle
+//    };
 
 
     VkSwapchainCreateInfoKHR swapchain_create_info=(VkSwapchainCreateInfoKHR)
@@ -426,10 +396,10 @@ static void initialise_gfx_swapchain(gfx_data * gfx)
         .sType=VK_STRUCTURE_TYPE_SWAPCHAIN_CREATE_INFO_KHR,
         .pNext=NULL,
         .flags=0,
-        .surface=gfx->surface,
+        .surface=cvm_vk_surface,
         .minImageCount=surface_capabilities.minImageCount,
-        .imageFormat=gfx->surface_format.format,
-        .imageColorSpace=gfx->surface_format.colorSpace,
+        .imageFormat=cvm_vk_surface_format.format,
+        .imageColorSpace=cvm_vk_surface_format.colorSpace,
         .imageExtent=surface_capabilities.currentExtent,
         .imageArrayLayers=1,
         .imageUsage=VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT,
@@ -438,22 +408,21 @@ static void initialise_gfx_swapchain(gfx_data * gfx)
         .pQueueFamilyIndices=NULL,
         .preTransform=surface_capabilities.currentTransform,
         .compositeAlpha=VK_COMPOSITE_ALPHA_OPAQUE_BIT_KHR,
-        .presentMode=gfx->surface_present_mode,
+        .presentMode=cvm_vk_surface_present_mode,
         .clipped=VK_TRUE,
         .oldSwapchain=gfx->swapchain
     };
 
-    CVM_VK_CHECK(vkCreateSwapchainKHR(gfx->device,&swapchain_create_info,NULL,&gfx->swapchain));
+    CVM_VK_CHECK(vkCreateSwapchainKHR(cvm_vk_device,&swapchain_create_info,NULL,&gfx->swapchain));
 
 
-    ///vkDestroyPipeline(gfx->device,gfx->test_pipeline,NULL); only call upon destruction/recreation, not on initial creation
-    create_pipeline(gfx,"shaders/test_vert.spv",NULL,"shaders/test_frag.spv");
+
 
 
     ///swapchain present instances (for each swapchain buffer image)
-    CVM_VK_CHECK(vkGetSwapchainImagesKHR(gfx->device,gfx->swapchain,&gfx->swapchain_image_count,NULL));
+    CVM_VK_CHECK(vkGetSwapchainImagesKHR(cvm_vk_device,gfx->swapchain,&gfx->swapchain_image_count,NULL));
     VkImage * swapchain_images=malloc(sizeof(swapchain_images)*gfx->swapchain_image_count);
-    CVM_VK_CHECK(vkGetSwapchainImagesKHR(gfx->device,gfx->swapchain,&gfx->swapchain_image_count,swapchain_images));
+    CVM_VK_CHECK(vkGetSwapchainImagesKHR(cvm_vk_device,gfx->swapchain,&gfx->swapchain_image_count,swapchain_images));
 
     gfx->swapchain_images=malloc(sizeof(gfx_swapchain_image_data)*gfx->swapchain_image_count);
 
@@ -470,7 +439,7 @@ static void initialise_gfx_swapchain(gfx_data * gfx)
             .flags=0,
             .image=swapchain_images[i],
             .viewType=VK_IMAGE_VIEW_TYPE_2D,
-            .format=gfx->surface_format.format,
+            .format=cvm_vk_surface_format.format,
             .components=(VkComponentMapping)
             {
                 .r=VK_COMPONENT_SWIZZLE_IDENTITY,
@@ -488,7 +457,7 @@ static void initialise_gfx_swapchain(gfx_data * gfx)
             }
         };
 
-        CVM_VK_CHECK(vkCreateImageView(gfx->device,&image_view_create_info,NULL,&gfx->swapchain_images[i].image_view));
+        CVM_VK_CHECK(vkCreateImageView(cvm_vk_device,&image_view_create_info,NULL,&gfx->swapchain_images[i].image_view));
     }
 
     free(swapchain_images);
@@ -500,58 +469,12 @@ static void free_gfx_swapchain_images(gfx_data * gfx)
 
     for(i=0;i<gfx->swapchain_image_count;i++)
     {
-        vkDestroyImageView(gfx->device,gfx->swapchain_images[i].image_view,NULL);
+        vkDestroyImageView(cvm_vk_device,gfx->swapchain_images[i].image_view,NULL);
     }
 
     free(gfx->swapchain_images);
 }
 
-
-
-static void initialise_presentation_intances_framebuffers(gfx_data * gfx)
-{
-    uint32_t i,j;
-    VkFramebufferCreateInfo framebuffer_create_info;
-    ///other per-presentation_instance images defined by rest of program should be used here
-
-    for(i=0;i<gfx->presentation_instance_count;i++)
-    {
-        gfx->presentation_instances[i].framebuffers=malloc(sizeof(VkFramebuffer)*gfx->swapchain_image_count);
-
-        for(j=0;j<gfx->swapchain_image_count;j++)
-        {
-            framebuffer_create_info=(VkFramebufferCreateInfo)
-            {
-                .sType=VK_STRUCTURE_TYPE_FRAMEBUFFER_CREATE_INFO,
-                .pNext=NULL,
-                .flags=0,
-                .renderPass=gfx->render_pass,
-                .attachmentCount=1,
-                .pAttachments= &gfx->swapchain_images[j].image_view,
-                .width=gfx->screen_rectangle.extent.width,
-                .height=gfx->screen_rectangle.extent.height,
-                .layers=1
-            };
-
-            CVM_VK_CHECK(vkCreateFramebuffer(gfx->device,&framebuffer_create_info,NULL,gfx->presentation_instances[i].framebuffers+j));
-        }
-    }
-}
-
-static void delete_presentation_intances_framebuffers(gfx_data * gfx)
-{
-    uint32_t i,j;
-
-    for(i=0;i<gfx->presentation_instance_count;i++)
-    {
-        for(j=0;j<gfx->swapchain_image_count;j++)
-        {
-            vkDestroyFramebuffer(gfx->device,gfx->presentation_instances[i].framebuffers[j],NULL);
-        }
-
-        free(gfx->presentation_instances[i].framebuffers);
-    }
-}
 
 
 
@@ -563,10 +486,10 @@ static void initialise_presentation_intances(gfx_data * gfx)
     VkCommandBufferAllocateInfo command_buffer_allocate_info;
     VkSemaphoreCreateInfo semaphore_create_info;
     VkFenceCreateInfo fence_create_info;
+    VkCommandPoolCreateInfo command_pool_create_info;
 
 
-    ///graphics command buffers
-    VkCommandPoolCreateInfo command_pool_create_info=(VkCommandPoolCreateInfo)
+    command_pool_create_info=(VkCommandPoolCreateInfo)
     {
         .sType=VK_STRUCTURE_TYPE_COMMAND_POOL_CREATE_INFO,
         .pNext=NULL,
@@ -574,7 +497,18 @@ static void initialise_presentation_intances(gfx_data * gfx)
         .queueFamilyIndex=gfx->graphics_queue_family
     };
 
-    CVM_VK_CHECK(vkCreateCommandPool(gfx->device,&command_pool_create_info,NULL,&gfx->graphics_command_pool));
+    CVM_VK_CHECK(vkCreateCommandPool(cvm_vk_device,&command_pool_create_info,NULL,&gfx->graphics_command_pool));
+
+
+    command_pool_create_info=(VkCommandPoolCreateInfo)
+    {
+        .sType=VK_STRUCTURE_TYPE_COMMAND_POOL_CREATE_INFO,
+        .pNext=NULL,
+        .flags=VK_COMMAND_POOL_CREATE_RESET_COMMAND_BUFFER_BIT | VK_COMMAND_POOL_CREATE_TRANSIENT_BIT,
+        .queueFamilyIndex=gfx->present_queue_family
+    };
+
+    CVM_VK_CHECK(vkCreateCommandPool(cvm_vk_device,&command_pool_create_info,NULL,&gfx->present_command_pool));
 
 
     for(i=0;i<gfx->presentation_instance_count;i++)
@@ -588,7 +522,19 @@ static void initialise_presentation_intances(gfx_data * gfx)
             .commandBufferCount=1
         };
 
-        CVM_VK_CHECK(vkAllocateCommandBuffers(gfx->device,&command_buffer_allocate_info,&gfx->presentation_instances[i].graphics_command_buffer));
+        CVM_VK_CHECK(vkAllocateCommandBuffers(cvm_vk_device,&command_buffer_allocate_info,&gfx->presentation_instances[i].graphics_command_buffer));
+
+
+        command_buffer_allocate_info=(VkCommandBufferAllocateInfo)
+        {
+            .sType=VK_STRUCTURE_TYPE_COMMAND_BUFFER_ALLOCATE_INFO,
+            .pNext=NULL,
+            .commandPool=gfx->present_command_pool,
+            .level=VK_COMMAND_BUFFER_LEVEL_PRIMARY,
+            .commandBufferCount=1
+        };
+
+        CVM_VK_CHECK(vkAllocateCommandBuffers(cvm_vk_device,&command_buffer_allocate_info,&gfx->presentation_instances[i].present_command_buffer));
 
 
         semaphore_create_info=(VkSemaphoreCreateInfo)
@@ -598,8 +544,9 @@ static void initialise_presentation_intances(gfx_data * gfx)
             .flags=0
         };
 
-        CVM_VK_CHECK(vkCreateSemaphore(gfx->device,&semaphore_create_info,NULL,&gfx->presentation_instances[i].acquire_image_semaphore));
-        CVM_VK_CHECK(vkCreateSemaphore(gfx->device,&semaphore_create_info,NULL,&gfx->presentation_instances[i].render_finished_semaphore));
+        CVM_VK_CHECK(vkCreateSemaphore(cvm_vk_device,&semaphore_create_info,NULL,&gfx->presentation_instances[i].acquire_semaphore));
+        CVM_VK_CHECK(vkCreateSemaphore(cvm_vk_device,&semaphore_create_info,NULL,&gfx->presentation_instances[i].graphics_semaphore));
+        CVM_VK_CHECK(vkCreateSemaphore(cvm_vk_device,&semaphore_create_info,NULL,&gfx->presentation_instances[i].present_semaphore));
 
 
         if(i)fence_create_info=(VkFenceCreateInfo)
@@ -615,7 +562,7 @@ static void initialise_presentation_intances(gfx_data * gfx)
             .flags=0
         };
 
-        CVM_VK_CHECK(vkCreateFence(gfx->device,&fence_create_info,NULL,&gfx->presentation_instances[i].completion_fence));
+        CVM_VK_CHECK(vkCreateFence(cvm_vk_device,&fence_create_info,NULL,&gfx->presentation_instances[i].completion_fence));
     }
 }
 
@@ -625,15 +572,18 @@ static void delete_presentation_intances(gfx_data * gfx)
 
     for(i=0;i<gfx->presentation_instance_count;i++)
     {
-        vkDestroyFence(gfx->device,gfx->presentation_instances[i].completion_fence,NULL);
+        vkDestroyFence(cvm_vk_device,gfx->presentation_instances[i].completion_fence,NULL);
 
-        vkDestroySemaphore(gfx->device,gfx->presentation_instances[i].acquire_image_semaphore,NULL);
-        vkDestroySemaphore(gfx->device,gfx->presentation_instances[i].render_finished_semaphore,NULL);
+        vkDestroySemaphore(cvm_vk_device,gfx->presentation_instances[i].acquire_semaphore,NULL);
+        vkDestroySemaphore(cvm_vk_device,gfx->presentation_instances[i].graphics_semaphore,NULL);
+        vkDestroySemaphore(cvm_vk_device,gfx->presentation_instances[i].present_semaphore,NULL);
 
-        vkFreeCommandBuffers(gfx->device,gfx->graphics_command_pool,1,&gfx->presentation_instances[i].graphics_command_buffer);
+        vkFreeCommandBuffers(cvm_vk_device,gfx->graphics_command_pool,1,&gfx->presentation_instances[i].graphics_command_buffer);
+        vkFreeCommandBuffers(cvm_vk_device,gfx->present_command_pool,1,&gfx->presentation_instances[i].present_command_buffer);
     }
 
-    vkDestroyCommandPool(gfx->device,gfx->graphics_command_pool,NULL);
+    vkDestroyCommandPool(cvm_vk_device,gfx->graphics_command_pool,NULL);
+    vkDestroyCommandPool(cvm_vk_device,gfx->present_command_pool,NULL);
 }
 
 
@@ -641,32 +591,38 @@ void initialise_gfx_display_data(gfx_data * gfx)
 {
     initialise_gfx_swapchain(gfx);
 
-    initialise_presentation_intances_framebuffers(gfx);
+    ///call initialise functions
 }
 
 void recreate_gfx_display_data(gfx_data * gfx)
 {
-    CVM_VK_CHECK(vkDeviceWaitIdle(gfx->device));
+    CVM_VK_CHECK(vkDeviceWaitIdle(cvm_vk_device));
 
     VkSwapchainKHR old_swapchain=gfx->swapchain;
 
-    delete_presentation_intances_framebuffers(gfx);
+
+    ///call terminate functions
 
     free_gfx_swapchain_images(gfx);///need free/recreate in case gfx->presentation_data_count changes
 
-    vkDestroyPipeline(gfx->device,gfx->test_pipeline,NULL);
-
     initialise_gfx_swapchain(gfx);
 
-    initialise_presentation_intances_framebuffers(gfx);
 
-    vkDestroySwapchainKHR(gfx->device,old_swapchain,NULL);
+    vkDestroySwapchainKHR(cvm_vk_device,old_swapchain,NULL);
 }
 
 
 
 
-
+void initialise_cvm_vk_swapchain_and_dependents(void)
+{
+}
+void reinitialise_cvm_vk_swapchain_and_dependents(void)
+{
+}
+void terminate_cvm_vk_swapchain_and_dependents(void)
+{
+}
 
 
 
@@ -677,7 +633,9 @@ gfx_data * create_gfx_data(SDL_Window * window)
 {
     gfx_data * gfx=malloc(sizeof(gfx_data));
 
-    gfx->update_count=0;
+    cvm_vk_update_count=0;
+    external_op_count=0;
+
     gfx->presentation_instance_index=0;
     gfx->presentation_instance_count=2;
     gfx->presentation_instances=malloc(sizeof(gfx_presentation_instance)*gfx->presentation_instance_count);
@@ -698,24 +656,20 @@ gfx_data * create_gfx_data(SDL_Window * window)
 
 void destroy_gfx_data(gfx_data * gfx)
 {
-    vkDeviceWaitIdle(gfx->device);
+    vkDeviceWaitIdle(cvm_vk_device);
 
-    vkFreeMemory(gfx->device,gfx->test_buffer_memory,NULL);
-    vkDestroyBuffer(gfx->device,gfx->test_buffer,NULL);
-
-    delete_presentation_intances_framebuffers(gfx);
+//    delete_presentation_intances_framebuffers(gfx);
 
     delete_presentation_intances(gfx);
 
     free_gfx_swapchain_images(gfx);
-    vkDestroySwapchainKHR(gfx->device,gfx->swapchain,NULL);
-
-    vkDestroyPipeline(gfx->device,gfx->test_pipeline,NULL);
+    vkDestroySwapchainKHR(cvm_vk_device,gfx->swapchain,NULL);
 
 
-    vkDestroyRenderPass(gfx->device,gfx->render_pass,NULL);
-    vkDestroyDevice(gfx->device,NULL);
-    vkDestroyInstance(gfx->instance,NULL);
+
+
+    vkDestroyDevice(cvm_vk_device,NULL);
+    vkDestroyInstance(cvm_vk_instance,NULL);
 
     free(gfx);
 }
@@ -725,10 +679,18 @@ void present_gfx_data(gfx_data * gfx)
 {
     uint32_t image_index;
     VkResult r;
+    gfx_presentation_instance * pi;
 
-    VkPipelineStageFlags wait_dst_stage_mask = VK_PIPELINE_STAGE_TRANSFER_BIT;
+    ///these types could probably be re-used, but as they're passed as pointers its better to be sure?
+    VkImageMemoryBarrier graphics_barrier,present_barrier;
+    VkSubmitInfo graphics_submit_info,present_submit_info;
+    VkPipelineStageFlags graphics_wait_dst_stage_mask,present_wait_dst_stage_mask;
+    VkPresentInfoKHR present_info;
 
-    r=vkAcquireNextImageKHR(gfx->device,gfx->swapchain,1000000000,gfx->presentation_instances[gfx->presentation_instance_index].acquire_image_semaphore,VK_NULL_HANDLE,&image_index);
+    pi=gfx->presentation_instances+gfx->presentation_instance_index;
+
+
+    r=vkAcquireNextImageKHR(cvm_vk_device,gfx->swapchain,1000000000,pi->acquire_semaphore,VK_NULL_HANDLE,&image_index);
     if(r==VK_ERROR_OUT_OF_DATE_KHR)/// if VK_SUBOPTIMAL_KHR then image WAS acquired and so must be displayed
     {
         puts("couldn't use swapchain");//recreate_gfx_swapchain(gfx);///rebuild swapchain dependent elements for this buffer
@@ -768,54 +730,20 @@ void present_gfx_data(gfx_data * gfx)
         .pInheritanceInfo=NULL
     };
 
-    VkClearValue clear_value;///other clear colours should probably be provided by other chunks of application
-    clear_value.color=(VkClearColorValue){{0.95f,0.5f,0.75f,1.0f}};
 
-    VkRenderPassBeginInfo render_pass_begin_info=(VkRenderPassBeginInfo)
-    {
-        .sType=VK_STRUCTURE_TYPE_RENDER_PASS_BEGIN_INFO,
-        .pNext=NULL,
-        .renderPass=gfx->render_pass,
-        .framebuffer=gfx->presentation_instances[gfx->presentation_instance_index].framebuffers[image_index],
-        .renderArea=gfx->screen_rectangle,
-        .clearValueCount=1,
-        .pClearValues= &clear_value
-    };
+
+    #warning move render pass to completely separate function (function pointer from list called by this function as part of command recording)
 
     ///also need barrier for uploaded vertex data from instance data pumped over transfer queue
 
 
-
-    #warning are barriers needed when subpass dependencies (VK_SUBPASS_EXTERNAL) are used
-    ///takes place of renderpass of
-    VkImageMemoryBarrier start_image_barrier=(VkImageMemoryBarrier)
+    graphics_barrier=(VkImageMemoryBarrier)
     {
         .sType=VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER,
         .pNext=NULL,
-        .srcAccessMask=VK_ACCESS_MEMORY_READ_BIT,
-        .dstAccessMask=VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT,
-        .oldLayout=VK_IMAGE_LAYOUT_UNDEFINED,
-        .newLayout=VK_IMAGE_LAYOUT_PRESENT_SRC_KHR,
-        .srcQueueFamilyIndex=gfx->present_queue_family,
-        .dstQueueFamilyIndex=gfx->graphics_queue_family,
-        .image=gfx->swapchain_images[image_index].image,
-        .subresourceRange=(VkImageSubresourceRange)
-        {
-            .aspectMask=VK_IMAGE_ASPECT_COLOR_BIT,
-            .baseMipLevel=0,
-            .levelCount=1,
-            .baseArrayLayer=0,
-            .layerCount=1
-        }
-    };
-
-    VkImageMemoryBarrier end_image_barrier=(VkImageMemoryBarrier)
-    {
-        .sType=VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER,
-        .pNext=NULL,
-        .srcAccessMask=VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT,
-        .dstAccessMask=VK_ACCESS_MEMORY_READ_BIT,
-        .oldLayout=VK_IMAGE_LAYOUT_PRESENT_SRC_KHR,
+        .srcAccessMask=VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT,///stage where data is written BEFORE the transfer/barrier
+        .dstAccessMask=0,///ignored anyway
+        .oldLayout=VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL,
         .newLayout=VK_IMAGE_LAYOUT_PRESENT_SRC_KHR,
         .srcQueueFamilyIndex=gfx->graphics_queue_family,
         .dstQueueFamilyIndex=gfx->present_queue_family,
@@ -831,64 +759,167 @@ void present_gfx_data(gfx_data * gfx)
     };
 
 
-
-
-    CVM_VK_CHECK(vkBeginCommandBuffer(gfx->presentation_instances[gfx->presentation_instance_index].graphics_command_buffer,&command_buffer_begin_info));
-
-    if(gfx->graphics_queue_family!=gfx->present_queue_family)vkCmdPipelineBarrier(gfx->presentation_instances[gfx->presentation_instance_index].graphics_command_buffer,VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT,VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT,0,0,NULL,0,NULL,1,&start_image_barrier);
-
-    vkCmdBeginRenderPass(gfx->presentation_instances[gfx->presentation_instance_index].graphics_command_buffer,&render_pass_begin_info,VK_SUBPASS_CONTENTS_INLINE);
-
-    vkCmdBindPipeline(gfx->presentation_instances[gfx->presentation_instance_index].graphics_command_buffer,VK_PIPELINE_BIND_POINT_GRAPHICS,gfx->test_pipeline);
-
-    VkDeviceSize offset=0;
-    vkCmdBindVertexBuffers(gfx->presentation_instances[gfx->presentation_instance_index].graphics_command_buffer,0,1,&gfx->test_buffer,&offset);
-
-    vkCmdDraw(gfx->presentation_instances[gfx->presentation_instance_index].graphics_command_buffer,4,1,0,0);
-
-    vkCmdEndRenderPass(gfx->presentation_instances[gfx->presentation_instance_index].graphics_command_buffer);
-
-    if(gfx->graphics_queue_family!=gfx->present_queue_family)vkCmdPipelineBarrier(gfx->presentation_instances[gfx->presentation_instance_index].graphics_command_buffer,VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT,VK_PIPELINE_STAGE_BOTTOM_OF_PIPE_BIT,0,0,NULL,0,NULL,1,&end_image_barrier);
-
-    CVM_VK_CHECK(vkEndCommandBuffer(gfx->presentation_instances[gfx->presentation_instance_index].graphics_command_buffer));
+    CVM_VK_CHECK(vkBeginCommandBuffer(pi->graphics_command_buffer,&command_buffer_begin_info));
 
 
 
-    ///submit current graphics commands
-    ///need semaphore from transfer submit, add in with &gfx->acquire_image_semaphore
 
-    VkSubmitInfo submit_info=(VkSubmitInfo)
+
+
+
+
+    VkImageMemoryBarrier temp_barrier=(VkImageMemoryBarrier)
+    {
+        .sType=VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER,
+        .pNext=NULL,
+        .srcAccessMask=VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT,///stage where data is written BEFORE the transfer/barrier
+        .dstAccessMask=0,///ignored anyway
+        .oldLayout=VK_IMAGE_LAYOUT_UNDEFINED,
+        .newLayout=VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL,
+        .srcQueueFamilyIndex=gfx->graphics_queue_family,
+        .dstQueueFamilyIndex=gfx->present_queue_family,
+        .image=gfx->swapchain_images[image_index].image,
+        .subresourceRange=(VkImageSubresourceRange)
+        {
+            .aspectMask=VK_IMAGE_ASPECT_COLOR_BIT,
+            .baseMipLevel=0,
+            .levelCount=1,
+            .baseArrayLayer=0,
+            .layerCount=1
+        }
+    };
+
+    vkCmdPipelineBarrier(pi->graphics_command_buffer,VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT,VK_PIPELINE_STAGE_BOTTOM_OF_PIPE_BIT,0,0,NULL,0,NULL,1,&temp_barrier);
+
+
+
+
+
+
+    /// example/test render pass, put in separate function
+    #warning call render function here
+
+
+
+
+
+
+    vkCmdPipelineBarrier(pi->graphics_command_buffer,VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT,VK_PIPELINE_STAGE_BOTTOM_OF_PIPE_BIT,0,0,NULL,0,NULL,1,&graphics_barrier);
+
+    CVM_VK_CHECK(vkEndCommandBuffer(pi->graphics_command_buffer));
+
+
+
+
+    graphics_wait_dst_stage_mask = VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT;
+
+    graphics_submit_info=(VkSubmitInfo) /// whether submission has associated fence depends on need for family ownership transfer, so actually submit in branched code section
     {
         .sType=VK_STRUCTURE_TYPE_SUBMIT_INFO,
         .pNext=NULL,
         .waitSemaphoreCount=1,
-        .pWaitSemaphores= &gfx->presentation_instances[gfx->presentation_instance_index].acquire_image_semaphore,
-        .pWaitDstStageMask= &wait_dst_stage_mask,
+        .pWaitSemaphores= &pi->acquire_semaphore,
+        .pWaitDstStageMask= &graphics_wait_dst_stage_mask,
         .commandBufferCount=1,
-        .pCommandBuffers= &gfx->presentation_instances[gfx->presentation_instance_index].graphics_command_buffer,
+        .pCommandBuffers= &pi->graphics_command_buffer,
         .signalSemaphoreCount=1,
-        .pSignalSemaphores= &gfx->presentation_instances[gfx->presentation_instance_index].render_finished_semaphore
+        .pSignalSemaphores= &pi->graphics_semaphore
     };
 
-    CVM_VK_CHECK(vkQueueSubmit(gfx->graphics_queue,1,&submit_info,gfx->presentation_instances[gfx->presentation_instance_index].completion_fence));
-
-    #warning swap/move fences and command buffers here
-
-    ///if separate queue/queue_families for present & gfx then only this needs be on present queue?
 
 
-
-    VkPresentInfoKHR present_info=(VkPresentInfoKHR)
+    if(gfx->present_queue_family==gfx->graphics_queue_family)///just present, waiting on graphics semaphore
     {
-        .sType=VK_STRUCTURE_TYPE_PRESENT_INFO_KHR,
-        .pNext=NULL,
-        .waitSemaphoreCount=1,
-        .pWaitSemaphores= &gfx->presentation_instances[gfx->presentation_instance_index].render_finished_semaphore,
-        .swapchainCount=1,
-        .pSwapchains= &gfx->swapchain,
-        .pImageIndices= &image_index,
-        .pResults=NULL
-    };
+        CVM_VK_CHECK(vkQueueSubmit(gfx->graphics_queue,1,&graphics_submit_info,pi->completion_fence));///if families the same this is last submit so fence goes here
+
+        present_info=(VkPresentInfoKHR)
+        {
+            .sType=VK_STRUCTURE_TYPE_PRESENT_INFO_KHR,
+            .pNext=NULL,
+            .waitSemaphoreCount=1,
+            .pWaitSemaphores= &pi->graphics_semaphore,
+            .swapchainCount=1,
+            .pSwapchains= &gfx->swapchain,
+            .pImageIndices= &image_index,
+            .pResults=NULL
+        };
+    }
+    else ///barrier above instead releases subresource, here present queue family acquires it (with "matching" barrier) and presents, waiting on ownership transfer (present) semaphore
+    {
+        #warning this needs to be tested on appropriate hardware
+
+        ///could use swapchain images with VK_SHARING_MODE_CONCURRENT to avoid this issue
+
+        CVM_VK_CHECK(vkQueueSubmit(gfx->graphics_queue,1,&graphics_submit_info,VK_NULL_HANDLE));///if families different fence goes after transfer op
+
+
+
+
+        ///=========== this section transfers ownership (start) ==============
+        present_barrier=(VkImageMemoryBarrier)
+        {
+            .sType=VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER,
+            .pNext=NULL,
+            .srcAccessMask=0,///ignored anyway
+            .dstAccessMask=0,
+            .oldLayout=VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL,
+            .newLayout=VK_IMAGE_LAYOUT_PRESENT_SRC_KHR,
+            .srcQueueFamilyIndex=gfx->graphics_queue_family,
+            .dstQueueFamilyIndex=gfx->present_queue_family,
+            .image=gfx->swapchain_images[image_index].image,
+            .subresourceRange=(VkImageSubresourceRange)
+            {
+                .aspectMask=VK_IMAGE_ASPECT_COLOR_BIT,
+                .baseMipLevel=0,
+                .levelCount=1,
+                .baseArrayLayer=0,
+                .layerCount=1
+            }
+        };
+
+        CVM_VK_CHECK(vkBeginCommandBuffer(pi->present_command_buffer,&command_buffer_begin_info));
+
+        vkCmdPipelineBarrier(pi->present_command_buffer,VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT,VK_PIPELINE_STAGE_BOTTOM_OF_PIPE_BIT,0,0,NULL,0,NULL,1,&present_barrier);
+
+        CVM_VK_CHECK(vkEndCommandBuffer(pi->present_command_buffer));
+
+        present_wait_dst_stage_mask = VK_PIPELINE_STAGE_ALL_COMMANDS_BIT;
+
+        present_submit_info=(VkSubmitInfo)
+        {
+            .sType=VK_STRUCTURE_TYPE_SUBMIT_INFO,
+            .pNext=NULL,
+            .waitSemaphoreCount=1,
+            .pWaitSemaphores= &pi->graphics_semaphore,
+            .pWaitDstStageMask= &present_wait_dst_stage_mask,
+            .commandBufferCount=1,
+            .pCommandBuffers= &pi->present_command_buffer,
+            .signalSemaphoreCount=1,
+            .pSignalSemaphores= &pi->present_semaphore
+        };
+
+        CVM_VK_CHECK(vkQueueSubmit(gfx->present_queue,1,&present_submit_info,pi->completion_fence));///if families different this is last submit so fence goes here
+        ///=========== this section transfers ownership (end) ==============
+
+
+
+
+        present_info=(VkPresentInfoKHR)
+        {
+            .sType=VK_STRUCTURE_TYPE_PRESENT_INFO_KHR,
+            .pNext=NULL,
+            .waitSemaphoreCount=1,
+            .pWaitSemaphores= &pi->present_semaphore,
+            .swapchainCount=1,
+            .pSwapchains= &gfx->swapchain,
+            .pImageIndices= &image_index,
+            .pResults=NULL
+        };
+    }
+
+    ///following transfers image to present_queue family
+
+
 
     r=vkQueuePresentKHR(gfx->present_queue,&present_info);
     if(r==VK_ERROR_OUT_OF_DATE_KHR)/// if VK_SUBOPTIMAL_KHR then image WAS acquired and so must be displayed
@@ -901,21 +932,62 @@ void present_gfx_data(gfx_data * gfx)
 
 
     gfx->presentation_instance_index=(gfx->presentation_instance_index+1)%gfx->presentation_instance_count;
+    pi=gfx->presentation_instances+gfx->presentation_instance_index;
+
+    /// finish/sync "next" (oldest in queue) presentation instance after this (new) one is fully submitted
+
+    CVM_VK_CHECK(vkWaitForFences(cvm_vk_device,1,&pi->completion_fence,VK_TRUE,1000000000));
+    CVM_VK_CHECK(vkResetFences(cvm_vk_device,1,&pi->completion_fence));
 
 
-    /// finish/sync previous frame after this frame is added to queues
-
-    CVM_VK_CHECK(vkWaitForFences(gfx->device,1,&gfx->presentation_instances[gfx->presentation_instance_index].completion_fence,VK_TRUE,1000000000));
-    CVM_VK_CHECK(vkResetFences(gfx->device,1,&gfx->presentation_instances[gfx->presentation_instance_index].completion_fence));
-
-    vkResetCommandBuffer(gfx->presentation_instances[gfx->presentation_instance_index].graphics_command_buffer,0);
 }
 
 
 
 
 
-VkShaderModule load_shader_data(gfx_data * gfx,const char * filename)
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+///TEST FUNCTIONS FROM HERE, STRIP DOWN / USE AS BASIS FOR REAL VERSIONS
+
+typedef struct test_render_data
+{
+    vec3f pos;
+    vec3f c;
+}
+test_render_data;
+
+static VkPipeline test_pipeline;
+static VkBuffer test_buffer;
+static VkDeviceMemory test_buffer_memory;
+static VkRenderPass test_render_pass;
+static VkFramebuffer test_framebuffers[16];
+static uint32_t test_framebuffer_count;
+
+
+
+
+VkShaderModule load_shader_data(const char * filename)
 {
     FILE * f;
     size_t length;
@@ -941,7 +1013,7 @@ VkShaderModule load_shader_data(gfx_data * gfx,const char * filename)
             .pCode=(uint32_t*)data_buffer
         };
 
-        if(vkCreateShaderModule(gfx->device,&shader_module_create_info,NULL,&shader_module)!=VK_SUCCESS)
+        if(vkCreateShaderModule(cvm_vk_device,&shader_module_create_info,NULL,&shader_module)!=VK_SUCCESS)
         {
             fprintf(stderr,"ERROR CREATING SHADER MODULE FROM FILE: %s\n",filename);
             exit(-1);
@@ -961,7 +1033,7 @@ VkShaderModule load_shader_data(gfx_data * gfx,const char * filename)
 
 
 
-void create_pipeline(gfx_data * gfx,const char * vert_file,const char * geom_file,const char * frag_file)
+static void create_pipeline(VkRenderPass render_pass,VkRect2D screen_rectangle,VkViewport screen_viewport)
 {
     ///load test shaders
 
@@ -972,9 +1044,9 @@ void create_pipeline(gfx_data * gfx,const char * vert_file,const char * geom_fil
     VkPipelineLayout layout;
     uint32_t i,stage_count=0;
 
-    if(vert_file)
+    //if(vert_file)
     {
-        stage_modules[stage_count]=load_shader_data(gfx,vert_file);
+        stage_modules[stage_count]=load_shader_data("shaders/test_vert.spv");
         stage_creation_info[stage_count]=(VkPipelineShaderStageCreateInfo)
         {
             .sType=VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO,
@@ -988,9 +1060,9 @@ void create_pipeline(gfx_data * gfx,const char * vert_file,const char * geom_fil
         stage_count++;
     }
 
-    if(frag_file)
+    //if(frag_file)
     {
-        stage_modules[stage_count]=load_shader_data(gfx,frag_file);
+        stage_modules[stage_count]=load_shader_data("shaders/test_frag.spv");
         stage_creation_info[stage_count]=(VkPipelineShaderStageCreateInfo)
         {
             .sType=VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO,
@@ -1053,7 +1125,16 @@ void create_pipeline(gfx_data * gfx,const char * vert_file,const char * geom_fil
     };
 
 
-
+    VkPipelineViewportStateCreateInfo viewport_state_info=(VkPipelineViewportStateCreateInfo)
+    {
+        .sType=VK_STRUCTURE_TYPE_PIPELINE_VIEWPORT_STATE_CREATE_INFO,
+        .pNext=NULL,
+        .flags=0,
+        .viewportCount=1,
+        .pViewports= &screen_viewport,
+        .scissorCount=1,
+        .pScissors= &screen_rectangle
+    };
 
 
     VkPipelineRasterizationStateCreateInfo rasterization_state_info=(VkPipelineRasterizationStateCreateInfo)
@@ -1121,7 +1202,7 @@ void create_pipeline(gfx_data * gfx,const char * vert_file,const char * geom_fil
         .pPushConstantRanges=NULL
     };
 
-    CVM_VK_CHECK(vkCreatePipelineLayout(gfx->device,&layout_creation_info,NULL,&layout));
+    CVM_VK_CHECK(vkCreatePipelineLayout(cvm_vk_device,&layout_creation_info,NULL,&layout));
 
     VkGraphicsPipelineCreateInfo pipeline_creation_info=(VkGraphicsPipelineCreateInfo)
     {
@@ -1133,27 +1214,27 @@ void create_pipeline(gfx_data * gfx,const char * vert_file,const char * geom_fil
         .pVertexInputState= &vert_input_info,
         .pInputAssemblyState= &input_assembly_info,
         .pTessellationState=NULL,
-        .pViewportState= &gfx->screen_viewport_state,
+        .pViewportState= &viewport_state_info,
         .pRasterizationState= &rasterization_state_info,
         .pMultisampleState= &multisample_state_info,
         .pDepthStencilState=NULL,
         .pColorBlendState= &blend_state_info,
         .pDynamicState=NULL,
         .layout=layout,
-        .renderPass=gfx->render_pass,
+        .renderPass=render_pass,
         .subpass=0,
         .basePipelineHandle=VK_NULL_HANDLE,
         .basePipelineIndex=-1
     };
 
-    CVM_VK_CHECK(vkCreateGraphicsPipelines(gfx->device,VK_NULL_HANDLE,1,&pipeline_creation_info,NULL,&gfx->test_pipeline));
+    CVM_VK_CHECK(vkCreateGraphicsPipelines(cvm_vk_device,VK_NULL_HANDLE,1,&pipeline_creation_info,NULL,&test_pipeline));
 
-    vkDestroyPipelineLayout(gfx->device,layout,NULL);
+    vkDestroyPipelineLayout(cvm_vk_device,layout,NULL);
 
-    for(i=0;i<stage_count;i++)vkDestroyShaderModule(gfx->device,stage_modules[i],NULL);
+    for(i=0;i<stage_count;i++)vkDestroyShaderModule(cvm_vk_device,stage_modules[i],NULL);
 }
 
-void create_vertex_buffer(gfx_data * gfx)
+static void create_vertex_buffer(void)
 {
     test_render_data d[4];
     d[0].c=(vec3f){1,0,0};
@@ -1168,6 +1249,30 @@ void create_vertex_buffer(gfx_data * gfx)
     d[3].c=(vec3f){1,1,1};
     d[3].pos=(vec3f){0.7,0.7,0};
 
+//    VkBufferCreateInfo tbc=(VkBufferCreateInfo)
+//    {
+//        .sType=VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO,
+//        .pNext=NULL,
+//        .flags=0,
+//        .size=sizeof(test_render_data)*4,
+//        .usage=VK_BUFFER_USAGE_VERTEX_BUFFER_BIT,
+//        .sharingMode=VK_SHARING_MODE_EXCLUSIVE,
+//        .queueFamilyIndexCount=0,
+//        .pQueueFamilyIndices=NULL
+//    };
+//
+//    VkBuffer tb;
+//
+//    CVM_VK_CHECK(vkCreateBuffer(cvm_vk_device,&tbc,NULL,&tb));
+//
+//    VkMemoryRequirements mr;
+//    vkGetBufferMemoryRequirements(cvm_vk_device,tb,&mr);
+//
+//    printf("a: %u\n",mr.alignment);
+//
+//    vkDestroyBuffer(cvm_vk_device,tb,NULL);
+
+
     VkBufferCreateInfo buffer_create_info=(VkBufferCreateInfo)
     {
         .sType=VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO,
@@ -1180,14 +1285,14 @@ void create_vertex_buffer(gfx_data * gfx)
         .pQueueFamilyIndices=NULL
     };
 
-    CVM_VK_CHECK(vkCreateBuffer(gfx->device,&buffer_create_info,NULL,&gfx->test_buffer));
+    CVM_VK_CHECK(vkCreateBuffer(cvm_vk_device,&buffer_create_info,NULL,&test_buffer));
 
 
     VkMemoryRequirements buffer_memory_requirements;
-    vkGetBufferMemoryRequirements(gfx->device,gfx->test_buffer,&buffer_memory_requirements);
+    vkGetBufferMemoryRequirements(cvm_vk_device,test_buffer,&buffer_memory_requirements);
 
     VkPhysicalDeviceMemoryProperties memory_properties;///move this to gfx ? prevents calling it every time a buffer is allocated
-    vkGetPhysicalDeviceMemoryProperties(gfx->physical_device,&memory_properties);
+    vkGetPhysicalDeviceMemoryProperties(cvm_vk_physical_device,&memory_properties);
 
     uint32_t i;
     VkMemoryAllocateInfo memory_allocate_info;
@@ -1204,16 +1309,16 @@ void create_vertex_buffer(gfx_data * gfx)
                 .memoryTypeIndex=i
             };
 
-            CVM_VK_CHECK(vkAllocateMemory(gfx->device,&memory_allocate_info,NULL,&gfx->test_buffer_memory));
+            CVM_VK_CHECK(vkAllocateMemory(cvm_vk_device,&memory_allocate_info,NULL,&test_buffer_memory));
             break;
         }
     }
 
-    CVM_VK_CHECK(vkBindBufferMemory(gfx->device,gfx->test_buffer,gfx->test_buffer_memory,0))
+    CVM_VK_CHECK(vkBindBufferMemory(cvm_vk_device,test_buffer,test_buffer_memory,0))
 
 
     void * data;
-    CVM_VK_CHECK(vkMapMemory(gfx->device,gfx->test_buffer_memory,0,sizeof(test_render_data)*4,0,&data));
+    CVM_VK_CHECK(vkMapMemory(cvm_vk_device,test_buffer_memory,0,sizeof(test_render_data)*4,0,&data));
 
     memcpy(data,d,sizeof(test_render_data)*4);
 
@@ -1221,14 +1326,91 @@ void create_vertex_buffer(gfx_data * gfx)
     {
         .sType=VK_STRUCTURE_TYPE_MAPPED_MEMORY_RANGE,
         .pNext=NULL,
-        .memory=gfx->test_buffer_memory,
+        .memory=test_buffer_memory,
         .offset=0,
         .size=VK_WHOLE_SIZE
     };
 
-    CVM_VK_CHECK(vkFlushMappedMemoryRanges(gfx->device,1,&flush_range));
+    CVM_VK_CHECK(vkFlushMappedMemoryRanges(cvm_vk_device,1,&flush_range));
 
-    vkUnmapMemory(gfx->device,gfx->test_buffer_memory);
+    vkUnmapMemory(cvm_vk_device,test_buffer_memory);
+}
+
+
+
+static void initialise_test_external(VkDevice device,VkPhysicalDevice physical_device,VkRect2D screen_rectangle,VkViewport screen_viewport,uint32_t swapchain_image_count,VkImageView * swapchain_image_views)
+{
+    uint32_t i;
+    VkFramebufferCreateInfo framebuffer_create_info;
+    ///other per-presentation_instance images defined by rest of program should be used here
+
+    create_pipeline(test_render_pass,screen_rectangle,screen_viewport);
+
+    create_vertex_buffer();
+
+    ///create vertex buffer
+
+    test_framebuffer_count=swapchain_image_count;
+
+    for(i=0;i<test_framebuffer_count;i++)
+    {
+        framebuffer_create_info=(VkFramebufferCreateInfo)
+        {
+            .sType=VK_STRUCTURE_TYPE_FRAMEBUFFER_CREATE_INFO,
+            .pNext=NULL,
+            .flags=0,
+            .renderPass=test_render_pass,
+            .attachmentCount=1,
+            .pAttachments= swapchain_image_views+i,
+            .width=screen_rectangle.extent.width,
+            .height=screen_rectangle.extent.height,
+            .layers=1
+        };
+
+        CVM_VK_CHECK(vkCreateFramebuffer(device,&framebuffer_create_info,NULL,test_framebuffers+i));
+    }
+}
+
+static void terminate_test_external(VkDevice device)
+{
+    uint32_t i;
+    vkDestroyPipeline(device,test_pipeline,NULL);
+
+    for(i=0;i<test_framebuffer_count;i++)vkDestroyFramebuffer(device,test_framebuffers[i],NULL);
+
+    vkDestroyBuffer(cvm_vk_device,test_buffer,NULL);
+    vkFreeMemory(cvm_vk_device,test_buffer_memory,NULL);
+
+}
+
+
+
+static void render_test_external(VkCommandBuffer command_buffer,uint32_t swapchain_image_index,VkRect2D screen_rectangle)
+{
+    VkClearValue clear_value;///other clear colours should probably be provided by other chunks of application
+    clear_value.color=(VkClearColorValue){{0.95f,0.5f,0.75f,1.0f}};
+
+    VkRenderPassBeginInfo render_pass_begin_info=(VkRenderPassBeginInfo)
+    {
+        .sType=VK_STRUCTURE_TYPE_RENDER_PASS_BEGIN_INFO,
+        .pNext=NULL,
+        .renderPass=test_render_pass,
+        .framebuffer=test_framebuffers[swapchain_image_index],
+        .renderArea=screen_rectangle,
+        .clearValueCount=1,
+        .pClearValues= &clear_value
+    };
+
+    vkCmdBeginRenderPass(command_buffer,&render_pass_begin_info,VK_SUBPASS_CONTENTS_INLINE);///================
+
+    vkCmdBindPipeline(command_buffer,VK_PIPELINE_BIND_POINT_GRAPHICS,test_pipeline);
+
+    VkDeviceSize offset=0;
+    vkCmdBindVertexBuffers(command_buffer,0,1,&test_buffer,&offset);
+
+    vkCmdDraw(command_buffer,4,1,0,0);
+
+    vkCmdEndRenderPass(command_buffer);///================
 }
 
 
@@ -1236,6 +1418,94 @@ void create_vertex_buffer(gfx_data * gfx)
 
 
 
+void initialise_test_render_data()
+{
+    ///default attachment (swapchain image)
+    VkAttachmentDescription attachment_description=(VkAttachmentDescription)
+    {
+        .flags=0,
+        .format=cvm_vk_surface_format.format,
+        .samples=VK_SAMPLE_COUNT_1_BIT,
+        .loadOp=VK_ATTACHMENT_LOAD_OP_CLEAR,
+        .storeOp=VK_ATTACHMENT_STORE_OP_STORE,
+        .stencilLoadOp=VK_ATTACHMENT_LOAD_OP_DONT_CARE,
+        .stencilStoreOp=VK_ATTACHMENT_STORE_OP_DONT_CARE,
+        .initialLayout=VK_IMAGE_LAYOUT_UNDEFINED,
+        .finalLayout=VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL
+    };
+
+    VkAttachmentReference attachment_reference=(VkAttachmentReference)
+    {
+        .attachment=0,
+        .layout=VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL,
+    };
+
+    VkSubpassDescription subpass_description=(VkSubpassDescription)
+    {
+        .flags=0,
+        .pipelineBindPoint=VK_PIPELINE_BIND_POINT_GRAPHICS,
+        .inputAttachmentCount=0,
+        .pInputAttachments=NULL,
+        .colorAttachmentCount=1,
+        .pColorAttachments= &attachment_reference,
+        .pResolveAttachments=NULL,
+        .pDepthStencilAttachment=NULL,
+        .preserveAttachmentCount=0,
+        .pPreserveAttachments=NULL
+    };
+
+    VkSubpassDependency subpass_dependencies[2];
+
+    ///if doing pipeline barries these external subpass demendencies probably aren't necessary
+    subpass_dependencies[0]=(VkSubpassDependency)
+    {
+        .srcSubpass=VK_SUBPASS_EXTERNAL,
+        .dstSubpass=0,
+        .srcStageMask=VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT,///must be the same as wait stage in submit (the one associated w/ the relevant semaphore)
+        .dstStageMask=VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT,
+        .srcAccessMask=0,
+        .dstAccessMask=VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT,
+        .dependencyFlags=VK_DEPENDENCY_BY_REGION_BIT
+    };
+
+    subpass_dependencies[1]=(VkSubpassDependency)
+    {
+        .srcSubpass=0,
+        .dstSubpass=VK_SUBPASS_EXTERNAL,
+        .srcStageMask=VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT,
+        .dstStageMask=VK_PIPELINE_STAGE_ALL_COMMANDS_BIT,///dont know which stage in present uses image data so use all
+        .srcAccessMask=VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT,
+        .dstAccessMask=VK_ACCESS_MEMORY_READ_BIT,
+        .dependencyFlags=VK_DEPENDENCY_BY_REGION_BIT
+    };
+
+    ///no subpass dependencies externally as memory barriers are used
+
+    VkRenderPassCreateInfo render_pass_creation_info=(VkRenderPassCreateInfo)
+    {
+        .sType=VK_STRUCTURE_TYPE_RENDER_PASS_CREATE_INFO,
+        .pNext=NULL,
+        .flags=0,
+        .attachmentCount=1,
+        .pAttachments= &attachment_description,
+        .subpassCount=1,
+        .pSubpasses= &subpass_description,
+        .dependencyCount=2,
+        .pDependencies=subpass_dependencies
+    };
+
+    CVM_VK_CHECK(vkCreateRenderPass(cvm_vk_device,&render_pass_creation_info,NULL,&test_render_pass));
+
+
+
+
+    ///add relevant functions
+}
+
+void terminate_test_render_data()
+{
+    vkDestroyRenderPass(cvm_vk_device,test_render_pass,NULL);
+}
 
 
 
