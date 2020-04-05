@@ -30,17 +30,10 @@ along with cvm_shared.  If not, see <https://www.gnu.org/licenses/>.
 #define NUM_OVERLAY_SPRITE_LEVELS 11
 /// 0=16 10=16k
 
-typedef struct overlay_presentation_instance
-{
-    ///map and write both buffers at same time
-    VkDeviceMemory memory;///stream allocation for uniforms colour and instance data
-    VkBuffer instance_buffer;
-    VkBuffer colour_buffer;///colour data, put "real uniforms" in push constant
-    VkCommandBuffer command_buffer;
 
-    uint32_t update_count;///is pipeline used in this command_buffer up to date
-}
-overlay_presentation_instance;
+
+
+
 
 
 
@@ -312,7 +305,6 @@ void render_overlay_text(overlay_data * od,overlay_theme * theme,char * text,int
 
 
 
-void initialise_cubic_theme(gl_functions * glf,overlay_theme * theme);
 
 overlay_sprite_data create_overlay_sprite(overlay_theme * theme,char * name,int max_w,int max_h,overlay_sprite_type type);
 overlay_sprite_data get_overlay_sprite_data(overlay_theme * theme,char * name);
@@ -321,6 +313,10 @@ void set_overlay_sprite_image_data(overlay_theme * theme,overlay_sprite_data osd
 void set_overlay_sprite_image_data_from_sdl_surface(overlay_theme * theme,overlay_sprite_data osd,SDL_Surface * surface,int w,int h,int x,int y);
 
 overlay_sprite_data create_overlay_sprite_from_sdl_surface(overlay_theme * theme,char * name,SDL_Surface * surface,int w,int h,int x,int y,overlay_sprite_type type);
+
+#include "themes/cubic.h"
+
+
 
 #endif
 

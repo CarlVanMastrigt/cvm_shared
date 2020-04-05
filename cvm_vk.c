@@ -29,7 +29,7 @@ static VkPhysicalDevice cvm_vk_physical_device;
 static VkDevice cvm_vk_device;///"logical" device
 static VkSurfaceKHR cvm_vk_surface;
 
-static VkSwapchainKHR cvm_vk_swapchain;
+static VkSwapchainKHR cvm_vk_swapchain=VK_NULL_HANDLE;
 
 static VkSurfaceFormatKHR cvm_vk_surface_format;
 static VkPresentModeKHR cvm_vk_surface_present_mode;
@@ -90,7 +90,7 @@ static uint32_t cvm_vk_swapchain_image_count;
 static cvm_vk_external_initialise cvm_vk_initialise_ops[CVM_VK_MAX_EXTERNAL];
 static cvm_vk_external_terminate cvm_vk_terminate_ops[CVM_VK_MAX_EXTERNAL];
 static cvm_vk_external_render cvm_vk_render_ops[CVM_VK_MAX_EXTERNAL];
-static uint32_t external_op_count=0;
+static uint32_t cvm_vk_external_op_count=0;
 
 
 static void initialise_cvm_vk_instance(SDL_Window * window)
@@ -136,8 +136,6 @@ static void initialise_cvm_vk_instance(SDL_Window * window)
 
     free(extension_names);
 }
-
-
 
 static void initialise_cvm_vk_surface(SDL_Window * window)
 {
@@ -339,128 +337,11 @@ static void initialise_cvm_vk_logical_device(void)
 }
 
 
-uint32_t add_cvm_vk_swapchain_dependent_functions(cvm_vk_external_initialise initialise,cvm_vk_external_terminate terminate,cvm_vk_external_render render)
-{
-    if(external_op_count==CVM_VK_MAX_EXTERNAL)
-    {
-        fprintf(stderr,"INSUFFICIENT EXTERNAL OP SPACE\n");
-    }
-
-    cvm_vk_initialise_ops[external_op_count]=initialise;
-    cvm_vk_terminate_ops[external_op_count]=terminate;
-    cvm_vk_render_ops[external_op_count]=render;
-
-    return external_op_count++;
-}
-
-
-
-///temp/test function
 
 
 
 
-
-//static void initialise_cvm_vk_swapchain(void)
-//{
-//    uint32_t i;
-//    VkSurfaceCapabilitiesKHR surface_capabilities;
-//
-//    ///swapchain
-//    CVM_VK_CHECK(vkGetPhysicalDeviceSurfaceCapabilitiesKHR(cvm_vk_physical_device,cvm_vk_surface,&surface_capabilities));
-//
-//    cvm_vk_screen_rectangle.offset.x=0;
-//    cvm_vk_screen_rectangle.offset.y=0;
-//    cvm_vk_screen_rectangle.extent=surface_capabilities.currentExtent;
-//
-//    cvm_vk_screen_viewport=(VkViewport)
-//    {
-//        .x=0.0,
-//        .y=0.0,
-//        .width=(float)cvm_vk_screen_rectangle.extent.width,
-//        .height=(float)cvm_vk_screen_rectangle.extent.height,
-//        .minDepth=0.0,
-//        .maxDepth=1.0
-//    };
-//
-//    VkSwapchainCreateInfoKHR swapchain_create_info=(VkSwapchainCreateInfoKHR)
-//    {
-//        .sType=VK_STRUCTURE_TYPE_SWAPCHAIN_CREATE_INFO_KHR,
-//        .pNext=NULL,
-//        .flags=0,
-//        .surface=cvm_vk_surface,
-//        .minImageCount=surface_capabilities.minImageCount,
-//        .imageFormat=cvm_vk_surface_format.format,
-//        .imageColorSpace=cvm_vk_surface_format.colorSpace,
-//        .imageExtent=surface_capabilities.currentExtent,
-//        .imageArrayLayers=1,
-//        .imageUsage=VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT,
-//        .imageSharingMode=VK_SHARING_MODE_EXCLUSIVE,
-//        .queueFamilyIndexCount=0,
-//        .pQueueFamilyIndices=NULL,
-//        .preTransform=surface_capabilities.currentTransform,
-//        .compositeAlpha=VK_COMPOSITE_ALPHA_OPAQUE_BIT_KHR,
-//        .presentMode=cvm_vk_surface_present_mode,
-//        .clipped=VK_TRUE,
-//        .oldSwapchain=VK_NULL_HANDLE///maybe find nice way to make this old one, set global static var w/ old one (though this needs to be called before that one is destroyed)
-//    };
-//
-//    CVM_VK_CHECK(vkCreateSwapchainKHR(cvm_vk_device,&swapchain_create_info,NULL,&cvm_vk_swapchain));
-//
-//
-//
-//
-//    cvm_vk_swapchain_image_count=CVM_VK_MAX_SWAPCHAIN_IMAGES;
-//    CVM_VK_CHECK(vkGetSwapchainImagesKHR(cvm_vk_device,cvm_vk_swapchain,&cvm_vk_swapchain_image_count,cvm_vk_swapchain_images));
-//
-//    VkImageViewCreateInfo image_view_create_info;
-//
-//    for(i=0;i<cvm_vk_swapchain_image_count;i++)
-//    {
-//        image_view_create_info=(VkImageViewCreateInfo)
-//        {
-//            .sType=VK_STRUCTURE_TYPE_IMAGE_VIEW_CREATE_INFO,
-//            .pNext=NULL,
-//            .flags=0,
-//            .image=cvm_vk_swapchain_images[i],
-//            .viewType=VK_IMAGE_VIEW_TYPE_2D,
-//            .format=cvm_vk_surface_format.format,
-//            .components=(VkComponentMapping)
-//            {
-//                .r=VK_COMPONENT_SWIZZLE_IDENTITY,
-//                .g=VK_COMPONENT_SWIZZLE_IDENTITY,
-//                .b=VK_COMPONENT_SWIZZLE_IDENTITY,
-//                .a=VK_COMPONENT_SWIZZLE_IDENTITY
-//            },
-//            .subresourceRange=(VkImageSubresourceRange)
-//            {
-//                .aspectMask=VK_IMAGE_ASPECT_COLOR_BIT,
-//                .baseMipLevel=0,
-//                .levelCount=1,
-//                .baseArrayLayer=0,
-//                .layerCount=1
-//            }
-//        };
-//
-//        CVM_VK_CHECK(vkCreateImageView(cvm_vk_device,&image_view_create_info,NULL,cvm_vk_swapchain_image_views+i));
-//    }
-//}
-
-//static void free_cvm_vk_swapchain_images(void)
-//{
-//    uint32_t i;
-//
-//    for(i=0;i<cvm_vk_swapchain_image_count;i++)
-//    {
-//        vkDestroyImageView(cvm_vk_device,cvm_vk_swapchain_image_views[i],NULL);
-//    }
-//}
-
-
-
-
-
-static void initialise_presentation_intances(void)
+static void initialise_cvm_vk_presentation_intances(void)
 {
     uint32_t i;
 
@@ -547,7 +428,7 @@ static void initialise_presentation_intances(void)
     }
 }
 
-static void delete_presentation_intances(void)
+static void terminate_cvm_vk_presentation_intances(void)
 {
     uint32_t i;
 
@@ -566,23 +447,6 @@ static void delete_presentation_intances(void)
     vkDestroyCommandPool(cvm_vk_device,cvm_vk_graphics_command_pool,NULL);
     vkDestroyCommandPool(cvm_vk_device,cvm_vk_present_command_pool,NULL);
 }
-
-
-
-
-//void recreate_cvm_vk_display_data(void)
-//{
-//    CVM_VK_CHECK(vkDeviceWaitIdle(cvm_vk_device));
-//
-////    VkSwapchainKHR old_swapchain=gfx->swapchain;
-//
-//
-//    ///call terminate functions
-//
-//
-//
-//    initialise_cvm_vk_swapchain();
-//}
 
 
 
@@ -628,7 +492,7 @@ void initialise_cvm_vk_swapchain_and_dependents(void)
         .compositeAlpha=VK_COMPOSITE_ALPHA_OPAQUE_BIT_KHR,
         .presentMode=cvm_vk_surface_present_mode,
         .clipped=VK_TRUE,
-        .oldSwapchain=VK_NULL_HANDLE///maybe find nice way to make this old one, set global static var w/ old one (though this needs to be called before that one is destroyed)
+        .oldSwapchain=cvm_vk_swapchain
     };
 
     CVM_VK_CHECK(vkCreateSwapchainKHR(cvm_vk_device,&swapchain_create_info,NULL,&cvm_vk_swapchain));
@@ -671,56 +535,92 @@ void initialise_cvm_vk_swapchain_and_dependents(void)
         CVM_VK_CHECK(vkCreateImageView(cvm_vk_device,&image_view_create_info,NULL,cvm_vk_swapchain_image_views+i));
     }
 
-
-    ///initialise dependents
+    for(i=0;i<cvm_vk_external_op_count;i++)cvm_vk_initialise_ops[i](cvm_vk_device,cvm_vk_physical_device,cvm_vk_screen_rectangle,cvm_vk_screen_viewport,cvm_vk_swapchain_image_count,cvm_vk_swapchain_image_views);
 }
-//void reinitialise_cvm_vk_swapchain_and_dependents(void)
-//{
-//}
-void terminate_cvm_vk_swapchain_and_dependents(void)
+void reinitialise_cvm_vk_swapchain_and_dependents(void)///actually does substantially improve performance over terminate -> initialise
+{
+    uint32_t i;
+    VkSwapchainKHR old_swapchain;
+
+    vkDeviceWaitIdle(cvm_vk_device);
+
+    for(i=0;i<cvm_vk_external_op_count;i++) cvm_vk_terminate_ops[i](cvm_vk_device);
+
+    for(i=0;i<cvm_vk_swapchain_image_count;i++) vkDestroyImageView(cvm_vk_device,cvm_vk_swapchain_image_views[i],NULL);
+
+    old_swapchain=cvm_vk_swapchain;
+
+    initialise_cvm_vk_swapchain_and_dependents();
+
+    vkDestroySwapchainKHR(cvm_vk_device,old_swapchain,NULL);
+}
+static void terminate_cvm_vk_swapchain_and_dependents(void)
 {
     uint32_t i;
 
-    ///terminate dependents
+    for(i=0;i<cvm_vk_external_op_count;i++) cvm_vk_terminate_ops[i](cvm_vk_device);
 
-    for(i=0;i<cvm_vk_swapchain_image_count;i++)
-    {
-        vkDestroyImageView(cvm_vk_device,cvm_vk_swapchain_image_views[i],NULL);
-    }
+    for(i=0;i<cvm_vk_swapchain_image_count;i++) vkDestroyImageView(cvm_vk_device,cvm_vk_swapchain_image_views[i],NULL);
 
     vkDestroySwapchainKHR(cvm_vk_device,cvm_vk_swapchain,NULL);
+    cvm_vk_swapchain=VK_NULL_HANDLE;
+}
+
+uint32_t add_cvm_vk_swapchain_dependent_functions(cvm_vk_external_initialise initialise,cvm_vk_external_terminate terminate,cvm_vk_external_render render)
+{
+    if(cvm_vk_external_op_count==CVM_VK_MAX_EXTERNAL)
+    {
+        fprintf(stderr,"INSUFFICIENT EXTERNAL OP SPACE\n");
+    }
+
+    cvm_vk_initialise_ops[cvm_vk_external_op_count]=initialise;
+    cvm_vk_terminate_ops[cvm_vk_external_op_count]=terminate;
+    cvm_vk_render_ops[cvm_vk_external_op_count]=render;
+
+    return cvm_vk_external_op_count++;
 }
 
 
 
 
 
-
-void initialise_cvm_vk_data(SDL_Window * window)
+void initialise_cvm_vk(SDL_Window * window)
 {
     initialise_cvm_vk_instance(window);
     initialise_cvm_vk_surface(window);
     initialise_cvm_vk_physical_device();
     initialise_cvm_vk_logical_device();
-    initialise_presentation_intances();
+    initialise_cvm_vk_presentation_intances();
 }
 
-void terminate_cvm_vk_data(void)
+void terminate_cvm_vk(void)
 {
-    vkDeviceWaitIdle(cvm_vk_device);
-
-    delete_presentation_intances();
-
+    terminate_cvm_vk_presentation_intances();
     terminate_cvm_vk_swapchain_and_dependents();
+
 
     vkDestroyDevice(cvm_vk_device,NULL);
     vkDestroyInstance(cvm_vk_instance,NULL);
 }
 
+void cvm_vk_wait(void)
+{
+    vkDeviceWaitIdle(cvm_vk_device);///move to controller func, like recreate?
+}
+
+VkFormat cvm_vk_get_screen_format(void)
+{
+    return cvm_vk_surface_format.format;
+}
+
+void cvm_vk_create_render_pass(VkRenderPassCreateInfo * render_pass_creation_info,VkRenderPass * render_pass)
+{
+    CVM_VK_CHECK(vkCreateRenderPass(cvm_vk_device,render_pass_creation_info,NULL,render_pass));
+}
 
 void present_cvm_vk_data(void)
 {
-    uint32_t image_index;
+    uint32_t i,image_index;
     VkResult r;
 
     ///these types could probably be re-used, but as they're passed as pointers its better to be sure?
@@ -790,33 +690,33 @@ void present_cvm_vk_data(void)
 
 
 
-
+    for(i=0;i<cvm_vk_external_op_count;i++)cvm_vk_render_ops[i](cvm_vk_presentation_instances[cvm_vk_presentation_instance_index].graphics_command_buffer,image_index,cvm_vk_screen_rectangle);
 
     ///this shouldn't be necessary when any external unit is used (possibly have fallback blank screen renderer though?)
 
-    VkImageMemoryBarrier temp_barrier=(VkImageMemoryBarrier)
-    {
-        .sType=VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER,
-        .pNext=NULL,
-        .srcAccessMask=VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT,///stage where data is written BEFORE the transfer/barrier
-        .dstAccessMask=0,///ignored anyway
-        .oldLayout=VK_IMAGE_LAYOUT_UNDEFINED,
-        .newLayout=VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL,
-        .srcQueueFamilyIndex=cvm_vk_graphics_queue_family,
-        .dstQueueFamilyIndex=cvm_vk_graphics_queue_family,
-        .image=cvm_vk_swapchain_images[image_index],
-        .subresourceRange=(VkImageSubresourceRange)
-        {
-            .aspectMask=VK_IMAGE_ASPECT_COLOR_BIT,
-            .baseMipLevel=0,
-            .levelCount=1,
-            .baseArrayLayer=0,
-            .layerCount=1
-        }
-    };
-
-    vkCmdPipelineBarrier(cvm_vk_presentation_instances[cvm_vk_presentation_instance_index].graphics_command_buffer,
-                         VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT,VK_PIPELINE_STAGE_BOTTOM_OF_PIPE_BIT,0,0,NULL,0,NULL,1,&temp_barrier);
+//    VkImageMemoryBarrier temp_barrier=(VkImageMemoryBarrier)
+//    {
+//        .sType=VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER,
+//        .pNext=NULL,
+//        .srcAccessMask=VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT,///stage where data is written BEFORE the transfer/barrier
+//        .dstAccessMask=0,///ignored anyway
+//        .oldLayout=VK_IMAGE_LAYOUT_UNDEFINED,
+//        .newLayout=VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL,
+//        .srcQueueFamilyIndex=cvm_vk_graphics_queue_family,
+//        .dstQueueFamilyIndex=cvm_vk_graphics_queue_family,
+//        .image=cvm_vk_swapchain_images[image_index],
+//        .subresourceRange=(VkImageSubresourceRange)
+//        {
+//            .aspectMask=VK_IMAGE_ASPECT_COLOR_BIT,
+//            .baseMipLevel=0,
+//            .levelCount=1,
+//            .baseArrayLayer=0,
+//            .layerCount=1
+//        }
+//    };
+//
+//    vkCmdPipelineBarrier(cvm_vk_presentation_instances[cvm_vk_presentation_instance_index].graphics_command_buffer,
+//                         VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT,VK_PIPELINE_STAGE_BOTTOM_OF_PIPE_BIT,0,0,NULL,0,NULL,1,&temp_barrier);
 
 
 
@@ -1219,8 +1119,8 @@ static void create_pipeline(VkRenderPass render_pass,VkRect2D screen_rectangle,V
         .srcColorBlendFactor=VK_BLEND_FACTOR_ONE,//VK_BLEND_FACTOR_SRC_ALPHA,
         .dstColorBlendFactor=VK_BLEND_FACTOR_ZERO,//VK_BLEND_FACTOR_ONE_MINUS_SRC_ALPHA
         .colorBlendOp=VK_BLEND_OP_ADD,
-        .srcAlphaBlendFactor=VK_BLEND_FACTOR_ONE,//VK_BLEND_FACTOR_SRC_ALPHA,
-        .dstAlphaBlendFactor=VK_BLEND_FACTOR_ZERO,//VK_BLEND_FACTOR_ONE_MINUS_SRC_ALPHA
+        .srcAlphaBlendFactor=VK_BLEND_FACTOR_ONE,//VK_BLEND_FACTOR_ZERO // both ZERO as alpha is ignored?
+        .dstAlphaBlendFactor=VK_BLEND_FACTOR_ZERO,//VK_BLEND_FACTOR_ONE
         .alphaBlendOp=VK_BLEND_OP_ADD,
         .colorWriteMask=VK_COLOR_COMPONENT_R_BIT|VK_COLOR_COMPONENT_G_BIT|VK_COLOR_COMPONENT_B_BIT|VK_COLOR_COMPONENT_A_BIT
     };
@@ -1494,7 +1394,6 @@ void initialise_test_render_data()
 
     VkSubpassDependency subpass_dependencies[2];
 
-    ///if doing pipeline barries these external subpass demendencies probably aren't necessary
     subpass_dependencies[0]=(VkSubpassDependency)
     {
         .srcSubpass=VK_SUBPASS_EXTERNAL,

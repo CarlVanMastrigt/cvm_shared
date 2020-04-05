@@ -65,19 +65,22 @@ typedef void(*cvm_vk_external_render)(VkCommandBuffer,uint32_t,VkRect2D);///prim
 ///gfx_data can ONLY change in main thread and ONLY be changed when not in use by other threads (inside main sync mutexes or before starting other threads that use it)
 
 
-void initialise_cvm_vk_data(SDL_Window * window);
-void terminate_cvm_vk_data(void);
+void initialise_cvm_vk(SDL_Window * window);
+void terminate_cvm_vk(void);
 
 
 uint32_t add_cvm_vk_swapchain_dependent_functions(cvm_vk_external_initialise initialise,cvm_vk_external_terminate terminate,cvm_vk_external_render render);
 
 
 void initialise_cvm_vk_swapchain_and_dependents(void);
-//void reinitialise_cvm_vk_swapchain_and_dependents(void);
-void terminate_cvm_vk_swapchain_and_dependents(void);
+void reinitialise_cvm_vk_swapchain_and_dependents(void);
+//void terminate_cvm_vk_swapchain_and_dependents(void);
 
 void present_cvm_vk_data(void);
 
+void cvm_vk_wait(void);
+VkFormat cvm_vk_get_screen_format(void);
+void cvm_vk_create_render_pass(VkRenderPassCreateInfo * render_pass_creation_info,VkRenderPass * render_pass);
 
 
 
