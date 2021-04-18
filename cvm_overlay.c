@@ -248,7 +248,8 @@ overlay_presentation_instance[CVM_VK_PRESENTATION_INSTANCE_COUNT];///no extra in
 //    for(i=0;i<stage_count;i++)vkDestroyShaderModule(cvm_vk_device,stage_modules[i],NULL);
 //}
 
-static void initialise_overlay_external(VkDevice device,VkPhysicalDevice physical_device,VkRect2D screen_rectangle,VkViewport screen_viewport,uint32_t swapchain_image_count,VkImageView * swapchain_image_views)
+
+static void initialise_overlay_swapchain_dependencies(VkDevice device,VkPhysicalDevice physical_device,VkRect2D screen_rectangle,VkViewport screen_viewport,uint32_t swapchain_image_count,VkImageView * swapchain_image_views)
 {
     uint32_t i;
     VkFramebufferCreateInfo framebuffer_create_info;
@@ -277,15 +278,8 @@ static void initialise_overlay_external(VkDevice device,VkPhysicalDevice physica
 //    }
 }
 
-static void terminate_overlay_external(VkDevice device)
-{
-//    uint32_t i;
-//    vkDestroyPipeline(device,test_pipeline,NULL);
-//
-//    for(i=0;i<test_framebuffer_count;i++)vkDestroyFramebuffer(device,test_framebuffers[i],NULL);
-}
-
-static void render_overlay_external(VkCommandBuffer primary_command_buffer,uint32_t swapchain_image_index,VkRect2D screen_rectangle)
+///rename once gl variant has been extracted
+static void render_overlay_(VkCommandBuffer primary_command_buffer,uint32_t swapchain_image_index,VkRect2D screen_rectangle)
 {
 //    VkClearValue clear_value;///other clear colours should probably be provided by other chunks of application
 //    clear_value.color=(VkClearColorValue){{0.95f,0.5f,0.75f,1.0f}};
@@ -312,6 +306,23 @@ static void render_overlay_external(VkCommandBuffer primary_command_buffer,uint3
 //
 //    vkCmdEndRenderPass(command_buffer);///================
 }
+
+static void terminate_overlay_swapchain_dependencies(VkDevice device)
+{
+//    uint32_t i;
+//    vkDestroyPipeline(device,test_pipeline,NULL);
+//
+//    for(i=0;i<test_framebuffer_count;i++)vkDestroyFramebuffer(device,test_framebuffers[i],NULL);
+}
+
+
+static cvm_vk_external_module overlay_module=
+(cvm_vk_external_module)
+{
+    .initialise =   initialise_overlay_swapchain_dependencies,
+    .render     =   render_overlay,
+    .terminate  =   terminate_overlay_swapchain_dependencies
+};
 
 void initialise_overlay_vk_data()
 {
@@ -394,7 +405,13 @@ void initialise_overlay_vk_data()
 
 //    create_vertex_buffer();
 
-    add_cvm_vk_swapchain_dependent_functions(initialise_overlay_external,terminate_overlay_external,render_overlay_external);
+
+    ///should probably move above to initialise_overlay_module_function
+
+
+
+
+    cvm_vk_add_external_module(overlay_module);
 }
 
 void terminate_overlay_vk_data()

@@ -58,7 +58,7 @@ along with cvm_shared.  If not, see <https://www.gnu.org/licenses/>.
 #include "cvm_mesh.h"
 
 
-
+#include "test_render.h"
 
 #endif
 

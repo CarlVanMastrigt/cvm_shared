@@ -23,6 +23,7 @@ along with cvm_shared.  If not, see <https://www.gnu.org/licenses/>.
 
 static uint32_t cvm_vk_update_count=0;///test if render op/buffer intended to be called is up to date
 
+/// copying around some vulkan structs (e.g. device) is invalid, instead just use these static ones
 
 static VkInstance cvm_vk_instance;
 static VkPhysicalDevice cvm_vk_physical_device;
@@ -47,7 +48,10 @@ static VkViewport cvm_vk_screen_viewport;
 
 
 
-
+///command pools are externally synchronised! need to allocate one pool per frame!?
+/// ^ no, externally synchronised they can only be altered from 1 CPU thread
+///     so long as these command pools are only used by the thread that created them,
+///     and each module allocates its own command pool per thread (it absolutely should) then everything will be fine
 
 static uint32_t cvm_vk_graphics_queue_family;
 static VkCommandPool cvm_vk_graphics_command_pool;
@@ -57,7 +61,7 @@ static uint32_t cvm_vk_present_queue_family;
 static VkCommandPool cvm_vk_present_command_pool;
 static VkQueue cvm_vk_present_queue;
 
-/// (for now) transfer queue only used at startup, before fiirst graphics render op, so only need 1 and can call vkDeviceWaitIdle after to avoid need to sync
+/// (for now) transfer queue only used at startup, before first graphics render op, so only need 1 and can call vkDeviceWaitIdle after to avoid need to sync
 /// presently all runtime uploads are stream so better to make them all be host visible anyway (ergo no need for transfer in render)
 static uint32_t cvm_vk_transfer_queue_family;
 static VkCommandPool cvm_vk_transfer_command_pool;
@@ -78,22 +82,21 @@ static struct
     VkCommandBuffer present_command_buffer;///allocated from cvm_vk_present_command_pool above
 }
 cvm_vk_presentation_instances[CVM_VK_PRESENTATION_INSTANCE_COUNT];
+/// need to know the max frame count such that resources can only be used after they are transferred back, should this be matched to the number of swapchain images?
+///probably best to match this to swapchain count
 
 static uint32_t cvm_vk_presentation_instance_index=0;
 
-static VkImage cvm_vk_swapchain_images[CVM_VK_MAX_SWAPCHAIN_IMAGES];
-static VkImageView cvm_vk_swapchain_image_views[CVM_VK_MAX_SWAPCHAIN_IMAGES];
+static VkImage * cvm_vk_swapchain_images;
+static VkImageView * cvm_vk_swapchain_image_views;
 static uint32_t cvm_vk_swapchain_image_count;
 
 
-/// these MUST be called in critical section, can modify resources
-static cvm_vk_external_initialise cvm_vk_initialise_ops[CVM_VK_MAX_EXTERNAL];
-static cvm_vk_external_terminate cvm_vk_terminate_ops[CVM_VK_MAX_EXTERNAL];
-static cvm_vk_external_render cvm_vk_render_ops[CVM_VK_MAX_EXTERNAL];
-static uint32_t cvm_vk_external_op_count=0;
+static cvm_vk_external_module cvm_vk_external_modules[CVM_VK_MAX_EXTERNAL];
+static uint32_t cvm_vk_external_module_count=0;
 
 
-static void initialise_cvm_vk_instance(SDL_Window * window)
+static void cvm_vk_initialise_instance(SDL_Window * window)
 {
     uint32_t extension_count;
     const char ** extension_names=NULL;
@@ -137,7 +140,7 @@ static void initialise_cvm_vk_instance(SDL_Window * window)
     free(extension_names);
 }
 
-static void initialise_cvm_vk_surface(SDL_Window * window)
+static void cvm_vk_initialise_surface(SDL_Window * window)
 {
     if(!SDL_Vulkan_CreateSurface(window,cvm_vk_instance,&cvm_vk_surface))
     {
@@ -152,11 +155,7 @@ static bool check_physical_device_appropriate(bool dedicated_gpu_required)
     uint32_t i,queue_family_count;
     VkQueueFamilyProperties * queue_family_properties=NULL;
     VkBool32 surface_supported;
-
-    //VkPhysicalDeviceFeatures required_features={VK_FALSE};
-
-    ///add more if more back-end queues are desired (add them to back-end family)
-    ///also potentially add transfer queue for quicker data transfer?
+    VkPhysicalDeviceFeatures features;
 
     vkGetPhysicalDeviceProperties(cvm_vk_physical_device,&properties);
 
@@ -164,9 +163,11 @@ static bool check_physical_device_appropriate(bool dedicated_gpu_required)
 
     printf("testing GPU : %s\n",properties.deviceName);
 
+    vkGetPhysicalDeviceFeatures(cvm_vk_physical_device,&features);
+
     #warning test for required features. need comparitor struct to do this?   enable all by default for time being?
 
-    //printf("geometry shader: %d\n",cvm_vk_device_features.geometryShader);
+    ///SIMPLE EXAMPLE TEST: printf("geometry shader: %d\n",features.geometryShader);
 
     vkGetPhysicalDeviceQueueFamilyProperties(cvm_vk_physical_device,&queue_family_count,NULL);
     queue_family_properties=malloc(sizeof(VkQueueFamilyProperties)*queue_family_count);
@@ -188,8 +189,7 @@ static bool check_physical_device_appropriate(bool dedicated_gpu_required)
             if(cvm_vk_transfer_queue_family==queue_family_count)cvm_vk_transfer_queue_family=i;///graphics must support transfer, even if not specified
         }
 
-        ///for testing purposed comment out this element
-        ///if an explicitly a transfer queue family separate from selected graphics queue family exists use it independently
+        ///if an explicit transfer queue family separate from selected graphics queue family exists use it independently
         if((i != cvm_vk_graphics_queue_family)&&(queue_family_properties[i].queueFlags&VK_QUEUE_TRANSFER_BIT))
         {
             cvm_vk_transfer_queue_family=i;
@@ -204,11 +204,13 @@ static bool check_physical_device_appropriate(bool dedicated_gpu_required)
 
     free(queue_family_properties);
 
+    printf("Queue Families count:%u g:%u t:%u p:%u\n",queue_family_count,cvm_vk_graphics_queue_family,cvm_vk_transfer_queue_family,cvm_vk_present_queue_family);
+
     return ((cvm_vk_graphics_queue_family != queue_family_count)&&(cvm_vk_transfer_queue_family != queue_family_count)&&(cvm_vk_present_queue_family != queue_family_count));
     ///return true only if all queue families needed can be satisfied
 }
 
-static void initialise_cvm_vk_physical_device(void)
+static void cvm_vk_initialise_physical_device(void)
 {
     ///pick best physical device with all required features
 
@@ -247,7 +249,7 @@ static void initialise_cvm_vk_physical_device(void)
     formats=malloc(sizeof(VkSurfaceFormatKHR)*format_count);
     CVM_VK_CHECK(vkGetPhysicalDeviceSurfaceFormatsKHR(cvm_vk_physical_device,cvm_vk_surface,&format_count,formats));
 
-    cvm_vk_surface_format=formats[0];
+    cvm_vk_surface_format=formats[0];///search for preferred/fallback instead of taking first?
 
     free(formats);
 
@@ -257,18 +259,20 @@ static void initialise_cvm_vk_physical_device(void)
     present_modes=malloc(sizeof(VkPresentModeKHR)*present_mode_count);
     CVM_VK_CHECK(vkGetPhysicalDeviceSurfacePresentModesKHR(cvm_vk_physical_device,cvm_vk_surface,&present_mode_count,present_modes));
 
+    ///maybe want do do something meaningful here in later versions, below should be fine for now
     cvm_vk_surface_present_mode=VK_PRESENT_MODE_FIFO_KHR;///guaranteed to exist
 
     free(present_modes);
 }
 
-static void initialise_cvm_vk_logical_device(void)
+static void cvm_vk_initialise_logical_device(void)
 {
     const char * device_extensions[]={"VK_KHR_swapchain"};
     const char * layer_names[]={"VK_LAYER_LUNARG_standard_validation"};///VK_LAYER_LUNARG_standard_validation
     float queue_priority=1.0;
 
     ///try copying device_features from gfx until appropriate list of required features found
+    ///can possibly do this internally for engine based o features requested (though that would disallow custom things to be done by user, so is probably better to AND anything like that with user defined feature list)
     VkPhysicalDeviceFeatures features=(VkPhysicalDeviceFeatures){};
     features.geometryShader=VK_TRUE;
     features.multiDrawIndirect=VK_TRUE;
@@ -341,7 +345,7 @@ static void initialise_cvm_vk_logical_device(void)
 
 
 
-static void initialise_cvm_vk_presentation_intances(void)
+static void cvm_vk_initialise_presentation_intances(void)
 {
     uint32_t i;
 
@@ -411,7 +415,7 @@ static void initialise_cvm_vk_presentation_intances(void)
         CVM_VK_CHECK(vkCreateSemaphore(cvm_vk_device,&semaphore_create_info,NULL,&cvm_vk_presentation_instances[i].present_semaphore));
 
 
-        if(i)fence_create_info=(VkFenceCreateInfo)///all but first should already be signalled
+        if(i) fence_create_info=(VkFenceCreateInfo)///all but first should already be signalled
         {
             .sType=VK_STRUCTURE_TYPE_FENCE_CREATE_INFO,
             .pNext=NULL,
@@ -428,7 +432,7 @@ static void initialise_cvm_vk_presentation_intances(void)
     }
 }
 
-static void terminate_cvm_vk_presentation_intances(void)
+static void cvm_vk_terminate_presentation_intances(void)
 {
     uint32_t i;
 
@@ -451,7 +455,7 @@ static void terminate_cvm_vk_presentation_intances(void)
 
 
 
-void initialise_cvm_vk_swapchain_and_dependents(void)
+void cvm_vk_initialise_swapchain(void)
 {
     uint32_t i;
     VkSurfaceCapabilitiesKHR surface_capabilities;
@@ -473,6 +477,7 @@ void initialise_cvm_vk_swapchain_and_dependents(void)
         .maxDepth=1.0
     };
 
+    /// the contents of this dictate explicit transfer of the swapchain images between the graphics and present queues!
     VkSwapchainCreateInfoKHR swapchain_create_info=(VkSwapchainCreateInfoKHR)
     {
         .sType=VK_STRUCTURE_TYPE_SWAPCHAIN_CREATE_INFO_KHR,
@@ -497,13 +502,13 @@ void initialise_cvm_vk_swapchain_and_dependents(void)
 
     CVM_VK_CHECK(vkCreateSwapchainKHR(cvm_vk_device,&swapchain_create_info,NULL,&cvm_vk_swapchain));
 
-
-
-
-    cvm_vk_swapchain_image_count=CVM_VK_MAX_SWAPCHAIN_IMAGES;
+    CVM_VK_CHECK(vkGetSwapchainImagesKHR(cvm_vk_device,cvm_vk_swapchain,&cvm_vk_swapchain_image_count,NULL));
+    cvm_vk_swapchain_images=malloc(cvm_vk_swapchain_image_count*sizeof(VkImage));
+    printf("swapchain image count: %u\n",cvm_vk_swapchain_image_count);
     CVM_VK_CHECK(vkGetSwapchainImagesKHR(cvm_vk_device,cvm_vk_swapchain,&cvm_vk_swapchain_image_count,cvm_vk_swapchain_images));
 
     VkImageViewCreateInfo image_view_create_info;
+    cvm_vk_swapchain_image_views=malloc(cvm_vk_swapchain_image_count*sizeof(VkImageView));
 
     for(i=0;i<cvm_vk_swapchain_image_count;i++)
     {
@@ -535,69 +540,76 @@ void initialise_cvm_vk_swapchain_and_dependents(void)
         CVM_VK_CHECK(vkCreateImageView(cvm_vk_device,&image_view_create_info,NULL,cvm_vk_swapchain_image_views+i));
     }
 
-    for(i=0;i<cvm_vk_external_op_count;i++)cvm_vk_initialise_ops[i](cvm_vk_device,cvm_vk_physical_device,cvm_vk_screen_rectangle,cvm_vk_screen_viewport,cvm_vk_swapchain_image_count,cvm_vk_swapchain_image_views);
+    for(i=0;i<cvm_vk_external_module_count;i++) cvm_vk_external_modules[i].initialise(
+        cvm_vk_device,cvm_vk_physical_device,cvm_vk_screen_rectangle,cvm_vk_screen_viewport,cvm_vk_swapchain_image_count,cvm_vk_swapchain_image_views);
 }
-void reinitialise_cvm_vk_swapchain_and_dependents(void)///actually does substantially improve performance over terminate -> initialise
+
+void cvm_vk_reinitialise_swapchain(void)///actually does substantially improve performance over terminate -> initialise
 {
     uint32_t i;
     VkSwapchainKHR old_swapchain;
 
     vkDeviceWaitIdle(cvm_vk_device);
 
-    for(i=0;i<cvm_vk_external_op_count;i++) cvm_vk_terminate_ops[i](cvm_vk_device);
+    for(i=0;i<cvm_vk_external_module_count;i++) cvm_vk_external_modules[i].terminate(cvm_vk_device);
 
     for(i=0;i<cvm_vk_swapchain_image_count;i++) vkDestroyImageView(cvm_vk_device,cvm_vk_swapchain_image_views[i],NULL);
+
+    free(cvm_vk_swapchain_images);
+    free(cvm_vk_swapchain_image_views);
 
     old_swapchain=cvm_vk_swapchain;
 
-    initialise_cvm_vk_swapchain_and_dependents();
+    cvm_vk_initialise_swapchain();
 
     vkDestroySwapchainKHR(cvm_vk_device,old_swapchain,NULL);
 }
-static void terminate_cvm_vk_swapchain_and_dependents(void)
+
+static void cvm_vk_terminate_swapchain(void)
 {
     uint32_t i;
 
-    for(i=0;i<cvm_vk_external_op_count;i++) cvm_vk_terminate_ops[i](cvm_vk_device);
+    for(i=0;i<cvm_vk_external_module_count;i++) cvm_vk_external_modules[i].terminate(cvm_vk_device);
 
     for(i=0;i<cvm_vk_swapchain_image_count;i++) vkDestroyImageView(cvm_vk_device,cvm_vk_swapchain_image_views[i],NULL);
+
+    free(cvm_vk_swapchain_images);
+    free(cvm_vk_swapchain_image_views);
 
     vkDestroySwapchainKHR(cvm_vk_device,cvm_vk_swapchain,NULL);
     cvm_vk_swapchain=VK_NULL_HANDLE;
 }
 
-uint32_t add_cvm_vk_swapchain_dependent_functions(cvm_vk_external_initialise initialise,cvm_vk_external_terminate terminate,cvm_vk_external_render render)
+
+uint32_t cvm_vk_add_external_module(cvm_vk_external_module module)
 {
-    if(cvm_vk_external_op_count==CVM_VK_MAX_EXTERNAL)
+    if(cvm_vk_external_module_count==CVM_VK_MAX_EXTERNAL)
     {
         fprintf(stderr,"INSUFFICIENT EXTERNAL OP SPACE\n");
     }
 
-    cvm_vk_initialise_ops[cvm_vk_external_op_count]=initialise;
-    cvm_vk_terminate_ops[cvm_vk_external_op_count]=terminate;
-    cvm_vk_render_ops[cvm_vk_external_op_count]=render;
+    cvm_vk_external_modules[cvm_vk_external_module_count]=module;
 
-    return cvm_vk_external_op_count++;
+    return cvm_vk_external_module_count++;
 }
 
 
 
 
 
-void initialise_cvm_vk(SDL_Window * window)
+void cvm_vk_initialise(SDL_Window * window,uint32_t frame_count)
 {
-    initialise_cvm_vk_instance(window);
-    initialise_cvm_vk_surface(window);
-    initialise_cvm_vk_physical_device();
-    initialise_cvm_vk_logical_device();
-    initialise_cvm_vk_presentation_intances();
+    cvm_vk_initialise_instance(window);
+    cvm_vk_initialise_surface(window);
+    cvm_vk_initialise_physical_device();
+    cvm_vk_initialise_logical_device();
+    cvm_vk_initialise_presentation_intances();
 }
 
-void terminate_cvm_vk(void)
+void cvm_vk_terminate(void)
 {
-    terminate_cvm_vk_presentation_intances();
-    terminate_cvm_vk_swapchain_and_dependents();
-
+    cvm_vk_terminate_presentation_intances();
+    cvm_vk_terminate_swapchain();
 
     vkDestroyDevice(cvm_vk_device,NULL);
     vkDestroyInstance(cvm_vk_instance,NULL);
@@ -618,7 +630,7 @@ void cvm_vk_create_render_pass(VkRenderPassCreateInfo * render_pass_creation_inf
     CVM_VK_CHECK(vkCreateRenderPass(cvm_vk_device,render_pass_creation_info,NULL,render_pass));
 }
 
-void present_cvm_vk_data(void)
+void cvm_vk_present(void)
 {
     uint32_t i,image_index;
     VkResult r;
@@ -636,12 +648,13 @@ void present_cvm_vk_data(void)
     if(r==VK_ERROR_OUT_OF_DATE_KHR)/// if VK_SUBOPTIMAL_KHR then image WAS acquired and so must be displayed
     {
         puts("couldn't use swapchain");//recreate_gfx_swapchain(gfx);///rebuild swapchain dependent elements for this buffer
+        return;
     }
     else if(r!=VK_SUCCESS) fprintf(stderr,"ACQUIRE NEXT IMAGE FAILED WITH ERROR : %d\n",r);
 
 
 
-    ///seperate command bufer for each render element (game/overlay) ?
+    ///separate command buffer for each render element (game/overlay) ?
 
     ///fence to prevent re-submission of same command buffer ( command buffer wasn't created with VK_COMMAND_BUFFER_USAGE_SIMULTANEOUS_USE_BIT )
 
@@ -680,56 +693,13 @@ void present_cvm_vk_data(void)
 
 
 
-
-
+    ///this also resets the command buffer
     CVM_VK_CHECK(vkBeginCommandBuffer(cvm_vk_presentation_instances[cvm_vk_presentation_instance_index].graphics_command_buffer,&command_buffer_begin_info));
 
+    for(i=0;i<cvm_vk_external_module_count;i++)cvm_vk_external_modules[i].render(cvm_vk_presentation_instances[cvm_vk_presentation_instance_index].graphics_command_buffer,image_index,cvm_vk_screen_rectangle);
 
-
-
-
-
-
-    for(i=0;i<cvm_vk_external_op_count;i++)cvm_vk_render_ops[i](cvm_vk_presentation_instances[cvm_vk_presentation_instance_index].graphics_command_buffer,image_index,cvm_vk_screen_rectangle);
-
-    ///this shouldn't be necessary when any external unit is used (possibly have fallback blank screen renderer though?)
-
-//    VkImageMemoryBarrier temp_barrier=(VkImageMemoryBarrier)
-//    {
-//        .sType=VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER,
-//        .pNext=NULL,
-//        .srcAccessMask=VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT,///stage where data is written BEFORE the transfer/barrier
-//        .dstAccessMask=0,///ignored anyway
-//        .oldLayout=VK_IMAGE_LAYOUT_UNDEFINED,
-//        .newLayout=VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL,
-//        .srcQueueFamilyIndex=cvm_vk_graphics_queue_family,
-//        .dstQueueFamilyIndex=cvm_vk_graphics_queue_family,
-//        .image=cvm_vk_swapchain_images[image_index],
-//        .subresourceRange=(VkImageSubresourceRange)
-//        {
-//            .aspectMask=VK_IMAGE_ASPECT_COLOR_BIT,
-//            .baseMipLevel=0,
-//            .levelCount=1,
-//            .baseArrayLayer=0,
-//            .layerCount=1
-//        }
-//    };
-//
-//    vkCmdPipelineBarrier(cvm_vk_presentation_instances[cvm_vk_presentation_instance_index].graphics_command_buffer,
-//                         VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT,VK_PIPELINE_STAGE_BOTTOM_OF_PIPE_BIT,0,0,NULL,0,NULL,1,&temp_barrier);
-
-
-
-
-
-
-    /// example/test render pass, put in separate function
-    #warning call render function here
-
-
-
-
-    graphics_barrier=(VkImageMemoryBarrier) /// does layout transition  &  if queue families are different relinquishes swapchain image
+    ///only do following inside branch where the queue families are not the same? though this does handle layout transitions anyway right?
+    graphics_barrier=(VkImageMemoryBarrier) /// does layout transition  &  if queue families are different relinquishes swapchain image, is this valid when queue families are the same?
     {
         .sType=VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER,
         .pNext=NULL,
@@ -849,6 +819,7 @@ void present_cvm_vk_data(void)
 
         CVM_VK_CHECK(vkQueueSubmit(cvm_vk_present_queue,1,&present_submit_info,cvm_vk_presentation_instances[cvm_vk_presentation_instance_index].completion_fence));///if families different this is last submit so fence goes here
         ///=========== this section transfers ownership (end) ==============
+        ///if vkQueueSubmit fails here it will be necessary to invalidate the command buffer contents
 
 
 
@@ -927,13 +898,22 @@ static VkPipeline test_pipeline;
 static VkBuffer test_buffer;
 static VkDeviceMemory test_buffer_memory;
 static VkRenderPass test_render_pass;
-static VkFramebuffer test_framebuffers[16];
+static VkFramebuffer * test_framebuffers;
 static uint32_t test_framebuffer_count;
 
+static VkShaderModule test_vert_module;
+static VkPipelineShaderStageCreateInfo test_vert_stage_info;
+
+static VkPipelineVertexInputStateCreateInfo test_vertex_input_info;
+static VkPipelineInputAssemblyStateCreateInfo input_assembly_info;
+static VkPipelineRasterizationStateCreateInfo test_rasterization_info;
 
 
 
-VkShaderModule load_shader_data(const char * filename)
+
+
+///return VkPipelineShaderStageCreateInfo, but hold on to VkShaderModule (passed by ptr) for deletion at program cleanup
+VkShaderModule load_shader_data(const char * filename, VkShaderStageFlagBits stage)
 {
     FILE * f;
     size_t length;
@@ -979,7 +959,7 @@ VkShaderModule load_shader_data(const char * filename)
 
 
 
-static void create_pipeline(VkRenderPass render_pass,VkRect2D screen_rectangle,VkViewport screen_viewport)
+static void create_pipeline(VkRenderPass render_pass,VkRect2D screen_rectangle,VkViewport screen_viewport,char * vert_file,char * geom_file,char * frag_file)
 {
     ///load test shaders
 
@@ -990,33 +970,38 @@ static void create_pipeline(VkRenderPass render_pass,VkRect2D screen_rectangle,V
     VkPipelineLayout layout;
     uint32_t i,stage_count=0;
 
-    //if(vert_file)
+    if(vert_file)
     {
-        stage_modules[stage_count]=load_shader_data("shaders/test_vert.spv");
+        stage_modules[stage_count]=load_shader_data(vert_file,VK_SHADER_STAGE_VERTEX_BIT);
         stage_creation_info[stage_count]=(VkPipelineShaderStageCreateInfo)
         {
             .sType=VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO,
             .pNext=NULL,
-            .flags=0,
+            .flags=0,///not supported
             .stage=VK_SHADER_STAGE_VERTEX_BIT,
             .module=stage_modules[stage_count],
-            .pName="main",
+            .pName="main",///always use main as entrypoint
             .pSpecializationInfo=NULL
         };
         stage_count++;
     }
 
-    //if(frag_file)
+    if(geom_file)
     {
-        stage_modules[stage_count]=load_shader_data("shaders/test_frag.spv");
+        fprintf(stderr,"GEOM SHADERS N.Y.I.\n");
+    }
+
+    if(frag_file)
+    {
+        stage_modules[stage_count]=load_shader_data(frag_file,VK_SHADER_STAGE_FRAGMENT_BIT);
         stage_creation_info[stage_count]=(VkPipelineShaderStageCreateInfo)
         {
             .sType=VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO,
             .pNext=NULL,
-            .flags=0,
+            .flags=0,///not supported
             .stage=VK_SHADER_STAGE_FRAGMENT_BIT,
             .module=stage_modules[stage_count],
-            .pName="main",
+            .pName="main",///always use main as entrypoint
             .pSpecializationInfo=NULL
         };
         stage_count++;
@@ -1284,15 +1269,17 @@ static void create_vertex_buffer(void)
 
 
 
-static void initialise_test_external(VkDevice device,VkPhysicalDevice physical_device,VkRect2D screen_rectangle,VkViewport screen_viewport,uint32_t swapchain_image_count,VkImageView * swapchain_image_views)
+static void initialise_test_swapchain_dependencies(VkDevice device,VkPhysicalDevice physical_device,VkRect2D screen_rectangle,VkViewport screen_viewport,uint32_t swapchain_image_count,VkImageView * swapchain_image_views)
 {
     uint32_t i;
     VkFramebufferCreateInfo framebuffer_create_info;
     ///other per-presentation_instance images defined by rest of program should be used here
 
-    create_pipeline(test_render_pass,screen_rectangle,screen_viewport);
+    create_pipeline(test_render_pass,screen_rectangle,screen_viewport,"shaders/test_vert.spv",NULL,"shaders/test_frag.spv");
 
     test_framebuffer_count=swapchain_image_count;
+
+    test_framebuffers=malloc(swapchain_image_count*sizeof(VkFramebuffer));
 
     for(i=0;i<test_framebuffer_count;i++)
     {
@@ -1313,17 +1300,7 @@ static void initialise_test_external(VkDevice device,VkPhysicalDevice physical_d
     }
 }
 
-static void terminate_test_external(VkDevice device)
-{
-    uint32_t i;
-    vkDestroyPipeline(device,test_pipeline,NULL);
-
-    for(i=0;i<test_framebuffer_count;i++)vkDestroyFramebuffer(device,test_framebuffers[i],NULL);
-}
-
-
-
-static void render_test_external(VkCommandBuffer command_buffer,uint32_t swapchain_image_index,VkRect2D screen_rectangle)
+static void render_test(VkCommandBuffer command_buffer,uint32_t swapchain_image_index,VkRect2D screen_rectangle)
 {
     VkClearValue clear_value;///other clear colours should probably be provided by other chunks of application
     clear_value.color=(VkClearColorValue){{0.95f,0.5f,0.75f,1.0f}};
@@ -1351,9 +1328,26 @@ static void render_test_external(VkCommandBuffer command_buffer,uint32_t swapcha
     vkCmdEndRenderPass(command_buffer);///================
 }
 
+static void terminate_test_swapchain_dependencies(VkDevice device)
+{
+    uint32_t i;
+    vkDestroyPipeline(device,test_pipeline,NULL);
+
+    for(i=0;i<test_framebuffer_count;i++)vkDestroyFramebuffer(device,test_framebuffers[i],NULL);
+
+    free(test_framebuffers);
+}
 
 
 
+
+static cvm_vk_external_module test_module=
+(cvm_vk_external_module)
+{
+    .initialise =   initialise_test_swapchain_dependencies,
+    .render     =   render_test,
+    .terminate  =   terminate_test_swapchain_dependencies
+};
 
 
 void initialise_test_render_data()
@@ -1433,7 +1427,7 @@ void initialise_test_render_data()
 
     create_vertex_buffer();
 
-    add_cvm_vk_swapchain_dependent_functions(initialise_test_external,terminate_test_external,render_test_external);
+    cvm_vk_add_external_module(test_module);
 }
 
 void terminate_test_render_data()
