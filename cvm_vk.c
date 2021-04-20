@@ -904,9 +904,9 @@ static uint32_t test_framebuffer_count;
 static VkShaderModule test_vert_module;
 static VkPipelineShaderStageCreateInfo test_vert_stage_info;
 
-static VkPipelineVertexInputStateCreateInfo test_vertex_input_info;
-static VkPipelineInputAssemblyStateCreateInfo input_assembly_info;
-static VkPipelineRasterizationStateCreateInfo test_rasterization_info;
+//static VkPipelineVertexInputStateCreateInfo test_vertex_input_info;
+//static VkPipelineInputAssemblyStateCreateInfo input_assembly_info;
+//static VkPipelineRasterizationStateCreateInfo test_rasterization_info;
 
 
 

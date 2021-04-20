@@ -44,6 +44,20 @@ along with cvm_shared.  If not, see <https://www.gnu.org/licenses/>.
 ///need 1 more than this for each extra layer of cycling (e.g. thread-sync-separation, that is written in thread then passed to main thread before being rendered with)
 
 
+
+
+/**
+features to be cognisant of:
+
+fragmentStoresAndAtomics
+
+
+
+(maybe)
+
+vertexPipelineStoresAndAtomics
+*/
+
 typedef struct cvm_vk_external_module
 {
     /// initialise and terminate are per-swapchain instantiation
@@ -71,6 +85,10 @@ void cvm_vk_create_render_pass(VkRenderPassCreateInfo * render_pass_creation_inf
 
 VkFormat cvm_vk_get_screen_format(void);
 
+
+/// break this down into portions that can be initialised and shared around seperately
+/// have a way to copy in or set manually, also (where appropriate) automatic/semi-automatic initialization
+/// checks that each part are initialised
 typedef struct cvm_vk_pipeline_state
 {
     /// stages
@@ -79,42 +97,50 @@ typedef struct cvm_vk_pipeline_state
     uint32_t stage_count;
 
 
+    ///beyond modules above, a lot of the following content can/should be shared between different pipelines and only known here by reference, probably never even being changed
+    /// i.e. above is locally owned, below is externally owned.
+    /// externally owned things shouldnt have their contents known here!
+    /// probably best to treat externally owned items as being mutable and potentially requiring pipeline re-init (even though this is invalid for a lot of items that match parts of shader)
+
     /// vertex inputs
-    VkPipelineVertexInputStateCreateInfo vert_input_info;
+    VkPipelineVertexInputStateCreateInfo * vert_input_info;
 
-    VkVertexInputBindingDescription * input_bindings;
-    uint32_t input_binding_count;
+    //VkVertexInputBindingDescription * input_bindings;
+    //uint32_t input_binding_count;
 
-    VkVertexInputAttributeDescription * input_attributes;
-    uint32_t input_attribute_count;
+    //VkVertexInputAttributeDescription * input_attributes;
+    //uint32_t input_attribute_count;
 
 
     /// blending (attachment related)
-    VkPipelineColorBlendStateCreateInfo blend_info;
-    VkPipelineColorBlendAttachmentState * blend_attachment_infos;
-    uint32_t blend_attachment_count;///basically should match colorAttachmentCount in subpass of pipeline
+    /// make this part of, or related to subpass
+    VkPipelineColorBlendStateCreateInfo * blend_info;
+    //VkPipelineColorBlendAttachmentState * blend_attachment_infos;
+    //uint32_t blend_attachment_count;///basically should match colorAttachmentCount in subpass of pipeline
 
 
-    /// misc static
-    VkPipelineInputAssemblyStateCreateInfo input_assembly_info;
-    VkPipelineRasterizationStateCreateInfo rasterization_info;
-
-
-    /// misc mutable
-    VkPipelineViewportStateCreateInfo viewport_state_info;
-    VkPipelineMultisampleStateCreateInfo multisample_info;/// could possible be changed my altering game settings
-
+    /// these are probably mutable, but i cant see that ever realistically being needed
+    VkPipelineInputAssemblyStateCreateInfo * input_assembly_info;///some of these can be shared
+    VkPipelineRasterizationStateCreateInfo * rasterization_info;
 
 
     /// general input data, descriptor sets and push constants (like uniforms)
-    ///     these can probably be tied to/inherited from the subpass in most cases
-    VkPipelineLayout layout;
+    /// can be shared between similar pipelines that have/use same bindings, should be provided externally and only referenced here
+    /// layout itself wont change, and is used to specify how data is actually loaded into descriptor sets which themselves provide data to their respective binding points in the shader
+            /// ^ this happens more or less completely seperately from the pipeline itself
+            /// ^ can bind contents of layout with vkCmdBindDescriptorSets prior to submitting any work or even binding pipelines (i prefer this approach)
+    VkPipelineLayout * layout;
 
-    VkDescriptorSetLayout * descrptor_sets;
-    uint32_t descrptor_set_count;
+    //VkDescriptorSetLayout * descrptor_set_layouts;///take these from external setup, use in conjunction with recyclable descriptor sets from pools
+    //uint32_t descrptor_set_count;
 
-    VkPushConstantRange * push_constants;
-    uint32_t push_constant_count;
+    //VkPushConstantRange * push_constants;
+    //uint32_t push_constant_count;
+
+
+    /// these are actually mutable without completely breaking!
+    VkPipelineViewportStateCreateInfo * viewport_state_info;
+    VkPipelineMultisampleStateCreateInfo * multisample_state_info;/// could possible be changed my altering game settings
 }
 cvm_vk_pipeline_state;
 
