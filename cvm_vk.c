@@ -39,6 +39,16 @@ static VkSurfaceFormatKHR cvm_vk_surface_format;
 
 static VkRect2D cvm_vk_screen_rectangle;///extent
 static VkViewport cvm_vk_screen_viewport;
+static VkPipelineViewportStateCreateInfo cvm_vk_screen_viewport_state=(VkPipelineViewportStateCreateInfo)
+{
+    .sType=VK_STRUCTURE_TYPE_PIPELINE_VIEWPORT_STATE_CREATE_INFO,
+    .pNext=NULL,
+    .flags=0,
+    .viewportCount=1,
+    .pViewports= &cvm_vk_screen_viewport,
+    .scissorCount=1,
+    .pScissors= &cvm_vk_screen_rectangle
+};
 
 ///may make more sense to put just above in struct (useful for "one time" initialisation functions, like vertex buffer)
 ///ALTERNATIVELY have functions to allocate these external objects? -- probably just use this option
@@ -467,6 +477,8 @@ void cvm_vk_initialise_swapchain(void)
     cvm_vk_screen_rectangle.offset.y=0;
     cvm_vk_screen_rectangle.extent=surface_capabilities.currentExtent;
 
+    ///need to check that the intended number of swapchain images is supported!
+
     cvm_vk_screen_viewport=(VkViewport)
     {
         .x=0.0,
@@ -624,6 +636,11 @@ VkFormat cvm_vk_get_screen_format(void)
 {
     return cvm_vk_surface_format.format;
 }
+
+//VkPipelineViewportStateCreateInfo * cvm_vk_get_screen_viewport_state(void)
+//{
+//    return &cvm_vk_screen_viewport_state;
+//}
 
 void cvm_vk_create_render_pass(VkRenderPassCreateInfo * render_pass_creation_info,VkRenderPass * render_pass)
 {
@@ -887,22 +904,17 @@ void cvm_vk_present(void)
 
 ///TEST FUNCTIONS FROM HERE, STRIP DOWN / USE AS BASIS FOR REAL VERSIONS
 
-typedef struct test_render_data
-{
-    vec3f pos;
-    vec3f c;
-}
-test_render_data;
 
-static VkPipeline test_pipeline;
+
+//static VkPipeline test_pipeline;
 static VkBuffer test_buffer;
 static VkDeviceMemory test_buffer_memory;
 static VkRenderPass test_render_pass;
 static VkFramebuffer * test_framebuffers;
 static uint32_t test_framebuffer_count;
 
-static VkShaderModule test_vert_module;
-static VkPipelineShaderStageCreateInfo test_vert_stage_info;
+//static VkShaderModule test_vert_module;
+//static VkPipelineShaderStageCreateInfo test_vert_stage_info;
 
 //static VkPipelineVertexInputStateCreateInfo test_vertex_input_info;
 //static VkPipelineInputAssemblyStateCreateInfo input_assembly_info;
@@ -912,9 +924,11 @@ static VkPipelineShaderStageCreateInfo test_vert_stage_info;
 
 
 
-///return VkPipelineShaderStageCreateInfo, but hold on to VkShaderModule (passed by ptr) for deletion at program cleanup
-VkShaderModule load_shader_data(const char * filename, VkShaderStageFlagBits stage)
+///return VkPipelineShaderStageCreateInfo, but hold on to VkShaderModule (passed by ptr) for deletion at program cleanup ( that module can be kept inside the creation info! )
+VkPipelineShaderStageCreateInfo cvm_vk_initialise_shader_stage_creation_info(const char * filename,VkShaderStageFlagBits stage)
 {
+    static char * entrypoint="main";
+
     FILE * f;
     size_t length;
     char * data_buffer;
@@ -953,217 +967,26 @@ VkShaderModule load_shader_data(const char * filename, VkShaderStageFlagBits sta
         exit(-1);
     }
 
-    return shader_module;
+    VkPipelineShaderStageCreateInfo stage_creation_info=(VkPipelineShaderStageCreateInfo)
+    {
+        .sType=VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO,
+        .pNext=NULL,
+        .flags=0,///not supported
+        .stage=stage,
+        .module=shader_module,///delete later directly from
+        .pName=entrypoint,///always use main as entrypoint, use a static string such that this address is still valid after function return
+        .pSpecializationInfo=NULL
+    };
+
+    return stage_creation_info;
 }
 
-
-
-
-static void create_pipeline(VkRenderPass render_pass,VkRect2D screen_rectangle,VkViewport screen_viewport,char * vert_file,char * geom_file,char * frag_file)
+void cvm_vk_terminate_shader_stage_creation_info(VkPipelineShaderStageCreateInfo * stage_creation_info)
 {
-    ///load test shaders
-
-    /// "shaders/test_vert.spv" "shaders/test_frag.spv"
-
-    VkShaderModule stage_modules[16];
-    VkPipelineShaderStageCreateInfo stage_creation_info[16];
-    VkPipelineLayout layout;
-    uint32_t i,stage_count=0;
-
-    if(vert_file)
-    {
-        stage_modules[stage_count]=load_shader_data(vert_file,VK_SHADER_STAGE_VERTEX_BIT);
-        stage_creation_info[stage_count]=(VkPipelineShaderStageCreateInfo)
-        {
-            .sType=VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO,
-            .pNext=NULL,
-            .flags=0,///not supported
-            .stage=VK_SHADER_STAGE_VERTEX_BIT,
-            .module=stage_modules[stage_count],
-            .pName="main",///always use main as entrypoint
-            .pSpecializationInfo=NULL
-        };
-        stage_count++;
-    }
-
-    if(geom_file)
-    {
-        fprintf(stderr,"GEOM SHADERS N.Y.I.\n");
-    }
-
-    if(frag_file)
-    {
-        stage_modules[stage_count]=load_shader_data(frag_file,VK_SHADER_STAGE_FRAGMENT_BIT);
-        stage_creation_info[stage_count]=(VkPipelineShaderStageCreateInfo)
-        {
-            .sType=VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO,
-            .pNext=NULL,
-            .flags=0,///not supported
-            .stage=VK_SHADER_STAGE_FRAGMENT_BIT,
-            .module=stage_modules[stage_count],
-            .pName="main",///always use main as entrypoint
-            .pSpecializationInfo=NULL
-        };
-        stage_count++;
-    }
-
-    VkVertexInputBindingDescription input_bindings[1]=
-    {
-        (VkVertexInputBindingDescription)
-        {
-            .binding=0,
-            .stride=sizeof(test_render_data),
-            .inputRate=VK_VERTEX_INPUT_RATE_VERTEX
-        }
-    };
-
-    VkVertexInputAttributeDescription input_attributes[2]=
-    {
-        (VkVertexInputAttributeDescription)
-        {
-            .location=0,
-            .binding=0,
-            .format=VK_FORMAT_R32G32B32_SFLOAT,
-            .offset=offsetof(test_render_data,pos)
-        },
-        (VkVertexInputAttributeDescription)
-        {
-            .location=1,
-            .binding=0,
-            .format=VK_FORMAT_R32G32B32_SFLOAT,
-            .offset=offsetof(test_render_data,c)
-        }
-    };
-
-    VkPipelineVertexInputStateCreateInfo vert_input_info=(VkPipelineVertexInputStateCreateInfo)
-    {
-        .sType=VK_STRUCTURE_TYPE_PIPELINE_VERTEX_INPUT_STATE_CREATE_INFO,
-        .pNext=NULL,
-        .flags=0,
-        .vertexBindingDescriptionCount=1,
-        .pVertexBindingDescriptions=input_bindings,
-        .vertexAttributeDescriptionCount=2,
-        .pVertexAttributeDescriptions=input_attributes
-    };
-
-    VkPipelineInputAssemblyStateCreateInfo input_assembly_info=(VkPipelineInputAssemblyStateCreateInfo)
-    {
-        .sType=VK_STRUCTURE_TYPE_PIPELINE_INPUT_ASSEMBLY_STATE_CREATE_INFO,
-        .pNext=NULL,
-        .flags=0,
-        .topology=VK_PRIMITIVE_TOPOLOGY_TRIANGLE_STRIP,///VK_PRIMITIVE_TOPOLOGY_TRIANGLE_LIST
-        .primitiveRestartEnable=VK_FALSE
-    };
-
-
-    VkPipelineViewportStateCreateInfo viewport_state_info=(VkPipelineViewportStateCreateInfo)
-    {
-        .sType=VK_STRUCTURE_TYPE_PIPELINE_VIEWPORT_STATE_CREATE_INFO,
-        .pNext=NULL,
-        .flags=0,
-        .viewportCount=1,
-        .pViewports= &screen_viewport,
-        .scissorCount=1,
-        .pScissors= &screen_rectangle
-    };
-
-
-    VkPipelineRasterizationStateCreateInfo rasterization_state_info=(VkPipelineRasterizationStateCreateInfo)
-    {
-        .sType=VK_STRUCTURE_TYPE_PIPELINE_RASTERIZATION_STATE_CREATE_INFO,
-        .pNext=NULL,
-        .flags=0,
-        .depthClampEnable=VK_FALSE,
-        .rasterizerDiscardEnable=VK_FALSE,
-        .polygonMode=VK_POLYGON_MODE_FILL,
-        .cullMode=VK_CULL_MODE_BACK_BIT,
-        .frontFace=VK_FRONT_FACE_COUNTER_CLOCKWISE,
-        .depthBiasEnable=VK_FALSE,
-        .depthBiasConstantFactor=0.0,
-        .depthBiasClamp=0.0,
-        .depthBiasSlopeFactor=0.0,
-        .lineWidth=1.0
-    };
-
-    VkPipelineMultisampleStateCreateInfo multisample_state_info=(VkPipelineMultisampleStateCreateInfo)
-    {
-        .sType=VK_STRUCTURE_TYPE_PIPELINE_MULTISAMPLE_STATE_CREATE_INFO,
-        .pNext=NULL,
-        .flags=0,
-        .rasterizationSamples=VK_SAMPLE_COUNT_1_BIT,
-        .sampleShadingEnable=VK_FALSE,
-        .minSampleShading=1.0,
-        .pSampleMask=NULL,
-        .alphaToCoverageEnable=VK_FALSE,
-        .alphaToOneEnable=VK_FALSE
-    };
-
-    VkPipelineColorBlendAttachmentState blend_attachment_state_info=(VkPipelineColorBlendAttachmentState)
-    {
-        .blendEnable=VK_FALSE,
-        .srcColorBlendFactor=VK_BLEND_FACTOR_ONE,//VK_BLEND_FACTOR_SRC_ALPHA,
-        .dstColorBlendFactor=VK_BLEND_FACTOR_ZERO,//VK_BLEND_FACTOR_ONE_MINUS_SRC_ALPHA
-        .colorBlendOp=VK_BLEND_OP_ADD,
-        .srcAlphaBlendFactor=VK_BLEND_FACTOR_ONE,//VK_BLEND_FACTOR_ZERO // both ZERO as alpha is ignored?
-        .dstAlphaBlendFactor=VK_BLEND_FACTOR_ZERO,//VK_BLEND_FACTOR_ONE
-        .alphaBlendOp=VK_BLEND_OP_ADD,
-        .colorWriteMask=VK_COLOR_COMPONENT_R_BIT|VK_COLOR_COMPONENT_G_BIT|VK_COLOR_COMPONENT_B_BIT|VK_COLOR_COMPONENT_A_BIT
-    };
-
-    VkPipelineColorBlendStateCreateInfo blend_state_info=(VkPipelineColorBlendStateCreateInfo)
-    {
-        .sType=VK_STRUCTURE_TYPE_PIPELINE_COLOR_BLEND_STATE_CREATE_INFO,
-        .pNext=NULL,
-        .flags=0,
-        .logicOpEnable=VK_FALSE,
-        .logicOp=VK_LOGIC_OP_COPY,
-        .attachmentCount=1,///must equal colorAttachmentCount in subpass
-        .pAttachments= &blend_attachment_state_info,
-        .blendConstants={0.0,0.0,0.0,0.0}
-    };
-
-    VkPipelineLayoutCreateInfo layout_creation_info=(VkPipelineLayoutCreateInfo)
-    {
-        .sType=VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO,
-        .pNext=NULL,
-        .flags=0,
-        .setLayoutCount=0,
-        .pSetLayouts=NULL,
-        .pushConstantRangeCount=0,
-        .pPushConstantRanges=NULL
-    };
-
-    CVM_VK_CHECK(vkCreatePipelineLayout(cvm_vk_device,&layout_creation_info,NULL,&layout));
-
-    VkGraphicsPipelineCreateInfo pipeline_creation_info=(VkGraphicsPipelineCreateInfo)
-    {
-        .sType=VK_STRUCTURE_TYPE_GRAPHICS_PIPELINE_CREATE_INFO,
-        .pNext=NULL,
-        .flags=0,
-        .stageCount=stage_count,
-        .pStages=stage_creation_info,
-        .pVertexInputState= &vert_input_info,
-        .pInputAssemblyState= &input_assembly_info,
-        .pTessellationState=NULL,
-        .pViewportState= &viewport_state_info,
-        .pRasterizationState= &rasterization_state_info,
-        .pMultisampleState= &multisample_state_info,
-        .pDepthStencilState=NULL,
-        .pColorBlendState= &blend_state_info,
-        .pDynamicState=NULL,
-        .layout=layout,
-        .renderPass=render_pass,
-        .subpass=0,
-        .basePipelineHandle=VK_NULL_HANDLE,
-        .basePipelineIndex=-1
-    };
-
-    CVM_VK_CHECK(vkCreateGraphicsPipelines(cvm_vk_device,VK_NULL_HANDLE,1,&pipeline_creation_info,NULL,&test_pipeline));
-
-    vkDestroyPipelineLayout(cvm_vk_device,layout,NULL);
-
-    for(i=0;i<stage_count;i++)vkDestroyShaderModule(cvm_vk_device,stage_modules[i],NULL);
+    vkDestroyShaderModule(cvm_vk_device,stage_creation_info->module,NULL);
 }
+
+
 
 static void create_vertex_buffer(void)
 {
@@ -1275,7 +1098,8 @@ static void initialise_test_swapchain_dependencies(VkDevice device,VkPhysicalDev
     VkFramebufferCreateInfo framebuffer_create_info;
     ///other per-presentation_instance images defined by rest of program should be used here
 
-    create_pipeline(test_render_pass,screen_rectangle,screen_viewport,"shaders/test_vert.spv",NULL,"shaders/test_frag.spv");
+    //create_pipeline(test_render_pass,screen_rectangle,screen_viewport,"shaders/test_vert.spv",NULL,"shaders/test_frag.spv");
+    create_test_pipeline(device);
 
     test_framebuffer_count=swapchain_image_count;
 
@@ -1318,7 +1142,7 @@ static void render_test(VkCommandBuffer command_buffer,uint32_t swapchain_image_
 
     vkCmdBeginRenderPass(command_buffer,&render_pass_begin_info,VK_SUBPASS_CONTENTS_INLINE);///================
 
-    vkCmdBindPipeline(command_buffer,VK_PIPELINE_BIND_POINT_GRAPHICS,test_pipeline);
+    vkCmdBindPipeline(command_buffer,VK_PIPELINE_BIND_POINT_GRAPHICS,get_test_pipeline());
 
     VkDeviceSize offset=0;
     vkCmdBindVertexBuffers(command_buffer,0,1,&test_buffer,&offset);
@@ -1331,7 +1155,8 @@ static void render_test(VkCommandBuffer command_buffer,uint32_t swapchain_image_
 static void terminate_test_swapchain_dependencies(VkDevice device)
 {
     uint32_t i;
-    vkDestroyPipeline(device,test_pipeline,NULL);
+    //vkDestroyPipeline(device,test_pipeline,NULL);
+    destroy_test_pipeline(device);
 
     for(i=0;i<test_framebuffer_count;i++)vkDestroyFramebuffer(device,test_framebuffers[i],NULL);
 
@@ -1427,6 +1252,8 @@ void initialise_test_render_data()
 
     create_vertex_buffer();
 
+    initialise_test_render_data_ext(cvm_vk_device,test_render_pass,&cvm_vk_screen_viewport_state);
+
     cvm_vk_add_external_module(test_module);
 }
 
@@ -1436,6 +1263,8 @@ void terminate_test_render_data()
 
     vkDestroyBuffer(cvm_vk_device,test_buffer,NULL);
     vkFreeMemory(cvm_vk_device,test_buffer_memory,NULL);
+
+    terminate_test_render_data_ext(cvm_vk_device);
 }
 
 

@@ -25,8 +25,19 @@ along with cvm_shared.  If not, see <https://www.gnu.org/licenses/>.
 #ifndef CVM_TEST_RENDER_H
 #define CVM_TEST_RENDER_H
 
-//void initialise_test_render_data(void);
-//void terminate_test_render_data(void);
+typedef struct test_render_data
+{
+    vec3f pos;
+    vec3f c;
+}
+test_render_data;
+
+void initialise_test_render_data_ext(VkDevice device,VkRenderPass render_pass,VkPipelineViewportStateCreateInfo * viewport_state_info);//,VkPipelineMultisampleStateCreateInfo * multisample_state_info
+void terminate_test_render_data_ext(VkDevice device);
+
+void create_test_pipeline(VkDevice device);
+void destroy_test_pipeline(VkDevice device);
+VkPipeline get_test_pipeline(void);
 
 #endif
 

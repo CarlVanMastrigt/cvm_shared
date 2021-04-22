@@ -320,7 +320,7 @@ static cvm_vk_external_module overlay_module=
 (cvm_vk_external_module)
 {
     .initialise =   initialise_overlay_swapchain_dependencies,
-    .render     =   render_overlay,
+    .render     =   render_overlay_,
     .terminate  =   terminate_overlay_swapchain_dependencies
 };
 
