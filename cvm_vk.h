@@ -58,10 +58,21 @@ fragmentStoresAndAtomics
 vertexPipelineStoresAndAtomics
 */
 
+//typedef enum
+//{
+//    CVM_VK_CHANGED_SCREEN_SIZE  = 0x01,
+//    CVM_VK_CHANGED_MSAA         = 0x02,
+//    CVM_VK_CHANGED_ALL          = 0xFF
+//}
+//cvm_vk_change_flags;
+
+///won't be supporting submodules having msaa output
+
 typedef struct cvm_vk_external_module
 {
     /// initialise and terminate are per-swapchain instantiation
-    void    (*initialise)   (VkDevice,VkPhysicalDevice,VkRect2D,VkViewport,uint32_t,VkImageView*);
+    void    (*initialise)   (VkDevice,VkPhysicalDevice,VkRect2D,uint32_t,VkImageView*);
+    /// per module update, each module internally keeps links to track data that requires rebuilding of resources (then this func executes those rebuilds)
     void    (*render    )   (VkCommandBuffer,uint32_t,VkRect2D);///primary command buffer into which to render,  (framebuffer/swapchain_image) index to use for rendering, render_area
     void    (*terminate )   (VkDevice);
 }
@@ -83,89 +94,25 @@ void cvm_vk_wait(void);
 
 void cvm_vk_create_render_pass(VkRenderPassCreateInfo * render_pass_creation_info,VkRenderPass * render_pass);///?
 
-VkPipelineShaderStageCreateInfo cvm_vk_initialise_shader_stage_creation_info(const char * filename,VkShaderStageFlagBits stage);
-void cvm_vk_terminate_shader_stage_creation_info(VkPipelineShaderStageCreateInfo * stage_creation_info);
-
 VkFormat cvm_vk_get_screen_format(void);
-///VkPipelineViewportStateCreateInfo * cvm_vk_get_screen_viewport_state(void);
 
+void cvm_vk_create_framebuffer(VkFramebuffer * framebuffer,VkFramebufferCreateInfo * info);
+void cvm_vk_destroy_framebuffer(VkFramebuffer framebuffer);
 
-/// break this down into portions that can be initialised and shared around seperately
-/// have a way to copy in or set manually, also (where appropriate) automatic/semi-automatic initialization
-/// checks that each part are initialised
+void cvm_vk_create_pipeline_layout(VkPipelineLayoutCreateInfo * info,VkPipelineLayout * pipeline_layout);
+void cvm_vk_destroy_pipeline_layout(VkPipelineLayout pipeline_layout);
 
-/// this is just the pipeline state duplicated! instead initialise a static VkGraphicsPipelineCreateInfo where needed, with shared pointers of creation data where appropriate
-/// then just build as necessary (viewport & similar data can actually be set AFTER having passed in pointer to the structure)
-/// local/static init function where VkGraphicsPipelineCreateInfo is initially set should also create shader modules and manage them
-/// can read directly from the VkGraphicsPipelineCreateInfo to figure out which VkShaderModule's need destroying at program termination
-/// all VkGraphicsPipelineCreateInfo should be set (or at least have appropriate pointer provided) at setup of their containing module
-/// VkPipelineLayout should be managed (created and destroyed) as appropriate (either created and destroyed locally or left to parent layer, i.e. the place that provides it)
-typedef struct cvm_vk_pipeline_state
-{
-    /// stages
-    ///these can be read from/known by VkGraphicsPipelineCreateInfo, no need to store copies!
-    VkShaderModule * stage_modules;
-    VkPipelineShaderStageCreateInfo * stage_module_infos;
-    uint32_t stage_count;
+void cvm_vk_create_graphics_pipeline(VkGraphicsPipelineCreateInfo * info,VkPipeline * pipeline);
+void cvm_vk_destroy_pipeline(VkPipeline pipeline);
 
-
-    ///beyond modules above, a lot of the following content can/should be shared between different pipelines and only known here by reference, probably never even being changed
-    /// i.e. above is locally owned, below is externally owned.
-    /// externally owned things shouldnt have their contents known here!
-    /// probably best to treat externally owned items as being mutable and potentially requiring pipeline re-init (even though this is invalid for a lot of items that match parts of shader)
-
-    /// vertex inputs
-    VkPipelineVertexInputStateCreateInfo * vert_input_info;
-
-    //VkVertexInputBindingDescription * input_bindings;
-    //uint32_t input_binding_count;
-
-    //VkVertexInputAttributeDescription * input_attributes;
-    //uint32_t input_attribute_count;
-
-
-    /// blending (attachment related)
-    /// make this part of, or related to subpass
-    VkPipelineColorBlendStateCreateInfo * blend_info;
-    //VkPipelineColorBlendAttachmentState * blend_attachment_infos;
-    //uint32_t blend_attachment_count;///basically should match colorAttachmentCount in subpass of pipeline
-
-
-    /// these are probably mutable, but i cant see that ever realistically being needed
-    VkPipelineInputAssemblyStateCreateInfo * input_assembly_info;///some of these can be shared
-    VkPipelineRasterizationStateCreateInfo * rasterization_info;
-
-
-    /// general input data, descriptor sets and push constants (like uniforms)
-    /// can be shared between similar pipelines that have/use same bindings, should be provided externally and only referenced here
-    /// layout itself wont change, and is used to specify how data is actually loaded into descriptor sets which themselves provide data to their respective binding points in the shader
-            /// ^ this happens more or less completely seperately from the pipeline itself
-            /// ^ can bind contents of layout with vkCmdBindDescriptorSets prior to submitting any work or even binding pipelines (i prefer this approach, rather than binding after pipeline)
-    VkPipelineLayout * layout;
-
-    //VkDescriptorSetLayout * descrptor_set_layouts;///take these from external setup, use in conjunction with recyclable descriptor sets from pools
-    //uint32_t descrptor_set_count;
-
-    //VkPushConstantRange * push_constants;
-    //uint32_t push_constant_count;
-
-
-    /// these are actually mutable without completely breaking!
-    VkPipelineViewportStateCreateInfo * viewport_state_info;
-    VkPipelineMultisampleStateCreateInfo * multisample_state_info;/// could possible be changed my altering game settings
-}
-cvm_vk_pipeline_state;
-
-//cvm_vk_pipeline_state cvm_vk_create_pipeline_state();
-//
-//
-//void cvm_vk_alter_pipeline_states_target(VkRenderPass render_pass,VkRect2D screen_rectangle,VkViewport screen_viewport);
-//cvm_vk_pipeline_state cvm_vk_destroy_pipeline_state();
+void cvm_vk_create_shader_stage_info(VkPipelineShaderStageCreateInfo * stage_info,const char * filename,VkShaderStageFlagBits stage);
+void cvm_vk_destroy_shader_stage_info(VkPipelineShaderStageCreateInfo * stage_info);
 
 
 
 ///test stuff
 void initialise_test_render_data(void);
+void update_test_render_data(bool screen_changed);
 void terminate_test_render_data(void);
 
 

@@ -32,11 +32,14 @@ typedef struct test_render_data
 }
 test_render_data;
 
-void initialise_test_render_data_ext(VkDevice device,VkRenderPass render_pass,VkPipelineViewportStateCreateInfo * viewport_state_info);//,VkPipelineMultisampleStateCreateInfo * multisample_state_info
-void terminate_test_render_data_ext(VkDevice device);
+void initialise_test_render_data_ext(void);
+void terminate_test_render_data_ext(void);
 
-void create_test_pipeline(VkDevice device);
-void destroy_test_pipeline(VkDevice device);
+void create_test_render_pass(VkFormat swapchain_format);
+//
+
+void initialise_test_swapchain_dependencies_ext(VkRect2D screen_rectangle,VkRenderPass render_pas,uint32_t swapchain_image_count,VkImageView * swapchain_image_views);
+void terminate_test_swapchain_dependencies_ext(void);
 VkPipeline get_test_pipeline(void);
 
 #endif
