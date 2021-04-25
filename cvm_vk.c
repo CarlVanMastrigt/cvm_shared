@@ -109,8 +109,14 @@ static uint32_t cvm_vk_external_module_count=0;
 static void cvm_vk_initialise_instance(SDL_Window * window)
 {
     uint32_t extension_count;
+    uint32_t api_version;
     const char ** extension_names=NULL;
     const char * layer_names[]={"VK_LAYER_KHRONOS_validation"};///VK_LAYER_LUNARG_standard_validation
+
+    CVM_VK_CHECK(vkEnumerateInstanceVersion(&api_version));
+
+    printf("Vulkan API version: %u.%u.%u - %u\n",(api_version>>22)&0x7F,(api_version>>12)&0x3FF,api_version&0xFFF,api_version>>29);
+
 
     if(!SDL_Vulkan_GetInstanceExtensions(window,&extension_count,NULL))
     {
@@ -133,7 +139,7 @@ static void cvm_vk_initialise_instance(SDL_Window * window)
         .applicationVersion=0,
         .pEngineName="cvm_shared",
         .engineVersion=0,
-        .apiVersion=VK_MAKE_VERSION(1,0,VK_HEADER_VERSION)
+        .apiVersion=api_version//VK_MAKE_VERSION(1,1,VK_HEADER_VERSION)
     };
 
     VkInstanceCreateInfo instance_creation_info=(VkInstanceCreateInfo)
@@ -279,7 +285,7 @@ static void cvm_vk_initialise_physical_device(void)
 static void cvm_vk_initialise_logical_device(void)
 {
     const char * device_extensions[]={"VK_KHR_swapchain"};
-    const char * layer_names[]={"VK_LAYER_LUNARG_standard_validation"};///VK_LAYER_LUNARG_standard_validation
+    const char * layer_names[]={"VK_LAYER_KHRONOS_validation"};///VK_LAYER_LUNARG_standard_validation
     float queue_priority=1.0;
 
     ///try copying device_features from gfx until appropriate list of required features found
@@ -630,15 +636,7 @@ void cvm_vk_wait(void)
     vkDeviceWaitIdle(cvm_vk_device);///move to controller func, like recreate?
 }
 
-VkFormat cvm_vk_get_screen_format(void)
-{
-    return cvm_vk_surface_format.format;
-}
 
-void cvm_vk_create_render_pass(VkRenderPassCreateInfo * render_pass_creation_info,VkRenderPass * render_pass)
-{
-    CVM_VK_CHECK(vkCreateRenderPass(cvm_vk_device,render_pass_creation_info,NULL,render_pass));
-}
 
 void cvm_vk_present(void)
 {
@@ -871,6 +869,26 @@ void cvm_vk_present(void)
 
 
 
+
+
+
+
+
+VkFormat cvm_vk_get_screen_format(void)
+{
+    return cvm_vk_surface_format.format;
+}
+
+void cvm_vk_create_render_pass(VkRenderPass * render_pass,VkRenderPassCreateInfo * info)
+{
+    CVM_VK_CHECK(vkCreateRenderPass(cvm_vk_device,info,NULL,render_pass));
+}
+
+void cvm_vk_destroy_render_pass(VkRenderPass render_pass)
+{
+    vkDestroyRenderPass(cvm_vk_device,render_pass,NULL);
+}
+
 void cvm_vk_create_framebuffer(VkFramebuffer * framebuffer,VkFramebufferCreateInfo * info)
 {
     CVM_VK_CHECK(vkCreateFramebuffer(cvm_vk_device,info,NULL,framebuffer));
@@ -882,7 +900,7 @@ void cvm_vk_destroy_framebuffer(VkFramebuffer framebuffer)
 }
 
 
-void cvm_vk_create_pipeline_layout(VkPipelineLayoutCreateInfo * info,VkPipelineLayout * pipeline_layout)
+void cvm_vk_create_pipeline_layout(VkPipelineLayout * pipeline_layout,VkPipelineLayoutCreateInfo * info)
 {
     CVM_VK_CHECK(vkCreatePipelineLayout(cvm_vk_device,info,NULL,pipeline_layout));
 }
@@ -893,7 +911,7 @@ void cvm_vk_destroy_pipeline_layout(VkPipelineLayout pipeline_layout)
 }
 
 
-void cvm_vk_create_graphics_pipeline(VkGraphicsPipelineCreateInfo * info,VkPipeline * pipeline)
+void cvm_vk_create_graphics_pipeline(VkPipeline * pipeline,VkGraphicsPipelineCreateInfo * info)
 {
     #warning use pipeline cache!?
     CVM_VK_CHECK(vkCreateGraphicsPipelines(cvm_vk_device,VK_NULL_HANDLE,1,info,NULL,pipeline));
@@ -989,9 +1007,6 @@ void cvm_vk_destroy_shader_stage_info(VkPipelineShaderStageCreateInfo * stage_in
 
 static VkBuffer test_buffer;
 static VkDeviceMemory test_buffer_memory;
-static VkRenderPass test_render_pass;
-static VkFramebuffer * test_framebuffers;
-static uint32_t test_framebuffer_count;
 
 
 
@@ -1104,75 +1119,19 @@ static void create_vertex_buffer(void)
 
 
 
-static void initialise_test_swapchain_dependencies(VkDevice device,VkPhysicalDevice physical_device,VkRect2D screen_rectangle,VkViewport screen_viewport,uint32_t swapchain_image_count,VkImageView * swapchain_image_views)
+static void initialise_test_swapchain_dependencies(VkDevice device,VkPhysicalDevice physical_device,VkRect2D screen_rectangle,uint32_t swapchain_image_count,VkImageView * swapchain_image_views)
 {
-    uint32_t i;
-    VkFramebufferCreateInfo framebuffer_create_info;
-    ///other per-presentation_instance images defined by rest of program should be used here
-
-    //create_pipeline(test_render_pass,screen_rectangle,screen_viewport,"shaders/test_vert.spv",NULL,"shaders/test_frag.spv");
-    initialise_test_swapchain_dependencies_ext(cvm_vk_screen_rectangle,test_render_pass,swapchain_image_count,swapchain_image_views);
-
-    test_framebuffer_count=swapchain_image_count;
-
-    test_framebuffers=malloc(swapchain_image_count*sizeof(VkFramebuffer));
-
-    for(i=0;i<test_framebuffer_count;i++)
-    {
-        framebuffer_create_info=(VkFramebufferCreateInfo)
-        {
-            .sType=VK_STRUCTURE_TYPE_FRAMEBUFFER_CREATE_INFO,
-            .pNext=NULL,
-            .flags=0,
-            .renderPass=test_render_pass,
-            .attachmentCount=1,
-            .pAttachments= swapchain_image_views+i,///is null handle valid here?
-            .width=screen_rectangle.extent.width,
-            .height=screen_rectangle.extent.height,
-            .layers=1
-        };
-
-        CVM_VK_CHECK(vkCreateFramebuffer(device,&framebuffer_create_info,NULL,test_framebuffers+i));
-    }
+    initialise_test_swapchain_dependencies_ext(cvm_vk_screen_rectangle,swapchain_image_count,swapchain_image_views);
 }
 
 static void render_test(VkCommandBuffer command_buffer,uint32_t swapchain_image_index,VkRect2D screen_rectangle)
 {
-    VkClearValue clear_value;///other clear colours should probably be provided by other chunks of application
-    clear_value.color=(VkClearColorValue){{0.95f,0.5f,0.75f,1.0f}};
-
-    VkRenderPassBeginInfo render_pass_begin_info=(VkRenderPassBeginInfo)
-    {
-        .sType=VK_STRUCTURE_TYPE_RENDER_PASS_BEGIN_INFO,
-        .pNext=NULL,
-        .renderPass=test_render_pass,
-        .framebuffer=test_framebuffers[swapchain_image_index],
-        .renderArea=screen_rectangle,
-        .clearValueCount=1,
-        .pClearValues= &clear_value
-    };
-
-    vkCmdBeginRenderPass(command_buffer,&render_pass_begin_info,VK_SUBPASS_CONTENTS_INLINE);///================
-
-    vkCmdBindPipeline(command_buffer,VK_PIPELINE_BIND_POINT_GRAPHICS,get_test_pipeline());
-
-    VkDeviceSize offset=0;
-    vkCmdBindVertexBuffers(command_buffer,0,1,&test_buffer,&offset);
-
-    vkCmdDraw(command_buffer,4,1,0,0);
-
-    vkCmdEndRenderPass(command_buffer);///================
+    test_render_ext(command_buffer,swapchain_image_index,screen_rectangle,&test_buffer);
 }
 
 static void terminate_test_swapchain_dependencies(VkDevice device)
 {
-    uint32_t i;
-    //vkDestroyPipeline(device,test_pipeline,NULL);
     terminate_test_swapchain_dependencies_ext();
-
-    for(i=0;i<test_framebuffer_count;i++)vkDestroyFramebuffer(device,test_framebuffers[i],NULL);
-
-    free(test_framebuffers);
 }
 
 
@@ -1186,80 +1145,8 @@ static cvm_vk_external_module test_module=
     .terminate  =   terminate_test_swapchain_dependencies
 };
 
-static VkAttachmentDescription test_attachments[1]=
-{
-    {
-        .flags=0,
-        .format=VK_FORMAT_UNDEFINED,///needs to be set elsewhere, undefined by default
-        .samples=VK_SAMPLE_COUNT_1_BIT,///can be altered when MSAA settings change, 1 by default
-        .loadOp=VK_ATTACHMENT_LOAD_OP_CLEAR,
-        .storeOp=VK_ATTACHMENT_STORE_OP_STORE,
-        .stencilLoadOp=VK_ATTACHMENT_LOAD_OP_DONT_CARE,
-        .stencilStoreOp=VK_ATTACHMENT_STORE_OP_DONT_CARE,
-        .initialLayout=VK_IMAGE_LAYOUT_UNDEFINED,
-        .finalLayout=VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL
-    }
-};
-
-static VkRenderPassCreateInfo test_render_pass_creation_info=(VkRenderPassCreateInfo)
-{
-    .sType=VK_STRUCTURE_TYPE_RENDER_PASS_CREATE_INFO,
-    .pNext=NULL,
-    .flags=0,
-    .attachmentCount=1,
-    .pAttachments=test_attachments,///not assigned inside here because if so it would become immutable/const
-    .subpassCount=1,
-    .pSubpasses=(VkSubpassDescription[1])
-    {
-        {
-            .flags=0,
-            .pipelineBindPoint=VK_PIPELINE_BIND_POINT_GRAPHICS,
-            .inputAttachmentCount=0,
-            .pInputAttachments=NULL,
-            .colorAttachmentCount=1,
-            .pColorAttachments=(VkAttachmentReference[1])
-            {
-                {
-                    .attachment=0,
-                    .layout=VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL,
-                }
-            },
-            .pResolveAttachments=NULL,
-            .pDepthStencilAttachment=NULL,
-            .preserveAttachmentCount=0,
-            .pPreserveAttachments=NULL
-        }
-    },
-    .dependencyCount=2,
-    .pDependencies=(VkSubpassDependency[2])
-    {
-        {
-            .srcSubpass=VK_SUBPASS_EXTERNAL,
-            .dstSubpass=0,
-            .srcStageMask=VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT,///must be the same as wait stage in submit (the one associated w/ the relevant semaphore)
-            .dstStageMask=VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT,
-            .srcAccessMask=0,
-            .dstAccessMask=VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT,
-            .dependencyFlags=VK_DEPENDENCY_BY_REGION_BIT
-        },
-        {
-            .srcSubpass=0,
-            .dstSubpass=VK_SUBPASS_EXTERNAL,
-            .srcStageMask=VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT,
-            .dstStageMask=VK_PIPELINE_STAGE_ALL_COMMANDS_BIT,///dont know which stage in present uses image data so use all
-            .srcAccessMask=VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT,
-            .dstAccessMask=VK_ACCESS_MEMORY_READ_BIT,
-            .dependencyFlags=VK_DEPENDENCY_BY_REGION_BIT
-        }
-    }
-};
-
 void initialise_test_render_data()
 {
-    test_attachments[0].format=cvm_vk_surface_format.format;
-
-    CVM_VK_CHECK(vkCreateRenderPass(cvm_vk_device,&test_render_pass_creation_info,NULL,&test_render_pass));
-
     create_vertex_buffer();
 
     initialise_test_render_data_ext();
@@ -1267,18 +1154,8 @@ void initialise_test_render_data()
     cvm_vk_add_external_module(test_module);
 }
 
-void update_test_render_data(bool screen_changed)
-{
-    if(screen_changed)
-    {
-        //
-    }
-}
-
 void terminate_test_render_data()
 {
-    vkDestroyRenderPass(cvm_vk_device,test_render_pass,NULL);
-
     vkDestroyBuffer(cvm_vk_device,test_buffer,NULL);
     vkFreeMemory(cvm_vk_device,test_buffer_memory,NULL);
 

@@ -35,12 +35,19 @@ test_render_data;
 void initialise_test_render_data_ext(void);
 void terminate_test_render_data_ext(void);
 
-void create_test_render_pass(VkFormat swapchain_format);
-//
+//void create_test_render_pass(VkFormat swapchain_format);
 
-void initialise_test_swapchain_dependencies_ext(VkRect2D screen_rectangle,VkRenderPass render_pas,uint32_t swapchain_image_count,VkImageView * swapchain_image_views);
+/// applications responsibility to handle recreation of submodule resources (unless i can come up with a better approach)
+void update_test_render_resources(bool screen_resized);
+
+void initialise_test_swapchain_dependencies_ext(VkRect2D screen_rectangle,uint32_t swapchain_image_count,VkImageView * swapchain_image_views);
 void terminate_test_swapchain_dependencies_ext(void);
+
+void test_render_ext(VkCommandBuffer command_buffer,uint32_t swapchain_image_index,VkRect2D screen_rectangle, const VkBuffer * vertex_buffer);///vertex buffer should be removed
+
+///remove these (should only be accessible internally)
 VkPipeline get_test_pipeline(void);
+VkFramebuffer get_test_framebuffer(uint32_t swapchain_image_index);
 
 #endif
 

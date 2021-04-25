@@ -92,17 +92,21 @@ void cvm_vk_present(void);
 
 void cvm_vk_wait(void);
 
-void cvm_vk_create_render_pass(VkRenderPassCreateInfo * render_pass_creation_info,VkRenderPass * render_pass);///?
 
-VkFormat cvm_vk_get_screen_format(void);
+
+VkFormat cvm_vk_get_screen_format(void);///can remove?
+
+
+void cvm_vk_create_render_pass(VkRenderPass * render_pass,VkRenderPassCreateInfo * info);
+void cvm_vk_destroy_render_pass(VkRenderPass render_pass);
 
 void cvm_vk_create_framebuffer(VkFramebuffer * framebuffer,VkFramebufferCreateInfo * info);
 void cvm_vk_destroy_framebuffer(VkFramebuffer framebuffer);
 
-void cvm_vk_create_pipeline_layout(VkPipelineLayoutCreateInfo * info,VkPipelineLayout * pipeline_layout);
+void cvm_vk_create_pipeline_layout(VkPipelineLayout * pipeline_layout,VkPipelineLayoutCreateInfo * info);
 void cvm_vk_destroy_pipeline_layout(VkPipelineLayout pipeline_layout);
 
-void cvm_vk_create_graphics_pipeline(VkGraphicsPipelineCreateInfo * info,VkPipeline * pipeline);
+void cvm_vk_create_graphics_pipeline(VkPipeline * pipeline,VkGraphicsPipelineCreateInfo * info);
 void cvm_vk_destroy_pipeline(VkPipeline pipeline);
 
 void cvm_vk_create_shader_stage_info(VkPipelineShaderStageCreateInfo * stage_info,const char * filename,VkShaderStageFlagBits stage);
@@ -112,7 +116,6 @@ void cvm_vk_destroy_shader_stage_info(VkPipelineShaderStageCreateInfo * stage_in
 
 ///test stuff
 void initialise_test_render_data(void);
-void update_test_render_data(bool screen_changed);
 void terminate_test_render_data(void);
 
 
