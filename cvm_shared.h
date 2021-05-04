@@ -28,6 +28,7 @@ along with cvm_shared.  If not, see <https://www.gnu.org/licenses/>.
 #include <string.h>
 #include <stdlib.h>
 #include <math.h>
+#include <threads.h>
 
 
 #include <SDL2/SDL.h>

@@ -63,26 +63,54 @@ static VkRect2D cvm_vk_screen_rectangle;///extent
 ///     so long as these command pools are only used by the thread that created them,
 ///     and each module allocates its own command pool per thread (it absolutely should) then everything will be fine
 
+///these can be the same
+static uint32_t cvm_vk_transfer_queue_family;
 static uint32_t cvm_vk_graphics_queue_family;
-static VkCommandPool cvm_vk_graphics_command_pool;
-static VkQueue cvm_vk_graphics_queue;
-
 static uint32_t cvm_vk_present_queue_family;
-static VkCommandPool cvm_vk_present_command_pool;
+///only support one of each of above
+static VkQueue cvm_vk_transfer_queue;
+static VkQueue cvm_vk_graphics_queue;
 static VkQueue cvm_vk_present_queue;
+
+///these are the command pools applicable to the main thread, should be provided upon request for a command pool by any submodule that runs in the main thread
+static VkCommandPool cvm_vk_transfer_command_pool;
+static VkCommandPool cvm_vk_graphics_command_pool;
+static VkCommandPool cvm_vk_present_command_pool;///only ever used within this file
+
 
 /// (for now) transfer queue only used at startup, before first graphics render op, so only need 1 and can call vkDeviceWaitIdle after to avoid need to sync
 /// presently all runtime uploads are stream so better to make them all be host visible anyway (ergo no need for transfer in render)
-static uint32_t cvm_vk_transfer_queue_family;
-static VkCommandPool cvm_vk_transfer_command_pool;
-static VkQueue cvm_vk_transfer_queue;
-VkCommandBuffer cvm_vk_transfer_command_buffer;
+
 
 ///submit transfer ops?
 
+/**
+shared command pools (one per queue) is fucking terrible, wont work across threads
+command pools CAN however be used for command buffers that are submitted to different queues (no they CANNOT!)
+    only this file handles the present queue
+    need a way for other files to know whether they need a seperate command pool for transfer and graphics ops
+        whatever is used MUST support multiple worker thread (able to create multiple command pools) and should be able to know if its operating in the main thread (only 1 command buffer needed)
+
+command pools are only needed for the threads in which command buffers are created and recorded to! this means we only need 1 command pool per worker thread per queue family!
+
+ask for gfx and transfer pools together if thats whats needed, with bool is_main_thread which returns the main thread's queues!
+this makes memory management quite tricky, but w/e cross that bridge when we get to it.
+
+
+note secondary command buffers must be in executable state in order to execute them in a primary command buffer, this reduces their usefulness substantially...
+
+need one command pool per thread per dispatch, things that only exist in the main thread won't need this
+
+tie command buffers to their state's age (use update count to determine if a command is out of date, this alleviates need to wait for commands to finish before recreating pipelines and other resources,
+    ^ just wait on fence then increment the update counter, (need to track how many are in flight!) track submit count and wait on fences of completion count to match (can simply be uint that rolls over!
+    ^ this paradigm agoids needing to wait on device
+*/
+
+///this paradigm sucks and needs review
 static struct
 {
     VkFence completion_fence;
+    bool in_flight;
 
     VkSemaphore acquire_semaphore;
     VkSemaphore graphics_semaphore;
@@ -92,6 +120,10 @@ static struct
     VkCommandBuffer present_command_buffer;///allocated from cvm_vk_present_command_pool above
 }
 cvm_vk_presentation_instances[CVM_VK_PRESENTATION_INSTANCE_COUNT];
+
+/// CVM_VK_PRESENTATION_INSTANCE_COUNT should really match swapchain image count, alloc it to be the same
+
+
 /// need to know the max frame count such that resources can only be used after they are transferred back, should this be matched to the number of swapchain images?
 ///probably best to match this to swapchain count
 
@@ -432,13 +464,14 @@ static void cvm_vk_initialise_presentation_intances(void)
         CVM_VK_CHECK(vkCreateSemaphore(cvm_vk_device,&semaphore_create_info,NULL,&cvm_vk_presentation_instances[i].present_semaphore));
 
 
-        if(i) fence_create_info=(VkFenceCreateInfo)///all but first should already be signalled
-        {
-            .sType=VK_STRUCTURE_TYPE_FENCE_CREATE_INFO,
-            .pNext=NULL,
-            .flags=VK_FENCE_CREATE_SIGNALED_BIT
-        };
-        else fence_create_info=(VkFenceCreateInfo)
+//        if(i) fence_create_info=(VkFenceCreateInfo)///all but first should already be signalled
+//        {
+//            .sType=VK_STRUCTURE_TYPE_FENCE_CREATE_INFO,
+//            .pNext=NULL,
+//            .flags=VK_FENCE_CREATE_SIGNALED_BIT
+//        };
+//        else
+        fence_create_info=(VkFenceCreateInfo)
         {
             .sType=VK_STRUCTURE_TYPE_FENCE_CREATE_INFO,
             .pNext=NULL,
@@ -446,6 +479,7 @@ static void cvm_vk_initialise_presentation_intances(void)
         };
 
         CVM_VK_CHECK(vkCreateFence(cvm_vk_device,&fence_create_info,NULL,&cvm_vk_presentation_instances[i].completion_fence));
+        cvm_vk_presentation_instances[i].in_flight=false;
     }
 }
 
@@ -489,6 +523,9 @@ void cvm_vk_initialise_swapchain(void)
         },
         .extent=surface_capabilities.currentExtent
     };
+
+    //printf("Minimum swapchain image count: %d\n",surface_capabilities.minImageCount);
+    //printf("Maximum swapchain image count: %d\n",surface_capabilities.maxImageCount);
 
     /// the contents of this dictate explicit transfer of the swapchain images between the graphics and present queues!
     VkSwapchainCreateInfoKHR swapchain_create_info=(VkSwapchainCreateInfoKHR)
@@ -562,7 +599,7 @@ void cvm_vk_reinitialise_swapchain(void)///actually does substantially improve p
     uint32_t i;
     VkSwapchainKHR old_swapchain;
 
-    vkDeviceWaitIdle(cvm_vk_device);
+    cvm_vk_wait();
 
     /// is terminating external modules here actually necessary? could we do that after in an update step and just set swapchain as having changed here for those modules to reference?
 
@@ -633,7 +670,14 @@ void cvm_vk_terminate(void)
 
 void cvm_vk_wait(void)
 {
-    vkDeviceWaitIdle(cvm_vk_device);///move to controller func, like recreate?
+    uint32_t i;
+    for(i=0;i<CVM_VK_PRESENTATION_INSTANCE_COUNT;i++)if(cvm_vk_presentation_instances[i].in_flight)
+    {
+        CVM_VK_CHECK(vkWaitForFences(cvm_vk_device,1,&cvm_vk_presentation_instances[i].completion_fence,VK_TRUE,1000000000));
+        CVM_VK_CHECK(vkResetFences(cvm_vk_device,1,&cvm_vk_presentation_instances[i].completion_fence));
+        cvm_vk_presentation_instances[i].in_flight=false;///has finished
+    }
+    //vkDeviceWaitIdle(cvm_vk_device);///move to controller func, like recreate?
 }
 
 
@@ -644,11 +688,10 @@ void cvm_vk_present(void)
     VkResult r;
 
     ///these types could probably be re-used, but as they're passed as pointers its better to be sure?
-    VkImageMemoryBarrier graphics_barrier,present_barrier;
+    VkImageMemoryBarrier start_graphics_barrier,end_graphics_barrier,present_barrier;
     VkSubmitInfo graphics_submit_info,present_submit_info;
     VkPipelineStageFlags graphics_wait_dst_stage_mask,present_wait_dst_stage_mask;
     VkPresentInfoKHR present_info;
-
 
 
 
@@ -662,7 +705,7 @@ void cvm_vk_present(void)
 
 
 
-    ///separate command buffer for each render element (game/overlay) ?
+    ///separate command buffer for each render element (game/overlay) ? (i like this, no function call per submodule, just a command buffer)
 
     ///fence to prevent re-submission of same command buffer ( command buffer wasn't created with VK_COMMAND_BUFFER_USAGE_SIMULTANEOUS_USE_BIT )
 
@@ -704,15 +747,43 @@ void cvm_vk_present(void)
     ///this also resets the command buffer
     CVM_VK_CHECK(vkBeginCommandBuffer(cvm_vk_presentation_instances[cvm_vk_presentation_instance_index].graphics_command_buffer,&command_buffer_begin_info));
 
+
+
+    start_graphics_barrier=(VkImageMemoryBarrier) /// does layout transition  &  if queue families are different relinquishes swapchain image, is this valid when queue families are the same?
+    {
+        .sType=VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER,
+        .pNext=NULL,
+        .srcAccessMask=0,/// 0 because its effectively a queue transfer or b/c
+        .dstAccessMask=VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT,
+        .oldLayout=VK_IMAGE_LAYOUT_UNDEFINED,
+        .newLayout=VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL,
+        .srcQueueFamilyIndex=VK_QUEUE_FAMILY_IGNORED,///VK_QUEUE_FAMILY_IGNORED when not describing ownership transfer?
+        .dstQueueFamilyIndex=VK_QUEUE_FAMILY_IGNORED,
+        .image=cvm_vk_swapchain_images[image_index],
+        .subresourceRange=(VkImageSubresourceRange)
+        {
+            .aspectMask=VK_IMAGE_ASPECT_COLOR_BIT,
+            .baseMipLevel=0,
+            .levelCount=1,
+            .baseArrayLayer=0,
+            .layerCount=1
+        }
+    };
+
+    vkCmdPipelineBarrier(cvm_vk_presentation_instances[cvm_vk_presentation_instance_index].graphics_command_buffer,
+                         VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT,VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT,0,0,NULL,0,NULL,1,&start_graphics_barrier);
+
+
+
     for(i=0;i<cvm_vk_external_module_count;i++)cvm_vk_external_modules[i].render(cvm_vk_presentation_instances[cvm_vk_presentation_instance_index].graphics_command_buffer,image_index,cvm_vk_screen_rectangle);
 
     ///only do following inside branch where the queue families are not the same? though this does handle layout transitions anyway right?
-    graphics_barrier=(VkImageMemoryBarrier) /// does layout transition  &  if queue families are different relinquishes swapchain image, is this valid when queue families are the same?
+    end_graphics_barrier=(VkImageMemoryBarrier) /// does layout transition  &  if queue families are different relinquishes swapchain image, is this valid when queue families are the same?
     {
         .sType=VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER,
         .pNext=NULL,
         .srcAccessMask=VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT,///stage where data is written BEFORE the transfer/barrier
-        .dstAccessMask=0,///ignored anyway
+        .dstAccessMask=0,///should be 0 by spec
         .oldLayout=VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL,
         .newLayout=VK_IMAGE_LAYOUT_PRESENT_SRC_KHR,
         .srcQueueFamilyIndex=cvm_vk_graphics_queue_family,
@@ -729,7 +800,7 @@ void cvm_vk_present(void)
     };
 
     vkCmdPipelineBarrier(cvm_vk_presentation_instances[cvm_vk_presentation_instance_index].graphics_command_buffer,
-                         VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT,VK_PIPELINE_STAGE_BOTTOM_OF_PIPE_BIT,0,0,NULL,0,NULL,1,&graphics_barrier);
+                         VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT,VK_PIPELINE_STAGE_BOTTOM_OF_PIPE_BIT,0,0,NULL,0,NULL,1,&end_graphics_barrier);
 
     CVM_VK_CHECK(vkEndCommandBuffer(cvm_vk_presentation_instances[cvm_vk_presentation_instance_index].graphics_command_buffer));
 
@@ -773,6 +844,7 @@ void cvm_vk_present(void)
     else ///barrier above instead releases subresource, here present queue family acquires it (with "matching" barrier) and presents, waiting on ownership transfer (present) semaphore
     {
         #warning this needs to be tested on appropriate hardware
+        #warning APPARENTLY THIS HARDWARE THAT HS THIS DOES NOT EVEN EXIST !!!
 
         ///could use swapchain images with VK_SHARING_MODE_CONCURRENT to avoid this issue
 
@@ -805,12 +877,12 @@ void cvm_vk_present(void)
 
         CVM_VK_CHECK(vkBeginCommandBuffer(cvm_vk_presentation_instances[cvm_vk_presentation_instance_index].present_command_buffer,&command_buffer_begin_info));
 
-        vkCmdPipelineBarrier(cvm_vk_presentation_instances[cvm_vk_presentation_instance_index].present_command_buffer,
-                             VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT,VK_PIPELINE_STAGE_BOTTOM_OF_PIPE_BIT,0,0,NULL,0,NULL,1,&present_barrier);
+        vkCmdPipelineBarrier(cvm_vk_presentation_instances[cvm_vk_presentation_instance_index].present_command_buffer,0,0,0,0,NULL,0,NULL,1,&present_barrier);
+        /// from wiki: no srcStage/AccessMask or dstStage/AccessMask is needed, waiting for a semaphore does that automatically.
 
         CVM_VK_CHECK(vkEndCommandBuffer(cvm_vk_presentation_instances[cvm_vk_presentation_instance_index].present_command_buffer));
 
-        present_wait_dst_stage_mask = VK_PIPELINE_STAGE_ALL_COMMANDS_BIT;
+        present_wait_dst_stage_mask = VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT;
 
         present_submit_info=(VkSubmitInfo)
         {
@@ -845,6 +917,9 @@ void cvm_vk_present(void)
         };
     }
 
+    ///either of above moves presentation instance to in flight
+    cvm_vk_presentation_instances[cvm_vk_presentation_instance_index].in_flight=true;
+
     ///following transfers image to present_queue family
 
 
@@ -857,14 +932,17 @@ void cvm_vk_present(void)
     else if(r!=VK_SUCCESS) fprintf(stderr,"PRESENTATION FAILED WITH ERROR : %d\n",r);
 
 
-
+    //cvm_vk_presentation_instances[i].in_flight
 
     cvm_vk_presentation_instance_index=(cvm_vk_presentation_instance_index+1)%CVM_VK_PRESENTATION_INSTANCE_COUNT;
 
     /// finish/sync "next" (oldest in queue) presentation instance after this (new) one is fully submitted
-
-    CVM_VK_CHECK(vkWaitForFences(cvm_vk_device,1,&cvm_vk_presentation_instances[cvm_vk_presentation_instance_index].completion_fence,VK_TRUE,1000000000));
-    CVM_VK_CHECK(vkResetFences(cvm_vk_device,1,&cvm_vk_presentation_instances[cvm_vk_presentation_instance_index].completion_fence));
+    if(cvm_vk_presentation_instances[cvm_vk_presentation_instance_index].in_flight)
+    {
+        CVM_VK_CHECK(vkWaitForFences(cvm_vk_device,1,&cvm_vk_presentation_instances[cvm_vk_presentation_instance_index].completion_fence,VK_TRUE,1000000000));
+        CVM_VK_CHECK(vkResetFences(cvm_vk_device,1,&cvm_vk_presentation_instances[cvm_vk_presentation_instance_index].completion_fence));
+        cvm_vk_presentation_instances[cvm_vk_presentation_instance_index].in_flight=false;///has finished
+    }
 }
 
 
@@ -1053,6 +1131,8 @@ static void create_vertex_buffer(void)
 //
 //    vkDestroyBuffer(cvm_vk_device,tb,NULL);
 
+    ///creation of buffer may be done wrong here, valgrind reports jump based on uninitialised value
+
 
     VkBufferCreateInfo buffer_create_info=(VkBufferCreateInfo)
     {
@@ -1075,8 +1155,24 @@ static void create_vertex_buffer(void)
     VkPhysicalDeviceMemoryProperties memory_properties;///move this to gfx ? prevents calling it every time a buffer is allocated
     vkGetPhysicalDeviceMemoryProperties(cvm_vk_physical_device,&memory_properties);
 
+
     uint32_t i;
     VkMemoryAllocateInfo memory_allocate_info;
+
+    /// integrated graphics ONLY has shared heaps! means theres no good way to test everything is working, but also means there's room for optimisation
+    ///     ^ could FORCE staging buffer for now
+    ///     ^ if staging is detected as not needed then dont do it? (staging is useful for managing resources though...)
+    ///         ^ or perhaps if it would be copying in anyway then the managed transfer paradigm could work but without the staging transfer, just move in directly
+    ///             ^ does make synchronization (particularly delete more challenging though, will have to schedule things for deletion)
+//    printf("memory types: %u\nheap count: %u\n",memory_properties.memoryTypeCount,memory_properties.memoryHeapCount);
+//
+//    for(i=0;i<memory_properties.memoryTypeCount;i++)
+//    {
+//        if(memory_properties.memoryTypes[i].propertyFlags&VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT)
+//        {
+//            printf("device local memory type: %u using heap: %u\n",i,memory_properties.memoryTypes[i].heapIndex);
+//        }
+//    }
 
     for(i=0;i<memory_properties.memoryTypeCount;i++)
     {

@@ -58,15 +58,26 @@ fragmentStoresAndAtomics
 vertexPipelineStoresAndAtomics
 */
 
-//typedef enum
-//{
-//    CVM_VK_CHANGED_SCREEN_SIZE  = 0x01,
-//    CVM_VK_CHANGED_MSAA         = 0x02,
-//    CVM_VK_CHANGED_ALL          = 0xFF
-//}
-//cvm_vk_change_flags;
-
 ///won't be supporting submodules having msaa output
+
+
+typedef struct cvm_vk_command_set
+{
+    /// used for tracking whether this work is still up to date (resources it uses haven't changed since creation)
+    /// also need a way to track whether swapchain image index is up to date
+    uint32_t creation_update_id;
+    uint32_t * submodule_update_id;
+
+    VkCommandBuffer transfer_work;
+    VkCommandBuffer graphics_work;
+
+    /// pass back to submodule to tell it which render pass to use
+    uint32_t swapchain_image_index;
+
+    ///semaphore not needed here, can keep in cvm_vk and add to the submit info
+    //VkSemaphore acquire_semaphore;
+}
+cvm_vk_command_set;
 
 typedef struct cvm_vk_external_module
 {
@@ -117,6 +128,22 @@ void cvm_vk_destroy_shader_stage_info(VkPipelineShaderStageCreateInfo * stage_in
 ///test stuff
 void initialise_test_render_data(void);
 void terminate_test_render_data(void);
+
+
+
+
+
+
+
+
+
+
+
+/// put memory stuff in separate file?
+
+
+
+
 
 
 #endif
