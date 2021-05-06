@@ -56,6 +56,11 @@ fragmentStoresAndAtomics
 (maybe)
 
 vertexPipelineStoresAndAtomics
+
+
+
+could move swapchain/resource rebuilding outside of critical section if atomic locking mechanism is employed
+    ^ cas to gain control, VK thread must gain absolute control (a==0 -> a=0xFFFFFFFF) whereas any thread using those resources can gain read permissions (a!=0xFFFFFFFF -> a=a+1)
 */
 
 ///won't be supporting submodules having msaa output

@@ -29,6 +29,7 @@ along with cvm_shared.  If not, see <https://www.gnu.org/licenses/>.
 #include <stdlib.h>
 #include <math.h>
 #include <threads.h>
+#include <time.h>
 
 
 #include <SDL2/SDL.h>
@@ -57,6 +58,7 @@ along with cvm_shared.  If not, see <https://www.gnu.org/licenses/>.
 #include "cvm_camera.h"
 #include "cvm_managed_buffer.h"
 #include "cvm_mesh.h"
+#include "cvm_thread.h"
 
 
 #include "test_render.h"
