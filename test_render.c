@@ -21,12 +21,14 @@ along with cvm_shared.  If not, see <https://www.gnu.org/licenses/>.
 
 /// should make all magig numbers const static integers (e.g. num attachments)
 
+static cvm_vk_module_data test_module_data;
 
 ///actual resultant structures defined/created by above
 static VkRenderPass test_render_pass;
 static VkPipelineLayout test_pipeline_layout;///relevant descriptors, share as much as possible
 static VkPipeline test_pipeline;
 static VkPipelineShaderStageCreateInfo test_stages[2];
+static VkRect2D test_render_area;
 
 static VkFramebuffer * test_framebuffers;
 static uint32_t test_framebuffer_count;///hopefully won't need to store locally
@@ -65,13 +67,13 @@ static void create_test_render_pass(VkFormat swapchain_format,VkSampleCountFlagB
             {
                 .flags=0,
                 .format=swapchain_format,
-                .samples=VK_SAMPLE_COUNT_1_BIT,//sample_count,
+                .samples=VK_SAMPLE_COUNT_1_BIT,///sample_count not relevant for actual render target (swapchain image)
                 .loadOp=VK_ATTACHMENT_LOAD_OP_CLEAR,
                 .storeOp=VK_ATTACHMENT_STORE_OP_STORE,
                 .stencilLoadOp=VK_ATTACHMENT_LOAD_OP_DONT_CARE,
                 .stencilStoreOp=VK_ATTACHMENT_STORE_OP_DONT_CARE,
-                .initialLayout=VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL,/// VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL , VK_IMAGE_LAYOUT_UNDEFINED ?
-                .finalLayout=VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL
+                .initialLayout=VK_IMAGE_LAYOUT_UNDEFINED,/// is first render pass (ergo the clear above) thus the VK_IMAGE_LAYOUT_UNDEFINED rather than VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL
+                .finalLayout=VK_IMAGE_LAYOUT_PRESENT_SRC_KHR///is last render pass thus the VK_IMAGE_LAYOUT_PRESENT_SRC_KHR rather than VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL
             }
         },
         .subpassCount=1,
@@ -313,6 +315,8 @@ void initialise_test_render_data_ext()
 
     cvm_vk_create_shader_stage_info(test_stages+0,"shaders/test_vert.spv",VK_SHADER_STAGE_VERTEX_BIT);
     cvm_vk_create_shader_stage_info(test_stages+1,"shaders/test_frag.spv",VK_SHADER_STAGE_FRAGMENT_BIT);
+
+    cvm_vk_create_module_data(&test_module_data,false,3);
 }
 
 void terminate_test_render_data_ext()
@@ -323,16 +327,18 @@ void terminate_test_render_data_ext()
     cvm_vk_destroy_shader_stage_info(test_stages+1);
 
     cvm_vk_destroy_pipeline_layout(test_pipeline_layout);
+
+    cvm_vk_destroy_module_data(&test_module_data,false);
 }
 
 
 void initialise_test_swapchain_dependencies_ext(VkRect2D screen_rectangle,uint32_t swapchain_image_count,VkImageView * swapchain_image_views)
 {
-    uint32_t i;
-
     create_test_pipelines(screen_rectangle,VK_SAMPLE_COUNT_1_BIT,1.0);
 
     create_test_framebuffers(screen_rectangle,swapchain_image_count,swapchain_image_views);
+
+    test_render_area=screen_rectangle;///needed for begin render pass
 }
 
 void terminate_test_swapchain_dependencies_ext()
@@ -393,6 +399,51 @@ void test_render_ext(VkCommandBuffer command_buffer,uint32_t swapchain_image_ind
     vkCmdEndRenderPass(command_buffer);///================
 }
 
+cvm_vk_module_frame_data * test_render_frame(void)
+{
+    VkCommandBuffer command_buffer;
+    uint32_t swapchain_image_index;
+
+    command_buffer = cvm_vk_begin_module_frame_transfer(&test_module_data,false);
+    if(command_buffer!=VK_NULL_HANDLE)
+    {
+        ///do transfers
+    }
+
+    command_buffer = cvm_vk_begin_module_frame_graphics(&test_module_data,true,0,&swapchain_image_index);
+    if(command_buffer!=VK_NULL_HANDLE)
+    {
+        ///do graphics
+        VkClearValue clear_value;///other clear colours should probably be provided by other chunks of application
+        clear_value.color=(VkClearColorValue){{0.95f,0.5f,0.75f,1.0f}};
+
+        VkRenderPassBeginInfo render_pass_begin_info=(VkRenderPassBeginInfo)
+        {
+            .sType=VK_STRUCTURE_TYPE_RENDER_PASS_BEGIN_INFO,
+            .pNext=NULL,
+            .renderPass=test_render_pass,
+            .framebuffer=test_framebuffers[swapchain_image_index],
+            .renderArea=test_render_area,
+            .clearValueCount=1,
+            .pClearValues= &clear_value
+        };
+
+        vkCmdBeginRenderPass(command_buffer,&render_pass_begin_info,VK_SUBPASS_CONTENTS_INLINE);///================
+
+        vkCmdBindPipeline(command_buffer,VK_PIPELINE_BIND_POINT_GRAPHICS,test_pipeline);
+
+        VkDeviceSize offset=0;
+        vkCmdBindVertexBuffers(command_buffer,0,1,get_test_buffer(),&offset);
+
+        vkCmdDraw(command_buffer,4,1,0,0);
+
+        vkCmdEndRenderPass(command_buffer);///================
+    }
+
+    return cvm_vk_end_module_frame(&test_module_data);
+}
+
+
 /// need a good way to get VkDevice here, could actually use external initialisation functions, need to work out naming scheme though,
 ///     ^ possible naming pairs: initialise/terminate create/destroy start/stop/end reference/derefernce link/unlink establish/abolish erect/dismantle
 /// also need to work out how to handle out of date data
@@ -413,7 +464,7 @@ void test_render_ext(VkCommandBuffer command_buffer,uint32_t swapchain_image_ind
 
 /// when screen size changes, rebuild: framebuffers, pipelines & swapchain
 /// when sample count changes, rebuild: framebuffers, pipelines & render passes (render passes requires pipeline rebuild anyway)
-/// ^ in both cases want a way to know if rebuild is necessary for this submodule and handle resources inteligently
+/// ^ in both cases want a way to know if rebuild is necessary for this module and handle resources inteligently
 ///
 
 

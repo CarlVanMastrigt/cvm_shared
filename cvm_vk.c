@@ -21,9 +21,9 @@ along with cvm_shared.  If not, see <https://www.gnu.org/licenses/>.
 
 
 
-static uint32_t cvm_vk_update_count=0;///test if render op/buffer intended to be called is up to date
 
 /// copying around some vulkan structs (e.g. device) is invalid, instead just use these static ones
+///     ^ wait, is this actually true?? where did i find this?
 
 static VkInstance cvm_vk_instance;
 static VkPhysicalDevice cvm_vk_physical_device;
@@ -37,18 +37,7 @@ static VkPresentModeKHR cvm_vk_surface_present_mode;
 
 static VkRect2D cvm_vk_screen_rectangle;///extent
 
-///make below 2 per-submodule things
-//static VkViewport cvm_vk_screen_viewport;
-//static VkPipelineViewportStateCreateInfo cvm_vk_screen_viewport_state=(VkPipelineViewportStateCreateInfo)
-//{
-//    .sType=VK_STRUCTURE_TYPE_PIPELINE_VIEWPORT_STATE_CREATE_INFO,
-//    .pNext=NULL,
-//    .flags=0,
-//    .viewportCount=1,
-//    .pViewports= &cvm_vk_screen_viewport,
-//    .scissorCount=1,
-//    .pScissors= &cvm_vk_screen_rectangle
-//};
+
 
 ///may make more sense to put just above in struct (useful for "one time" initialisation functions, like vertex buffer)
 ///ALTERNATIVELY have functions to allocate these external objects? -- probably just use this option
@@ -72,15 +61,10 @@ static VkQueue cvm_vk_transfer_queue;
 static VkQueue cvm_vk_graphics_queue;
 static VkQueue cvm_vk_present_queue;
 
-///these are the command pools applicable to the main thread, should be provided upon request for a command pool by any submodule that runs in the main thread
-static VkCommandPool cvm_vk_transfer_command_pool;
-static VkCommandPool cvm_vk_graphics_command_pool;
+///these are the command pools applicable to the main thread, should be provided upon request for a command pool by any module that runs in the main thread
+static VkCommandPool cvm_vk_transfer_command_pool;///provided as default for same-thread modules
+static VkCommandPool cvm_vk_graphics_command_pool;///provided as default for same-thread modules
 static VkCommandPool cvm_vk_present_command_pool;///only ever used within this file
-
-
-/// (for now) transfer queue only used at startup, before first graphics render op, so only need 1 and can call vkDeviceWaitIdle after to avoid need to sync
-/// presently all runtime uploads are stream so better to make them all be host visible anyway (ergo no need for transfer in render)
-
 
 ///submit transfer ops?
 
@@ -101,9 +85,24 @@ note secondary command buffers must be in executable state in order to execute t
 
 need one command pool per thread per dispatch, things that only exist in the main thread won't need this
 
-tie command buffers to their state's age (use update count to determine if a command is out of date, this alleviates need to wait for commands to finish before recreating pipelines and other resources,
-    ^ just wait on fence then increment the update counter, (need to track how many are in flight!) track submit count and wait on fences of completion count to match (can simply be uint that rolls over!
+tie command buffers to their state's age (use update count to determine if a command is out of date), this alleviates need to wait for commands to finish before recreating pipelines and other resources,
+    ^ just wait on fence then increment the update counter, (need to track how many are in flight!) track submit count and wait on fences of completion count to match (can simply be uint that rolls over!)
     ^ this paradigm agoids needing to wait on device
+
+
+
+what prevents framebuffer images (that arent the destination swapchain image) being overwritten by other frames in flight?
+    ^ external dependencies? semaphores?
+
+
+could allow 2 sets of "transient" framebuffer (g-buffer) images by creating VkFramebuffers for every possible combo of swapchain image and "transient" (g-buffer) images (i do like this tbh)
+
+
+can use dependencies to ensure uniform reads
+
+
+subpasses should know if they're the first or not in the execution hierarchy and have their external dependencies set as such (don't implement single command buffer for layout transition)
+modules should mark themselves as clearing the back buffer so that they can be replaced when necessary
 */
 
 ///this paradigm sucks and needs review
@@ -119,7 +118,9 @@ static struct
     VkCommandBuffer graphics_command_buffer;///allocated from cvm_vk_graphics_command_pool above
     VkCommandBuffer present_command_buffer;///allocated from cvm_vk_present_command_pool above
 }
-cvm_vk_presentation_instances[CVM_VK_PRESENTATION_INSTANCE_COUNT];
+cvm_vk_presentation_instances[CVM_VK_PRESENTATION_INSTANCE_COUNT];///REMOVE
+
+///for now require that number requested be provided, throw error and exit if not (sync issues may occur if this req. isn't met!)
 
 /// CVM_VK_PRESENTATION_INSTANCE_COUNT should really match swapchain image count, alloc it to be the same
 
@@ -127,15 +128,26 @@ cvm_vk_presentation_instances[CVM_VK_PRESENTATION_INSTANCE_COUNT];
 /// need to know the max frame count such that resources can only be used after they are transferred back, should this be matched to the number of swapchain images?
 ///probably best to match this to swapchain count
 
-static uint32_t cvm_vk_presentation_instance_index=0;
+static uint32_t cvm_vk_presentation_instance_index=0;///REMOVE
 
-static VkImage * cvm_vk_swapchain_images;
-static VkImageView * cvm_vk_swapchain_image_views;
+
+
+///may want to rename cvm_vk_frames, cvm_vk_presentation_instance probably isnt that bad tbh...
+static cvm_vk_acquired_frame * cvm_vk_acquired_frames;///number of these should match swapchain image count
+static cvm_vk_swapchain_frame * cvm_vk_swapchain_frames;
+static uint32_t cvm_vk_current_frame;
+static uint32_t cvm_vk_active_frames=0;///both frames in flight and frames acquired by rendereer
+
+static VkImage * cvm_vk_swapchain_images;///can probably make this a function local array (or malloc) that can be discarded after views are created
+static VkImageView * cvm_vk_swapchain_image_views;///can probably make part of cvm_vk_frame (though they do get destroyed/recreated separately from frames...)
 static uint32_t cvm_vk_swapchain_image_count;
+///following used to determine number of swapchain images to allocate
+static uint32_t cvm_vk_min_swapchain_images;
+static uint32_t cvm_vk_extra_swapchain_images;
 
 
-static cvm_vk_external_module cvm_vk_external_modules[CVM_VK_MAX_EXTERNAL];
-static uint32_t cvm_vk_external_module_count=0;
+static cvm_vk_external_module cvm_vk_external_modules[CVM_VK_MAX_EXTERNAL];///REMOVE
+static uint32_t cvm_vk_external_module_count=0;///REMOVE
 
 
 static void cvm_vk_initialise_instance(SDL_Window * window)
@@ -389,42 +401,378 @@ static void cvm_vk_initialise_logical_device(void)
     vkGetDeviceQueue(cvm_vk_device,cvm_vk_present_queue_family,0,&cvm_vk_present_queue);
 }
 
+static void cvm_vk_create_default_command_pools()
+{
+    VkCommandPoolCreateInfo command_pool_create_info=(VkCommandPoolCreateInfo)
+    {
+        .sType=VK_STRUCTURE_TYPE_COMMAND_POOL_CREATE_INFO,
+        .pNext=NULL,
+        .flags=VK_COMMAND_POOL_CREATE_RESET_COMMAND_BUFFER_BIT | VK_COMMAND_POOL_CREATE_TRANSIENT_BIT,
+        .queueFamilyIndex=cvm_vk_transfer_queue_family
+    };
+
+    CVM_VK_CHECK(vkCreateCommandPool(cvm_vk_device,&command_pool_create_info,NULL,&cvm_vk_transfer_command_pool));
+
+    if(cvm_vk_graphics_queue_family==cvm_vk_transfer_queue_family) cvm_vk_graphics_command_pool=cvm_vk_transfer_command_pool;
+    else
+    {
+        command_pool_create_info.queueFamilyIndex=cvm_vk_graphics_queue_family;
+        CVM_VK_CHECK(vkCreateCommandPool(cvm_vk_device,&command_pool_create_info,NULL,&cvm_vk_graphics_command_pool));
+    }
+
+    if(cvm_vk_present_queue_family==cvm_vk_transfer_queue_family) cvm_vk_present_command_pool=cvm_vk_transfer_command_pool;
+    else
+    {
+        command_pool_create_info.queueFamilyIndex=cvm_vk_present_queue_family;
+        CVM_VK_CHECK(vkCreateCommandPool(cvm_vk_device,&command_pool_create_info,NULL,&cvm_vk_present_command_pool));
+    }
+}
+
+static void cvm_vk_destroy_default_command_pools()
+{
+    vkDestroyCommandPool(cvm_vk_device,cvm_vk_transfer_command_pool,NULL);
+    if(cvm_vk_graphics_queue_family!=cvm_vk_transfer_queue_family) vkDestroyCommandPool(cvm_vk_device,cvm_vk_graphics_command_pool,NULL);
+    if(cvm_vk_present_queue_family!=cvm_vk_transfer_queue_family) vkDestroyCommandPool(cvm_vk_device,cvm_vk_present_command_pool,NULL);
+}
+
+static void cvm_vk_create_presentation_frames(VkImage * swapchain_images)
+{
+    uint32_t i;
+
+    cvm_vk_current_frame=0;///need to reset in case number of swapchain images goes down
+
+    cvm_vk_acquired_frames=malloc(cvm_vk_swapchain_image_count*sizeof(cvm_vk_acquired_frame));
+    cvm_vk_swapchain_frames=malloc(cvm_vk_swapchain_image_count*sizeof(cvm_vk_swapchain_frame));
+
+    for(i=0;i<cvm_vk_swapchain_image_count;i++)
+    {
+        /// acquired frames
+        cvm_vk_acquired_frames[i].acquired_image_index=CVM_VK_INVALID_IMAGE_INDEX;
+        cvm_vk_acquired_frames[i].in_flight=false;
+
+        VkSemaphoreCreateInfo semaphore_create_info=(VkSemaphoreCreateInfo)
+        {
+            .sType=VK_STRUCTURE_TYPE_SEMAPHORE_CREATE_INFO,
+            .pNext=NULL,
+            .flags=0
+        };
+
+        VkFenceCreateInfo fence_create_info=(VkFenceCreateInfo)
+        {
+            .sType=VK_STRUCTURE_TYPE_FENCE_CREATE_INFO,
+            .pNext=NULL,
+            .flags=0
+        };
+
+        CVM_VK_CHECK(vkCreateFence(cvm_vk_device,&fence_create_info,NULL,&cvm_vk_acquired_frames[i].completion_fence));
+
+        CVM_VK_CHECK(vkCreateSemaphore(cvm_vk_device,&semaphore_create_info,NULL,&cvm_vk_acquired_frames[i].acquire_semaphore));
+
+
+        /// swapchain frames
+        cvm_vk_swapchain_frames[i].image=swapchain_images[i];
+
+        VkImageViewCreateInfo image_view_create_info=(VkImageViewCreateInfo)
+        {
+            .sType=VK_STRUCTURE_TYPE_IMAGE_VIEW_CREATE_INFO,
+            .pNext=NULL,
+            .flags=0,
+            .image=swapchain_images[i],
+            .viewType=VK_IMAGE_VIEW_TYPE_2D,
+            .format=cvm_vk_surface_format.format,
+            .components=(VkComponentMapping)
+            {
+                .r=VK_COMPONENT_SWIZZLE_IDENTITY,
+                .g=VK_COMPONENT_SWIZZLE_IDENTITY,
+                .b=VK_COMPONENT_SWIZZLE_IDENTITY,
+                .a=VK_COMPONENT_SWIZZLE_IDENTITY
+            },
+            .subresourceRange=(VkImageSubresourceRange)
+            {
+                .aspectMask=VK_IMAGE_ASPECT_COLOR_BIT,
+                .baseMipLevel=0,
+                .levelCount=1,
+                .baseArrayLayer=0,
+                .layerCount=1
+            }
+        };
+
+        CVM_VK_CHECK(vkCreateImageView(cvm_vk_device,&image_view_create_info,NULL,&cvm_vk_swapchain_frames[i].image_view));
+
+        CVM_VK_CHECK(vkCreateSemaphore(cvm_vk_device,&semaphore_create_info,NULL,&cvm_vk_swapchain_frames[i].present_semaphore));
+
+
+        ///queue ownership transfer stuff
+        if(cvm_vk_present_queue_family!=cvm_vk_graphics_queue_family)
+        {
+            CVM_VK_CHECK(vkCreateSemaphore(cvm_vk_device,&semaphore_create_info,NULL,&cvm_vk_swapchain_frames[i].graphics_relinquish_semaphore));
+
+
+            VkCommandBufferAllocateInfo command_buffer_allocate_info=(VkCommandBufferAllocateInfo)
+            {
+                .sType=VK_STRUCTURE_TYPE_COMMAND_BUFFER_ALLOCATE_INFO,
+                .pNext=NULL,
+                .commandPool=0,///set later
+                .level=VK_COMMAND_BUFFER_LEVEL_PRIMARY,
+                .commandBufferCount=1
+            };
+
+            command_buffer_allocate_info.commandPool=cvm_vk_graphics_command_pool;
+            CVM_VK_CHECK(vkAllocateCommandBuffers(cvm_vk_device,&command_buffer_allocate_info,&cvm_vk_swapchain_frames[i].graphics_relinquish_command_buffer));
+
+            command_buffer_allocate_info.commandPool=cvm_vk_present_command_pool;
+            CVM_VK_CHECK(vkAllocateCommandBuffers(cvm_vk_device,&command_buffer_allocate_info,&cvm_vk_swapchain_frames[i].present_acquire_command_buffer));
+
+            VkCommandBufferBeginInfo command_buffer_begin_info=(VkCommandBufferBeginInfo)
+            {
+                .sType=VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO,
+                .pNext=NULL,
+                .flags=0,///not one time use
+                .pInheritanceInfo=NULL
+            };
+
+            /// would really like to swap to VkImageMemoryBarrier2KHR here, is much nicer way to organise data
 
 
 
+            CVM_VK_CHECK(vkBeginCommandBuffer(cvm_vk_swapchain_frames[i].graphics_relinquish_command_buffer,&command_buffer_begin_info));
+
+            VkImageMemoryBarrier graphics_relinquish_barrier=(VkImageMemoryBarrier)
+            {
+                .sType=VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER,
+                .pNext=NULL,
+                .srcAccessMask=VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT,///stage where data is written BEFORE the transfer/barrier
+                .dstAccessMask=0,///should be 0 by spec
+                .oldLayout=VK_IMAGE_LAYOUT_PRESENT_SRC_KHR,
+                .newLayout=VK_IMAGE_LAYOUT_PRESENT_SRC_KHR,
+                .srcQueueFamilyIndex=cvm_vk_graphics_queue_family,
+                .dstQueueFamilyIndex=cvm_vk_present_queue_family,
+                .image=swapchain_images[i],
+                .subresourceRange=(VkImageSubresourceRange)
+                {
+                    .aspectMask=VK_IMAGE_ASPECT_COLOR_BIT,
+                    .baseMipLevel=0,
+                    .levelCount=1,
+                    .baseArrayLayer=0,
+                    .layerCount=1
+                }
+            };
+
+            vkCmdPipelineBarrier(cvm_vk_swapchain_frames[i].graphics_relinquish_command_buffer,VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT,0,0,0,NULL,0,NULL,1,&graphics_relinquish_barrier);///dstStageMask=VK_PIPELINE_STAGE_BOTTOM_OF_PIPE_BIT ??
+
+            CVM_VK_CHECK(vkEndCommandBuffer(cvm_vk_swapchain_frames[i].graphics_relinquish_command_buffer));
 
 
-static void cvm_vk_initialise_presentation_intances(void)
+
+            VkImageMemoryBarrier present_acquire_barrier=(VkImageMemoryBarrier)
+            {
+                .sType=VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER,
+                .pNext=NULL,
+                .srcAccessMask=0,///ignored anyway
+                .dstAccessMask=0,
+                .oldLayout=VK_IMAGE_LAYOUT_PRESENT_SRC_KHR,
+                .newLayout=VK_IMAGE_LAYOUT_PRESENT_SRC_KHR,
+                .srcQueueFamilyIndex=cvm_vk_graphics_queue_family,
+                .dstQueueFamilyIndex=cvm_vk_present_queue_family,
+                .image=swapchain_images[i],
+                .subresourceRange=(VkImageSubresourceRange)
+                {
+                    .aspectMask=VK_IMAGE_ASPECT_COLOR_BIT,
+                    .baseMipLevel=0,
+                    .levelCount=1,
+                    .baseArrayLayer=0,
+                    .layerCount=1
+                }
+            };
+
+            CVM_VK_CHECK(vkBeginCommandBuffer(cvm_vk_swapchain_frames[i].present_acquire_command_buffer,&command_buffer_begin_info));
+
+            vkCmdPipelineBarrier(cvm_vk_swapchain_frames[i].present_acquire_command_buffer,0,0,0,0,NULL,0,NULL,1,&present_acquire_barrier);
+            /// from wiki: no srcStage/AccessMask or dstStage/AccessMask is needed, waiting for a semaphore does that automatically.
+
+            CVM_VK_CHECK(vkEndCommandBuffer(cvm_vk_swapchain_frames[i].present_acquire_command_buffer));
+        }
+    }
+}
+
+static void cvm_vk_destroy_presentation_frames()
+{
+    uint32_t i;
+
+    for(i=0;i<cvm_vk_swapchain_image_count;i++)
+    {
+        /// acquired frames
+        vkDestroyFence(cvm_vk_device,cvm_vk_acquired_frames[i].completion_fence,NULL);
+        vkDestroySemaphore(cvm_vk_device,cvm_vk_acquired_frames[i].acquire_semaphore,NULL);
+
+        /// swapchain frames
+        vkDestroyImageView(cvm_vk_device,cvm_vk_swapchain_frames[i].image_view,NULL);
+
+        vkDestroySemaphore(cvm_vk_device,cvm_vk_swapchain_frames[i].present_semaphore,NULL);
+
+        ///queue ownership transfer stuff
+        if(cvm_vk_present_queue_family!=cvm_vk_graphics_queue_family)
+        {
+            vkDestroySemaphore(cvm_vk_device,cvm_vk_swapchain_frames[i].graphics_relinquish_semaphore,NULL);
+
+            vkFreeCommandBuffers(cvm_vk_device,cvm_vk_graphics_command_pool,1,&cvm_vk_swapchain_frames[i].graphics_relinquish_command_buffer);
+            vkFreeCommandBuffers(cvm_vk_device,cvm_vk_graphics_command_pool,1,&cvm_vk_swapchain_frames[i].present_acquire_command_buffer);
+        }
+    }
+
+    free(cvm_vk_acquired_frames);
+    free(cvm_vk_swapchain_frames);
+}
+
+void cvm_vk_initialise_swapchain(void) ///merge with swapchain initialisation?
+{
+    uint32_t i;
+    VkSurfaceCapabilitiesKHR surface_capabilities;
+
+    ///swapchain
+    CVM_VK_CHECK(vkGetPhysicalDeviceSurfaceCapabilitiesKHR(cvm_vk_physical_device,cvm_vk_surface,&surface_capabilities));
+
+    cvm_vk_screen_rectangle=(VkRect2D)
+    {
+        .offset=(VkOffset2D)
+        {
+            .x=0,
+            .y=0
+        },
+        .extent=surface_capabilities.currentExtent
+    };
+
+    cvm_vk_swapchain_image_count=((surface_capabilities.minImageCount > cvm_vk_min_swapchain_images) ? surface_capabilities.minImageCount : cvm_vk_min_swapchain_images)+cvm_vk_extra_swapchain_images;
+
+    if((surface_capabilities.maxImageCount)&&(surface_capabilities.maxImageCount < cvm_vk_swapchain_image_count))
+    {
+        fprintf(stderr,"REQUESTED SWAPCHAIN IMAGE COUNT NOT SUPPORTED\n");
+        exit(-1);
+    }
+
+    cvm_vk_swapchain_images=malloc(sizeof(VkImage)*cvm_vk_swapchain_image_count);
+    cvm_vk_swapchain_image_views=malloc(sizeof(VkImageView)*cvm_vk_swapchain_image_count);
+
+    /// the contents of this dictate explicit transfer of the swapchain images between the graphics and present queues!
+    VkSwapchainCreateInfoKHR swapchain_create_info=(VkSwapchainCreateInfoKHR)
+    {
+        .sType=VK_STRUCTURE_TYPE_SWAPCHAIN_CREATE_INFO_KHR,
+        .pNext=NULL,
+        .flags=0,
+        .surface=cvm_vk_surface,
+        .minImageCount=cvm_vk_swapchain_image_count,
+        .imageFormat=cvm_vk_surface_format.format,
+        .imageColorSpace=cvm_vk_surface_format.colorSpace,
+        .imageExtent=surface_capabilities.currentExtent,
+        .imageArrayLayers=1,
+        .imageUsage=VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT,
+        .imageSharingMode=VK_SHARING_MODE_EXCLUSIVE,
+        .queueFamilyIndexCount=0,
+        .pQueueFamilyIndices=NULL,
+        .preTransform=surface_capabilities.currentTransform,
+        .compositeAlpha=VK_COMPOSITE_ALPHA_OPAQUE_BIT_KHR,
+        .presentMode=cvm_vk_surface_present_mode,
+        .clipped=VK_TRUE,
+        .oldSwapchain=cvm_vk_swapchain
+    };
+
+    CVM_VK_CHECK(vkCreateSwapchainKHR(cvm_vk_device,&swapchain_create_info,NULL,&cvm_vk_swapchain));
+
+    CVM_VK_CHECK(vkGetSwapchainImagesKHR(cvm_vk_device,cvm_vk_swapchain,&i,NULL));
+    if(i!=cvm_vk_swapchain_image_count)
+    {
+        fprintf(stderr,"COULD NOT CREATE REQUESTED NUMBER OF SWAPCHAIN IMAGES\n");
+        exit(-1);
+    }
+    CVM_VK_CHECK(vkGetSwapchainImagesKHR(cvm_vk_device,cvm_vk_swapchain,&cvm_vk_swapchain_image_count,cvm_vk_swapchain_images));
+
+    VkImageViewCreateInfo image_view_create_info;
+
+    for(i=0;i<cvm_vk_swapchain_image_count;i++)
+    {
+        image_view_create_info=(VkImageViewCreateInfo)
+        {
+            .sType=VK_STRUCTURE_TYPE_IMAGE_VIEW_CREATE_INFO,
+            .pNext=NULL,
+            .flags=0,
+            .image=cvm_vk_swapchain_images[i],
+            .viewType=VK_IMAGE_VIEW_TYPE_2D,
+            .format=cvm_vk_surface_format.format,
+            .components=(VkComponentMapping)
+            {
+                .r=VK_COMPONENT_SWIZZLE_IDENTITY,
+                .g=VK_COMPONENT_SWIZZLE_IDENTITY,
+                .b=VK_COMPONENT_SWIZZLE_IDENTITY,
+                .a=VK_COMPONENT_SWIZZLE_IDENTITY
+            },
+            .subresourceRange=(VkImageSubresourceRange)
+            {
+                .aspectMask=VK_IMAGE_ASPECT_COLOR_BIT,
+                .baseMipLevel=0,
+                .levelCount=1,
+                .baseArrayLayer=0,
+                .layerCount=1
+            }
+        };
+
+        CVM_VK_CHECK(vkCreateImageView(cvm_vk_device,&image_view_create_info,NULL,cvm_vk_swapchain_image_views+i));
+    }
+
+    for(i=0;i<cvm_vk_external_module_count;i++) cvm_vk_external_modules[i].initialise(
+        cvm_vk_device,cvm_vk_physical_device,cvm_vk_screen_rectangle,cvm_vk_swapchain_image_count,cvm_vk_swapchain_image_views);
+
+    cvm_vk_create_presentation_frames(cvm_vk_swapchain_images);///move this to a parent function for both this and cvm_vk_initialise_swapchain
+}
+
+void cvm_vk_reinitialise_swapchain(void)///actually does substantially improve performance over terminate -> initialise
+{
+    uint32_t i;
+    VkSwapchainKHR old_swapchain;
+
+    cvm_vk_wait();
+
+    /// is terminating external modules here actually necessary? could we do that after in an update step and just set swapchain as having changed here for those modules to reference?
+
+    for(i=0;i<cvm_vk_external_module_count;i++) cvm_vk_external_modules[i].terminate(cvm_vk_device);
+
+    for(i=0;i<cvm_vk_swapchain_image_count;i++) vkDestroyImageView(cvm_vk_device,cvm_vk_swapchain_image_views[i],NULL);
+
+    free(cvm_vk_swapchain_images);
+    free(cvm_vk_swapchain_image_views);
+
+    cvm_vk_destroy_presentation_frames(); ///move this to a parent function or redesign this whole structure
+
+    old_swapchain=cvm_vk_swapchain;
+
+    cvm_vk_initialise_swapchain();
+
+    vkDestroySwapchainKHR(cvm_vk_device,old_swapchain,NULL);
+}
+
+static void cvm_vk_terminate_swapchain(void)
+{
+    uint32_t i;
+
+    for(i=0;i<cvm_vk_external_module_count;i++) cvm_vk_external_modules[i].terminate(cvm_vk_device);
+
+    for(i=0;i<cvm_vk_swapchain_image_count;i++) vkDestroyImageView(cvm_vk_device,cvm_vk_swapchain_image_views[i],NULL);
+
+    free(cvm_vk_swapchain_images);
+    free(cvm_vk_swapchain_image_views);
+
+    cvm_vk_destroy_presentation_frames();
+
+    vkDestroySwapchainKHR(cvm_vk_device,cvm_vk_swapchain,NULL);
+    cvm_vk_swapchain=VK_NULL_HANDLE;
+}
+
+static void cvm_vk_initialise_presentation_intances(void)///REMOVE
 {
     uint32_t i;
 
     VkCommandBufferAllocateInfo command_buffer_allocate_info;
     VkSemaphoreCreateInfo semaphore_create_info;
     VkFenceCreateInfo fence_create_info;
-    VkCommandPoolCreateInfo command_pool_create_info;
-
-
-    command_pool_create_info=(VkCommandPoolCreateInfo)
-    {
-        .sType=VK_STRUCTURE_TYPE_COMMAND_POOL_CREATE_INFO,
-        .pNext=NULL,
-        .flags=VK_COMMAND_POOL_CREATE_RESET_COMMAND_BUFFER_BIT | VK_COMMAND_POOL_CREATE_TRANSIENT_BIT,
-        .queueFamilyIndex=cvm_vk_graphics_queue_family
-    };
-
-    CVM_VK_CHECK(vkCreateCommandPool(cvm_vk_device,&command_pool_create_info,NULL,&cvm_vk_graphics_command_pool));
-
-
-    command_pool_create_info=(VkCommandPoolCreateInfo)
-    {
-        .sType=VK_STRUCTURE_TYPE_COMMAND_POOL_CREATE_INFO,
-        .pNext=NULL,
-        .flags=VK_COMMAND_POOL_CREATE_RESET_COMMAND_BUFFER_BIT | VK_COMMAND_POOL_CREATE_TRANSIENT_BIT,
-        .queueFamilyIndex=cvm_vk_present_queue_family
-    };
-
-    CVM_VK_CHECK(vkCreateCommandPool(cvm_vk_device,&command_pool_create_info,NULL,&cvm_vk_present_command_pool));
-
 
     for(i=0;i<CVM_VK_PRESENTATION_INSTANCE_COUNT;i++)
     {
@@ -463,14 +811,6 @@ static void cvm_vk_initialise_presentation_intances(void)
         CVM_VK_CHECK(vkCreateSemaphore(cvm_vk_device,&semaphore_create_info,NULL,&cvm_vk_presentation_instances[i].graphics_semaphore));
         CVM_VK_CHECK(vkCreateSemaphore(cvm_vk_device,&semaphore_create_info,NULL,&cvm_vk_presentation_instances[i].present_semaphore));
 
-
-//        if(i) fence_create_info=(VkFenceCreateInfo)///all but first should already be signalled
-//        {
-//            .sType=VK_STRUCTURE_TYPE_FENCE_CREATE_INFO,
-//            .pNext=NULL,
-//            .flags=VK_FENCE_CREATE_SIGNALED_BIT
-//        };
-//        else
         fence_create_info=(VkFenceCreateInfo)
         {
             .sType=VK_STRUCTURE_TYPE_FENCE_CREATE_INFO,
@@ -483,7 +823,7 @@ static void cvm_vk_initialise_presentation_intances(void)
     }
 }
 
-static void cvm_vk_terminate_presentation_intances(void)
+static void cvm_vk_terminate_presentation_intances(void)///REMOVE
 {
     uint32_t i;
 
@@ -498,146 +838,17 @@ static void cvm_vk_terminate_presentation_intances(void)
         vkFreeCommandBuffers(cvm_vk_device,cvm_vk_graphics_command_pool,1,&cvm_vk_presentation_instances[i].graphics_command_buffer);
         vkFreeCommandBuffers(cvm_vk_device,cvm_vk_present_command_pool,1,&cvm_vk_presentation_instances[i].present_command_buffer);
     }
-
-    vkDestroyCommandPool(cvm_vk_device,cvm_vk_graphics_command_pool,NULL);
-    vkDestroyCommandPool(cvm_vk_device,cvm_vk_present_command_pool,NULL);
 }
 
 
 
 
-void cvm_vk_initialise_swapchain(void)
-{
-    uint32_t i;
-    VkSurfaceCapabilitiesKHR surface_capabilities;
-
-    ///swapchain
-    CVM_VK_CHECK(vkGetPhysicalDeviceSurfaceCapabilitiesKHR(cvm_vk_physical_device,cvm_vk_surface,&surface_capabilities));
-
-    cvm_vk_screen_rectangle=(VkRect2D)
-    {
-        .offset=(VkOffset2D)
-        {
-            .x=0,
-            .y=0
-        },
-        .extent=surface_capabilities.currentExtent
-    };
-
-    //printf("Minimum swapchain image count: %d\n",surface_capabilities.minImageCount);
-    //printf("Maximum swapchain image count: %d\n",surface_capabilities.maxImageCount);
-
-    /// the contents of this dictate explicit transfer of the swapchain images between the graphics and present queues!
-    VkSwapchainCreateInfoKHR swapchain_create_info=(VkSwapchainCreateInfoKHR)
-    {
-        .sType=VK_STRUCTURE_TYPE_SWAPCHAIN_CREATE_INFO_KHR,
-        .pNext=NULL,
-        .flags=0,
-        .surface=cvm_vk_surface,
-        .minImageCount=surface_capabilities.minImageCount,
-        .imageFormat=cvm_vk_surface_format.format,
-        .imageColorSpace=cvm_vk_surface_format.colorSpace,
-        .imageExtent=surface_capabilities.currentExtent,
-        .imageArrayLayers=1,
-        .imageUsage=VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT,
-        .imageSharingMode=VK_SHARING_MODE_EXCLUSIVE,
-        .queueFamilyIndexCount=0,
-        .pQueueFamilyIndices=NULL,
-        .preTransform=surface_capabilities.currentTransform,
-        .compositeAlpha=VK_COMPOSITE_ALPHA_OPAQUE_BIT_KHR,
-        .presentMode=cvm_vk_surface_present_mode,
-        .clipped=VK_TRUE,
-        .oldSwapchain=cvm_vk_swapchain
-    };
-
-    CVM_VK_CHECK(vkCreateSwapchainKHR(cvm_vk_device,&swapchain_create_info,NULL,&cvm_vk_swapchain));
-
-    CVM_VK_CHECK(vkGetSwapchainImagesKHR(cvm_vk_device,cvm_vk_swapchain,&cvm_vk_swapchain_image_count,NULL));
-    cvm_vk_swapchain_images=malloc(cvm_vk_swapchain_image_count*sizeof(VkImage));
-    printf("swapchain image count: %u\n",cvm_vk_swapchain_image_count);
-    CVM_VK_CHECK(vkGetSwapchainImagesKHR(cvm_vk_device,cvm_vk_swapchain,&cvm_vk_swapchain_image_count,cvm_vk_swapchain_images));
-
-    VkImageViewCreateInfo image_view_create_info;
-    cvm_vk_swapchain_image_views=malloc(cvm_vk_swapchain_image_count*sizeof(VkImageView));
-
-    for(i=0;i<cvm_vk_swapchain_image_count;i++)
-    {
-        image_view_create_info=(VkImageViewCreateInfo)
-        {
-            .sType=VK_STRUCTURE_TYPE_IMAGE_VIEW_CREATE_INFO,
-            .pNext=NULL,
-            .flags=0,
-            .image=cvm_vk_swapchain_images[i],
-            .viewType=VK_IMAGE_VIEW_TYPE_2D,
-            .format=cvm_vk_surface_format.format,
-            .components=(VkComponentMapping)
-            {
-                .r=VK_COMPONENT_SWIZZLE_IDENTITY,
-                .g=VK_COMPONENT_SWIZZLE_IDENTITY,
-                .b=VK_COMPONENT_SWIZZLE_IDENTITY,
-                .a=VK_COMPONENT_SWIZZLE_IDENTITY
-            },
-            .subresourceRange=(VkImageSubresourceRange)
-            {
-                .aspectMask=VK_IMAGE_ASPECT_COLOR_BIT,
-                .baseMipLevel=0,
-                .levelCount=1,
-                .baseArrayLayer=0,
-                .layerCount=1
-            }
-        };
-
-        CVM_VK_CHECK(vkCreateImageView(cvm_vk_device,&image_view_create_info,NULL,cvm_vk_swapchain_image_views+i));
-    }
-
-    for(i=0;i<cvm_vk_external_module_count;i++) cvm_vk_external_modules[i].initialise(
-        cvm_vk_device,cvm_vk_physical_device,cvm_vk_screen_rectangle,cvm_vk_swapchain_image_count,cvm_vk_swapchain_image_views);
-}
-
-void cvm_vk_reinitialise_swapchain(void)///actually does substantially improve performance over terminate -> initialise
-{
-    uint32_t i;
-    VkSwapchainKHR old_swapchain;
-
-    cvm_vk_wait();
-
-    /// is terminating external modules here actually necessary? could we do that after in an update step and just set swapchain as having changed here for those modules to reference?
-
-    for(i=0;i<cvm_vk_external_module_count;i++) cvm_vk_external_modules[i].terminate(cvm_vk_device);
-
-    for(i=0;i<cvm_vk_swapchain_image_count;i++) vkDestroyImageView(cvm_vk_device,cvm_vk_swapchain_image_views[i],NULL);
-
-    free(cvm_vk_swapchain_images);
-    free(cvm_vk_swapchain_image_views);
-
-    old_swapchain=cvm_vk_swapchain;
-
-    cvm_vk_initialise_swapchain();
-
-    vkDestroySwapchainKHR(cvm_vk_device,old_swapchain,NULL);
-}
-
-static void cvm_vk_terminate_swapchain(void)
-{
-    uint32_t i;
-
-    for(i=0;i<cvm_vk_external_module_count;i++) cvm_vk_external_modules[i].terminate(cvm_vk_device);
-
-    for(i=0;i<cvm_vk_swapchain_image_count;i++) vkDestroyImageView(cvm_vk_device,cvm_vk_swapchain_image_views[i],NULL);
-
-    free(cvm_vk_swapchain_images);
-    free(cvm_vk_swapchain_image_views);
-
-    vkDestroySwapchainKHR(cvm_vk_device,cvm_vk_swapchain,NULL);
-    cvm_vk_swapchain=VK_NULL_HANDLE;
-}
-
-
-uint32_t cvm_vk_add_external_module(cvm_vk_external_module module)
+uint32_t cvm_vk_add_external_module(cvm_vk_external_module module)///REMOVE
 {
     if(cvm_vk_external_module_count==CVM_VK_MAX_EXTERNAL)
     {
         fprintf(stderr,"INSUFFICIENT EXTERNAL OP SPACE\n");
+        exit(-1);
     }
 
     cvm_vk_external_modules[cvm_vk_external_module_count]=module;
@@ -649,25 +860,31 @@ uint32_t cvm_vk_add_external_module(cvm_vk_external_module module)
 
 
 
-void cvm_vk_initialise(SDL_Window * window,uint32_t frame_count)
+void cvm_vk_initialise(SDL_Window * window,uint32_t min_swapchain_images,uint32_t extra_swapchain_images)
 {
+    cvm_vk_min_swapchain_images=min_swapchain_images;
+    cvm_vk_extra_swapchain_images=extra_swapchain_images;
+
     cvm_vk_initialise_instance(window);
     cvm_vk_initialise_surface(window);
     cvm_vk_initialise_physical_device();
     cvm_vk_initialise_logical_device();
+    cvm_vk_create_default_command_pools();
     cvm_vk_initialise_presentation_intances();
 }
 
 void cvm_vk_terminate(void)
 {
-    cvm_vk_terminate_presentation_intances();
     cvm_vk_terminate_swapchain();
+    cvm_vk_terminate_presentation_intances();
+    cvm_vk_destroy_default_command_pools();
 
     vkDestroyDevice(cvm_vk_device,NULL);
     vkDestroySurfaceKHR(cvm_vk_instance,cvm_vk_surface,NULL);
     vkDestroyInstance(cvm_vk_instance,NULL);
 }
 
+///new frame paradigm removes need for this, let presentation engine/render loop handle flushing frames
 void cvm_vk_wait(void)
 {
     uint32_t i;
@@ -677,10 +894,181 @@ void cvm_vk_wait(void)
         CVM_VK_CHECK(vkResetFences(cvm_vk_device,1,&cvm_vk_presentation_instances[i].completion_fence));
         cvm_vk_presentation_instances[i].in_flight=false;///has finished
     }
-    //vkDeviceWaitIdle(cvm_vk_device);///move to controller func, like recreate?
 }
 
+///also do module frame invalidation here, pass in settings update counter or similar
+/// success, fail but not ready to recreate, fail and ready to recreate
+/// enen though it'd be possible to not recreate swapchain when some settings change and just use out of date checking to avoid rendering...
+///         its much simpler and easier to just hijack swapchain recreation to rebuild rendering resources and avoid presenting out of date data
 
+///returns true when rebuild is required and possible, frame images in should be CVM_VK_INVALID_IMAGE_INDEX (and be that for ALL frames)
+/// CANNOT alter the contents of any presenation frame being read from, should add some kind of error checking (though that will be difficult to do in multithreading situations efficiently)
+/// MUST be called AFTER present for the frame
+/// need static bool here, or using input to control prevention of frame acquisition (can probably assume recreation needed if game_running is still true) also allows other reasons to recreate, e.g. settings change
+///      ^ this paradigm might even avoid swapchain recreation when not changing things that affect it! (e.g. 1 modules MSAA settings)
+/// need a better name for this
+/// rely on this func to detect swapchain resize? couldn't hurt to double check based on screen resize
+bool cvm_vk_prepare_for_next_frame(bool acquire)
+{
+    cvm_vk_acquired_frame * frame = cvm_vk_acquired_frames + (cvm_vk_current_frame+cvm_vk_extra_swapchain_images+1)%cvm_vk_swapchain_image_count;///next frame written to by module detached the most from presentation
+    /// this modulo op should be used everywhere its acted upon instead
+
+    if(frame->in_flight)
+    {
+        CVM_VK_CHECK(vkWaitForFences(cvm_vk_device,1,&frame->completion_fence,VK_TRUE,1000000000));
+        CVM_VK_CHECK(vkResetFences(cvm_vk_device,1,&frame->completion_fence));
+        frame->in_flight=false;///has finished
+        cvm_vk_active_frames--;
+    }
+
+    if(acquire)
+    {
+        VkResult r=vkAcquireNextImageKHR(cvm_vk_device,cvm_vk_swapchain,1000000000,frame->acquire_semaphore,VK_NULL_HANDLE,&frame->acquired_image_index);
+        if(r==VK_ERROR_OUT_OF_DATE_KHR)/// if VK_SUBOPTIMAL_KHR then image WAS acquired and so must be displayed
+        {
+            puts("swapchain out of date");
+            frame->acquired_image_index=CVM_VK_INVALID_IMAGE_INDEX;
+            return false;
+        }
+        else if(r!=VK_SUCCESS)
+        {
+            fprintf(stderr,"ACQUIRE NEXT IMAGE FAILED WITH ERROR : %d\n",r);
+            frame->acquired_image_index=CVM_VK_INVALID_IMAGE_INDEX;
+            return false;
+        }
+    }
+    else
+    {
+        frame->acquired_image_index=CVM_VK_INVALID_IMAGE_INDEX;
+        return false;
+    }
+
+    cvm_vk_active_frames++;
+    return true;
+}
+
+void cvm_vk_transition_frame(void)///must be called in critical section!
+{
+    cvm_vk_current_frame = (cvm_vk_current_frame+1)%cvm_vk_swapchain_image_count;
+}
+
+void cvm_vk_present_current_frame(cvm_vk_module_frame_data ** module_frames, uint32_t module_frame_count)
+{
+    cvm_vk_acquired_frame * acquired_frame;
+    cvm_vk_swapchain_frame * swapchain_frame;
+    ///add extra ones if async/sync compute can be waited upon as well?
+    VkSemaphore semaphores[4];
+    VkPipelineStageFlags wait_stage_flags[4];
+    uint32_t i;
+
+    acquired_frame=cvm_vk_acquired_frames+cvm_vk_current_frame;
+    swapchain_frame=cvm_vk_swapchain_frames+acquired_frame->acquired_image_index;
+
+    if(acquired_frame->acquired_image_index==CVM_VK_INVALID_IMAGE_INDEX)
+    {
+        ///check frame isnt in flight?
+        ///also check no module frame has graphics work?
+        return;
+    }
+
+
+    #warning need error checking that every module has work to do, also a way to exit early
+
+
+    ///i do prefer design of VkSubmitInfo2KHR here instead
+    VkSubmitInfo submit_info=(VkSubmitInfo) /// whether submission has associated fence depends on need for family ownership transfer, so actually submit in branched code section
+    {
+        .sType=VK_STRUCTURE_TYPE_SUBMIT_INFO,
+        .pNext=NULL,
+        .waitSemaphoreCount=0,
+        .pWaitSemaphores=semaphores,
+        .pWaitDstStageMask=wait_stage_flags,
+        .commandBufferCount=1,///always just 1
+        .pCommandBuffers= NULL,
+        .signalSemaphoreCount=0,///only changes to 1 for last module, 0 otherwise
+        .pSignalSemaphores=NULL
+    };
+
+    for(i=0;i<module_frame_count;i++)
+    {
+        ///semaphores in between submits in same queue probably arent necessary, can likely rely on external subpass dependencies, this needs looking into
+        /// ^yes this looks to be the case
+        submit_info.waitSemaphoreCount=0;
+
+        if(i==0)///wait on image acquisition
+        {
+            semaphores[submit_info.waitSemaphoreCount]=acquired_frame->acquire_semaphore;
+            wait_stage_flags[submit_info.waitSemaphoreCount]=VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT;
+            submit_info.waitSemaphoreCount++;
+        }
+
+        if(module_frames[i]->has_transfer_work)///wait on upload of data
+        {
+            #warning semaphore probably only needed when queues are different! (needs further work)
+            semaphores[submit_info.waitSemaphoreCount]=module_frames[i]->transfer_semaphore;
+            wait_stage_flags[submit_info.waitSemaphoreCount]=module_frames[i]->transfer_flags;
+            submit_info.waitSemaphoreCount++;
+        }
+
+        ///may also want to wait on async compute?
+
+        submit_info.pCommandBuffers=&module_frames[i]->graphics_work;
+
+        if((i==module_frame_count)&&(cvm_vk_present_queue_family==cvm_vk_graphics_queue_family))///no queue ownership transfer required, signal present semaphore as this is the last frame
+        {
+            submit_info.signalSemaphoreCount=1;
+            submit_info.pSignalSemaphores=&swapchain_frame->present_semaphore;
+
+            CVM_VK_CHECK(vkQueueSubmit(cvm_vk_graphics_queue,1,&submit_info,acquired_frame->completion_fence));
+        }
+        else
+        {
+            CVM_VK_CHECK(vkQueueSubmit(cvm_vk_graphics_queue,1,&submit_info,VK_NULL_HANDLE));
+        }
+    }
+
+    if(cvm_vk_present_queue_family!=cvm_vk_graphics_queue_family)///perform queue ownership transfer
+    {
+        ///relinquish
+        submit_info.waitSemaphoreCount=0;
+        submit_info.pWaitSemaphores=NULL;
+        submit_info.signalSemaphoreCount=1;
+        submit_info.pSignalSemaphores=&swapchain_frame->graphics_relinquish_semaphore;
+        submit_info.pCommandBuffers=&swapchain_frame->graphics_relinquish_command_buffer;
+        CVM_VK_CHECK(vkQueueSubmit(cvm_vk_graphics_queue,1,&submit_info,VK_NULL_HANDLE));
+
+        ///acquire
+        wait_stage_flags[0]=VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT;
+        submit_info.waitSemaphoreCount=1;
+        submit_info.pWaitSemaphores=&swapchain_frame->graphics_relinquish_semaphore;
+        submit_info.signalSemaphoreCount=1;
+        submit_info.pSignalSemaphores=&swapchain_frame->present_semaphore;
+        submit_info.pCommandBuffers=&swapchain_frame->present_acquire_command_buffer;
+        CVM_VK_CHECK(vkQueueSubmit(cvm_vk_present_queue,1,&submit_info,acquired_frame->completion_fence));
+    }
+
+    VkPresentInfoKHR present_info=(VkPresentInfoKHR)
+    {
+        .sType=VK_STRUCTURE_TYPE_PRESENT_INFO_KHR,
+        .pNext=NULL,
+        .waitSemaphoreCount=1,
+        .pWaitSemaphores=&swapchain_frame->present_semaphore,
+        .swapchainCount=1,
+        .pSwapchains=&cvm_vk_swapchain,
+        .pImageIndices=&acquired_frame->acquired_image_index,
+        .pResults=NULL
+    };
+
+
+    VkResult r=vkQueuePresentKHR(cvm_vk_present_queue,&present_info);
+    if(r==VK_ERROR_OUT_OF_DATE_KHR)/// if VK_SUBOPTIMAL_KHR then image WAS acquired and so must be displayed
+    {
+        puts("couldn't present (out of date)");
+    }
+    else if(r!=VK_SUCCESS) fprintf(stderr,"PRESENTATION FAILED WITH ERROR : %d\n",r);
+
+    acquired_frame->in_flight=true;
+}
 
 void cvm_vk_present(void)
 {
@@ -688,7 +1076,7 @@ void cvm_vk_present(void)
     VkResult r;
 
     ///these types could probably be re-used, but as they're passed as pointers its better to be sure?
-    VkImageMemoryBarrier start_graphics_barrier,end_graphics_barrier,present_barrier;
+    VkImageMemoryBarrier end_graphics_barrier,present_barrier;
     VkSubmitInfo graphics_submit_info,present_submit_info;
     VkPipelineStageFlags graphics_wait_dst_stage_mask,present_wait_dst_stage_mask;
     VkPresentInfoKHR present_info;
@@ -699,29 +1087,17 @@ void cvm_vk_present(void)
     if(r==VK_ERROR_OUT_OF_DATE_KHR)/// if VK_SUBOPTIMAL_KHR then image WAS acquired and so must be displayed
     {
         puts("couldn't use swapchain");//recreate_gfx_swapchain(gfx);///rebuild swapchain dependent elements for this buffer
+        ///could try this again after swapchain recreation? (probably within while loop?)
+        ///     ^ NO! - wouldn't have correct screen size from sdl event!
         return;
     }
     else if(r!=VK_SUCCESS) fprintf(stderr,"ACQUIRE NEXT IMAGE FAILED WITH ERROR : %d\n",r);
 
 
 
-    ///separate command buffer for each render element (game/overlay) ? (i like this, no function call per submodule, just a command buffer)
+    ///separate command buffer for each render element (game/overlay) ? (i like this, no function call per module, just a command buffer)
 
     ///fence to prevent re-submission of same command buffer ( command buffer wasn't created with VK_COMMAND_BUFFER_USAGE_SIMULTANEOUS_USE_BIT )
-
-
-    ///before  submit/present  ensure update_count associated with incoming command buffer matches the current value (so as to ensure that pipelines &c. have not been deleted)
-    ///otherwise just have primary command buffer clear screen
-
-    ///alter primary command buffer
-
-    ///
-
-    ///only delete pipelines & display images between mutexes in main thread (assuming multi-threading)
-
-
-
-
 
 
 
@@ -748,59 +1124,7 @@ void cvm_vk_present(void)
     CVM_VK_CHECK(vkBeginCommandBuffer(cvm_vk_presentation_instances[cvm_vk_presentation_instance_index].graphics_command_buffer,&command_buffer_begin_info));
 
 
-
-    start_graphics_barrier=(VkImageMemoryBarrier) /// does layout transition  &  if queue families are different relinquishes swapchain image, is this valid when queue families are the same?
-    {
-        .sType=VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER,
-        .pNext=NULL,
-        .srcAccessMask=0,/// 0 because its effectively a queue transfer or b/c
-        .dstAccessMask=VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT,
-        .oldLayout=VK_IMAGE_LAYOUT_UNDEFINED,
-        .newLayout=VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL,
-        .srcQueueFamilyIndex=VK_QUEUE_FAMILY_IGNORED,///VK_QUEUE_FAMILY_IGNORED when not describing ownership transfer?
-        .dstQueueFamilyIndex=VK_QUEUE_FAMILY_IGNORED,
-        .image=cvm_vk_swapchain_images[image_index],
-        .subresourceRange=(VkImageSubresourceRange)
-        {
-            .aspectMask=VK_IMAGE_ASPECT_COLOR_BIT,
-            .baseMipLevel=0,
-            .levelCount=1,
-            .baseArrayLayer=0,
-            .layerCount=1
-        }
-    };
-
-    vkCmdPipelineBarrier(cvm_vk_presentation_instances[cvm_vk_presentation_instance_index].graphics_command_buffer,
-                         VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT,VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT,0,0,NULL,0,NULL,1,&start_graphics_barrier);
-
-
-
     for(i=0;i<cvm_vk_external_module_count;i++)cvm_vk_external_modules[i].render(cvm_vk_presentation_instances[cvm_vk_presentation_instance_index].graphics_command_buffer,image_index,cvm_vk_screen_rectangle);
-
-    ///only do following inside branch where the queue families are not the same? though this does handle layout transitions anyway right?
-    end_graphics_barrier=(VkImageMemoryBarrier) /// does layout transition  &  if queue families are different relinquishes swapchain image, is this valid when queue families are the same?
-    {
-        .sType=VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER,
-        .pNext=NULL,
-        .srcAccessMask=VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT,///stage where data is written BEFORE the transfer/barrier
-        .dstAccessMask=0,///should be 0 by spec
-        .oldLayout=VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL,
-        .newLayout=VK_IMAGE_LAYOUT_PRESENT_SRC_KHR,
-        .srcQueueFamilyIndex=cvm_vk_graphics_queue_family,
-        .dstQueueFamilyIndex=cvm_vk_present_queue_family,
-        .image=cvm_vk_swapchain_images[image_index],
-        .subresourceRange=(VkImageSubresourceRange)
-        {
-            .aspectMask=VK_IMAGE_ASPECT_COLOR_BIT,
-            .baseMipLevel=0,
-            .levelCount=1,
-            .baseArrayLayer=0,
-            .layerCount=1
-        }
-    };
-
-    vkCmdPipelineBarrier(cvm_vk_presentation_instances[cvm_vk_presentation_instance_index].graphics_command_buffer,
-                         VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT,VK_PIPELINE_STAGE_BOTTOM_OF_PIPE_BIT,0,0,NULL,0,NULL,1,&end_graphics_barrier);
 
     CVM_VK_CHECK(vkEndCommandBuffer(cvm_vk_presentation_instances[cvm_vk_presentation_instance_index].graphics_command_buffer));
 
@@ -841,80 +1165,11 @@ void cvm_vk_present(void)
             .pResults=NULL
         };
     }
-    else ///barrier above instead releases subresource, here present queue family acquires it (with "matching" barrier) and presents, waiting on ownership transfer (present) semaphore
+    else
     {
-        #warning this needs to be tested on appropriate hardware
-        #warning APPARENTLY THIS HARDWARE THAT HS THIS DOES NOT EVEN EXIST !!!
-
-        ///could use swapchain images with VK_SHARING_MODE_CONCURRENT to avoid this issue
-
-        CVM_VK_CHECK(vkQueueSubmit(cvm_vk_graphics_queue,1,&graphics_submit_info,VK_NULL_HANDLE));///if families different fence goes after transfer op
-
-
-
-
-        ///=========== this section transfers ownership (start) ==============
-        present_barrier=(VkImageMemoryBarrier)
-        {
-            .sType=VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER,
-            .pNext=NULL,
-            .srcAccessMask=0,///ignored anyway
-            .dstAccessMask=0,
-            .oldLayout=VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL,
-            .newLayout=VK_IMAGE_LAYOUT_PRESENT_SRC_KHR,
-            .srcQueueFamilyIndex=cvm_vk_graphics_queue_family,
-            .dstQueueFamilyIndex=cvm_vk_present_queue_family,
-            .image=cvm_vk_swapchain_images[image_index],
-            .subresourceRange=(VkImageSubresourceRange)
-            {
-                .aspectMask=VK_IMAGE_ASPECT_COLOR_BIT,
-                .baseMipLevel=0,
-                .levelCount=1,
-                .baseArrayLayer=0,
-                .layerCount=1
-            }
-        };
-
-        CVM_VK_CHECK(vkBeginCommandBuffer(cvm_vk_presentation_instances[cvm_vk_presentation_instance_index].present_command_buffer,&command_buffer_begin_info));
-
-        vkCmdPipelineBarrier(cvm_vk_presentation_instances[cvm_vk_presentation_instance_index].present_command_buffer,0,0,0,0,NULL,0,NULL,1,&present_barrier);
-        /// from wiki: no srcStage/AccessMask or dstStage/AccessMask is needed, waiting for a semaphore does that automatically.
-
-        CVM_VK_CHECK(vkEndCommandBuffer(cvm_vk_presentation_instances[cvm_vk_presentation_instance_index].present_command_buffer));
-
-        present_wait_dst_stage_mask = VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT;
-
-        present_submit_info=(VkSubmitInfo)
-        {
-            .sType=VK_STRUCTURE_TYPE_SUBMIT_INFO,
-            .pNext=NULL,
-            .waitSemaphoreCount=1,
-            .pWaitSemaphores= &cvm_vk_presentation_instances[cvm_vk_presentation_instance_index].graphics_semaphore,
-            .pWaitDstStageMask= &present_wait_dst_stage_mask,
-            .commandBufferCount=1,
-            .pCommandBuffers= &cvm_vk_presentation_instances[cvm_vk_presentation_instance_index].present_command_buffer,
-            .signalSemaphoreCount=1,
-            .pSignalSemaphores= &cvm_vk_presentation_instances[cvm_vk_presentation_instance_index].present_semaphore
-        };
-
-        CVM_VK_CHECK(vkQueueSubmit(cvm_vk_present_queue,1,&present_submit_info,cvm_vk_presentation_instances[cvm_vk_presentation_instance_index].completion_fence));///if families different this is last submit so fence goes here
-        ///=========== this section transfers ownership (end) ==============
-        ///if vkQueueSubmit fails here it will be necessary to invalidate the command buffer contents
-
-
-
-
-        present_info=(VkPresentInfoKHR)
-        {
-            .sType=VK_STRUCTURE_TYPE_PRESENT_INFO_KHR,
-            .pNext=NULL,
-            .waitSemaphoreCount=1,
-            .pWaitSemaphores= &cvm_vk_presentation_instances[cvm_vk_presentation_instance_index].present_semaphore,
-            .swapchainCount=1,
-            .pSwapchains= &cvm_vk_swapchain,
-            .pImageIndices= &image_index,
-            .pResults=NULL
-        };
+        #warning implement this!
+        fprintf(stderr,"QUEUE OWNERSIP TRANSFER NYI\n");
+        exit(-1);
     }
 
     ///either of above moves presentation instance to in flight
@@ -930,9 +1185,6 @@ void cvm_vk_present(void)
         puts("couldn't present (out of date)");//recreate_gfx_swapchain(gfx);///rebuild swapchain dependent elements for this buffer
     }
     else if(r!=VK_SUCCESS) fprintf(stderr,"PRESENTATION FAILED WITH ERROR : %d\n",r);
-
-
-    //cvm_vk_presentation_instances[i].in_flight
 
     cvm_vk_presentation_instance_index=(cvm_vk_presentation_instance_index+1)%CVM_VK_PRESENTATION_INSTANCE_COUNT;
 
@@ -1066,6 +1318,186 @@ void cvm_vk_destroy_shader_stage_info(VkPipelineShaderStageCreateInfo * stage_in
 
 
 
+void cvm_vk_create_module_data(cvm_vk_module_data * module_data,bool in_separate_thread,uint32_t active_frame_count)
+{
+    uint32_t i;
+
+    module_data->current_frame=0;
+
+    module_data->frame_count=active_frame_count;
+    module_data->frames=malloc(sizeof(cvm_vk_module_frame_data)*module_data->frame_count);
+
+
+    if(in_separate_thread)
+    {
+        VkCommandPoolCreateInfo command_pool_create_info=(VkCommandPoolCreateInfo)
+        {
+            .sType=VK_STRUCTURE_TYPE_COMMAND_POOL_CREATE_INFO,
+            .pNext=NULL,
+            .flags=VK_COMMAND_POOL_CREATE_RESET_COMMAND_BUFFER_BIT | VK_COMMAND_POOL_CREATE_TRANSIENT_BIT,
+            .queueFamilyIndex=cvm_vk_transfer_queue_family
+        };
+
+        CVM_VK_CHECK(vkCreateCommandPool(cvm_vk_device,&command_pool_create_info,NULL,&module_data->transfer_pool));
+
+        if(cvm_vk_transfer_queue_family==cvm_vk_graphics_queue_family) module_data->graphics_pool=module_data->transfer_pool;
+        else
+        {
+            command_pool_create_info.queueFamilyIndex=cvm_vk_graphics_queue_family;
+            CVM_VK_CHECK(vkCreateCommandPool(cvm_vk_device,&command_pool_create_info,NULL,&module_data->graphics_pool));
+        }
+    }
+    else
+    {
+        module_data->transfer_pool=cvm_vk_transfer_command_pool;
+        module_data->graphics_pool=cvm_vk_graphics_command_pool;
+    }
+
+
+    for(i=0;i<module_data->frame_count;i++)
+    {
+        module_data->frames[i].parent_module=module_data;
+        module_data->frames[i].in_flight=false;
+        //module_data->frames[i].swapchain_image_index=CVM_VK_INVALID_IMAGE_INDEX;///basically just for error checking
+
+        module_data->frames[i].has_transfer_work=false;
+        module_data->frames[i].has_graphics_work=false;
+        module_data->frames[i].transfer_flags=VK_PIPELINE_STAGE_ALL_GRAPHICS_BIT;///probably want to set this properly, i.e. 0 and have module set it
+
+
+        VkSemaphoreCreateInfo semaphore_create_info=(VkSemaphoreCreateInfo)
+        {
+            .sType=VK_STRUCTURE_TYPE_SEMAPHORE_CREATE_INFO,
+            .pNext=NULL,
+            .flags=0
+        };
+
+        CVM_VK_CHECK(vkCreateSemaphore(cvm_vk_device,&semaphore_create_info,NULL,&module_data->frames[i].transfer_semaphore));
+
+
+        VkCommandBufferAllocateInfo command_buffer_allocate_info=(VkCommandBufferAllocateInfo)
+        {
+            .sType=VK_STRUCTURE_TYPE_COMMAND_BUFFER_ALLOCATE_INFO,
+            .pNext=NULL,
+            .commandPool=module_data->transfer_pool,
+            .level=VK_COMMAND_BUFFER_LEVEL_PRIMARY,
+            .commandBufferCount=1
+        };
+
+        CVM_VK_CHECK(vkAllocateCommandBuffers(cvm_vk_device,&command_buffer_allocate_info,&module_data->frames[i].transfer_work));
+
+        command_buffer_allocate_info.commandPool=module_data->graphics_pool;
+        CVM_VK_CHECK(vkAllocateCommandBuffers(cvm_vk_device,&command_buffer_allocate_info,&module_data->frames[i].graphics_work));
+    }
+}
+
+void cvm_vk_destroy_module_data(cvm_vk_module_data * module_data,bool in_separate_thread)
+{
+    uint32_t i;
+
+    for(i=0;i<module_data->frame_count;i++)
+    {
+        if(module_data->frames[i].in_flight)
+        {
+            fprintf(stderr,"TRYING TO DESTROY module FRAME THAT IS IN FLIGHT\n");
+            exit(-1);
+        }
+
+        vkFreeCommandBuffers(cvm_vk_device,module_data->transfer_pool,1,&module_data->frames[i].transfer_work);
+        vkFreeCommandBuffers(cvm_vk_device,module_data->graphics_pool,1,&module_data->frames[i].graphics_work);
+
+        vkDestroySemaphore(cvm_vk_device,module_data->frames[i].transfer_semaphore,NULL);
+    }
+
+    if(in_separate_thread)
+    {
+        vkDestroyCommandPool(cvm_vk_device,module_data->transfer_pool,NULL);
+
+        if(cvm_vk_transfer_queue_family!=cvm_vk_graphics_queue_family)
+        {
+            vkDestroyCommandPool(cvm_vk_device,module_data->graphics_pool,NULL);
+        }
+    }
+
+    free(module_data->frames);
+}
+
+
+VkCommandBuffer cvm_vk_begin_module_frame_transfer(cvm_vk_module_data * module_data,bool has_work)
+{
+    cvm_vk_module_frame_data * frame=module_data->frames+module_data->current_frame;
+
+    frame->has_transfer_work=has_work;
+
+    VkCommandBuffer command_buffer=VK_NULL_HANDLE;
+
+    if(frame->has_transfer_work)
+    {
+        VkCommandBufferBeginInfo command_buffer_begin_info=(VkCommandBufferBeginInfo)
+        {
+            .sType=VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO,
+            .pNext=NULL,
+            .flags=VK_COMMAND_BUFFER_USAGE_ONE_TIME_SUBMIT_BIT,/// VK_COMMAND_BUFFER_USAGE_SIMULTANEOUS_USE_BIT  necessary? in tutorial bet shouldn't be used?
+            .pInheritanceInfo=NULL
+        };
+
+        CVM_VK_CHECK(vkBeginCommandBuffer(frame->transfer_work,&command_buffer_begin_info));
+        command_buffer=frame->transfer_work;
+    }
+
+    return command_buffer;
+}
+
+VkCommandBuffer cvm_vk_begin_module_frame_graphics(cvm_vk_module_data * module_data,bool has_work,uint32_t frame_offset,uint32_t * swapchain_image_index)
+{
+    *swapchain_image_index = cvm_vk_acquired_frames[(cvm_vk_current_frame+frame_offset)%cvm_vk_swapchain_image_count].acquired_image_index;///value passed back by rendering engine
+
+    cvm_vk_module_frame_data * frame=module_data->frames+module_data->current_frame;
+
+    VkCommandBuffer command_buffer=VK_NULL_HANDLE;
+
+    /// if recreating module relevant data might want to pass in first, new acquired swapchain image index so this frames correct index can be passed back to modules
+    /// this may warrant making get swapchain image index a separate function that operates on same list of submodle frames (and can fail accordingly &c.)
+    if(*swapchain_image_index != CVM_VK_INVALID_IMAGE_INDEX)///data passed in is valid and everything is up to date
+    {
+        if(frame->in_flight)
+        {
+            fprintf(stderr,"TRYING TO WRITE module FRAME THAT IS STILL IN FLIGHT\n");
+            exit(-1);
+        }
+
+        frame->has_graphics_work=has_work;
+
+        VkCommandBufferBeginInfo command_buffer_begin_info=(VkCommandBufferBeginInfo)
+        {
+            .sType=VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO,
+            .pNext=NULL,
+            .flags=VK_COMMAND_BUFFER_USAGE_ONE_TIME_SUBMIT_BIT,/// VK_COMMAND_BUFFER_USAGE_SIMULTANEOUS_USE_BIT  necessary? in tutorial bet shouldn't be used?
+            .pInheritanceInfo=NULL
+        };
+
+        if(frame->has_graphics_work)
+        {
+            CVM_VK_CHECK(vkBeginCommandBuffer(frame->graphics_work,&command_buffer_begin_info));
+            command_buffer=frame->graphics_work;
+        }
+    }
+    else frame->has_graphics_work=false;
+
+    return command_buffer;
+}
+
+cvm_vk_module_frame_data * cvm_vk_end_module_frame(cvm_vk_module_data * module_data)
+{
+    cvm_vk_module_frame_data * frame=module_data->frames + module_data->current_frame++;
+    if(module_data->current_frame==module_data->frame_count)module_data->current_frame=0;
+
+    if(frame->has_transfer_work) CVM_VK_CHECK(vkEndCommandBuffer(frame->transfer_work));
+    if(frame->has_graphics_work) CVM_VK_CHECK(vkEndCommandBuffer(frame->graphics_work));
+
+    return frame;
+}
+
 
 
 
@@ -1085,6 +1517,11 @@ void cvm_vk_destroy_shader_stage_info(VkPipelineShaderStageCreateInfo * stage_in
 
 static VkBuffer test_buffer;
 static VkDeviceMemory test_buffer_memory;
+
+VkBuffer * get_test_buffer(void)
+{
+    return &test_buffer;
+}
 
 
 
@@ -1257,8 +1694,3 @@ void terminate_test_render_data()
 
     terminate_test_render_data_ext();
 }
-
-
-
-
-
