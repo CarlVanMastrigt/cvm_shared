@@ -28,10 +28,8 @@ static VkRenderPass test_render_pass;
 static VkPipelineLayout test_pipeline_layout;///relevant descriptors, share as much as possible
 static VkPipeline test_pipeline;
 static VkPipelineShaderStageCreateInfo test_stages[2];
-static VkRect2D test_render_area;
 
 static VkFramebuffer * test_framebuffers;
-static uint32_t test_framebuffer_count;///hopefully won't need to store locally
 static VkImageView test_framebuffer_attachments[1];///first reserved for swapchain, rest are views of locally created images
 
 
@@ -270,8 +268,11 @@ static void create_test_pipelines(VkRect2D screen_rectangle,VkSampleCountFlagBit
     cvm_vk_create_graphics_pipeline(&test_pipeline,&create_info);
 }
 
-static void create_test_framebuffers(VkRect2D screen_rectangle,uint32_t swapchain_image_count,VkImageView * swapchain_image_views)
+static void create_test_framebuffers(VkRect2D screen_rectangle)
 {
+    uint32_t swapchain_image_count=cvm_vk_get_swapchain_image_count();
+    uint32_t i;
+
     VkFramebufferCreateInfo create_info=(VkFramebufferCreateInfo)
     {
         .sType=VK_STRUCTURE_TYPE_FRAMEBUFFER_CREATE_INFO,
@@ -287,11 +288,11 @@ static void create_test_framebuffers(VkRect2D screen_rectangle,uint32_t swapchai
 
     test_framebuffers=malloc(swapchain_image_count*sizeof(VkFramebuffer));
 
-    for(test_framebuffer_count=0;test_framebuffer_count<swapchain_image_count;test_framebuffer_count++)
+    for(i=0;i<swapchain_image_count;i++)
     {
-        test_framebuffer_attachments[0]=swapchain_image_views[test_framebuffer_count];
+        test_framebuffer_attachments[0]=cvm_vk_get_swapchain_image_view(i);
 
-        cvm_vk_create_framebuffer(test_framebuffers+test_framebuffer_count,&create_info);
+        cvm_vk_create_framebuffer(test_framebuffers+i,&create_info);
     }
 }
 
@@ -332,22 +333,23 @@ void terminate_test_render_data_ext()
 }
 
 
-void initialise_test_swapchain_dependencies_ext(VkRect2D screen_rectangle,uint32_t swapchain_image_count,VkImageView * swapchain_image_views)
+void initialise_test_swapchain_dependencies_ext(void)
 {
+    VkRect2D screen_rectangle=cvm_vk_get_screen_rectangle();
+
     create_test_pipelines(screen_rectangle,VK_SAMPLE_COUNT_1_BIT,1.0);
 
-    create_test_framebuffers(screen_rectangle,swapchain_image_count,swapchain_image_views);
-
-    test_render_area=screen_rectangle;///needed for begin render pass
+    create_test_framebuffers(screen_rectangle);
 }
 
 void terminate_test_swapchain_dependencies_ext()
 {
+    uint32_t swapchain_image_count=cvm_vk_get_swapchain_image_count();
     uint32_t i;
 
     cvm_vk_destroy_pipeline(test_pipeline);
 
-    for(i=0;i<test_framebuffer_count;i++)
+    for(i=0;i<swapchain_image_count;i++)
     {
         cvm_vk_destroy_framebuffer(test_framebuffers[i]);
     }
@@ -423,7 +425,7 @@ cvm_vk_module_frame_data * test_render_frame(void)
             .pNext=NULL,
             .renderPass=test_render_pass,
             .framebuffer=test_framebuffers[swapchain_image_index],
-            .renderArea=test_render_area,
+            .renderArea=cvm_vk_get_screen_rectangle(),
             .clearValueCount=1,
             .pClearValues= &clear_value
         };

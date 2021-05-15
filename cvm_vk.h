@@ -183,20 +183,6 @@ struct cvm_vk_module_data
     uint32_t current_frame;/// the current index of frames to use, internal to this module
 };
 
-
-/// remove this
-typedef struct cvm_vk_external_module
-{
-    /// initialise and terminate are per-swapchain instantiation
-    void    (*initialise)   (VkDevice,VkPhysicalDevice,VkRect2D,uint32_t,VkImageView*);
-    /// per module update, each module internally keeps links to track data that requires rebuilding of resources (then this func executes those rebuilds)
-    void    (*render    )   (VkCommandBuffer,uint32_t,VkRect2D);///primary command buffer into which to render,  (framebuffer/swapchain_image) index to use for rendering, render_area
-    void    (*terminate )   (VkDevice);
-}
-cvm_vk_external_module;
-
-uint32_t cvm_vk_add_external_module(cvm_vk_external_module module);
-
 ///gfx_data can ONLY change in main thread and ONLY be changed when not in use by other threads (inside main sync mutexes or before starting other threads that use it)
 
 void cvm_vk_initialise(SDL_Window * window,uint32_t min_swapchain_images,uint32_t extra_swapchain_images);
@@ -205,13 +191,9 @@ void cvm_vk_terminate(void);///also terminates swapchain dependant data at same 
 void cvm_vk_initialise_swapchain(void);
 void cvm_vk_reinitialise_swapchain(void);
 
-void cvm_vk_present(void);
-
-void cvm_vk_wait(void);
 
 
 
-VkFormat cvm_vk_get_screen_format(void);///can remove?
 
 
 void cvm_vk_create_render_pass(VkRenderPass * render_pass,VkRenderPassCreateInfo * info);
@@ -236,6 +218,12 @@ void cvm_vk_destroy_shader_stage_info(VkPipelineShaderStageCreateInfo * stage_in
 bool cvm_vk_prepare_for_next_frame(bool acquire);
 void cvm_vk_transition_frame(void);///must be called in critical section!
 void cvm_vk_present_current_frame(cvm_vk_module_frame_data ** module_frames, uint32_t module_count);
+bool cvm_vk_are_frames_active(void);
+
+VkRect2D cvm_vk_get_screen_rectangle(void);
+VkFormat cvm_vk_get_screen_format(void);///can remove?
+uint32_t cvm_vk_get_swapchain_image_count(void);
+VkImageView cvm_vk_get_swapchain_image_view(uint32_t index);
 
 /// (NYI) these are needed for cases where modules delegate rendering to a worker thread by way of secondary command buffers, which then need their own command pool
 /// also need functions to allocate command buffers from these pools
@@ -253,9 +241,15 @@ VkCommandBuffer cvm_vk_begin_module_frame_graphics(cvm_vk_module_data * module_d
 cvm_vk_module_frame_data * cvm_vk_end_module_frame(cvm_vk_module_data * module_data);
 
 
+
+
+
 ///test stuff
 void initialise_test_render_data(void);
 void terminate_test_render_data(void);
+
+void terminate_test_swapchain_dependencies(VkDevice device);
+void initialise_test_swapchain_dependencies(VkDevice device,VkPhysicalDevice physical_device,VkRect2D screen_rectangle,uint32_t swapchain_image_count,VkImageView * swapchain_image_views);
 
 VkBuffer * get_test_buffer(void);///remove after memory mangement system is implemented
 
@@ -263,8 +257,6 @@ VkBuffer * get_test_buffer(void);///remove after memory mangement system is impl
 
 
 
-
-void cvm_vk_sc_test(void);
 
 
 

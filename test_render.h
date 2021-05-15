@@ -40,7 +40,7 @@ void terminate_test_render_data_ext(void);
 /// applications responsibility to handle recreation of module resources (unless i can come up with a better approach)
 void update_test_render_resources(bool screen_resized);
 
-void initialise_test_swapchain_dependencies_ext(VkRect2D screen_rectangle,uint32_t swapchain_image_count,VkImageView * swapchain_image_views);
+void initialise_test_swapchain_dependencies_ext(void);
 void terminate_test_swapchain_dependencies_ext(void);
 
 void test_render_ext(VkCommandBuffer command_buffer,uint32_t swapchain_image_index,VkRect2D screen_rectangle, const VkBuffer * vertex_buffer);///vertex buffer should be removed

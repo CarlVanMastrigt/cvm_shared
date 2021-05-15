@@ -316,14 +316,6 @@ static void terminate_overlay_swapchain_dependencies(VkDevice device)
 }
 
 
-static cvm_vk_external_module overlay_module=
-(cvm_vk_external_module)
-{
-    .initialise =   initialise_overlay_swapchain_dependencies,
-    .render     =   render_overlay_,
-    .terminate  =   terminate_overlay_swapchain_dependencies
-};
-
 void initialise_overlay_vk_data()
 {
     VkAttachmentDescription attachment_description=(VkAttachmentDescription)
@@ -401,7 +393,7 @@ void initialise_overlay_vk_data()
     };
 
 //    CVM_VK_CHECK(vkCreateRenderPass(cvm_vk_device,&render_pass_creation_info,NULL,&overlay_render_pass));
-    cvm_vk_create_render_pass(&render_pass_creation_info,&overlay_render_pass);
+    cvm_vk_create_render_pass(&overlay_render_pass,&render_pass_creation_info);
 
 //    create_vertex_buffer();
 
@@ -409,9 +401,6 @@ void initialise_overlay_vk_data()
     ///should probably move above to initialise_overlay_module_function
 
 
-
-
-    cvm_vk_add_external_module(overlay_module);
 }
 
 void terminate_overlay_vk_data()
