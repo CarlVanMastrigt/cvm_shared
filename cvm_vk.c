@@ -111,23 +111,18 @@ modules should mark themselves as clearing the back buffer so that they can be r
 
 ///may want to rename cvm_vk_frames, cvm_vk_presentation_instance probably isnt that bad tbh...
 ///realloc these only if number of swapchain image count changes (it wont really)
-static cvm_vk_acquired_frame * cvm_vk_acquired_frames;///number of these should match swapchain image count
-static cvm_vk_swapchain_frame * cvm_vk_swapchain_frames;
+static cvm_vk_acquired_frame_data * cvm_vk_acquired_frames=NULL;///number of these should match swapchain image count
+static cvm_vk_swapchain_image_data * cvm_vk_swapchain_images=NULL;
+static uint32_t cvm_vk_frame_count=0;/// this is also the number of swapchain images
 static uint32_t cvm_vk_current_frame_index;
 static uint32_t cvm_vk_active_frame_count=0;///both frames in flight and frames acquired by rendereer
-
-///can remove following 2 eventually (are now part of swapchain frame struct)
-static VkImage * cvm_vk_swapchain_images;///can probably make this a function local array (or malloc) that can be discarded after views are created
-static VkImageView * cvm_vk_swapchain_image_views;///can probably make part of cvm_vk_frame (though they do get destroyed/recreated separately from frames...)
-
-static uint32_t cvm_vk_swapchain_image_count;
 ///following used to determine number of swapchain images to allocate
 static uint32_t cvm_vk_min_swapchain_images;
 static uint32_t cvm_vk_extra_swapchain_images;
 
 
 
-static void cvm_vk_initialise_instance(SDL_Window * window)
+static void cvm_vk_create_instance(SDL_Window * window)
 {
     uint32_t extension_count;
     uint32_t api_version;
@@ -178,7 +173,7 @@ static void cvm_vk_initialise_instance(SDL_Window * window)
     free(extension_names);
 }
 
-static void cvm_vk_initialise_surface(SDL_Window * window)
+static void cvm_vk_create_surface(SDL_Window * window)
 {
     if(!SDL_Vulkan_CreateSurface(window,cvm_vk_instance,&cvm_vk_surface))
     {
@@ -248,7 +243,7 @@ static bool check_physical_device_appropriate(bool dedicated_gpu_required)
     ///return true only if all queue families needed can be satisfied
 }
 
-static void cvm_vk_initialise_physical_device(void)
+static void cvm_vk_create_physical_device(void)
 {
     ///pick best physical device with all required features
 
@@ -303,7 +298,7 @@ static void cvm_vk_initialise_physical_device(void)
     free(present_modes);
 }
 
-static void cvm_vk_initialise_logical_device(void)
+static void cvm_vk_create_logical_device(void)
 {
     const char * device_extensions[]={"VK_KHR_swapchain"};
     const char * layer_names[]={"VK_LAYER_KHRONOS_validation"};///VK_LAYER_LUNARG_standard_validation
@@ -412,16 +407,84 @@ static void cvm_vk_destroy_default_command_pools()
     if(cvm_vk_present_queue_family!=cvm_vk_transfer_queue_family) vkDestroyCommandPool(cvm_vk_device,cvm_vk_present_command_pool,NULL);
 }
 
-static void cvm_vk_create_presentation_frames(VkImage * swapchain_images)
+
+
+void cvm_vk_create_swapchain(void)
 {
     uint32_t i;
+    VkSurfaceCapabilitiesKHR surface_capabilities;
+
+    VkSwapchainKHR old_swapchain=cvm_vk_swapchain;
+    uint32_t old_frame_count=cvm_vk_frame_count;
+
+    ///swapchain
+    CVM_VK_CHECK(vkGetPhysicalDeviceSurfaceCapabilitiesKHR(cvm_vk_physical_device,cvm_vk_surface,&surface_capabilities));
+
+    cvm_vk_screen_rectangle=(VkRect2D)
+    {
+        .offset=(VkOffset2D)
+        {
+            .x=0,
+            .y=0
+        },
+        .extent=surface_capabilities.currentExtent
+    };
+
+    cvm_vk_frame_count=((surface_capabilities.minImageCount > cvm_vk_min_swapchain_images) ? surface_capabilities.minImageCount : cvm_vk_min_swapchain_images)+cvm_vk_extra_swapchain_images;
+
+    if((surface_capabilities.maxImageCount)&&(surface_capabilities.maxImageCount < cvm_vk_frame_count))
+    {
+        fprintf(stderr,"REQUESTED SWAPCHAIN IMAGE COUNT NOT SUPPORTED\n");
+        exit(-1);
+    }
+
+    /// the contents of this dictate explicit transfer of the swapchain images between the graphics and present queues!
+    VkSwapchainCreateInfoKHR swapchain_create_info=(VkSwapchainCreateInfoKHR)
+    {
+        .sType=VK_STRUCTURE_TYPE_SWAPCHAIN_CREATE_INFO_KHR,
+        .pNext=NULL,
+        .flags=0,
+        .surface=cvm_vk_surface,
+        .minImageCount=cvm_vk_frame_count,
+        .imageFormat=cvm_vk_surface_format.format,
+        .imageColorSpace=cvm_vk_surface_format.colorSpace,
+        .imageExtent=surface_capabilities.currentExtent,
+        .imageArrayLayers=1,
+        .imageUsage=VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT,
+        .imageSharingMode=VK_SHARING_MODE_EXCLUSIVE,
+        .queueFamilyIndexCount=0,
+        .pQueueFamilyIndices=NULL,
+        .preTransform=surface_capabilities.currentTransform,
+        .compositeAlpha=VK_COMPOSITE_ALPHA_OPAQUE_BIT_KHR,
+        .presentMode=cvm_vk_surface_present_mode,
+        .clipped=VK_TRUE,
+        .oldSwapchain=old_swapchain
+    };
+
+    CVM_VK_CHECK(vkCreateSwapchainKHR(cvm_vk_device,&swapchain_create_info,NULL,&cvm_vk_swapchain));
+
+    CVM_VK_CHECK(vkGetSwapchainImagesKHR(cvm_vk_device,cvm_vk_swapchain,&i,NULL));
+    if(i!=cvm_vk_frame_count)
+    {
+        fprintf(stderr,"COULD NOT CREATE REQUESTED NUMBER OF SWAPCHAIN IMAGES\n");
+        exit(-1);
+    }
+
+    VkImage * swapchain_images=malloc(sizeof(VkImage)*cvm_vk_frame_count);
+
+    CVM_VK_CHECK(vkGetSwapchainImagesKHR(cvm_vk_device,cvm_vk_swapchain,&cvm_vk_frame_count,swapchain_images));
+
+
 
     cvm_vk_current_frame_index=0;///need to reset in case number of swapchain images goes down
 
-    cvm_vk_acquired_frames=malloc(cvm_vk_swapchain_image_count*sizeof(cvm_vk_acquired_frame));
-    cvm_vk_swapchain_frames=malloc(cvm_vk_swapchain_image_count*sizeof(cvm_vk_swapchain_frame));
+    if(old_frame_count!=cvm_vk_frame_count)
+    {
+        cvm_vk_acquired_frames=realloc(cvm_vk_acquired_frames,cvm_vk_frame_count*sizeof(cvm_vk_acquired_frame_data));
+        cvm_vk_swapchain_images=realloc(cvm_vk_swapchain_images,cvm_vk_frame_count*sizeof(cvm_vk_swapchain_image_data));
+    }
 
-    for(i=0;i<cvm_vk_swapchain_image_count;i++)
+    for(i=0;i<cvm_vk_frame_count;i++)
     {
         /// acquired frames
         cvm_vk_acquired_frames[i].acquired_image_index=CVM_VK_INVALID_IMAGE_INDEX;
@@ -447,7 +510,7 @@ static void cvm_vk_create_presentation_frames(VkImage * swapchain_images)
 
 
         /// swapchain frames
-        cvm_vk_swapchain_frames[i].image=swapchain_images[i];
+        cvm_vk_swapchain_images[i].image=swapchain_images[i];
 
         VkImageViewCreateInfo image_view_create_info=(VkImageViewCreateInfo)
         {
@@ -474,15 +537,15 @@ static void cvm_vk_create_presentation_frames(VkImage * swapchain_images)
             }
         };
 
-        CVM_VK_CHECK(vkCreateImageView(cvm_vk_device,&image_view_create_info,NULL,&cvm_vk_swapchain_frames[i].image_view));
+        CVM_VK_CHECK(vkCreateImageView(cvm_vk_device,&image_view_create_info,NULL,&cvm_vk_swapchain_images[i].image_view));
 
-        CVM_VK_CHECK(vkCreateSemaphore(cvm_vk_device,&semaphore_create_info,NULL,&cvm_vk_swapchain_frames[i].present_semaphore));
+        CVM_VK_CHECK(vkCreateSemaphore(cvm_vk_device,&semaphore_create_info,NULL,&cvm_vk_swapchain_images[i].present_semaphore));
 
 
         ///queue ownership transfer stuff
         if(cvm_vk_present_queue_family!=cvm_vk_graphics_queue_family)
         {
-            CVM_VK_CHECK(vkCreateSemaphore(cvm_vk_device,&semaphore_create_info,NULL,&cvm_vk_swapchain_frames[i].graphics_relinquish_semaphore));
+            CVM_VK_CHECK(vkCreateSemaphore(cvm_vk_device,&semaphore_create_info,NULL,&cvm_vk_swapchain_images[i].graphics_relinquish_semaphore));
 
 
             VkCommandBufferAllocateInfo command_buffer_allocate_info=(VkCommandBufferAllocateInfo)
@@ -495,10 +558,10 @@ static void cvm_vk_create_presentation_frames(VkImage * swapchain_images)
             };
 
             command_buffer_allocate_info.commandPool=cvm_vk_graphics_command_pool;
-            CVM_VK_CHECK(vkAllocateCommandBuffers(cvm_vk_device,&command_buffer_allocate_info,&cvm_vk_swapchain_frames[i].graphics_relinquish_command_buffer));
+            CVM_VK_CHECK(vkAllocateCommandBuffers(cvm_vk_device,&command_buffer_allocate_info,&cvm_vk_swapchain_images[i].graphics_relinquish_command_buffer));
 
             command_buffer_allocate_info.commandPool=cvm_vk_present_command_pool;
-            CVM_VK_CHECK(vkAllocateCommandBuffers(cvm_vk_device,&command_buffer_allocate_info,&cvm_vk_swapchain_frames[i].present_acquire_command_buffer));
+            CVM_VK_CHECK(vkAllocateCommandBuffers(cvm_vk_device,&command_buffer_allocate_info,&cvm_vk_swapchain_images[i].present_acquire_command_buffer));
 
             VkCommandBufferBeginInfo command_buffer_begin_info=(VkCommandBufferBeginInfo)
             {
@@ -512,7 +575,7 @@ static void cvm_vk_create_presentation_frames(VkImage * swapchain_images)
 
 
 
-            CVM_VK_CHECK(vkBeginCommandBuffer(cvm_vk_swapchain_frames[i].graphics_relinquish_command_buffer,&command_buffer_begin_info));
+            CVM_VK_CHECK(vkBeginCommandBuffer(cvm_vk_swapchain_images[i].graphics_relinquish_command_buffer,&command_buffer_begin_info));
 
             VkImageMemoryBarrier graphics_relinquish_barrier=(VkImageMemoryBarrier)
             {
@@ -535,9 +598,9 @@ static void cvm_vk_create_presentation_frames(VkImage * swapchain_images)
                 }
             };
 
-            vkCmdPipelineBarrier(cvm_vk_swapchain_frames[i].graphics_relinquish_command_buffer,VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT,0,0,0,NULL,0,NULL,1,&graphics_relinquish_barrier);///dstStageMask=VK_PIPELINE_STAGE_BOTTOM_OF_PIPE_BIT ??
+            vkCmdPipelineBarrier(cvm_vk_swapchain_images[i].graphics_relinquish_command_buffer,VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT,0,0,0,NULL,0,NULL,1,&graphics_relinquish_barrier);///dstStageMask=VK_PIPELINE_STAGE_BOTTOM_OF_PIPE_BIT ??
 
-            CVM_VK_CHECK(vkEndCommandBuffer(cvm_vk_swapchain_frames[i].graphics_relinquish_command_buffer));
+            CVM_VK_CHECK(vkEndCommandBuffer(cvm_vk_swapchain_images[i].graphics_relinquish_command_buffer));
 
 
 
@@ -562,186 +625,46 @@ static void cvm_vk_create_presentation_frames(VkImage * swapchain_images)
                 }
             };
 
-            CVM_VK_CHECK(vkBeginCommandBuffer(cvm_vk_swapchain_frames[i].present_acquire_command_buffer,&command_buffer_begin_info));
+            CVM_VK_CHECK(vkBeginCommandBuffer(cvm_vk_swapchain_images[i].present_acquire_command_buffer,&command_buffer_begin_info));
 
-            vkCmdPipelineBarrier(cvm_vk_swapchain_frames[i].present_acquire_command_buffer,0,0,0,0,NULL,0,NULL,1,&present_acquire_barrier);
+            vkCmdPipelineBarrier(cvm_vk_swapchain_images[i].present_acquire_command_buffer,0,0,0,0,NULL,0,NULL,1,&present_acquire_barrier);
             /// from wiki: no srcStage/AccessMask or dstStage/AccessMask is needed, waiting for a semaphore does that automatically.
 
-            CVM_VK_CHECK(vkEndCommandBuffer(cvm_vk_swapchain_frames[i].present_acquire_command_buffer));
+            CVM_VK_CHECK(vkEndCommandBuffer(cvm_vk_swapchain_images[i].present_acquire_command_buffer));
         }
     }
+
+    free(swapchain_images);
+
+    if(old_swapchain!=VK_NULL_HANDLE)vkDestroySwapchainKHR(cvm_vk_device,old_swapchain,NULL);
 }
 
-static void cvm_vk_destroy_presentation_frames()
+void cvm_vk_destroy_swapchain(void)
 {
     uint32_t i;
 
-    for(i=0;i<cvm_vk_swapchain_image_count;i++)
+    for(i=0;i<cvm_vk_frame_count;i++)
     {
         /// acquired frames
         vkDestroyFence(cvm_vk_device,cvm_vk_acquired_frames[i].completion_fence,NULL);
         vkDestroySemaphore(cvm_vk_device,cvm_vk_acquired_frames[i].acquire_semaphore,NULL);
 
         /// swapchain frames
-        vkDestroyImageView(cvm_vk_device,cvm_vk_swapchain_frames[i].image_view,NULL);
+        vkDestroyImageView(cvm_vk_device,cvm_vk_swapchain_images[i].image_view,NULL);
 
-        vkDestroySemaphore(cvm_vk_device,cvm_vk_swapchain_frames[i].present_semaphore,NULL);
+        vkDestroySemaphore(cvm_vk_device,cvm_vk_swapchain_images[i].present_semaphore,NULL);
 
         ///queue ownership transfer stuff
         if(cvm_vk_present_queue_family!=cvm_vk_graphics_queue_family)
         {
-            vkDestroySemaphore(cvm_vk_device,cvm_vk_swapchain_frames[i].graphics_relinquish_semaphore,NULL);
+            vkDestroySemaphore(cvm_vk_device,cvm_vk_swapchain_images[i].graphics_relinquish_semaphore,NULL);
 
-            vkFreeCommandBuffers(cvm_vk_device,cvm_vk_graphics_command_pool,1,&cvm_vk_swapchain_frames[i].graphics_relinquish_command_buffer);
-            vkFreeCommandBuffers(cvm_vk_device,cvm_vk_graphics_command_pool,1,&cvm_vk_swapchain_frames[i].present_acquire_command_buffer);
+            vkFreeCommandBuffers(cvm_vk_device,cvm_vk_graphics_command_pool,1,&cvm_vk_swapchain_images[i].graphics_relinquish_command_buffer);
+            vkFreeCommandBuffers(cvm_vk_device,cvm_vk_graphics_command_pool,1,&cvm_vk_swapchain_images[i].present_acquire_command_buffer);
         }
     }
-
-    free(cvm_vk_acquired_frames);
-    free(cvm_vk_swapchain_frames);
 }
 
-void cvm_vk_initialise_swapchain(void) ///merge with swapchain initialisation?
-{
-    uint32_t i;
-    VkSurfaceCapabilitiesKHR surface_capabilities;
-
-    ///swapchain
-    CVM_VK_CHECK(vkGetPhysicalDeviceSurfaceCapabilitiesKHR(cvm_vk_physical_device,cvm_vk_surface,&surface_capabilities));
-
-    cvm_vk_screen_rectangle=(VkRect2D)
-    {
-        .offset=(VkOffset2D)
-        {
-            .x=0,
-            .y=0
-        },
-        .extent=surface_capabilities.currentExtent
-    };
-
-    cvm_vk_swapchain_image_count=((surface_capabilities.minImageCount > cvm_vk_min_swapchain_images) ? surface_capabilities.minImageCount : cvm_vk_min_swapchain_images)+cvm_vk_extra_swapchain_images;
-
-    if((surface_capabilities.maxImageCount)&&(surface_capabilities.maxImageCount < cvm_vk_swapchain_image_count))
-    {
-        fprintf(stderr,"REQUESTED SWAPCHAIN IMAGE COUNT NOT SUPPORTED\n");
-        exit(-1);
-    }
-
-    cvm_vk_swapchain_images=malloc(sizeof(VkImage)*cvm_vk_swapchain_image_count);
-    cvm_vk_swapchain_image_views=malloc(sizeof(VkImageView)*cvm_vk_swapchain_image_count);
-
-    /// the contents of this dictate explicit transfer of the swapchain images between the graphics and present queues!
-    VkSwapchainCreateInfoKHR swapchain_create_info=(VkSwapchainCreateInfoKHR)
-    {
-        .sType=VK_STRUCTURE_TYPE_SWAPCHAIN_CREATE_INFO_KHR,
-        .pNext=NULL,
-        .flags=0,
-        .surface=cvm_vk_surface,
-        .minImageCount=cvm_vk_swapchain_image_count,
-        .imageFormat=cvm_vk_surface_format.format,
-        .imageColorSpace=cvm_vk_surface_format.colorSpace,
-        .imageExtent=surface_capabilities.currentExtent,
-        .imageArrayLayers=1,
-        .imageUsage=VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT,
-        .imageSharingMode=VK_SHARING_MODE_EXCLUSIVE,
-        .queueFamilyIndexCount=0,
-        .pQueueFamilyIndices=NULL,
-        .preTransform=surface_capabilities.currentTransform,
-        .compositeAlpha=VK_COMPOSITE_ALPHA_OPAQUE_BIT_KHR,
-        .presentMode=cvm_vk_surface_present_mode,
-        .clipped=VK_TRUE,
-        .oldSwapchain=cvm_vk_swapchain
-    };
-
-    CVM_VK_CHECK(vkCreateSwapchainKHR(cvm_vk_device,&swapchain_create_info,NULL,&cvm_vk_swapchain));
-
-    CVM_VK_CHECK(vkGetSwapchainImagesKHR(cvm_vk_device,cvm_vk_swapchain,&i,NULL));
-    if(i!=cvm_vk_swapchain_image_count)
-    {
-        fprintf(stderr,"COULD NOT CREATE REQUESTED NUMBER OF SWAPCHAIN IMAGES\n");
-        exit(-1);
-    }
-    CVM_VK_CHECK(vkGetSwapchainImagesKHR(cvm_vk_device,cvm_vk_swapchain,&cvm_vk_swapchain_image_count,cvm_vk_swapchain_images));
-
-    VkImageViewCreateInfo image_view_create_info;
-
-    for(i=0;i<cvm_vk_swapchain_image_count;i++)
-    {
-        image_view_create_info=(VkImageViewCreateInfo)
-        {
-            .sType=VK_STRUCTURE_TYPE_IMAGE_VIEW_CREATE_INFO,
-            .pNext=NULL,
-            .flags=0,
-            .image=cvm_vk_swapchain_images[i],
-            .viewType=VK_IMAGE_VIEW_TYPE_2D,
-            .format=cvm_vk_surface_format.format,
-            .components=(VkComponentMapping)
-            {
-                .r=VK_COMPONENT_SWIZZLE_IDENTITY,
-                .g=VK_COMPONENT_SWIZZLE_IDENTITY,
-                .b=VK_COMPONENT_SWIZZLE_IDENTITY,
-                .a=VK_COMPONENT_SWIZZLE_IDENTITY
-            },
-            .subresourceRange=(VkImageSubresourceRange)
-            {
-                .aspectMask=VK_IMAGE_ASPECT_COLOR_BIT,
-                .baseMipLevel=0,
-                .levelCount=1,
-                .baseArrayLayer=0,
-                .layerCount=1
-            }
-        };
-
-        CVM_VK_CHECK(vkCreateImageView(cvm_vk_device,&image_view_create_info,NULL,cvm_vk_swapchain_image_views+i));
-    }
-
-    ///for(i=0;i<cvm_vk_external_module_count;i++) cvm_vk_external_modules[i].initialise(
-    ///    cvm_vk_device,cvm_vk_physical_device,cvm_vk_screen_rectangle,cvm_vk_swapchain_image_count,cvm_vk_swapchain_image_views);
-
-    cvm_vk_create_presentation_frames(cvm_vk_swapchain_images);///move this to a parent function for both this and cvm_vk_initialise_swapchain
-
-    initialise_test_swapchain_dependencies(cvm_vk_device,cvm_vk_physical_device,cvm_vk_screen_rectangle,cvm_vk_swapchain_image_count,cvm_vk_swapchain_image_views);
-}
-
-void cvm_vk_reinitialise_swapchain(void)///actually does substantially improve performance over terminate -> initialise
-{
-    uint32_t i;
-    VkSwapchainKHR old_swapchain;
-
-    ///for(i=0;i<cvm_vk_external_module_count;i++) cvm_vk_external_modules[i].terminate(cvm_vk_device);
-    terminate_test_swapchain_dependencies(cvm_vk_device);
-
-    for(i=0;i<cvm_vk_swapchain_image_count;i++) vkDestroyImageView(cvm_vk_device,cvm_vk_swapchain_image_views[i],NULL);
-
-    free(cvm_vk_swapchain_images);
-    free(cvm_vk_swapchain_image_views);
-
-    cvm_vk_destroy_presentation_frames(); ///move this to a parent function or redesign this whole structure
-
-    old_swapchain=cvm_vk_swapchain;
-
-    cvm_vk_initialise_swapchain();
-
-    vkDestroySwapchainKHR(cvm_vk_device,old_swapchain,NULL);
-}
-
-static void cvm_vk_terminate_swapchain(void)
-{
-    uint32_t i;
-
-    ///for(i=0;i<cvm_vk_external_module_count;i++) cvm_vk_external_modules[i].terminate(cvm_vk_device);
-    terminate_test_swapchain_dependencies(cvm_vk_device);
-
-    for(i=0;i<cvm_vk_swapchain_image_count;i++) vkDestroyImageView(cvm_vk_device,cvm_vk_swapchain_image_views[i],NULL);
-
-    free(cvm_vk_swapchain_images);
-    free(cvm_vk_swapchain_image_views);
-
-    cvm_vk_destroy_presentation_frames();
-
-    vkDestroySwapchainKHR(cvm_vk_device,cvm_vk_swapchain,NULL);
-    cvm_vk_swapchain=VK_NULL_HANDLE;
-}
 
 VkRect2D cvm_vk_get_screen_rectangle(void)
 {
@@ -755,12 +678,12 @@ VkFormat cvm_vk_get_screen_format(void)
 
 uint32_t cvm_vk_get_swapchain_image_count(void)
 {
-    return cvm_vk_swapchain_image_count;
+    return cvm_vk_frame_count;
 }
 
 VkImageView cvm_vk_get_swapchain_image_view(uint32_t index)
 {
-    return cvm_vk_swapchain_frames[index].image_view;
+    return cvm_vk_swapchain_images[index].image_view;
 }
 
 void cvm_vk_initialise(SDL_Window * window,uint32_t min_swapchain_images,uint32_t extra_swapchain_images)
@@ -768,18 +691,21 @@ void cvm_vk_initialise(SDL_Window * window,uint32_t min_swapchain_images,uint32_
     cvm_vk_min_swapchain_images=min_swapchain_images;
     cvm_vk_extra_swapchain_images=extra_swapchain_images;
 
-    cvm_vk_initialise_instance(window);
-    cvm_vk_initialise_surface(window);
-    cvm_vk_initialise_physical_device();
-    cvm_vk_initialise_logical_device();
+    cvm_vk_create_instance(window);
+    cvm_vk_create_surface(window);
+    cvm_vk_create_physical_device();
+    cvm_vk_create_logical_device();
     cvm_vk_create_default_command_pools();
 }
 
 void cvm_vk_terminate(void)
 {
-    cvm_vk_terminate_swapchain();
     cvm_vk_destroy_default_command_pools();
 
+    free(cvm_vk_acquired_frames);
+    free(cvm_vk_swapchain_images);
+
+    vkDestroySwapchainKHR(cvm_vk_device,cvm_vk_swapchain,NULL);
     vkDestroyDevice(cvm_vk_device,NULL);
     vkDestroySurfaceKHR(cvm_vk_instance,cvm_vk_surface,NULL);
     vkDestroyInstance(cvm_vk_instance,NULL);
@@ -799,7 +725,7 @@ void cvm_vk_terminate(void)
 /// rely on this func to detect swapchain resize? couldn't hurt to double check based on screen resize
 bool cvm_vk_prepare_for_next_frame(bool acquire)
 {
-    cvm_vk_acquired_frame * frame = cvm_vk_acquired_frames + (cvm_vk_current_frame_index+cvm_vk_extra_swapchain_images+1)%cvm_vk_swapchain_image_count;///next frame written to by module detached the most from presentation
+    cvm_vk_acquired_frame_data * frame = cvm_vk_acquired_frames + (cvm_vk_current_frame_index+cvm_vk_extra_swapchain_images+1)%cvm_vk_frame_count;///next frame written to by module detached the most from presentation
     /// this modulo op should be used everywhere its acted upon instead
 
     if(frame->in_flight)
@@ -838,20 +764,20 @@ bool cvm_vk_prepare_for_next_frame(bool acquire)
 
 void cvm_vk_transition_frame(void)///must be called in critical section!
 {
-    cvm_vk_current_frame_index = (cvm_vk_current_frame_index+1)%cvm_vk_swapchain_image_count;
+    cvm_vk_current_frame_index = (cvm_vk_current_frame_index+1)%cvm_vk_frame_count;
 }
 
 void cvm_vk_present_current_frame(cvm_vk_module_frame_data ** module_frames, uint32_t module_frame_count)
 {
-    cvm_vk_acquired_frame * acquired_frame;
-    cvm_vk_swapchain_frame * swapchain_frame;
+    cvm_vk_acquired_frame_data * acquired_frame;
+    cvm_vk_swapchain_image_data * swapchain_image;
     ///add extra ones if async/sync compute can be waited upon as well?
     VkSemaphore semaphores[4];
     VkPipelineStageFlags wait_stage_flags[4];
     uint32_t i;
 
     acquired_frame=cvm_vk_acquired_frames+cvm_vk_current_frame_index;
-    swapchain_frame=cvm_vk_swapchain_frames+acquired_frame->acquired_image_index;
+    swapchain_image=cvm_vk_swapchain_images+acquired_frame->acquired_image_index;
 
     if(acquired_frame->acquired_image_index==CVM_VK_INVALID_IMAGE_INDEX)
     {
@@ -904,7 +830,7 @@ void cvm_vk_present_current_frame(cvm_vk_module_frame_data ** module_frames, uin
         if((i==(module_frame_count-1))&&(cvm_vk_present_queue_family==cvm_vk_graphics_queue_family))///no queue ownership transfer required, signal present semaphore as this is the last frame
         {
             submit_info.signalSemaphoreCount=1;
-            submit_info.pSignalSemaphores=&swapchain_frame->present_semaphore;
+            submit_info.pSignalSemaphores=&swapchain_image->present_semaphore;
 
             CVM_VK_CHECK(vkQueueSubmit(cvm_vk_graphics_queue,1,&submit_info,acquired_frame->completion_fence));
         }
@@ -920,17 +846,17 @@ void cvm_vk_present_current_frame(cvm_vk_module_frame_data ** module_frames, uin
         submit_info.waitSemaphoreCount=0;
         submit_info.pWaitSemaphores=NULL;
         submit_info.signalSemaphoreCount=1;
-        submit_info.pSignalSemaphores=&swapchain_frame->graphics_relinquish_semaphore;
-        submit_info.pCommandBuffers=&swapchain_frame->graphics_relinquish_command_buffer;
+        submit_info.pSignalSemaphores=&swapchain_image->graphics_relinquish_semaphore;
+        submit_info.pCommandBuffers=&swapchain_image->graphics_relinquish_command_buffer;
         CVM_VK_CHECK(vkQueueSubmit(cvm_vk_graphics_queue,1,&submit_info,VK_NULL_HANDLE));
 
         ///acquire
         wait_stage_flags[0]=VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT;
         submit_info.waitSemaphoreCount=1;
-        submit_info.pWaitSemaphores=&swapchain_frame->graphics_relinquish_semaphore;
+        submit_info.pWaitSemaphores=&swapchain_image->graphics_relinquish_semaphore;
         submit_info.signalSemaphoreCount=1;
-        submit_info.pSignalSemaphores=&swapchain_frame->present_semaphore;
-        submit_info.pCommandBuffers=&swapchain_frame->present_acquire_command_buffer;
+        submit_info.pSignalSemaphores=&swapchain_image->present_semaphore;
+        submit_info.pCommandBuffers=&swapchain_image->present_acquire_command_buffer;
         CVM_VK_CHECK(vkQueueSubmit(cvm_vk_present_queue,1,&submit_info,acquired_frame->completion_fence));
     }
 
@@ -939,7 +865,7 @@ void cvm_vk_present_current_frame(cvm_vk_module_frame_data ** module_frames, uin
         .sType=VK_STRUCTURE_TYPE_PRESENT_INFO_KHR,
         .pNext=NULL,
         .waitSemaphoreCount=1,
-        .pWaitSemaphores=&swapchain_frame->present_semaphore,
+        .pWaitSemaphores=&swapchain_image->present_semaphore,
         .swapchainCount=1,
         .pSwapchains=&cvm_vk_swapchain,
         .pImageIndices=&acquired_frame->acquired_image_index,
@@ -1204,7 +1130,7 @@ VkCommandBuffer cvm_vk_begin_module_frame_transfer(cvm_vk_module_data * module_d
 
 VkCommandBuffer cvm_vk_begin_module_frame_graphics(cvm_vk_module_data * module_data,bool has_work,uint32_t frame_offset,uint32_t * swapchain_image_index)
 {
-    *swapchain_image_index = cvm_vk_acquired_frames[(cvm_vk_current_frame_index+frame_offset)%cvm_vk_swapchain_image_count].acquired_image_index;///value passed back by rendering engine
+    *swapchain_image_index = cvm_vk_acquired_frames[(cvm_vk_current_frame_index+frame_offset)%cvm_vk_frame_count].acquired_image_index;///value passed back by rendering engine
 
     cvm_vk_module_frame_data * frame=module_data->frames+module_data->current_frame;
 
@@ -1388,7 +1314,7 @@ static void create_vertex_buffer(void)
         exit(-1);
     }
 
-    CVM_VK_CHECK(vkBindBufferMemory(cvm_vk_device,test_buffer,test_buffer_memory,0))
+    CVM_VK_CHECK(vkBindBufferMemory(cvm_vk_device,test_buffer,test_buffer_memory,0));
 
 
     void * data;
@@ -1412,39 +1338,13 @@ static void create_vertex_buffer(void)
 
 
 
-void initialise_test_swapchain_dependencies(VkDevice device,VkPhysicalDevice physical_device,VkRect2D screen_rectangle,uint32_t swapchain_image_count,VkImageView * swapchain_image_views)
-{
-    initialise_test_swapchain_dependencies_ext();
-}
 
-//static void render_test(VkCommandBuffer command_buffer,uint32_t swapchain_image_index,VkRect2D screen_rectangle)
-//{
-//    test_render_ext(command_buffer,swapchain_image_index,screen_rectangle,&test_buffer);
-//}
-
-void terminate_test_swapchain_dependencies(VkDevice device)
-{
-    terminate_test_swapchain_dependencies_ext();
-}
-
-
-
-
-//static cvm_vk_external_module test_module=
-//(cvm_vk_external_module)
-//{
-//    .initialise =   initialise_test_swapchain_dependencies,
-//    .render     =   render_test,
-//    .terminate  =   terminate_test_swapchain_dependencies
-//};
 
 void initialise_test_render_data()
 {
     create_vertex_buffer();
 
     initialise_test_render_data_ext();
-
-    //cvm_vk_add_external_module(test_module);
 }
 
 void terminate_test_render_data()

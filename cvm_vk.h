@@ -89,7 +89,7 @@ going to have to rely on acquire op failing to know when to recreate swapchain
 ///this should encompass swapchain images? (or at least it could...)
 
 ///this struct contains the data needed to be known upfront when acquiring swapchain image (cvm_vk_swapchain_frame), some data could go in either struct though...
-typedef struct cvm_vk_acquired_frame
+typedef struct cvm_vk_acquired_frame_data
 {
     ///would be good to have a way to specify other semaphores &c. here for more complex interdependency
 
@@ -104,10 +104,10 @@ typedef struct cvm_vk_acquired_frame
     VkFence completion_fence;
     bool in_flight;
 }
-cvm_vk_acquired_frame;
+cvm_vk_acquired_frame_data;
 
 
-typedef struct cvm_vk_swapchain_frame
+typedef struct cvm_vk_swapchain_image_data
 {
     VkImage image;///theese are provided by the WSI
     VkImageView image_view;
@@ -121,7 +121,7 @@ typedef struct cvm_vk_swapchain_frame
     VkSemaphore graphics_relinquish_semaphore;///only necessary when transferring to a dedicated present queue, used as part of queue transfer
     VkSemaphore present_semaphore;///needed by VkPresentInfoKHR
 }
-cvm_vk_swapchain_frame;
+cvm_vk_swapchain_image_data;
 
 
 /// if using a linked list paradigm, the looking forward in linked list becomes method to acquire appropriate frame
@@ -188,8 +188,8 @@ struct cvm_vk_module_data
 void cvm_vk_initialise(SDL_Window * window,uint32_t min_swapchain_images,uint32_t extra_swapchain_images);
 void cvm_vk_terminate(void);///also terminates swapchain dependant data at same time
 
-void cvm_vk_initialise_swapchain(void);
-void cvm_vk_reinitialise_swapchain(void);
+void cvm_vk_create_swapchain(void);
+void cvm_vk_destroy_swapchain(void);
 
 
 
@@ -247,9 +247,6 @@ cvm_vk_module_frame_data * cvm_vk_end_module_frame(cvm_vk_module_data * module_d
 ///test stuff
 void initialise_test_render_data(void);
 void terminate_test_render_data(void);
-
-void terminate_test_swapchain_dependencies(VkDevice device);
-void initialise_test_swapchain_dependencies(VkDevice device,VkPhysicalDevice physical_device,VkRect2D screen_rectangle,uint32_t swapchain_image_count,VkImageView * swapchain_image_views);
 
 VkBuffer * get_test_buffer(void);///remove after memory mangement system is implemented
 

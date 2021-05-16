@@ -368,39 +368,6 @@ VkFramebuffer get_test_framebuffer(uint32_t swapchain_image_index)
 }
 
 
-void update_test_render_resources(bool screen_resized)
-{
-    //
-}
-
-void test_render_ext(VkCommandBuffer command_buffer,uint32_t swapchain_image_index,VkRect2D screen_rectangle, const VkBuffer * vertex_buffer)
-{
-    VkClearValue clear_value;///other clear colours should probably be provided by other chunks of application
-    clear_value.color=(VkClearColorValue){{0.95f,0.5f,0.75f,1.0f}};
-
-    VkRenderPassBeginInfo render_pass_begin_info=(VkRenderPassBeginInfo)
-    {
-        .sType=VK_STRUCTURE_TYPE_RENDER_PASS_BEGIN_INFO,
-        .pNext=NULL,
-        .renderPass=test_render_pass,
-        .framebuffer=test_framebuffers[swapchain_image_index],
-        .renderArea=screen_rectangle,
-        .clearValueCount=1,
-        .pClearValues= &clear_value
-    };
-
-    vkCmdBeginRenderPass(command_buffer,&render_pass_begin_info,VK_SUBPASS_CONTENTS_INLINE);///================
-
-    vkCmdBindPipeline(command_buffer,VK_PIPELINE_BIND_POINT_GRAPHICS,test_pipeline);
-
-    VkDeviceSize offset=0;
-    vkCmdBindVertexBuffers(command_buffer,0,1,vertex_buffer,&offset);
-
-    vkCmdDraw(command_buffer,4,1,0,0);
-
-    vkCmdEndRenderPass(command_buffer);///================
-}
-
 cvm_vk_module_frame_data * test_render_frame(void)
 {
     VkCommandBuffer command_buffer;
