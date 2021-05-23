@@ -19,12 +19,6 @@ along with cvm_shared.  If not, see <https://www.gnu.org/licenses/>.
 
 #include "cvm_shared.h"
 
-
-
-
-/// copying around some vulkan structs (e.g. device) is invalid, instead just use these static ones
-///     ^ wait, is this actually true?? where did i find this?
-
 static VkInstance cvm_vk_instance;
 static VkPhysicalDevice cvm_vk_physical_device;
 static VkDevice cvm_vk_device;///"logical" device
@@ -35,26 +29,11 @@ static VkSurfaceFormatKHR cvm_vk_surface_format;
 static VkPresentModeKHR cvm_vk_surface_present_mode;
 static VkRect2D cvm_vk_screen_rectangle;///extent
 
-
-
-///may make more sense to put just above in struct (useful for "one time" initialisation functions, like vertex buffer)
-///ALTERNATIVELY have functions to allocate these external objects? -- probably just use this option
-
-
-
-
-
-
-///command pools are externally synchronised! need to allocate one pool per frame!?
-/// ^ no, externally synchronised they can only be altered from 1 CPU thread
-///     so long as these command pools are only used by the thread that created them,
-///     and each module allocates its own command pool per thread (it absolutely should) then everything will be fine
-
 ///these can be the same
 static uint32_t cvm_vk_transfer_queue_family;
 static uint32_t cvm_vk_graphics_queue_family;
 static uint32_t cvm_vk_present_queue_family;
-///only support one of each of above
+///only support one of each of above (allow these to be the same if above are as well?)
 static VkQueue cvm_vk_transfer_queue;
 static VkQueue cvm_vk_graphics_queue;
 static VkQueue cvm_vk_present_queue;
@@ -64,61 +43,22 @@ static VkCommandPool cvm_vk_transfer_command_pool;///provided as default for sam
 static VkCommandPool cvm_vk_graphics_command_pool;///provided as default for same-thread modules
 static VkCommandPool cvm_vk_present_command_pool;///only ever used within this file
 
-///submit transfer ops?
-
-/**
-shared command pools (one per queue) is fucking terrible, wont work across threads
-command pools CAN however be used for command buffers that are submitted to different queues (no they CANNOT!)
-    only this file handles the present queue
-    need a way for other files to know whether they need a seperate command pool for transfer and graphics ops
-        whatever is used MUST support multiple worker thread (able to create multiple command pools) and should be able to know if its operating in the main thread (only 1 command buffer needed)
-
-command pools are only needed for the threads in which command buffers are created and recorded to! this means we only need 1 command pool per worker thread per queue family!
-
-ask for gfx and transfer pools together if thats whats needed, with bool is_main_thread which returns the main thread's queues!
-this makes memory management quite tricky, but w/e cross that bridge when we get to it.
-
-
-note secondary command buffers must be in executable state in order to execute them in a primary command buffer, this reduces their usefulness substantially...
-
-need one command pool per thread per dispatch, things that only exist in the main thread won't need this
-
-tie command buffers to their state's age (use update count to determine if a command is out of date), this alleviates need to wait for commands to finish before recreating pipelines and other resources,
-    ^ just wait on fence then increment the update counter, (need to track how many are in flight!) track submit count and wait on fences of completion count to match (can simply be uint that rolls over!)
-    ^ this paradigm agoids needing to wait on device
-
-
-
-what prevents framebuffer images (that arent the destination swapchain image) being overwritten by other frames in flight?
-    ^ external dependencies? semaphores?
-
-
-could allow 2 sets of "transient" framebuffer (g-buffer) images by creating VkFramebuffers for every possible combo of swapchain image and "transient" (g-buffer) images (i do like this tbh)
-
-
-can use dependencies to ensure uniform reads
-
-
-subpasses should know if they're the first or not in the execution hierarchy and have their external dependencies set as such (don't implement single command buffer for layout transition)
-modules should mark themselves as clearing the back buffer so that they can be replaced when necessary
-*/
-
-
-/// need to know the max frame count such that resources can only be used after they are transferred back, should this be matched to the number of swapchain images?
-///probably best to match this to swapchain count
-
 
 
 ///may want to rename cvm_vk_frames, cvm_vk_presentation_instance probably isnt that bad tbh...
 ///realloc these only if number of swapchain image count changes (it wont really)
-static cvm_vk_acquired_frame_data * cvm_vk_acquired_frames=NULL;///number of these should match swapchain image count
-static cvm_vk_swapchain_image_data * cvm_vk_swapchain_images=NULL;
-static uint32_t cvm_vk_frame_count=0;/// this is also the number of swapchain images
-static uint32_t cvm_vk_current_frame_index;
-static uint32_t cvm_vk_active_frame_count=0;///both frames in flight and frames acquired by rendereer
+static cvm_vk_swapchain_image_acquisition_data * cvm_vk_acquired_images=NULL;///number of these should match swapchain image count
+static cvm_vk_swapchain_image_present_data * cvm_vk_presenting_images=NULL;
+static uint32_t cvm_vk_swapchain_image_count=0;/// this is also the number of swapchain images
+static uint32_t cvm_vk_current_acquired_image_index;
+static uint32_t cvm_vk_acquired_image_count=0;///both frames in flight and frames acquired by rendereer
 ///following used to determine number of swapchain images to allocate
 static uint32_t cvm_vk_min_swapchain_images;
-static uint32_t cvm_vk_extra_swapchain_images;
+static uint32_t cvm_vk_extra_swapchain_images;///thread separation, applicable to transfer as well, name *should* reflect this
+static bool cvm_vk_rendering_resources_valid=false;///can this be determined for next frame during critical section?
+
+
+//static uint32_t cvm_vk_transfer_cycle_count;
 
 
 
@@ -206,16 +146,14 @@ static bool check_physical_device_appropriate(bool dedicated_gpu_required)
     queue_family_properties=malloc(sizeof(VkQueueFamilyProperties)*queue_family_count);
     vkGetPhysicalDeviceQueueFamilyProperties(cvm_vk_physical_device,&queue_family_count,queue_family_properties);
 
-    ///use first queue family to support each desired operation
-
-    #warning find_other queue families
-
     cvm_vk_graphics_queue_family=queue_family_count;
     cvm_vk_transfer_queue_family=queue_family_count;
     cvm_vk_present_queue_family=queue_family_count;
 
     for(i=0;i<queue_family_count;i++)
     {
+        //printf("queue family %u available queue count: %u\n",i,queue_family_properties[i].queueCount);
+
         if((cvm_vk_graphics_queue_family==queue_family_count)&&(queue_family_properties[i].queueFlags&VK_QUEUE_GRAPHICS_BIT))
         {
             cvm_vk_graphics_queue_family=i;
@@ -303,9 +241,8 @@ static void cvm_vk_create_logical_device(void)
     const char * device_extensions[]={"VK_KHR_swapchain"};
     const char * layer_names[]={"VK_LAYER_KHRONOS_validation"};///VK_LAYER_LUNARG_standard_validation
     float queue_priority=1.0;
+    ///if implementing separate transfer queue use a lower priority
 
-    ///try copying device_features from gfx until appropriate list of required features found
-    ///can possibly do this internally for engine based o features requested (though that would disallow custom things to be done by user, so is probably better to AND anything like that with user defined feature list)
     VkPhysicalDeviceFeatures features=(VkPhysicalDeviceFeatures){};
     features.geometryShader=VK_TRUE;
     features.multiDrawIndirect=VK_TRUE;
@@ -415,7 +352,7 @@ void cvm_vk_create_swapchain(void)
     VkSurfaceCapabilitiesKHR surface_capabilities;
 
     VkSwapchainKHR old_swapchain=cvm_vk_swapchain;
-    uint32_t old_frame_count=cvm_vk_frame_count;
+    uint32_t old_swapchain_image_count=cvm_vk_swapchain_image_count;
 
     ///swapchain
     CVM_VK_CHECK(vkGetPhysicalDeviceSurfaceCapabilitiesKHR(cvm_vk_physical_device,cvm_vk_surface,&surface_capabilities));
@@ -430,9 +367,9 @@ void cvm_vk_create_swapchain(void)
         .extent=surface_capabilities.currentExtent
     };
 
-    cvm_vk_frame_count=((surface_capabilities.minImageCount > cvm_vk_min_swapchain_images) ? surface_capabilities.minImageCount : cvm_vk_min_swapchain_images)+cvm_vk_extra_swapchain_images;
+    cvm_vk_swapchain_image_count=((surface_capabilities.minImageCount > cvm_vk_min_swapchain_images) ? surface_capabilities.minImageCount : cvm_vk_min_swapchain_images)+cvm_vk_extra_swapchain_images;
 
-    if((surface_capabilities.maxImageCount)&&(surface_capabilities.maxImageCount < cvm_vk_frame_count))
+    if((surface_capabilities.maxImageCount)&&(surface_capabilities.maxImageCount < cvm_vk_swapchain_image_count))
     {
         fprintf(stderr,"REQUESTED SWAPCHAIN IMAGE COUNT NOT SUPPORTED\n");
         exit(-1);
@@ -445,7 +382,7 @@ void cvm_vk_create_swapchain(void)
         .pNext=NULL,
         .flags=0,
         .surface=cvm_vk_surface,
-        .minImageCount=cvm_vk_frame_count,
+        .minImageCount=cvm_vk_swapchain_image_count,
         .imageFormat=cvm_vk_surface_format.format,
         .imageColorSpace=cvm_vk_surface_format.colorSpace,
         .imageExtent=surface_capabilities.currentExtent,
@@ -464,31 +401,30 @@ void cvm_vk_create_swapchain(void)
     CVM_VK_CHECK(vkCreateSwapchainKHR(cvm_vk_device,&swapchain_create_info,NULL,&cvm_vk_swapchain));
 
     CVM_VK_CHECK(vkGetSwapchainImagesKHR(cvm_vk_device,cvm_vk_swapchain,&i,NULL));
-    if(i!=cvm_vk_frame_count)
+    if(i!=cvm_vk_swapchain_image_count)
     {
         fprintf(stderr,"COULD NOT CREATE REQUESTED NUMBER OF SWAPCHAIN IMAGES\n");
         exit(-1);
     }
 
-    VkImage * swapchain_images=malloc(sizeof(VkImage)*cvm_vk_frame_count);
+    VkImage * swapchain_images=malloc(sizeof(VkImage)*cvm_vk_swapchain_image_count);
 
-    CVM_VK_CHECK(vkGetSwapchainImagesKHR(cvm_vk_device,cvm_vk_swapchain,&cvm_vk_frame_count,swapchain_images));
+    CVM_VK_CHECK(vkGetSwapchainImagesKHR(cvm_vk_device,cvm_vk_swapchain,&cvm_vk_swapchain_image_count,swapchain_images));
 
 
 
-    cvm_vk_current_frame_index=0;///need to reset in case number of swapchain images goes down
+    cvm_vk_current_acquired_image_index=0;///need to reset in case number of swapchain images goes down
 
-    if(old_frame_count!=cvm_vk_frame_count)
+    if(old_swapchain_image_count!=cvm_vk_swapchain_image_count)
     {
-        cvm_vk_acquired_frames=realloc(cvm_vk_acquired_frames,cvm_vk_frame_count*sizeof(cvm_vk_acquired_frame_data));
-        cvm_vk_swapchain_images=realloc(cvm_vk_swapchain_images,cvm_vk_frame_count*sizeof(cvm_vk_swapchain_image_data));
+        cvm_vk_acquired_images=realloc(cvm_vk_acquired_images,cvm_vk_swapchain_image_count*sizeof(cvm_vk_swapchain_image_acquisition_data));
+        cvm_vk_presenting_images=realloc(cvm_vk_presenting_images,cvm_vk_swapchain_image_count*sizeof(cvm_vk_swapchain_image_present_data));
     }
 
-    for(i=0;i<cvm_vk_frame_count;i++)
+    for(i=0;i<cvm_vk_swapchain_image_count;i++)
     {
         /// acquired frames
-        cvm_vk_acquired_frames[i].acquired_image_index=CVM_VK_INVALID_IMAGE_INDEX;
-        cvm_vk_acquired_frames[i].in_flight=false;
+        cvm_vk_acquired_images[i].image_index=CVM_VK_INVALID_IMAGE_INDEX;
 
         VkSemaphoreCreateInfo semaphore_create_info=(VkSemaphoreCreateInfo)
         {
@@ -497,6 +433,13 @@ void cvm_vk_create_swapchain(void)
             .flags=0
         };
 
+        CVM_VK_CHECK(vkCreateSemaphore(cvm_vk_device,&semaphore_create_info,NULL,&cvm_vk_acquired_images[i].acquire_semaphore));
+
+
+        /// swapchain frames
+        cvm_vk_presenting_images[i].in_flight=false;
+        cvm_vk_presenting_images[i].image=swapchain_images[i];
+
         VkFenceCreateInfo fence_create_info=(VkFenceCreateInfo)
         {
             .sType=VK_STRUCTURE_TYPE_FENCE_CREATE_INFO,
@@ -504,13 +447,7 @@ void cvm_vk_create_swapchain(void)
             .flags=0
         };
 
-        CVM_VK_CHECK(vkCreateFence(cvm_vk_device,&fence_create_info,NULL,&cvm_vk_acquired_frames[i].completion_fence));
-
-        CVM_VK_CHECK(vkCreateSemaphore(cvm_vk_device,&semaphore_create_info,NULL,&cvm_vk_acquired_frames[i].acquire_semaphore));
-
-
-        /// swapchain frames
-        cvm_vk_swapchain_images[i].image=swapchain_images[i];
+        CVM_VK_CHECK(vkCreateFence(cvm_vk_device,&fence_create_info,NULL,&cvm_vk_presenting_images[i].completion_fence));
 
         VkImageViewCreateInfo image_view_create_info=(VkImageViewCreateInfo)
         {
@@ -537,15 +474,15 @@ void cvm_vk_create_swapchain(void)
             }
         };
 
-        CVM_VK_CHECK(vkCreateImageView(cvm_vk_device,&image_view_create_info,NULL,&cvm_vk_swapchain_images[i].image_view));
+        CVM_VK_CHECK(vkCreateImageView(cvm_vk_device,&image_view_create_info,NULL,&cvm_vk_presenting_images[i].image_view));
 
-        CVM_VK_CHECK(vkCreateSemaphore(cvm_vk_device,&semaphore_create_info,NULL,&cvm_vk_swapchain_images[i].present_semaphore));
+        CVM_VK_CHECK(vkCreateSemaphore(cvm_vk_device,&semaphore_create_info,NULL,&cvm_vk_presenting_images[i].present_semaphore));
 
 
         ///queue ownership transfer stuff
         if(cvm_vk_present_queue_family!=cvm_vk_graphics_queue_family)
         {
-            CVM_VK_CHECK(vkCreateSemaphore(cvm_vk_device,&semaphore_create_info,NULL,&cvm_vk_swapchain_images[i].graphics_relinquish_semaphore));
+            CVM_VK_CHECK(vkCreateSemaphore(cvm_vk_device,&semaphore_create_info,NULL,&cvm_vk_presenting_images[i].graphics_relinquish_semaphore));
 
 
             VkCommandBufferAllocateInfo command_buffer_allocate_info=(VkCommandBufferAllocateInfo)
@@ -558,10 +495,10 @@ void cvm_vk_create_swapchain(void)
             };
 
             command_buffer_allocate_info.commandPool=cvm_vk_graphics_command_pool;
-            CVM_VK_CHECK(vkAllocateCommandBuffers(cvm_vk_device,&command_buffer_allocate_info,&cvm_vk_swapchain_images[i].graphics_relinquish_command_buffer));
+            CVM_VK_CHECK(vkAllocateCommandBuffers(cvm_vk_device,&command_buffer_allocate_info,&cvm_vk_presenting_images[i].graphics_relinquish_command_buffer));
 
             command_buffer_allocate_info.commandPool=cvm_vk_present_command_pool;
-            CVM_VK_CHECK(vkAllocateCommandBuffers(cvm_vk_device,&command_buffer_allocate_info,&cvm_vk_swapchain_images[i].present_acquire_command_buffer));
+            CVM_VK_CHECK(vkAllocateCommandBuffers(cvm_vk_device,&command_buffer_allocate_info,&cvm_vk_presenting_images[i].present_acquire_command_buffer));
 
             VkCommandBufferBeginInfo command_buffer_begin_info=(VkCommandBufferBeginInfo)
             {
@@ -575,7 +512,7 @@ void cvm_vk_create_swapchain(void)
 
 
 
-            CVM_VK_CHECK(vkBeginCommandBuffer(cvm_vk_swapchain_images[i].graphics_relinquish_command_buffer,&command_buffer_begin_info));
+            CVM_VK_CHECK(vkBeginCommandBuffer(cvm_vk_presenting_images[i].graphics_relinquish_command_buffer,&command_buffer_begin_info));
 
             VkImageMemoryBarrier graphics_relinquish_barrier=(VkImageMemoryBarrier)
             {
@@ -598,9 +535,9 @@ void cvm_vk_create_swapchain(void)
                 }
             };
 
-            vkCmdPipelineBarrier(cvm_vk_swapchain_images[i].graphics_relinquish_command_buffer,VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT,0,0,0,NULL,0,NULL,1,&graphics_relinquish_barrier);///dstStageMask=VK_PIPELINE_STAGE_BOTTOM_OF_PIPE_BIT ??
+            vkCmdPipelineBarrier(cvm_vk_presenting_images[i].graphics_relinquish_command_buffer,VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT,0,0,0,NULL,0,NULL,1,&graphics_relinquish_barrier);///dstStageMask=VK_PIPELINE_STAGE_BOTTOM_OF_PIPE_BIT ??
 
-            CVM_VK_CHECK(vkEndCommandBuffer(cvm_vk_swapchain_images[i].graphics_relinquish_command_buffer));
+            CVM_VK_CHECK(vkEndCommandBuffer(cvm_vk_presenting_images[i].graphics_relinquish_command_buffer));
 
 
 
@@ -625,42 +562,45 @@ void cvm_vk_create_swapchain(void)
                 }
             };
 
-            CVM_VK_CHECK(vkBeginCommandBuffer(cvm_vk_swapchain_images[i].present_acquire_command_buffer,&command_buffer_begin_info));
+            CVM_VK_CHECK(vkBeginCommandBuffer(cvm_vk_presenting_images[i].present_acquire_command_buffer,&command_buffer_begin_info));
 
-            vkCmdPipelineBarrier(cvm_vk_swapchain_images[i].present_acquire_command_buffer,0,0,0,0,NULL,0,NULL,1,&present_acquire_barrier);
+            vkCmdPipelineBarrier(cvm_vk_presenting_images[i].present_acquire_command_buffer,0,0,0,0,NULL,0,NULL,1,&present_acquire_barrier);
             /// from wiki: no srcStage/AccessMask or dstStage/AccessMask is needed, waiting for a semaphore does that automatically.
 
-            CVM_VK_CHECK(vkEndCommandBuffer(cvm_vk_swapchain_images[i].present_acquire_command_buffer));
+            CVM_VK_CHECK(vkEndCommandBuffer(cvm_vk_presenting_images[i].present_acquire_command_buffer));
         }
     }
 
     free(swapchain_images);
 
     if(old_swapchain!=VK_NULL_HANDLE)vkDestroySwapchainKHR(cvm_vk_device,old_swapchain,NULL);
+
+    cvm_vk_rendering_resources_valid=true;
 }
 
 void cvm_vk_destroy_swapchain(void)
 {
     uint32_t i;
 
-    for(i=0;i<cvm_vk_frame_count;i++)
+    for(i=0;i<cvm_vk_swapchain_image_count;i++)
     {
         /// acquired frames
-        vkDestroyFence(cvm_vk_device,cvm_vk_acquired_frames[i].completion_fence,NULL);
-        vkDestroySemaphore(cvm_vk_device,cvm_vk_acquired_frames[i].acquire_semaphore,NULL);
+        vkDestroySemaphore(cvm_vk_device,cvm_vk_acquired_images[i].acquire_semaphore,NULL);
 
         /// swapchain frames
-        vkDestroyImageView(cvm_vk_device,cvm_vk_swapchain_images[i].image_view,NULL);
+        vkDestroyImageView(cvm_vk_device,cvm_vk_presenting_images[i].image_view,NULL);
 
-        vkDestroySemaphore(cvm_vk_device,cvm_vk_swapchain_images[i].present_semaphore,NULL);
+        vkDestroyFence(cvm_vk_device,cvm_vk_presenting_images[i].completion_fence,NULL);
+
+        vkDestroySemaphore(cvm_vk_device,cvm_vk_presenting_images[i].present_semaphore,NULL);
 
         ///queue ownership transfer stuff
         if(cvm_vk_present_queue_family!=cvm_vk_graphics_queue_family)
         {
-            vkDestroySemaphore(cvm_vk_device,cvm_vk_swapchain_images[i].graphics_relinquish_semaphore,NULL);
+            vkDestroySemaphore(cvm_vk_device,cvm_vk_presenting_images[i].graphics_relinquish_semaphore,NULL);
 
-            vkFreeCommandBuffers(cvm_vk_device,cvm_vk_graphics_command_pool,1,&cvm_vk_swapchain_images[i].graphics_relinquish_command_buffer);
-            vkFreeCommandBuffers(cvm_vk_device,cvm_vk_graphics_command_pool,1,&cvm_vk_swapchain_images[i].present_acquire_command_buffer);
+            vkFreeCommandBuffers(cvm_vk_device,cvm_vk_graphics_command_pool,1,&cvm_vk_presenting_images[i].graphics_relinquish_command_buffer);
+            vkFreeCommandBuffers(cvm_vk_device,cvm_vk_graphics_command_pool,1,&cvm_vk_presenting_images[i].present_acquire_command_buffer);
         }
     }
 }
@@ -678,12 +618,12 @@ VkFormat cvm_vk_get_screen_format(void)
 
 uint32_t cvm_vk_get_swapchain_image_count(void)
 {
-    return cvm_vk_frame_count;
+    return cvm_vk_swapchain_image_count;
 }
 
 VkImageView cvm_vk_get_swapchain_image_view(uint32_t index)
 {
-    return cvm_vk_swapchain_images[index].image_view;
+    return cvm_vk_presenting_images[index].image_view;
 }
 
 void cvm_vk_initialise(SDL_Window * window,uint32_t min_swapchain_images,uint32_t extra_swapchain_images)
@@ -702,8 +642,8 @@ void cvm_vk_terminate(void)
 {
     cvm_vk_destroy_default_command_pools();
 
-    free(cvm_vk_acquired_frames);
-    free(cvm_vk_swapchain_images);
+    free(cvm_vk_acquired_images);
+    free(cvm_vk_presenting_images);
 
     vkDestroySwapchainKHR(cvm_vk_device,cvm_vk_swapchain,NULL);
     vkDestroyDevice(cvm_vk_device,NULL);
@@ -711,80 +651,86 @@ void cvm_vk_terminate(void)
     vkDestroyInstance(cvm_vk_instance,NULL);
 }
 
-///also do module frame invalidation here, pass in settings update counter or similar
-/// success, fail but not ready to recreate, fail and ready to recreate
-/// enen though it'd be possible to not recreate swapchain when some settings change and just use out of date checking to avoid rendering...
-///         its much simpler and easier to just hijack swapchain recreation to rebuild rendering resources and avoid presenting out of date data
 
-///returns true when rebuild is required and possible, frame images in should be CVM_VK_INVALID_IMAGE_INDEX (and be that for ALL frames)
-/// CANNOT alter the contents of any presenation frame being read from, should add some kind of error checking (though that will be difficult to do in multithreading situations efficiently)
 /// MUST be called AFTER present for the frame
-/// need static bool here, or using input to control prevention of frame acquisition (can probably assume recreation needed if game_running is still true) also allows other reasons to recreate, e.g. settings change
+/// need robust input parameter(s?) to control prevention of frame acquisition (can probably assume recreation needed if game_running is still true) also allows other reasons to recreate, e.g. settings change
 ///      ^ this paradigm might even avoid swapchain recreation when not changing things that affect it! (e.g. 1 modules MSAA settings)
 /// need a better name for this
 /// rely on this func to detect swapchain resize? couldn't hurt to double check based on screen resize
-bool cvm_vk_prepare_for_next_frame(bool acquire)
+void cvm_vk_prepare_for_next_frame(bool rendering_resources_invalid)
 {
-    cvm_vk_acquired_frame_data * frame = cvm_vk_acquired_frames + (cvm_vk_current_frame_index+cvm_vk_extra_swapchain_images+1)%cvm_vk_frame_count;///next frame written to by module detached the most from presentation
-    /// this modulo op should be used everywhere its acted upon instead
+    if(rendering_resources_invalid)cvm_vk_rendering_resources_valid=false;
 
-    if(frame->in_flight)
+    cvm_vk_swapchain_image_acquisition_data * acquired_image = cvm_vk_acquired_images + (cvm_vk_current_acquired_image_index+cvm_vk_extra_swapchain_images+1)%cvm_vk_swapchain_image_count;
+    /// next frame (+1) written to by module detached the most from presentation (+cvm_vk_extra_swapchain_images)
+    /// this modulo op should be used everywhere a particular frame offset (offset from cvm_vk_current_image_acquisition_index) is needed
+
+    if(acquired_image->image_index!=CVM_VK_INVALID_IMAGE_INDEX)
     {
-        CVM_VK_CHECK(vkWaitForFences(cvm_vk_device,1,&frame->completion_fence,VK_TRUE,1000000000));
-        CVM_VK_CHECK(vkResetFences(cvm_vk_device,1,&frame->completion_fence));
-        frame->in_flight=false;///has finished
-        cvm_vk_active_frame_count--;
+        cvm_vk_swapchain_image_present_data * presenting_image = cvm_vk_presenting_images + acquired_image->image_index;
+
+        if(presenting_image->in_flight)
+        {
+            CVM_VK_CHECK(vkWaitForFences(cvm_vk_device,1,&presenting_image->completion_fence,VK_TRUE,1000000000));
+            CVM_VK_CHECK(vkResetFences(cvm_vk_device,1,&presenting_image->completion_fence));
+            presenting_image->in_flight=false;///has finished
+            cvm_vk_acquired_image_count--;
+        }
+        else
+        {
+            fprintf(stderr,"SHOULD BE IN FLIGHT IF IMAGE WAS ACQUIRED\n");
+        }
     }
 
-    if(acquire)
+    if(cvm_vk_rendering_resources_valid)
     {
-        VkResult r=vkAcquireNextImageKHR(cvm_vk_device,cvm_vk_swapchain,1000000000,frame->acquire_semaphore,VK_NULL_HANDLE,&frame->acquired_image_index);
+        VkResult r=vkAcquireNextImageKHR(cvm_vk_device,cvm_vk_swapchain,1000000000,acquired_image->acquire_semaphore,VK_NULL_HANDLE,&acquired_image->image_index);
         if(r==VK_ERROR_OUT_OF_DATE_KHR)/// if VK_SUBOPTIMAL_KHR then image WAS acquired and so must be displayed
         {
             puts("swapchain out of date");
-            frame->acquired_image_index=CVM_VK_INVALID_IMAGE_INDEX;
-            return false;
+            acquired_image->image_index=CVM_VK_INVALID_IMAGE_INDEX;
+            cvm_vk_rendering_resources_valid=false;
         }
         else if(r!=VK_SUCCESS)
         {
             fprintf(stderr,"ACQUIRE NEXT IMAGE FAILED WITH ERROR : %d\n",r);
-            frame->acquired_image_index=CVM_VK_INVALID_IMAGE_INDEX;
-            return false;
+            acquired_image->image_index=CVM_VK_INVALID_IMAGE_INDEX;
+            cvm_vk_rendering_resources_valid=false;
+        }
+        else
+        {
+            cvm_vk_acquired_image_count++;
         }
     }
     else
     {
-        frame->acquired_image_index=CVM_VK_INVALID_IMAGE_INDEX;
-        return false;
+        acquired_image->image_index=CVM_VK_INVALID_IMAGE_INDEX;
     }
-
-    cvm_vk_active_frame_count++;
-    return true;
 }
 
 void cvm_vk_transition_frame(void)///must be called in critical section!
 {
-    cvm_vk_current_frame_index = (cvm_vk_current_frame_index+1)%cvm_vk_frame_count;
+    cvm_vk_current_acquired_image_index = (cvm_vk_current_acquired_image_index+1)%cvm_vk_swapchain_image_count;
 }
 
-void cvm_vk_present_current_frame(cvm_vk_module_frame_data ** module_frames, uint32_t module_frame_count)
+void cvm_vk_present_current_frame(cvm_vk_module_graphics_block ** graphics_blocks, uint32_t graphics_block_count)
 {
-    cvm_vk_acquired_frame_data * acquired_frame;
-    cvm_vk_swapchain_image_data * swapchain_image;
+    cvm_vk_swapchain_image_acquisition_data * acquired_image;
+    cvm_vk_swapchain_image_present_data * presenting_image;
     ///add extra ones if async/sync compute can be waited upon as well?
-    VkSemaphore semaphores[4];
-    VkPipelineStageFlags wait_stage_flags[4];
+    VkPipelineStageFlags wait_stage_flags;
     uint32_t i;
 
-    acquired_frame=cvm_vk_acquired_frames+cvm_vk_current_frame_index;
-    swapchain_image=cvm_vk_swapchain_images+acquired_frame->acquired_image_index;
+    acquired_image=cvm_vk_acquired_images+cvm_vk_current_acquired_image_index;
 
-    if(acquired_frame->acquired_image_index==CVM_VK_INVALID_IMAGE_INDEX)
+    if(acquired_image->image_index==CVM_VK_INVALID_IMAGE_INDEX)
     {
         ///check frame isnt in flight?
         ///also check no module frame has graphics work?
         return;
     }
+
+    presenting_image=cvm_vk_presenting_images+acquired_image->image_index;
 
     #warning need error checking that every module has work to do, also a way to exit early
 
@@ -794,15 +740,15 @@ void cvm_vk_present_current_frame(cvm_vk_module_frame_data ** module_frames, uin
         .sType=VK_STRUCTURE_TYPE_SUBMIT_INFO,
         .pNext=NULL,
         .waitSemaphoreCount=0,
-        .pWaitSemaphores=semaphores,
-        .pWaitDstStageMask=wait_stage_flags,
+        .pWaitSemaphores=NULL,
+        .pWaitDstStageMask=&wait_stage_flags,
         .commandBufferCount=1,///always just 1
-        .pCommandBuffers= NULL,
+        .pCommandBuffers= NULL,///not set yet
         .signalSemaphoreCount=0,///only changes to 1 for last module, 0 otherwise
         .pSignalSemaphores=NULL
     };
 
-    for(i=0;i<module_frame_count;i++)
+    for(i=0;i<graphics_block_count;i++)
     {
         ///semaphores in between submits in same queue probably arent necessary, can likely rely on external subpass dependencies, this needs looking into
         /// ^yes this looks to be the case
@@ -810,29 +756,22 @@ void cvm_vk_present_current_frame(cvm_vk_module_frame_data ** module_frames, uin
 
         if(i==0)///wait on image acquisition
         {
-            semaphores[submit_info.waitSemaphoreCount]=acquired_frame->acquire_semaphore;
-            wait_stage_flags[submit_info.waitSemaphoreCount]=VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT;
-            submit_info.waitSemaphoreCount++;
+            submit_info.waitSemaphoreCount=1;
+            submit_info.pWaitSemaphores=&acquired_image->acquire_semaphore;
+
+            wait_stage_flags=VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT;///is this correct?
         }
 
-        if(module_frames[i]->has_transfer_work)///wait on upload of data
-        {
-            #warning semaphore probably only needed when queues are different! (needs further work)
-            semaphores[submit_info.waitSemaphoreCount]=module_frames[i]->transfer_semaphore;
-            wait_stage_flags[submit_info.waitSemaphoreCount]=module_frames[i]->transfer_flags;
-            submit_info.waitSemaphoreCount++;
-        }
+        ///may also want to wait on async compute? (if so, reimplement allowing multiple semaphore waits)
 
-        ///may also want to wait on async compute?
+        submit_info.pCommandBuffers=&graphics_blocks[i]->work;
 
-        submit_info.pCommandBuffers=&module_frames[i]->graphics_work;
-
-        if((i==(module_frame_count-1))&&(cvm_vk_present_queue_family==cvm_vk_graphics_queue_family))///no queue ownership transfer required, signal present semaphore as this is the last frame
+        if((i==(graphics_block_count-1))&&(cvm_vk_present_queue_family==cvm_vk_graphics_queue_family))///no queue ownership transfer required, signal present semaphore as this is the last frame
         {
             submit_info.signalSemaphoreCount=1;
-            submit_info.pSignalSemaphores=&swapchain_image->present_semaphore;
+            submit_info.pSignalSemaphores=&presenting_image->present_semaphore;
 
-            CVM_VK_CHECK(vkQueueSubmit(cvm_vk_graphics_queue,1,&submit_info,acquired_frame->completion_fence));
+            CVM_VK_CHECK(vkQueueSubmit(cvm_vk_graphics_queue,1,&submit_info,presenting_image->completion_fence));
         }
         else
         {
@@ -846,18 +785,18 @@ void cvm_vk_present_current_frame(cvm_vk_module_frame_data ** module_frames, uin
         submit_info.waitSemaphoreCount=0;
         submit_info.pWaitSemaphores=NULL;
         submit_info.signalSemaphoreCount=1;
-        submit_info.pSignalSemaphores=&swapchain_image->graphics_relinquish_semaphore;
-        submit_info.pCommandBuffers=&swapchain_image->graphics_relinquish_command_buffer;
+        submit_info.pSignalSemaphores=&presenting_image->graphics_relinquish_semaphore;
+        submit_info.pCommandBuffers=&presenting_image->graphics_relinquish_command_buffer;
         CVM_VK_CHECK(vkQueueSubmit(cvm_vk_graphics_queue,1,&submit_info,VK_NULL_HANDLE));
 
         ///acquire
-        wait_stage_flags[0]=VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT;
+        wait_stage_flags=VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT;
         submit_info.waitSemaphoreCount=1;
-        submit_info.pWaitSemaphores=&swapchain_image->graphics_relinquish_semaphore;
+        submit_info.pWaitSemaphores=&presenting_image->graphics_relinquish_semaphore;
         submit_info.signalSemaphoreCount=1;
-        submit_info.pSignalSemaphores=&swapchain_image->present_semaphore;
-        submit_info.pCommandBuffers=&swapchain_image->present_acquire_command_buffer;
-        CVM_VK_CHECK(vkQueueSubmit(cvm_vk_present_queue,1,&submit_info,acquired_frame->completion_fence));
+        submit_info.pSignalSemaphores=&presenting_image->present_semaphore;
+        submit_info.pCommandBuffers=&presenting_image->present_acquire_command_buffer;
+        CVM_VK_CHECK(vkQueueSubmit(cvm_vk_present_queue,1,&submit_info,presenting_image->completion_fence));
     }
 
     VkPresentInfoKHR present_info=(VkPresentInfoKHR)
@@ -865,10 +804,10 @@ void cvm_vk_present_current_frame(cvm_vk_module_frame_data ** module_frames, uin
         .sType=VK_STRUCTURE_TYPE_PRESENT_INFO_KHR,
         .pNext=NULL,
         .waitSemaphoreCount=1,
-        .pWaitSemaphores=&swapchain_image->present_semaphore,
+        .pWaitSemaphores=&presenting_image->present_semaphore,
         .swapchainCount=1,
         .pSwapchains=&cvm_vk_swapchain,
-        .pImageIndices=&acquired_frame->acquired_image_index,
+        .pImageIndices=&acquired_image->image_index,
         .pResults=NULL
     };
 
@@ -880,13 +819,34 @@ void cvm_vk_present_current_frame(cvm_vk_module_frame_data ** module_frames, uin
     }
     else if(r!=VK_SUCCESS) fprintf(stderr,"PRESENTATION FAILED WITH ERROR : %d\n",r);
 
-    acquired_frame->in_flight=true;
+    presenting_image->in_flight=true;
 }
 
-bool cvm_vk_are_frames_active(void)
+bool cvm_vk_recreate_rendering_resources(void) /// this should be made unnecessary id change noted in cvm_vk_transition_frame is implemented
 {
-    return (cvm_vk_active_frame_count > 0);
+    return ((cvm_vk_acquired_image_count == 0)&&(!cvm_vk_rendering_resources_valid));
 }
+
+void cvm_vk_wait(void)
+{
+    uint32_t i;
+
+    ///this will leave some images acquired... (and some command buffers in the pending state)
+
+    for(i=0;i<cvm_vk_swapchain_image_count;i++)
+    {
+        if(cvm_vk_presenting_images[i].in_flight)
+        {
+            CVM_VK_CHECK(vkWaitForFences(cvm_vk_device,1,&cvm_vk_presenting_images[i].completion_fence,VK_TRUE,1000000000));
+            cvm_vk_presenting_images[i].in_flight=false;///has finished
+            cvm_vk_acquired_image_count--;
+        }
+    }
+
+    #warning do same for submits made to transfer queue
+}
+
+
 
 
 void cvm_vk_create_render_pass(VkRenderPass * render_pass,VkRenderPassCreateInfo * info)
@@ -998,14 +958,15 @@ void cvm_vk_destroy_shader_stage_info(VkPipelineShaderStageCreateInfo * stage_in
 
 
 
-void cvm_vk_create_module_data(cvm_vk_module_data * module_data,bool in_separate_thread,uint32_t active_frame_count)
+
+void cvm_vk_create_module_data(cvm_vk_module_data * module_data,bool in_separate_thread)
 {
     uint32_t i;
 
-    module_data->current_frame=0;
+    module_data->graphics_block_count=0;
+    module_data->graphics_blocks=NULL;
 
-    module_data->frame_count=active_frame_count;
-    module_data->frames=malloc(sizeof(cvm_vk_module_frame_data)*module_data->frame_count);
+    module_data->graphics_block_index=0;
 
 
     if(in_separate_thread)
@@ -1032,18 +993,43 @@ void cvm_vk_create_module_data(cvm_vk_module_data * module_data,bool in_separate
         module_data->transfer_pool=cvm_vk_transfer_command_pool;
         module_data->graphics_pool=cvm_vk_graphics_command_pool;
     }
+}
 
+void cvm_vk_resize_module_graphics_data(cvm_vk_module_data * module_data,uint32_t extra_frame_count)
+{
+    uint32_t i;
 
-    for(i=0;i<module_data->frame_count;i++)
+    if(extra_frame_count>cvm_vk_extra_swapchain_images)
     {
-        module_data->frames[i].parent_module=module_data;
-        module_data->frames[i].in_flight=false;
-        //module_data->frames[i].swapchain_image_index=CVM_VK_INVALID_IMAGE_INDEX;///basically just for error checking
+        fprintf(stderr,"TRYING TO CREATE MODULE WITH MORE EXTRA FRAMES THAN ARE AVAILABLE IN THE SWAPCHAIN\n");
+        exit(-1);
+    }
 
-        module_data->frames[i].has_transfer_work=false;
-        module_data->frames[i].has_graphics_work=false;
-        module_data->frames[i].transfer_flags=VK_PIPELINE_STAGE_ALL_GRAPHICS_BIT;///probably want to set this properly, i.e. 0 and have module set it
+    uint32_t new_block_count=(cvm_vk_swapchain_image_count-cvm_vk_extra_swapchain_images)+extra_frame_count;
 
+    if(new_block_count==module_data->graphics_block_count)return;///no resizing necessary
+
+    for(i=new_block_count;i<module_data->graphics_block_count;i++)///clean up unnecessary blocks
+    {
+        if(module_data->graphics_blocks[i].in_flight)
+        {
+            fprintf(stderr,"TRYING TO DESTROY module FRAME THAT IS IN FLIGHT\n");
+            exit(-1);
+        }
+
+        vkFreeCommandBuffers(cvm_vk_device,module_data->transfer_pool,1,&module_data->graphics_blocks[i].work);
+    }
+
+
+    module_data->graphics_blocks=realloc(module_data->graphics_blocks,sizeof(cvm_vk_module_graphics_block)*new_block_count);
+
+
+    for(i=module_data->graphics_block_count;i<new_block_count;i++)///create new necessary frames
+    {
+        module_data->graphics_blocks[i].parent_module=module_data;
+        module_data->graphics_blocks[i].in_flight=false;
+
+        module_data->graphics_blocks[i].has_work=false;
 
         VkSemaphoreCreateInfo semaphore_create_info=(VkSemaphoreCreateInfo)
         {
@@ -1052,41 +1038,35 @@ void cvm_vk_create_module_data(cvm_vk_module_data * module_data,bool in_separate
             .flags=0
         };
 
-        CVM_VK_CHECK(vkCreateSemaphore(cvm_vk_device,&semaphore_create_info,NULL,&module_data->frames[i].transfer_semaphore));
-
-
         VkCommandBufferAllocateInfo command_buffer_allocate_info=(VkCommandBufferAllocateInfo)
         {
             .sType=VK_STRUCTURE_TYPE_COMMAND_BUFFER_ALLOCATE_INFO,
             .pNext=NULL,
-            .commandPool=module_data->transfer_pool,
+            .commandPool=module_data->graphics_pool,
             .level=VK_COMMAND_BUFFER_LEVEL_PRIMARY,
             .commandBufferCount=1
         };
 
-        CVM_VK_CHECK(vkAllocateCommandBuffers(cvm_vk_device,&command_buffer_allocate_info,&module_data->frames[i].transfer_work));
-
-        command_buffer_allocate_info.commandPool=module_data->graphics_pool;
-        CVM_VK_CHECK(vkAllocateCommandBuffers(cvm_vk_device,&command_buffer_allocate_info,&module_data->frames[i].graphics_work));
+        CVM_VK_CHECK(vkAllocateCommandBuffers(cvm_vk_device,&command_buffer_allocate_info,&module_data->graphics_blocks[i].work));
     }
+
+    module_data->graphics_block_index=0;
+    module_data->graphics_block_count=new_block_count;
 }
 
 void cvm_vk_destroy_module_data(cvm_vk_module_data * module_data,bool in_separate_thread)
 {
     uint32_t i;
 
-    for(i=0;i<module_data->frame_count;i++)
+    for(i=0;i<module_data->graphics_block_count;i++)
     {
-        if(module_data->frames[i].in_flight)
+        if(module_data->graphics_blocks[i].in_flight)
         {
             fprintf(stderr,"TRYING TO DESTROY module FRAME THAT IS IN FLIGHT\n");
             exit(-1);
         }
 
-        vkFreeCommandBuffers(cvm_vk_device,module_data->transfer_pool,1,&module_data->frames[i].transfer_work);
-        vkFreeCommandBuffers(cvm_vk_device,module_data->graphics_pool,1,&module_data->frames[i].graphics_work);
-
-        vkDestroySemaphore(cvm_vk_device,module_data->frames[i].transfer_semaphore,NULL);
+        vkFreeCommandBuffers(cvm_vk_device,module_data->transfer_pool,1,&module_data->graphics_blocks[i].work);
     }
 
     if(in_separate_thread)
@@ -1099,54 +1079,49 @@ void cvm_vk_destroy_module_data(cvm_vk_module_data * module_data,bool in_separat
         }
     }
 
-    free(module_data->frames);
+    free(module_data->graphics_blocks);
 }
 
+//VkCommandBuffer cvm_vk_begin_module_frame_transfer(cvm_vk_module_data * module_data,bool has_work)
+//{
+//    cvm_vk_module_frame_data * frame=module_data->frames+module_data->current_frame_index;
+//
+//    frame->has_transfer_work=has_work;
+//
+//    VkCommandBuffer command_buffer=VK_NULL_HANDLE;
+//
+//    if(frame->has_transfer_work)
+//    {
+//        VkCommandBufferBeginInfo command_buffer_begin_info=(VkCommandBufferBeginInfo)
+//        {
+//            .sType=VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO,
+//            .pNext=NULL,
+//            .flags=VK_COMMAND_BUFFER_USAGE_ONE_TIME_SUBMIT_BIT,/// VK_COMMAND_BUFFER_USAGE_SIMULTANEOUS_USE_BIT  necessary? in tutorial bet shouldn't be used?
+//            .pInheritanceInfo=NULL
+//        };
+//
+//        CVM_VK_CHECK(vkBeginCommandBuffer(frame->transfer_work,&command_buffer_begin_info));
+//        command_buffer=frame->transfer_work;
+//    }
+//
+//    return command_buffer;
+//}
 
-VkCommandBuffer cvm_vk_begin_module_frame_transfer(cvm_vk_module_data * module_data,bool has_work)
+VkCommandBuffer cvm_vk_begin_module_graphics_block(cvm_vk_module_data * module_data,uint32_t frame_offset,uint32_t * swapchain_image_index)
 {
-    cvm_vk_module_frame_data * frame=module_data->frames+module_data->current_frame;
+    *swapchain_image_index = cvm_vk_acquired_images[(cvm_vk_current_acquired_image_index+frame_offset)%cvm_vk_swapchain_image_count].image_index;///value passed back by rendering engine
 
-    frame->has_transfer_work=has_work;
+    cvm_vk_module_graphics_block * block=module_data->graphics_blocks+module_data->graphics_block_index;
 
-    VkCommandBuffer command_buffer=VK_NULL_HANDLE;
-
-    if(frame->has_transfer_work)
-    {
-        VkCommandBufferBeginInfo command_buffer_begin_info=(VkCommandBufferBeginInfo)
-        {
-            .sType=VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO,
-            .pNext=NULL,
-            .flags=VK_COMMAND_BUFFER_USAGE_ONE_TIME_SUBMIT_BIT,/// VK_COMMAND_BUFFER_USAGE_SIMULTANEOUS_USE_BIT  necessary? in tutorial bet shouldn't be used?
-            .pInheritanceInfo=NULL
-        };
-
-        CVM_VK_CHECK(vkBeginCommandBuffer(frame->transfer_work,&command_buffer_begin_info));
-        command_buffer=frame->transfer_work;
-    }
-
-    return command_buffer;
-}
-
-VkCommandBuffer cvm_vk_begin_module_frame_graphics(cvm_vk_module_data * module_data,bool has_work,uint32_t frame_offset,uint32_t * swapchain_image_index)
-{
-    *swapchain_image_index = cvm_vk_acquired_frames[(cvm_vk_current_frame_index+frame_offset)%cvm_vk_frame_count].acquired_image_index;///value passed back by rendering engine
-
-    cvm_vk_module_frame_data * frame=module_data->frames+module_data->current_frame;
-
-    VkCommandBuffer command_buffer=VK_NULL_HANDLE;
-
-    /// if recreating module relevant data might want to pass in first, new acquired swapchain image index so this frames correct index can be passed back to modules
-    /// this may warrant making get swapchain image index a separate function that operates on same list of submodle frames (and can fail accordingly &c.)
     if(*swapchain_image_index != CVM_VK_INVALID_IMAGE_INDEX)///data passed in is valid and everything is up to date
     {
-        if(frame->in_flight)
+        if(block->in_flight)
         {
-            fprintf(stderr,"TRYING TO WRITE module FRAME THAT IS STILL IN FLIGHT\n");
+            fprintf(stderr,"TRYING TO WRITE MODULE FRAME THAT IS STILL IN FLIGHT\n");
             exit(-1);
         }
 
-        frame->has_graphics_work=has_work;
+        block->has_work=true;
 
         VkCommandBufferBeginInfo command_buffer_begin_info=(VkCommandBufferBeginInfo)
         {
@@ -1156,27 +1131,46 @@ VkCommandBuffer cvm_vk_begin_module_frame_graphics(cvm_vk_module_data * module_d
             .pInheritanceInfo=NULL
         };
 
-        if(frame->has_graphics_work)
-        {
-            CVM_VK_CHECK(vkBeginCommandBuffer(frame->graphics_work,&command_buffer_begin_info));
-            command_buffer=frame->graphics_work;
-        }
+
+        CVM_VK_CHECK(vkBeginCommandBuffer(block->work,&command_buffer_begin_info));
+        return block->work;
     }
-    else frame->has_graphics_work=false;
-
-    return command_buffer;
+    else
+    {
+        block->has_work=false;
+        return VK_NULL_HANDLE;
+    }
 }
 
-cvm_vk_module_frame_data * cvm_vk_end_module_frame(cvm_vk_module_data * module_data)
+cvm_vk_module_graphics_block * cvm_vk_end_module_graphics_block(cvm_vk_module_data * module_data)
 {
-    cvm_vk_module_frame_data * frame=module_data->frames + module_data->current_frame++;
-    if(module_data->current_frame==module_data->frame_count)module_data->current_frame=0;
+    cvm_vk_module_graphics_block * block=module_data->graphics_blocks + module_data->graphics_block_index;
 
-    if(frame->has_transfer_work) CVM_VK_CHECK(vkEndCommandBuffer(frame->transfer_work));
-    if(frame->has_graphics_work) CVM_VK_CHECK(vkEndCommandBuffer(frame->graphics_work));
+    if(block->has_work)
+    {
+        CVM_VK_CHECK(vkEndCommandBuffer(block->work));
+        module_data->graphics_block_index = (module_data->graphics_block_index+1)%module_data->graphics_block_count;
+    }
 
-    return frame;
+    return block;
 }
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 
 
@@ -1281,8 +1275,8 @@ static void create_vertex_buffer(void)
     ///     ^ if staging is detected as not needed then dont do it? (staging is useful for managing resources though...)
     ///         ^ or perhaps if it would be copying in anyway then the managed transfer paradigm could work but without the staging transfer, just move in directly
     ///             ^ does make synchronization (particularly delete more challenging though, will have to schedule things for deletion)
-//    printf("memory types: %u\nheap count: %u\n",memory_properties.memoryTypeCount,memory_properties.memoryHeapCount);
-//
+    printf("memory types: %u\nheap count: %u\n",memory_properties.memoryTypeCount,memory_properties.memoryHeapCount);
+
 //    for(i=0;i<memory_properties.memoryTypeCount;i++)
 //    {
 //        if(memory_properties.memoryTypes[i].propertyFlags&VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT)

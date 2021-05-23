@@ -47,7 +47,7 @@ VkPipeline get_test_pipeline(void);
 VkFramebuffer get_test_framebuffer(uint32_t swapchain_image_index);
 
 
-cvm_vk_module_frame_data * test_render_frame(void);
+cvm_vk_module_graphics_block * test_render_frame(void);
 
 #endif
 

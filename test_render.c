@@ -317,7 +317,7 @@ void initialise_test_render_data_ext()
     cvm_vk_create_shader_stage_info(test_stages+0,"shaders/test_vert.spv",VK_SHADER_STAGE_VERTEX_BIT);
     cvm_vk_create_shader_stage_info(test_stages+1,"shaders/test_frag.spv",VK_SHADER_STAGE_FRAGMENT_BIT);
 
-    cvm_vk_create_module_data(&test_module_data,false,3);
+    cvm_vk_create_module_data(&test_module_data,false);
 }
 
 void terminate_test_render_data_ext()
@@ -340,6 +340,8 @@ void initialise_test_swapchain_dependencies_ext(void)
     create_test_pipelines(screen_rectangle,VK_SAMPLE_COUNT_1_BIT,1.0);
 
     create_test_framebuffers(screen_rectangle);
+
+    cvm_vk_resize_module_graphics_data(&test_module_data,0);
 }
 
 void terminate_test_swapchain_dependencies_ext()
@@ -368,18 +370,18 @@ VkFramebuffer get_test_framebuffer(uint32_t swapchain_image_index)
 }
 
 
-cvm_vk_module_frame_data * test_render_frame(void)
+cvm_vk_module_graphics_block * test_render_frame(void)
 {
     VkCommandBuffer command_buffer;
     uint32_t swapchain_image_index;
 
-    command_buffer = cvm_vk_begin_module_frame_transfer(&test_module_data,false);
-    if(command_buffer!=VK_NULL_HANDLE)
-    {
-        ///do transfers
-    }
+//    command_buffer = cvm_vk_begin_module_frame_transfer(&test_module_data,false);
+//    if(command_buffer!=VK_NULL_HANDLE)
+//    {
+//        ///do transfers
+//    }
 
-    command_buffer = cvm_vk_begin_module_frame_graphics(&test_module_data,true,0,&swapchain_image_index);
+    command_buffer = cvm_vk_begin_module_graphics_block(&test_module_data,0,&swapchain_image_index);
     if(command_buffer!=VK_NULL_HANDLE)
     {
         ///do graphics
@@ -409,33 +411,8 @@ cvm_vk_module_frame_data * test_render_frame(void)
         vkCmdEndRenderPass(command_buffer);///================
     }
 
-    return cvm_vk_end_module_frame(&test_module_data);
+    return cvm_vk_end_module_graphics_block(&test_module_data);
 }
-
-
-/// need a good way to get VkDevice here, could actually use external initialisation functions, need to work out naming scheme though,
-///     ^ possible naming pairs: initialise/terminate create/destroy start/stop/end reference/derefernce link/unlink establish/abolish erect/dismantle
-/// also need to work out how to handle out of date data
-/// need a good way to manage screen size, wrt render-passes & sub-passes vs pipelines, maybe only use base struct (VkRect2D? or even self defined width and height struct)
-///     ^ rectangle/width/height would allow sub-modules/passes to define their own depth ranges... (probably a good idea!)
-/// allowing sub-modules to define their own MSAA settings fits well with above, though both then need a robust way to handle being out of date and recreated
-///     ^ maybe as part of render step? or even as separate update step?
-///     ^ slight modification to update might allow destruction and recreation of pipelines and passes to happen completely seperately from cvm_vk (it isnt at the moment)
-///         ^ need to ensure lingering data from other parts of engine in undestroyed parts wont cause problems (e.g. renderpass referencing deleted swapchain image)
-///     ^ generally this separation would be a good idea, would allow some passes to have non-screen size targets and so not require rebuild/recreation on window resize, same goes for overlay when msaa changes
-/// the need for render pass objects (which include multisample state) is a pain in the ass, means need to feed render pass info into
-/// have different recreation flags, such that module need only recreate renderpass when it actually changes (e.g. MSAA changes)
-/// also of note is that viewport changes relate to modules differently to msaa changes, so different pathways on per-module basis really are needed
-
-/// if only 2 cases that can trigger rebuild are resizing swapchain and altering MSAA, it may be okay to trigger same resource rebuild as there is a lot of overlap (framebuffer rebuild for both)
-/// and although render passes dont need to be rebuilt after resize, pipelines do which is likely more expensive, also msaa change requires everything to be rebuilt
-/// add dirt flag for these things to render passes which get checked? could also just have separate function for when either changes? (neither is great tbh)
-
-/// when screen size changes, rebuild: framebuffers, pipelines & swapchain
-/// when sample count changes, rebuild: framebuffers, pipelines & render passes (render passes requires pipeline rebuild anyway)
-/// ^ in both cases want a way to know if rebuild is necessary for this module and handle resources inteligently
-///
-
 
 
 
