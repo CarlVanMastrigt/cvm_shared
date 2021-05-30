@@ -1,5 +1,5 @@
 /**
-Copyright 2020 Carl van Mastrigt
+Copyright 2020,2021 Carl van Mastrigt
 
 This file is part of cvm_shared.
 
@@ -19,10 +19,13 @@ along with cvm_shared.  If not, see <https://www.gnu.org/licenses/>.
 
 #include "cvm_shared.h"
 
+///should probably have null initailisation of these vars, though that does obfuscate those that really do need to be statically initialised
+
 static VkInstance cvm_vk_instance;
 static VkPhysicalDevice cvm_vk_physical_device;
 static VkDevice cvm_vk_device;///"logical" device
 static VkSurfaceKHR cvm_vk_surface;
+static VkPhysicalDeviceMemoryProperties cvm_vk_memory_properties;
 
 static VkSwapchainKHR cvm_vk_swapchain=VK_NULL_HANDLE;
 static VkSurfaceFormatKHR cvm_vk_surface_format;
@@ -122,7 +125,7 @@ static void cvm_vk_create_surface(SDL_Window * window)
     }
 }
 
-static bool check_physical_device_appropriate(bool dedicated_gpu_required)
+static bool check_physical_device_appropriate(bool dedicated_gpu_required,bool sync_compute_required)
 {
     VkPhysicalDeviceProperties properties;
     uint32_t i,queue_family_count;
@@ -153,8 +156,12 @@ static bool check_physical_device_appropriate(bool dedicated_gpu_required)
     for(i=0;i<queue_family_count;i++)
     {
         //printf("queue family %u available queue count: %u\n",i,queue_family_properties[i].queueCount);
+        #warning add support for a-sync compute
 
-        if((cvm_vk_graphics_queue_family==queue_family_count)&&(queue_family_properties[i].queueFlags&VK_QUEUE_GRAPHICS_BIT))
+        ///If an implementation exposes any queue family that supports graphics operations,
+        /// at least one queue family of at least one physical device exposed by the implementation must support both graphics and compute operations.
+
+        if((cvm_vk_graphics_queue_family==queue_family_count)&&(queue_family_properties[i].queueFlags&VK_QUEUE_GRAPHICS_BIT)&&(queue_family_properties[i].queueFlags&VK_QUEUE_COMPUTE_BIT || !sync_compute_required))
         {
             cvm_vk_graphics_queue_family=i;
             if(cvm_vk_transfer_queue_family==queue_family_count)cvm_vk_transfer_queue_family=i;///graphics must support transfer, even if not specified
@@ -181,7 +188,7 @@ static bool check_physical_device_appropriate(bool dedicated_gpu_required)
     ///return true only if all queue families needed can be satisfied
 }
 
-static void cvm_vk_create_physical_device(void)
+static void cvm_vk_create_physical_device(bool sync_compute_required)
 {
     ///pick best physical device with all required features
 
@@ -197,13 +204,13 @@ static void cvm_vk_create_physical_device(void)
     for(i=0;i<device_count;i++)///check for dedicated gfx cards first
     {
         cvm_vk_physical_device=physical_devices[i];
-        if(check_physical_device_appropriate(true)) break;
+        if(check_physical_device_appropriate(true,sync_compute_required)) break;
     }
 
     if(i==device_count)for(i=0;i<device_count;i++)///check for non-dedicated (integrated) gfx cards next
     {
         cvm_vk_physical_device=physical_devices[i];
-        if(check_physical_device_appropriate(false)) break;
+        if(check_physical_device_appropriate(false,sync_compute_required)) break;
     }
 
     free(physical_devices);
@@ -232,6 +239,16 @@ static void cvm_vk_create_physical_device(void)
 
     ///maybe want do do something meaningful here in later versions, below should be fine for now
     cvm_vk_surface_present_mode=VK_PRESENT_MODE_FIFO_KHR;///guaranteed to exist
+
+    vkGetPhysicalDeviceMemoryProperties(cvm_vk_physical_device,&cvm_vk_memory_properties);
+    printf("memory types: %u\nheap count: %u\n",cvm_vk_memory_properties.memoryTypeCount,cvm_vk_memory_properties.memoryHeapCount);
+//    for(i=0;i<memory_properties.memoryTypeCount;i++)
+//    {
+//        if(memory_properties.memoryTypes[i].propertyFlags&VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT)
+//        {
+//            printf("device local memory type: %u using heap: %u\n",i,memory_properties.memoryTypes[i].heapIndex);
+//        }
+//    }
 
     free(present_modes);
 }
@@ -626,14 +643,14 @@ VkImageView cvm_vk_get_swapchain_image_view(uint32_t index)
     return cvm_vk_presenting_images[index].image_view;
 }
 
-void cvm_vk_initialise(SDL_Window * window,uint32_t min_swapchain_images,uint32_t extra_swapchain_images)
+void cvm_vk_initialise(SDL_Window * window,uint32_t min_swapchain_images,uint32_t extra_swapchain_images,bool sync_compute_required)
 {
     cvm_vk_min_swapchain_images=min_swapchain_images;
     cvm_vk_extra_swapchain_images=extra_swapchain_images;
 
     cvm_vk_create_instance(window);
     cvm_vk_create_surface(window);
-    cvm_vk_create_physical_device();
+    cvm_vk_create_physical_device(sync_compute_required);
     cvm_vk_create_logical_device();
     cvm_vk_create_default_command_pools();
 }
@@ -955,14 +972,86 @@ void cvm_vk_destroy_shader_stage_info(VkPipelineShaderStageCreateInfo * stage_in
 
 
 
+///unlike other functions, this one takes abstract/resultant data rather than just generic creation info
+void * cvm_vk_create_buffer(VkBuffer * buffer,VkDeviceMemory * memory,VkBufferUsageFlags usage,VkDeviceSize size,bool require_host_visible)
+{
+    /// prefer_host_local for staging buffer that is written to dynamically? maybe in the future
+    /// instead have flags for usage that are used to determine which heap to use?
+
+    /// exclusive ownership means explicit ownership transfers are required, but this may have better performance
+    /// need for these can be indicated by flags on buffer ranges (for staging)
+
+    VkBufferCreateInfo buffer_create_info=(VkBufferCreateInfo)
+    {
+        .sType=VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO,
+        .pNext=NULL,
+        .flags=0,
+        .size=size,
+        .usage=usage,
+        .sharingMode=VK_SHARING_MODE_EXCLUSIVE,
+        .queueFamilyIndexCount=0,
+        .pQueueFamilyIndices=NULL
+    };
+
+    CVM_VK_CHECK(vkCreateBuffer(cvm_vk_device,&buffer_create_info,NULL,buffer));
+
+    VkMemoryRequirements buffer_memory_requirements;
+    vkGetBufferMemoryRequirements(cvm_vk_device,*buffer,&buffer_memory_requirements);
+
+    uint32_t i;
+
+    /// integrated graphics ONLY has shared heaps! (UMA) means there's no good way to test everything is working, but also means there's room for optimisation
+    ///     ^ if staging is detected as not needed then don't do it? (but still need a way to test staging, circumvent_uma define? this won't really test things properly though...)
+    ///     ^ also I'm pretty sure staging is needed for uploading textures
+
+    for(i=0;i<cvm_vk_memory_properties.memoryTypeCount;i++)
+    {
+        if(( buffer_memory_requirements.memoryTypeBits & 1<<i ) && ( !require_host_visible || cvm_vk_memory_properties.memoryTypes[i].propertyFlags&VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT ))
+        {
+            void * mapping=NULL;
+
+            VkMemoryAllocateInfo memory_allocate_info=(VkMemoryAllocateInfo)
+            {
+                .sType=VK_STRUCTURE_TYPE_MEMORY_ALLOCATE_INFO,
+                .pNext=NULL,
+                .allocationSize=buffer_memory_requirements.size,
+                .memoryTypeIndex=i
+            };
+
+            CVM_VK_CHECK(vkAllocateMemory(cvm_vk_device,&memory_allocate_info,NULL,memory));
+
+            CVM_VK_CHECK(vkBindBufferMemory(cvm_vk_device,*buffer,*memory,0));///offset/alignment kind of irrelevant because of 1 buffer per allocation paradigm
+
+            if(cvm_vk_memory_properties.memoryTypes[i].propertyFlags&VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT)
+            {
+                CVM_VK_CHECK(vkMapMemory(cvm_vk_device,*memory,0,VK_WHOLE_SIZE,0,&mapping));
+            }
+
+            return mapping;
+        }
+    }
+
+    fprintf(stderr,"COULD NOT FIND APPROPRIATE MEMORY FOR ALLOCATION\n");
+    exit(-1);
+}
+
+void cvm_vk_destroy_buffer(VkBuffer buffer,VkDeviceMemory memory,void * mapping)
+{
+    if(mapping)
+    {
+        vkUnmapMemory(cvm_vk_device,memory);
+    }
+
+    vkDestroyBuffer(cvm_vk_device,buffer,NULL);
+    vkFreeMemory(cvm_vk_device,memory,NULL);
+}
+
 
 
 
 
 void cvm_vk_create_module_data(cvm_vk_module_data * module_data,bool in_separate_thread)
 {
-    uint32_t i;
-
     module_data->graphics_block_count=0;
     module_data->graphics_blocks=NULL;
 
@@ -1182,9 +1271,6 @@ cvm_vk_module_graphics_block * cvm_vk_end_module_graphics_block(cvm_vk_module_da
 
 
 
-
-
-
 ///TEST FUNCTIONS FROM HERE, STRIP DOWN / USE AS BASIS FOR REAL VERSIONS
 
 
@@ -1196,6 +1282,10 @@ VkBuffer * get_test_buffer(void)
 {
     return &test_buffer;
 }
+
+
+
+
 
 
 
@@ -1263,8 +1353,8 @@ static void create_vertex_buffer(void)
     VkMemoryRequirements buffer_memory_requirements;
     vkGetBufferMemoryRequirements(cvm_vk_device,test_buffer,&buffer_memory_requirements);
 
-    VkPhysicalDeviceMemoryProperties memory_properties;///move this to gfx ? prevents calling it every time a buffer is allocated
-    vkGetPhysicalDeviceMemoryProperties(cvm_vk_physical_device,&memory_properties);
+    //VkPhysicalDeviceMemoryProperties memory_properties;///move this to gfx ? prevents calling it every time a buffer is allocated
+    //vkGetPhysicalDeviceMemoryProperties(cvm_vk_physical_device,&memory_properties);
 
 
     uint32_t i;
@@ -1275,7 +1365,6 @@ static void create_vertex_buffer(void)
     ///     ^ if staging is detected as not needed then dont do it? (staging is useful for managing resources though...)
     ///         ^ or perhaps if it would be copying in anyway then the managed transfer paradigm could work but without the staging transfer, just move in directly
     ///             ^ does make synchronization (particularly delete more challenging though, will have to schedule things for deletion)
-    printf("memory types: %u\nheap count: %u\n",memory_properties.memoryTypeCount,memory_properties.memoryHeapCount);
 
 //    for(i=0;i<memory_properties.memoryTypeCount;i++)
 //    {
@@ -1285,9 +1374,10 @@ static void create_vertex_buffer(void)
 //        }
 //    }
 
-    for(i=0;i<memory_properties.memoryTypeCount;i++)
+    for(i=0;i<cvm_vk_memory_properties.memoryTypeCount;i++)
     {
-        if((buffer_memory_requirements.memoryTypeBits&(1<<i))&&(memory_properties.memoryTypes[i].propertyFlags&VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT))
+        printf("mem %u\n",cvm_vk_memory_properties.memoryTypes[i].propertyFlags);
+        if((buffer_memory_requirements.memoryTypeBits&(1<<i))&&(cvm_vk_memory_properties.memoryTypes[i].propertyFlags&VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT))
         {
             memory_allocate_info=(VkMemoryAllocateInfo)
             {
@@ -1302,7 +1392,7 @@ static void create_vertex_buffer(void)
         }
     }
 
-    if(i==memory_properties.memoryTypeCount)
+    if(i==cvm_vk_memory_properties.memoryTypeCount)
     {
         fprintf(stderr,"COULD NOT FIND APPROPRIATE MEMORY FOR ALLOCATION\n");
         exit(-1);

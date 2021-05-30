@@ -1,5 +1,5 @@
 /**
-Copyright 2020 Carl van Mastrigt
+Copyright 2020,2021 Carl van Mastrigt
 
 This file is part of cvm_shared.
 
@@ -185,7 +185,7 @@ struct cvm_vk_module_data
 
 ///gfx_data can ONLY change in main thread and ONLY be changed when not in use by other threads (inside main sync mutexes or before starting other threads that use it)
 
-void cvm_vk_initialise(SDL_Window * window,uint32_t min_swapchain_images,uint32_t extra_swapchain_images);///this extra is the max extra used by any module
+void cvm_vk_initialise(SDL_Window * window,uint32_t min_swapchain_images,uint32_t extra_swapchain_images,bool sync_compute_required);///this extra is the max extra used by any module
 void cvm_vk_terminate(void);///also terminates swapchain dependant data at same time
 
 void cvm_vk_create_swapchain(void);
@@ -213,6 +213,9 @@ void cvm_vk_destroy_shader_stage_info(VkPipelineShaderStageCreateInfo * stage_in
 
 
 
+void * cvm_vk_create_buffer(VkBuffer * buffer,VkDeviceMemory * memory,VkBufferUsageFlags usage,VkDeviceSize size,bool require_host_visible);
+void cvm_vk_destroy_buffer(VkBuffer buffer,VkDeviceMemory memory,void * mapping);
+
 
 
 void cvm_vk_prepare_for_next_frame(bool rendering_resources_invalid);
@@ -234,12 +237,8 @@ VkImageView cvm_vk_get_swapchain_image_view(uint32_t index);
 
 ///must be called after cvm_vk_initialise
 void cvm_vk_create_module_data(cvm_vk_module_data * module_data,bool in_separate_thread);
-void cvm_vk_resize_module_graphics_data(cvm_vk_module_data * module_data,uint32_t extra_frame_count);
+void cvm_vk_resize_module_graphics_data(cvm_vk_module_data * module_data,uint32_t extra_frame_count);///this must be called in critical section
 void cvm_vk_destroy_module_data(cvm_vk_module_data * module_data,bool in_separate_thread);
-
-///FUCK FUCK FUCK its isn't thread safe to call cvm_vk_resize_module_data at same time as cvm_vk_begin_module_frame_transfer/cvm_vk_begin_module_frame_graphics/cvm_vk_end_module_frame
-/// instead need a way to trigger those happening such that resize/create/destroy happens in the child thread!
-/// alternatively need lock on submodule data, possibly with separation of transfer and graphics?
 
 //VkCommandBuffer cvm_vk_begin_module_frame_transfer(cvm_vk_module_data * module_data,bool has_work);///always valid to call? if not return bool
 
@@ -260,62 +259,7 @@ VkBuffer * get_test_buffer(void);///remove after memory mangement system is impl
 
 
 
-
-typedef struct cvm_vk_managed_buffer_location cvm_vk_managed_buffer_location;
-
-struct cvm_vk_managed_buffer_location
-{
-    ///no part of this should be read
-
-    cvm_vk_module_data * parent_module;
-
-    cvm_vk_managed_buffer_location * next;/// for when in linked list (e.g. available, update or relinquish queue)
-    cvm_vk_managed_buffer_location * replacement;/// what will replace this buffer
-
-    ///may want pointer to siblings for recombination
-
-    /// can be accessed by any thread, is created/deleted in thread safe manner after nothing is referencing it any longer
-    VkBuffer buffer;///copy of buffer from which this was derived, may want to have pointer to that buffer as well to ease burden on defragger
-    uint32_t offset;
-
-    uint32_t size_factor:5;///size = base_size<<size_factor, base_size should be 256 ish, this allows any size buffer as long as base_size is at least 2 (it definitely should be)
-    uint32_t replaced:1;///because of possibility of torn reads, require an extra frame to pass before actually setting this (after location has been replaced) in case of out of order writes to replaced vs replacement.
-    ///as well as an extra frame before deleting (i.e. treat this as only having been set in the critical section, even though it MAY be set earlier (which shouldnt have consequences)
-    uint32_t relinquished:1;///is available for recombination/reuse (though reuse should be known by virtue of which linked list it appears in)
-
-
-    /// should be put in appropriate scheduled deletion (relinquish) linked list, this should ensure it is deleted only after its finished being used
-
-    ///though this provides no way to know when a particular buffer needs defragging
-    ///     ^ could use actual size rounded to multiple of 256 (or w/e base_size is) and moved around more to be more tightly packed (this is a lot more work)
-    /// if using above alter size and offset by base_size_factor (should probably meet alignment requirements where possible)
-    /// this could even allow a realloc! (potentially, not sure how to handle moving/copying, probably move at same time as uploading from staging) but also allows quick resize!
-    /// will require super-fast search algorithm to find appropriately sized available spaces
-    /// despite these restrictions i do like this idea
-
-
-    ///hierarchical PO2 approach (effectively tree) requires no defragging but can wast up to 50% of memory... will automatically align blocks though... (i do also quite like this approach tbh)
-
-
-    /// CAN USE BOTH APPROACHES! have both available as well as linear allocator for staging buffer! wowee
-    /// could also use in tandem, like allocating a sized block from an image for glyphs!
-
-    ///if each thread has its own buffer it can handle defrag w/o synch (submit ops to transfer queue w/ low priority - match min swapchain cycle length)
-    ///     ^ "match min swapchain cycle length" <-- this would mean that transfer needs to be recreated every time
-    ///to defrag PO2 move buffs to lower index with same size if available, starting with highest indexed location
-
-    ///need a way to know whether data is active/available (prevent submitting renders that use memory not yet transferred)
-
-};
-
-
-
-
-
-
-/// put memory stuff in separate file?
-
-
+#include "cvm_vk_memory.h"
 
 
 
