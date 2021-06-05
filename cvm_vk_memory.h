@@ -121,15 +121,15 @@ typedef struct cvm_vk_managed_buffer
 
     cvm_vk_dynamic_buffer_allocation * dynamic_allocations;
     uint32_t dynamic_allocation_space;
-    uint32_t dynamic_allocation_count;///total number used up
-    uint32_t reserved_allocation_count;/// allocations expected to be made per frame
-
-    uint32_t rightmost_allocation;///used for setting left/right of new allocations
-
+    uint32_t reserved_allocation_count;/// max allocations expected to be made per frame (amount to expand by when reallocing?)
     uint32_t first_unused_allocation;///singly linked list of allocations to assign space to
     uint32_t unused_allocation_count;
 
-    uint32_t * available_dynamic_allocations;///array with index reflecting each possible size, is index of first in doubly linked list of those sizes
+    uint32_t rightmost_allocation;///used for setting left/right of new allocations
+
+    ///consider making following fixed array with max size of ~24 (whole struct should fit on 2-3 cache lines)
+    uint32_t * available_dynamic_allocations_start;///array with index reflecting each possible size, is index of first in doubly linked list of those sizes
+    uint32_t * available_dynamic_allocations_end;
     ///intelligent application of last pointer to linked list creation isn't applicable, cannot reference/dereference bitfield!
     uint32_t num_dynamic_allocation_sizes;///essentially max value of dynamic_buffer_allocation.size_factor derived from the exponent of max_allocation_size/base_allocation_size
     uint32_t available_dynamic_allocation_bitmask;
