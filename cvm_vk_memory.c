@@ -29,6 +29,7 @@ void cvm_vk_create_managed_buffer(cvm_vk_managed_buffer * mb,uint32_t buffer_siz
 {
     uint32_t i;
     buffer_size=(((buffer_size-1) >> min_size_factor)+1) << min_size_factor;///round to multiple (complier warns about what i want as needing braces, lol)
+    mb->total_space=buffer_size;
     mb->static_offset=buffer_size;
     mb->dynamic_offset=0;
 
@@ -52,12 +53,12 @@ void cvm_vk_create_managed_buffer(cvm_vk_managed_buffer * mb,uint32_t buffer_siz
 
     mb->base_dynamic_allocation_size_factor=min_size_factor;
 
-    mb->mapping=cvm_vk_create_buffer(&mb->buffer,&mb->memory,usage,buffer_size,false);///if this is non-null then probably UMA and thus can circumvent staging buffer
+    #warning mb->mapping=cvm_vk_create_buffer(&mb->buffer,&mb->memory,usage,buffer_size,false);///if this is non-null then probably UMA and thus can circumvent staging buffer
 }
 
 void cvm_vk_destroy_managed_buffer(cvm_vk_managed_buffer * mb)
 {
-    cvm_vk_destroy_buffer(mb->buffer,mb->memory,mb->mapping);
+    #warning cvm_vk_destroy_buffer(mb->buffer,mb->memory,mb->mapping);
 
     free(mb->available_dynamic_allocations_start);
     free(mb->available_dynamic_allocations_end);
@@ -71,7 +72,7 @@ uint32_t cvm_vk_acquire_dynamic_buffer_allocation(cvm_vk_managed_buffer * mb,uin
     cvm_vk_dynamic_buffer_allocation ar,al;
 
     ///linear search should be fine as its assumed the vast majority of buffers will have size factor less than 3 (ergo better than binary search)
-    for(size_factor=mb->base_dynamic_allocation_size_factor;1<<size_factor > size;size_factor++);
+    for(size_factor=mb->base_dynamic_allocation_size_factor;1<<size_factor < size;size_factor++);
     size_factor-=mb->base_dynamic_allocation_size_factor;
 
     /// ~~ lock here ~~
@@ -196,7 +197,7 @@ uint32_t cvm_vk_acquire_dynamic_buffer_allocation(cvm_vk_managed_buffer * mb,uin
 
         mb->dynamic_allocations[r]=ar;
         mb->rightmost_allocation=r;
-        mb->dynamic_offset=o;
+        mb->dynamic_offset=o+(1<<size_factor);
         mb->available_dynamic_allocation_bitmask=available_bitmask;
 
         /// ~~ unlock here ~~
@@ -230,7 +231,7 @@ void cvm_vk_relinquish_dynamic_buffer_allocation(cvm_vk_managed_buffer * mb,uint
 
         while(index!=CVM_VK_NULL_ALLOCATION_INDEX && (a=mb->dynamic_allocations[index]).available)
         {
-            ///remove from linked list, will always be last so code is simpler
+            ///remove from linked list, will always be last (as ll is sorted by offset and this is righmost buffer) so code is simpler
             mb->available_dynamic_allocations_end[a.size_factor]=a.prev;
 
             if(a.prev==CVM_VK_NULL_ALLOCATION_INDEX)
@@ -261,7 +262,7 @@ void cvm_vk_relinquish_dynamic_buffer_allocation(cvm_vk_managed_buffer * mb,uint
         while(1)/// combine allocations in aligned way
         {
             ///neighbouring allocation for this alignment
-            n = a.offset&1<<a.size_factor ? a.left : a.right;/// will never be CVM_VK_NULL_ALLOCATION_INDEX
+            n = a.offset&1<<a.size_factor ? a.left : a.right;/// will never be CVM_VK_NULL_ALLOCATION_INDEX (if was rightmost other branch would be take, if leftmost (offset is 0), right will always be taken)
 
             an=mb->dynamic_allocations[n];
 

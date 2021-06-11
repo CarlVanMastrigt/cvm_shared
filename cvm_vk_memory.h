@@ -84,6 +84,10 @@ typedef struct cvm_vk_dynamic_buffer_allocation/// (dont ref this by pointer, on
     uint32_t prev;
     uint32_t next;///this is also used to store replacement index, possible because when representing memory, this dynamic allocation isn't in any linked list
     ///                 ^ actually, no, will need to be put in list of buffers that need relinquishing, but these can be singly linked list using prev
+    /// remove doubly linked list paradigm, is TERRIBLE for performance upon relinquishing, instead use binary heap on per size basis, with per-size memory available
+    /// binary heap entry should store index at minimum, but preferably index AND offset to reduce cache-missing memory accesses, need to store index within that heap here
+    /// should profile a bunch of use cases to ensure this does actually improve performance
+    ///     ^ i estimate 50% memory overhead for this
 
     uint32_t offset;/// actual offset = base_size<<offset_factor base allocation size 10 allows 16G buffer (which i quite like)
     ///get bit for "is_right_buffer" by 1 & (offset >> size_factor) during recombination calculations (256M max buffer size and 256 byte min gives the required size of this)
@@ -113,7 +117,7 @@ typedef struct cvm_vk_managed_buffer
     VkBuffer buffer;
     VkDeviceMemory memory;
 
-    ///uint64_t total_space;
+    uint64_t total_space;///actually DO need to track total buffer size so that buffer can be cleaned (all static and dynamic allocations removed in one go)
     uint64_t static_offset;/// taken from end of buffer
     uint32_t dynamic_offset;/// taken from start of buffer, is a multiple of base offset, actual offset = dynamic_offset<<base_dynamic_allocation_size_factor
     ///recursively free dynamic allocations (if they are the last allocation) when making available
@@ -155,7 +159,10 @@ cvm_vk_managed_buffer;
 
 
 void cvm_vk_create_managed_buffer(cvm_vk_managed_buffer * buffer,uint32_t buffer_size,uint32_t min_size_factor,uint32_t max_size_factor,uint32_t reserved_allocation_count,VkBufferUsageFlags usage);
+void cvm_vk_destroy_managed_buffer(cvm_vk_managed_buffer * mb);
 
+uint32_t cvm_vk_acquire_dynamic_buffer_allocation(cvm_vk_managed_buffer * mb,uint32_t size);
+void cvm_vk_relinquish_dynamic_buffer_allocation(cvm_vk_managed_buffer * mb,uint32_t index);
 
 #endif
 
