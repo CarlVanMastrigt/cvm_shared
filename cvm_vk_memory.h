@@ -81,13 +81,17 @@ typedef struct cvm_vk_dynamic_buffer_allocation/// (dont ref this by pointer, on
 {
     uint32_t left;
     uint32_t right;
-    uint32_t prev;
-    uint32_t next;///this is also used to store replacement index, possible because when representing memory, this dynamic allocation isn't in any linked list
+    uint32_t link;
+    //uint32_t prev;
+    //uint32_t next;///this is also used to store replacement index, possible because when representing memory, this dynamic allocation isn't in any linked list
     ///                 ^ actually, no, will need to be put in list of buffers that need relinquishing, but these can be singly linked list using prev
+    ///                         ^ can store list to be relinquished in separate list, will prevent extra memory overhead and keep shit clean
     /// remove doubly linked list paradigm, is TERRIBLE for performance upon relinquishing, instead use binary heap on per size basis, with per-size memory available
-    /// binary heap entry should store index at minimum, but preferably index AND offset to reduce cache-missing memory accesses, need to store index within that heap here
     /// should profile a bunch of use cases to ensure this does actually improve performance
-    ///     ^ i estimate 50% memory overhead for this
+    ///     ^ i estimate 30% memory overhead for this (not too terrible!)
+    ///     ^ altering the indicies stored here when re-organising heap is going to be painfully expensive (but so would reading offsets so w.e)
+    ///     ^ *should* be able to remove prev entirely and make next a "catch all" index (next in unused linked list, replacement when updating, index in "availability" heap)
+    ///         ^ need a good name! (association, register, coterminous, link)
 
     uint32_t offset;/// actual offset = base_size<<offset_factor base allocation size 10 allows 16G buffer (which i quite like)
     ///get bit for "is_right_buffer" by 1 & (offset >> size_factor) during recombination calculations (256M max buffer size and 256 byte min gives the required size of this)
@@ -108,9 +112,13 @@ typedef struct cvm_vk_dynamic_buffer_allocation/// (dont ref this by pointer, on
 }
 cvm_vk_dynamic_buffer_allocation;
 
-
-//typedef uint32_t cvm_vk_dynamic_buffer_index;
-//typedef uint64_t cvm_vk_static_buffer_offset;///raw offset (?) in managed buffer (multiple of base mag?)
+typedef struct cvm_vk_availablility_heap
+{
+    uint32_t * indices;
+    uint32_t space;
+    uint32_t count;
+}
+cvm_vk_availablility_heap;
 
 typedef struct cvm_vk_managed_buffer
 {
@@ -132,8 +140,7 @@ typedef struct cvm_vk_managed_buffer
     uint32_t rightmost_allocation;///used for setting left/right of new allocations
 
     ///consider making following fixed array with max size of ~24 (whole struct should fit on 2-3 cache lines)
-    uint32_t * available_dynamic_allocations_start;///array with index reflecting each possible size, is index of first in doubly linked list of those sizes
-    uint32_t * available_dynamic_allocations_end;
+    cvm_vk_availablility_heap * available_dynamic_allocations;
     ///intelligent application of last pointer to linked list creation isn't applicable, cannot reference/dereference bitfield!
     uint32_t num_dynamic_allocation_sizes;///essentially max value of dynamic_buffer_allocation.size_factor derived from the exponent of max_allocation_size/base_allocation_size
     uint32_t available_dynamic_allocation_bitmask;
