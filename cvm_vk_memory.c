@@ -25,6 +25,12 @@ along with cvm_shared.  If not, see <https://www.gnu.org/licenses/>.
 
 ///only using extern for variables in same category of files (e.g. vulkan memory is permitted to have extern accesses of the vulkan base)
 
+
+
+
+
+
+
 void cvm_vk_create_managed_buffer(cvm_vk_managed_buffer * mb,uint32_t buffer_size,uint32_t min_size_factor,uint32_t max_size_factor,uint32_t reserved_allocation_count,VkBufferUsageFlags usage)
 {
     uint32_t i;
@@ -33,23 +39,28 @@ void cvm_vk_create_managed_buffer(cvm_vk_managed_buffer * mb,uint32_t buffer_siz
     mb->static_offset=buffer_size;
     mb->dynamic_offset=0;
 
-    mb->dynamic_allocations=malloc(sizeof(cvm_vk_dynamic_buffer_allocation)*reserved_allocation_count);
-    mb->dynamic_allocation_space=reserved_allocation_count;
-    mb->reserved_allocation_count=reserved_allocation_count;
+    cvm_vk_dynamic_buffer_allocation * dynamic_allocations=malloc(sizeof(cvm_vk_dynamic_buffer_allocation)*reserved_allocation_count);
 
-    mb->first_unused_allocation=0;///put all allocations in linked list of unused allocations
-    for(i=0;i<reserved_allocation_count-1;i++)mb->dynamic_allocations[i].link=i+1;
-    mb->dynamic_allocations[i].link=CVM_VK_NULL_ALLOCATION_INDEX;
+    cvm_vk_dynamic_buffer_allocation * next=NULL;
+    i=reserved_allocation_count;
+    while(i--)
+    {
+        dynamic_allocations[i].link.next=next;
+        dynamic_allocations[i].is_base=!i;
+        next=dynamic_allocations+i;
+    }
+
+    mb->first_unused_allocation=dynamic_allocations;///put all allocations in linked list of unused allocations
     mb->unused_allocation_count=reserved_allocation_count;
-
-    mb->rightmost_allocation=CVM_VK_NULL_ALLOCATION_INDEX;///rightmost doesn't exist as it hasn't been allocated
+    mb->reserved_allocation_count=reserved_allocation_count;
+    mb->rightmost_allocation=NULL;///rightmost doesn't exist as it hasn't been allocated
 
 
     mb->num_dynamic_allocation_sizes=max_size_factor-min_size_factor;
     mb->available_dynamic_allocations=malloc(sizeof(cvm_vk_availablility_heap)*mb->num_dynamic_allocation_sizes);
     for(i=0;i<mb->num_dynamic_allocation_sizes;i++)
     {
-        mb->available_dynamic_allocations[i].indices=malloc(sizeof(uint32_t)*16);
+        mb->available_dynamic_allocations[i].heap=malloc(sizeof(cvm_vk_dynamic_buffer_allocation*)*16);
         mb->available_dynamic_allocations[i].space=16;
         mb->available_dynamic_allocations[i].count=0;
     }
@@ -64,28 +75,83 @@ void cvm_vk_destroy_managed_buffer(cvm_vk_managed_buffer * mb)
 {
     #warning cvm_vk_destroy_buffer(mb->buffer,mb->memory,mb->mapping);
     uint32_t i;
-    for(i=0;i<mb->num_dynamic_allocation_sizes;i++)free(mb->available_dynamic_allocations[i].indices);
+    cvm_vk_dynamic_buffer_allocation *f,*l,*current,*next;
+
+    for(i=0;i<mb->num_dynamic_allocation_sizes;i++)free(mb->available_dynamic_allocations[i].heap);
     free(mb->available_dynamic_allocations);
-    free(mb->dynamic_allocations);
+
+    ///all dynamic allocations should be freed at this point
+    if(mb->rightmost_allocation)
+    {
+        fprintf(stderr,"TRYING TO DESTROY A BUFFER WITH ACTIVE ELEMENTS\n");
+        exit(-1);
+        ///could instead just rightmost to offload all active buffers to the unused linked list
+    }
+
+
+    f=l=NULL;
+    ///get all base allocations in their own linked list, discarding all others
+    for(current=mb->first_unused_allocation;current;current=next)
+    {
+        next=current->link.next;
+        if(current->is_base)
+        {
+            if(l) l=l->link.next=current;
+            else f=l=current;
+        }
+    }
+    l->link.next=NULL;
+
+    for(current=f;current;current=next)
+    {
+        next=current->link.next;
+        free(current);///free all base allocations (to mathch appropriate allocs)
+    }
 }
 
-uint32_t cvm_vk_acquire_dynamic_buffer_allocation(cvm_vk_managed_buffer * mb,uint32_t size)
+void cvm_vk_update_managed_buffer_reservations(cvm_vk_managed_buffer * mb)
 {
-    uint32_t i,l,r,o,m,u,d,c,size_factor,available_bitmask;
-    uint32_t * indices;
-    cvm_vk_dynamic_buffer_allocation ar,al;
-    cvm_vk_dynamic_buffer_allocation * allocations=mb->dynamic_allocations;
+    uint32_t i;
+    cvm_vk_dynamic_buffer_allocation *next,*dynamic_allocations;
+
+    if(mb->unused_allocation_count<mb->reserved_allocation_count)
+    {
+        dynamic_allocations=malloc(sizeof(cvm_vk_dynamic_buffer_allocation)*mb->reserved_allocation_count);
+
+        next=mb->first_unused_allocation;
+        i=mb->reserved_allocation_count;
+        while(i--)
+        {
+            dynamic_allocations[i].link.next=next;
+            dynamic_allocations[i].is_base=!i;
+            next=dynamic_allocations+i;
+        }
+
+        mb->first_unused_allocation=dynamic_allocations;
+        mb->unused_allocation_count+=mb->reserved_allocation_count;
+    }
+}
+
+cvm_vk_dynamic_buffer_allocation * cvm_vk_acquire_dynamic_buffer_allocation(cvm_vk_managed_buffer * mb,uint64_t size)
+{
+    uint32_t i,o,m,u,d,c,size_factor,available_bitmask;
+    cvm_vk_dynamic_buffer_allocation ** heap;
+    cvm_vk_dynamic_buffer_allocation *l,*r;
 
     ///linear search should be fine as its assumed the vast majority of buffers will have size factor less than 3 (ergo better than binary search)
-    for(size_factor=mb->base_dynamic_allocation_size_factor;1<<size_factor < size;size_factor++);
+    for(size_factor=mb->base_dynamic_allocation_size_factor;0x0000000000000001<<size_factor < size;size_factor++);
     size_factor-=mb->base_dynamic_allocation_size_factor;
 
-    if(size_factor>=mb->num_dynamic_allocation_sizes)return CVM_VK_NULL_ALLOCATION_INDEX;
+    if(size_factor>=mb->num_dynamic_allocation_sizes)return NULL;
 
     /// ~~ lock here ~~
 
     /// okay, seeing as this function must be as fast and light as possible, we should track unused allocation count to determine if there are enough unused allocations left (with allowance for inaccuracy)
-    if(mb->unused_allocation_count < mb->num_dynamic_allocation_sizes) return CVM_VK_NULL_ALLOCATION_INDEX;///there might not be enough unused allocations, early exit with failure (this should VERY rarely, if ever happen)
+    if(mb->unused_allocation_count < mb->num_dynamic_allocation_sizes)
+    {
+        /// ~~ unlock here ~~
+        return NULL;///there might not be enough unused allocations, early exit with failure (this should VERY rarely, if ever happen)
+    }
     ///above ensures there will be enough unused allocations for any case below (is overly conservative. but is a quick, rarely failing test)
 
     available_bitmask=mb->available_dynamic_allocation_bitmask;
@@ -95,61 +161,56 @@ uint32_t cvm_vk_acquire_dynamic_buffer_allocation(cvm_vk_managed_buffer * mb,uin
         ///find lowest size with available allocation
         for(i=size_factor;!(available_bitmask>>i&1);i++);
 
-        indices=mb->available_dynamic_allocations[i].indices;
+        heap=mb->available_dynamic_allocations[i].heap;
 
-        l=indices[0];
-        al=allocations[l];
+        l=heap[0];
 
-        if((c= --mb->available_dynamic_allocations[i].count))///as we need
+        if((c= --mb->available_dynamic_allocations[i].count))
         {
             u=0;
 
             while((d=(u<<1)+1)<c)
             {
-                d+= (d+1<c) && (allocations[indices[d+1]].offset < allocations[indices[d]].offset);
-                if(allocations[indices[c]].offset < allocations[indices[d]].offset) break;
-                allocations[indices[d]].link=u;///need to know (new) index in heap
-                indices[u]=indices[d];
+                d+= (d+1<c) && (heap[d+1]->offset < heap[d]->offset);
+                if(heap[c]->offset < heap[d]->offset) break;
+                heap[d]->link.heap_index=u;///need to know (new) index in heap
+                heap[u]=heap[d];
                 u=d;
             }
 
-            allocations[indices[c]].link=u;
-            indices[u]=indices[c];
+            heap[c]->link.heap_index=u;
+            heap[u]=heap[c];
         }
         else available_bitmask&= ~(1<<i);
 
-        al.available=false;
-        al.link=CVM_VK_NULL_ALLOCATION_INDEX;///not in any linked list
-        al.size_factor=size_factor;
+        l->available=false;
+        l->link.next=NULL;///not in any linked list
+        l->size_factor=size_factor;
 
         while(i-- > size_factor)
         {
             r=mb->first_unused_allocation;
-            mb->first_unused_allocation=allocations[r].link;
+            mb->first_unused_allocation=r->link.next;
             mb->unused_allocation_count--;
 
             ///horizontal linked list stuff
-            allocations[al.right].left=r;///right cannot be NULL. if it were, then this allocation would have been freed back to the pool (rightmost available allocations are recursively freed)
-            ar.right=al.right;
-            ar.left=l;
-            al.right=r;
+            l->right->left=r;///right cannot be NULL. if it were, then this allocation would have been freed back to the pool (rightmost available allocations are recursively freed)
+            r->right=l->right;
+            r->left=l;
+            l->right=r;
 
-            ar.size_factor=i;
-            ar.offset=al.offset+(1<<i);
-            ar.available=true;
+            r->size_factor=i;
+            r->offset=l->offset+(1<<i);
+            r->available=true;
             ///if this allocation size wasn't empty, then this code path wouldn't be taken, ergo addition to heap is super simple
-            ar.link=0;///index in heap
+            r->link.heap_index=0;///index in heap
 
-            mb->available_dynamic_allocations[i].indices[0]=r;
+            mb->available_dynamic_allocations[i].heap[0]=r;
             mb->available_dynamic_allocations[i].count=1;
-
-            allocations[r]=ar;
 
             available_bitmask|=1<<i;
         }
-        #warning if implementing defragger then need to put this in offset ordered (and size tiered?) list of active allocations
 
-        allocations[l]=al;
         mb->available_dynamic_allocation_bitmask=available_bitmask;
 
         /// ~~ unlock here ~~
@@ -162,37 +223,35 @@ uint32_t cvm_vk_acquire_dynamic_buffer_allocation(cvm_vk_managed_buffer * mb,uin
 
         m=(1<<size_factor)-1;
 
-        if( ((((o+m)>>size_factor)<<size_factor) + (1<<size_factor)) << mb->base_dynamic_allocation_size_factor > mb->static_offset)return CVM_VK_NULL_ALLOCATION_INDEX;///not enough memory left
+        if( ((uint64_t)((((o+m)>>size_factor)<<size_factor) + (1<<size_factor))) << mb->base_dynamic_allocation_size_factor > mb->static_offset)return NULL;///not enough memory left
         /// ^ extra brackets to make compiler shut up :sob:
 
-        l=mb->rightmost_allocation;///could have some dummy allocations to avoid need for testing against CVM_VK_NULL_ALLOCATION_INDEX
+        l=mb->rightmost_allocation;
         ///i is initially set to bitmask of sizes that need new allocations
 
 
         for(i=0;o&m;i++) if(o&1<<i)/// o&m allows early exit at very little (if any) cost over i<size_favtor
         {
             r=mb->first_unused_allocation;
-            mb->first_unused_allocation=allocations[r].link;///r is guaranteed to be a valid location by checking done before starting this loop
+            mb->first_unused_allocation=r->link.next;///r is guaranteed to be a valid location by checking done before starting this loop
             mb->unused_allocation_count--;
 
-            ar.offset=o;
-            ar.left=l;///right will get set after the fact
-            ar.size_factor=i;
-            ar.available=true;
+            r->offset=o;
+            r->left=l;///right will get set after the fact
+            r->size_factor=i;
+            r->available=true;
             ///add to heap
-            ar.link=mb->available_dynamic_allocations[i].count++;///by virtue of being allocated from the end it will have the largest offset, thus will never need to move up the heap
+            r->link.heap_index=mb->available_dynamic_allocations[i].count++;///by virtue of being allocated from the end it will have the largest offset, thus will never need to move up the heap
 
-            if(ar.link==mb->available_dynamic_allocations[i].space)
+            if(r->link.heap_index==mb->available_dynamic_allocations[i].space)
             {
-                mb->available_dynamic_allocations[i].indices=realloc(mb->available_dynamic_allocations[i].indices,sizeof(uint32_t)*(mb->available_dynamic_allocations[i].space*=2));
+                mb->available_dynamic_allocations[i].heap=realloc(mb->available_dynamic_allocations[i].heap,sizeof(cvm_vk_dynamic_buffer_allocation*)*(mb->available_dynamic_allocations[i].space*=2));
             }
-            mb->available_dynamic_allocations[i].indices[ar.link]=r;
+            mb->available_dynamic_allocations[i].heap[r->link.heap_index]=r;
 
             available_bitmask|=1<<i;
 
-            allocations[l].right=r;///l cannot be CVM_VK_NULL_ALLOCATION_INDEX as then alignment would already be satisfied
-
-            allocations[r]=ar;
+            l->right=r;///l cannot be CVM_VK_NULL_ALLOCATION_INDEX as then alignment would already be satisfied
 
             o+=1<<i;///increment offset
 
@@ -200,19 +259,18 @@ uint32_t cvm_vk_acquire_dynamic_buffer_allocation(cvm_vk_managed_buffer * mb,uin
         }
 
         r=mb->first_unused_allocation;
-        mb->first_unused_allocation=allocations[r].link;///r is guaranteed to be a valid location by checking done before starting this loop
+        mb->first_unused_allocation=r->link.next;///r is guaranteed to be a valid location by checking done before starting this loop
         mb->unused_allocation_count--;
 
-        ar.offset=o;
-        ar.left=l;
-        ar.right=CVM_VK_NULL_ALLOCATION_INDEX;
-        ar.size_factor=size_factor;
-        ar.link=CVM_VK_NULL_ALLOCATION_INDEX;/// prev/next are unnecessary for allocations in use tbh
-        ar.available=false;
+        r->offset=o;
+        r->left=l;
+        r->right=NULL;
+        r->size_factor=size_factor;
+        r->link.next=NULL;/// prev/next are unnecessary for allocations in use tbh
+        r->available=false;
 
-        if(l!=CVM_VK_NULL_ALLOCATION_INDEX)allocations[l].right=r;
+        if(l)l->right=r;
 
-        allocations[r]=ar;
 
         mb->rightmost_allocation=r;
         mb->dynamic_offset=o+(1<<size_factor);
@@ -224,159 +282,166 @@ uint32_t cvm_vk_acquire_dynamic_buffer_allocation(cvm_vk_managed_buffer * mb,uin
     }
 }
 
-void cvm_vk_relinquish_dynamic_buffer_allocation(cvm_vk_managed_buffer * mb,uint32_t index)
+void cvm_vk_relinquish_dynamic_buffer_allocation(cvm_vk_managed_buffer * mb,cvm_vk_dynamic_buffer_allocation * a)
 {
-    uint32_t n,u,d,c,available_bitmask;
-    uint32_t * indices;
-    cvm_vk_dynamic_buffer_allocation a,an;
-    cvm_vk_dynamic_buffer_allocation * allocations=mb->dynamic_allocations;
+    uint32_t u,d,c,available_bitmask;
+    cvm_vk_dynamic_buffer_allocation ** heap;
+    cvm_vk_dynamic_buffer_allocation *n;///represents next or neighbour
 
     /// ~~ lock here ~~
 
     available_bitmask=mb->available_dynamic_allocation_bitmask;
 
-    if(index==mb->rightmost_allocation)
+    if(a==mb->rightmost_allocation)
     {
         ///free space from right until an unavailable allocation is found
         ///need handling for only 1 alloc, which is rightmost
 
-        n=mb->first_unused_allocation;
+        a->link.next=mb->first_unused_allocation;
 
-        allocations[index].link=n;
-
-        n=index;
-        index=allocations[index].left;
+        n=a;
+        a=a->left;
         mb->unused_allocation_count++;
 
-        while(index!=CVM_VK_NULL_ALLOCATION_INDEX && (a=allocations[index]).available)
+        while(a && a->available)
         {
             ///remove from heap, index cannot have any children as it's the allocation with the largest offset
-            if((c= --mb->available_dynamic_allocations[a.size_factor].count))
+            if((c= --mb->available_dynamic_allocations[a->size_factor].count))
             {
-                indices=mb->available_dynamic_allocations[a.size_factor].indices;
+                heap=mb->available_dynamic_allocations[a->size_factor].heap;
 
-                d=a.link;
-                while(d && allocations[indices[c]].offset < allocations[indices[(u=(d-1)>>1)]].offset)
+                d=a->link.heap_index;
+                while(d && heap[c]->offset < heap[(u=(d-1)>>1)]->offset)
                 {
-                    allocations[indices[u]].link=d;
-                    indices[d]=indices[u];
+                    heap[u]->link.heap_index=d;
+                    heap[d]=heap[u];
                     d=u;
                 }
 
-                allocations[indices[c]].link=d;
-                indices[d]=indices[c];
+                heap[c]->link.heap_index=d;
+                heap[d]=heap[c];
             }
-            else available_bitmask&= ~(1<<a.size_factor);///just removed last available allocation of this size
+            else available_bitmask&= ~(1<<a->size_factor);///just removed last available allocation of this size
 
             ///put into unused linked list
-            allocations[index].link=n;
+            a->link.next=n;
 
-            n=index;
-            index=allocations[index].left;
+            n=a;
+            a=a->left;
             mb->unused_allocation_count++;
         }
 
         mb->first_unused_allocation=n;
-        mb->rightmost_allocation=index;
-        if(index!=CVM_VK_NULL_ALLOCATION_INDEX)allocations[index].right=CVM_VK_NULL_ALLOCATION_INDEX;
-        mb->dynamic_offset=allocations[n].offset;///despite having been conceptually moved this data is still available and valid
+        mb->rightmost_allocation=a;
+        if(a)a->right=NULL;
+        mb->dynamic_offset=n->offset;///despite having been conceptually moved this data is still available and valid
         mb->available_dynamic_allocation_bitmask=available_bitmask;
     }
     else /// the difficult one...
     {
-        a=allocations[index];
-
-        while(a.size_factor+1 < mb->num_dynamic_allocation_sizes)/// combine allocations in aligned way
+        while(a->size_factor+1 < mb->num_dynamic_allocation_sizes)/// combine allocations in aligned way
         {
             ///neighbouring allocation for this alignment
-            n = a.offset&1<<a.size_factor ? a.left : a.right;/// will never be CVM_VK_NULL_ALLOCATION_INDEX (if was rightmost other branch would be take, if leftmost (offset is 0), right will always be taken)
+            n = a->offset&1<<a->size_factor ? a->left : a->right;/// will never be CVM_VK_NULL_ALLOCATION_INDEX (if was rightmost other branch would be take, if leftmost (offset is 0), right will always be taken)
 
-            an=allocations[n];
+            if(!n->available || n->size_factor!=a->size_factor)break;///an size factor must be the same size or smaller, can only combine if the same size and available
 
-            if(!an.available || an.size_factor!=a.size_factor)break;///an size factor must be the same size or smaller, can only combine if the same size and available
-
-            ///remove an from its availability heap
-            if((c= --mb->available_dynamic_allocations[an.size_factor].count))
+            ///remove n from its availability heap
+            if((c= --mb->available_dynamic_allocations[n->size_factor].count))
             {
-                indices=mb->available_dynamic_allocations[an.size_factor].indices;
+                heap=mb->available_dynamic_allocations[n->size_factor].heap;
 
-                d=an.link;
-                ///first try moving up the ranks
-                while(d && allocations[indices[c]].offset < allocations[indices[(u=(d-1)>>1)]].offset)///if indices[c]==index then this is never true and branch does basically nothing
+                d=n->link.heap_index;
+                while(d && heap[c]->offset < heap[(u=(d-1)>>1)]->offset)///try moving up
                 {
-                    allocations[indices[u]].link=d;
-                    indices[d]=indices[u];
+                    heap[u]->link.heap_index=d;
+                    heap[d]=heap[u];
                     d=u;
                 }
-                u=d;///swaping these for clarity...
-                ///then try moving down the ranks
-                while((d=(u<<1)+1)<c)
+                u=d;
+                while((d=(u<<1)+1)<c)///try moving down
                 {
-                    d+= (d+1<c) && (allocations[indices[d+1]].offset < allocations[indices[d]].offset);
-                    if(allocations[indices[c]].offset < allocations[indices[d]].offset) break;
-                    allocations[indices[d]].link=u;
-                    indices[u]=indices[d];
+                    d+= (d+1<c) && (heap[d+1]->offset < heap[d]->offset);
+                    if(heap[c]->offset < heap[d]->offset) break;
+                    heap[d]->link.heap_index=u;
+                    heap[u]=heap[d];
                     u=d;
                 }
 
-                allocations[indices[c]].link=u;
-                indices[u]=indices[c];
+                heap[c]->link.heap_index=u;
+                heap[u]=heap[c];
             }
-            else available_bitmask&= ~(1<<an.size_factor);///just removed last available allocation of this size
+            else available_bitmask&= ~(1<<n->size_factor);///just removed last available allocation of this size
 
             ///change left-right bindings
-            if(a.offset&1<<a.size_factor) /// a is right
+            if(a->offset&1<<a->size_factor) /// a is right
             {
-                a.offset=an.offset;
+                a->offset=n->offset;
                 ///this should be rare enough to set next and prev during loop and still be the most efficient option
-                a.left=an.left;
-                if(a.left!=CVM_VK_NULL_ALLOCATION_INDEX) allocations[a.left].right=index;
+                a->left=n->left;
+                if(a->left) a->left->right=a;
             }
-            else /// a is left
-            {
-                a.right=an.right;
-                mb->dynamic_allocations[a.right].left=index;///right CANNOT be CVM_VK_NULL_ALLOCATION_INDEX, as rightmost allocation cannot be available
-            }
+            else (a->right=n->right)->left=a;///right CANNOT be NULL, as rightmost allocation cannot be available
 
-            a.size_factor++;
+            a->size_factor++;
 
-            allocations[n].link=mb->first_unused_allocation;///put subsumed adjacent allocation in unused list, not worth copying all an back when only 1 value changes
+            n->link.next=mb->first_unused_allocation;///put subsumed adjacent allocation in unused list, not worth copying all an back when only 1 value changes
             mb->first_unused_allocation=n;
             mb->unused_allocation_count++;
         }
 
         /// add a to appropriate availability heap
-        a.available=true;
+        a->available=true;
 
-        d=mb->available_dynamic_allocations[a.size_factor].count++;///by virtue of being allocated from the end it will have the largest offset, thus will never need to move up the heap
-        indices=mb->available_dynamic_allocations[a.size_factor].indices;
+        d=mb->available_dynamic_allocations[a->size_factor].count++;///by virtue of being allocated from the end it will have the largest offset, thus will never need to move up the heap
+        heap=mb->available_dynamic_allocations[a->size_factor].heap;
 
-        if(d==mb->available_dynamic_allocations[a.size_factor].space)
+        if(d==mb->available_dynamic_allocations[a->size_factor].space)
         {
-            indices=mb->available_dynamic_allocations[a.size_factor].indices=realloc(indices,sizeof(uint32_t)*(mb->available_dynamic_allocations[a.size_factor].space*=2));
+            heap=mb->available_dynamic_allocations[a->size_factor].heap=realloc(heap,sizeof(cvm_vk_dynamic_buffer_allocation*)*(mb->available_dynamic_allocations[a->size_factor].space*=2));
         }
 
-        while(d && a.offset < allocations[indices[(u=(d-1)>>1)]].offset)
+        while(d && a->offset < heap[(u=(d-1)>>1)]->offset)
         {
-            allocations[indices[u]].link=d;
-            indices[d]=indices[u];
+            heap[u]->link.heap_index=d;
+            heap[d]=heap[u];
             d=u;
         }
 
-        a.link=d;
-        indices[d]=index;
+        a->link.heap_index=d;
+        heap[d]=a;
 
-        available_bitmask|=1<<a.size_factor;
+        available_bitmask|=1<<a->size_factor;
 
         mb->available_dynamic_allocation_bitmask=available_bitmask;
-        allocations[index]=a;
     }
 
     /// ~~ unlock here ~~
 }
 
+uint64_t cvm_vk_acquire_static_buffer_allocation(cvm_vk_managed_buffer * mb,uint64_t size,uint64_t alignment)///it is assumed alignment is power of 2, may want to ensure this is the case
+{
+    uint64_t dynamic_offset,s,e,offset;
 
+    size=((size+(alignment-1))& ~(alignment-1));///round up size t multiple of alignment (not strictly necessary but w/e)
 
+    /// ~~ lock here ~~
+
+    e=mb->static_offset& ~(alignment-1);
+    s=((uint64_t)mb->dynamic_offset)<<mb->base_dynamic_allocation_size_factor;
+
+    if(s+size > e || e==size)///must have enough space and cannot use whole buffer for static allocations (returning 0 is reserved for errors)
+    {
+        /// ~~ unlock here ~~
+        return 0;
+    }
+
+    mb->static_offset=e-size;
+
+    /// ~~ unlock here ~~
+
+    return e-size;
+}
 
 
 

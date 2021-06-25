@@ -26,95 +26,49 @@ along with cvm_shared.  If not, see <https://www.gnu.org/licenses/>.
 #define CVM_VK_MEMORY_H
 
 
-//#define CVM_VK_NULL_ALLOCATION_INDEX 0x1FFFFF
-#define CVM_VK_NULL_ALLOCATION_INDEX 0xFFFFFFFF
-/// ^ max representable index for any dynamic buffer allocation (1 than max number of allocations)
 
-/// buffer offset is actually MORE important than reference index capacity (each reference identifies a unique offset!)
+/// could use more complicated allocator that can recombine sections of arbatrary size with no power of 2 superstructure, may work reasonably well, especially if memory is grouped by expected lifetime
+///     ^ this will definitely require a defragger!
+///     ^ use expected lifetime to prioritise ordering of sections? will that happen naturally as chunks are allocated/deallocated
+///     ^ profile an implementation and only use it if its substantially better than the extant implementation in terms of alloc/dealloc time
+///     ^ require all chunks to meet the largest supported types alignment requirements
 
-/// 2M max references (21 bits) and 16M max memory locations (24 bits)
 
-/// despite them not really being necessary, limit offsets of both static and dynamic allocations to the
 
-/// this design doesnt technically allow multithreaded alterations to different parts, but if accessed values go unaltered then it actually will... (this definitely jank, but seems to be defined behaviour)
 
-/// probably worth testing performance if this used base size primitives (uint32_t) and was a little larger (24 bytes vs 16)... (yeah its almost certianly woth it)
-//typedef struct cvm_vk_dynamic_buffer_allocation/// (dont ref this by pointer, only store index)
-//{
-//    uint64_t valid:1;///memory has been copied to this location
-//
-//    ///in following; invalid/null == 0x001FFFFF
-//    uint64_t left:21;
-//    uint64_t right:21;
-//    uint64_t prev:21;
-//    uint64_t next:21;///this is also used to store replacement index, possible because when representing memory, this dynamic allocation isn't in any linked list
-//    ///                 ^ actually, no, will need to be put in list of buffers that need relinquishing, but these can be singly linked list using prev
-//
-//    ///due to packing this into a u64 can easily reference more than 4 gig of memory!
-//    uint64_t offset:24;/// actual offset = base_size<<offset_factor base allocation size 10 allows 16G buffer (which i quite like)
-//    ///get bit for "is_right_buffer" by 1 & (offset >> size_factor) during recombination calculations (256M max buffer size and 256 byte min gives the required size of this)
-//    uint64_t size_factor:5;
-//
-//
-//    uint64_t staged:1;/// data has been moved here by transfer queue, so this can be utilised
-//    uint64_t replaced:1;///set this when replacement exists in vram; is this even necessary?
-//    /// FUCK, if swapping/replacing contents of cvm_vk_dynamic_buffer_allocation as part of defraggimg then above is invalid, entire struct changes as part of defrag
-//    /// for now; plan to do defragging in objects parent thread, then depending on which is more useful, use spinlocks (possibly per 256 allocations, intersplicing the locks between allocations) to sync
-//    ///         ^ when needing multiple locks always lock lower index first!
-//    ///         ^ by placing spinlocks at the end of a cluster, the final index (CVM_VK_NULL_ALLOCATION_INDEX) isn't "wasted"
-//    /// or just spit work of defragging across threads (i do like above though tbh)
-//    ///remember, this requires reallocation of buffers inside critical section
-//    uint64_t relinquished:1;///is available for recombination (for easy checking of left-right adjacent allocatios as part of recombination)
-//}
-//cvm_vk_dynamic_buffer_allocation;
 
-//typedef enum
-//{
-//    CVM_VK_DYNAMIC_BUFFER_AVAILABLE=0,///does not represent memory yet
-//    CVM_VK_DYNAMIC_BUFFER_ALLOCATED=1,/// represents memory but does not have valid contents yet
-//    CVM_VK_DYNAMIC_BUFFER_VALID=2,///has valid contents
-//    ///may need more as time goes on
-//}
-//cvm_vk_dynamic_buffer_allocation_state;
 
-typedef struct cvm_vk_dynamic_buffer_allocation/// (dont ref this by pointer, only store index)
+
+///pointer approach was at best very marginally better at the cost of extra allocation complexity and extra storage space :sob:
+/// may want to try optimising both this and old approach
+
+typedef struct cvm_vk_dynamic_buffer_allocation cvm_vk_dynamic_buffer_allocation;
+
+
+struct cvm_vk_dynamic_buffer_allocation/// (dont ref this by pointer, only store index)
 {
-    uint32_t left;
-    uint32_t right;
-    uint32_t link;
-    //uint32_t prev;
-    //uint32_t next;///this is also used to store replacement index, possible because when representing memory, this dynamic allocation isn't in any linked list
-    ///                 ^ actually, no, will need to be put in list of buffers that need relinquishing, but these can be singly linked list using prev
-    ///                         ^ can store list to be relinquished in separate list, will prevent extra memory overhead and keep shit clean
-    /// remove doubly linked list paradigm, is TERRIBLE for performance upon relinquishing, instead use binary heap on per size basis, with per-size memory available
-    /// should profile a bunch of use cases to ensure this does actually improve performance
-    ///     ^ i estimate 30% memory overhead for this (not too terrible!)
-    ///     ^ altering the indicies stored here when re-organising heap is going to be painfully expensive (but so would reading offsets so w.e)
-    ///     ^ *should* be able to remove prev entirely and make next a "catch all" index (next in unused linked list, replacement when updating, index in "availability" heap)
-    ///         ^ need a good name! (association, register, coterminous, link)
+    /// is possible to make all contents here bitfields (20->12 bytes), no noticeable drop in performance was observed when doing so, need to set CVM_VK_NULL_ALLOCATION_INDEX appropriately if doing so
+    /// does limit to 2M max allocations, but this should be more than enough
+    cvm_vk_dynamic_buffer_allocation * left;
+    cvm_vk_dynamic_buffer_allocation * right;
+    union
+    {
+        cvm_vk_dynamic_buffer_allocation * next;
+        uint32_t heap_index;
+    }link;
+    //void * link;///can be either cvm_vk_dynamic_buffer_allocation or position in heap, if this is in fact faster, will need to make this either relative offset or a union with the index (actually isnt a terrible tbh)
 
     uint32_t offset;/// actual offset = base_size<<offset_factor base allocation size 10 allows 16G buffer (which i quite like)
     ///get bit for "is_right_buffer" by 1 & (offset >> size_factor) during recombination calculations (256M max buffer size and 256 byte min gives the required size of this)
     uint32_t size_factor:5;
     uint32_t available:1;///does not have contents, can be retrieved by new allocation or recombined into
+    uint32_t is_base:1;///need to free this pointer at end
+};
 
-    ///could probably replace these "booleans" with a single state variable that can have all 4(?) possible states
-//    uint32_t valid:1;///memory has been copied to this location
-//    uint32_t staged:1;/// data has been moved here by transfer queue, so this can be utilised
-//    uint32_t replaced:1;///set this when replacement exists in vram; is this even necessary?
-//    /// FUCK, if swapping/replacing contents of cvm_vk_dynamic_buffer_allocation as part of defraggimg then above is invalid, entire struct changes as part of defrag
-//    /// for now; plan to do defragging in objects parent thread, then depending on which is more useful, use spinlocks (possibly per 256 allocations, intersplicing the locks between allocations) to sync
-//    ///         ^ when needing multiple locks always lock lower index first!
-//    ///         ^ by placing spinlocks at the end of a cluster, the final index (CVM_VK_NULL_ALLOCATION_INDEX) isn't "wasted"
-//    /// or just spit work of defragging across threads (i do like above though tbh)
-//    ///remember, this requires reallocation of buffers inside critical section
-//    uint32_t relinquished:1;///is available for recombination (for easy checking of left-right adjacent allocatios as part of recombination)
-}
-cvm_vk_dynamic_buffer_allocation;
-
+///need to ensure heap ALWAYS has enough space for this test,create heap with max number of allocations! (2^16)
 typedef struct cvm_vk_availablility_heap
 {
-    uint32_t * indices;
+    cvm_vk_dynamic_buffer_allocation ** heap;///potentially worth testing the effect of storing in a struct with the pointer to the allocation (avoids double indirection in about half of cases)
     uint32_t space;
     uint32_t count;
 }
@@ -131,13 +85,11 @@ typedef struct cvm_vk_managed_buffer
     ///recursively free dynamic allocations (if they are the last allocation) when making available
     ///give error if dynamic_offset would become greater than static_offset
 
-    cvm_vk_dynamic_buffer_allocation * dynamic_allocations;
-    uint32_t dynamic_allocation_space;
     uint32_t reserved_allocation_count;/// max allocations expected to be made per frame (amount to expand by when reallocing?)
-    uint32_t first_unused_allocation;///singly linked list of allocations to assign space to
+    cvm_vk_dynamic_buffer_allocation * first_unused_allocation;///singly linked list of allocations to assign space to
     uint32_t unused_allocation_count;
 
-    uint32_t rightmost_allocation;///used for setting left/right of new allocations
+    cvm_vk_dynamic_buffer_allocation * rightmost_allocation;///used for setting left/right of new allocations
 
     ///consider making following fixed array with max size of ~24 (whole struct should fit on 2-3 cache lines)
     cvm_vk_availablility_heap * available_dynamic_allocations;
@@ -165,11 +117,90 @@ cvm_vk_managed_buffer;
 ///     ^ though tbh this whole idea is definitely overkill, and still needs a way to manage failure case of system running out of memory... (do as advanced version?) (current imp. will likely be quicker)
 
 
+///instead could allocate from power of 2 sections, storing neighbouring blocks when difference from power of 2 warrants it, and using start-end alignment to allow replacing paired block of mem
+/// would still allocate from power of 2 sections and free them in similar way...
+
 void cvm_vk_create_managed_buffer(cvm_vk_managed_buffer * buffer,uint32_t buffer_size,uint32_t min_size_factor,uint32_t max_size_factor,uint32_t reserved_allocation_count,VkBufferUsageFlags usage);
 void cvm_vk_destroy_managed_buffer(cvm_vk_managed_buffer * mb);
 
-uint32_t cvm_vk_acquire_dynamic_buffer_allocation(cvm_vk_managed_buffer * mb,uint32_t size);
-void cvm_vk_relinquish_dynamic_buffer_allocation(cvm_vk_managed_buffer * mb,uint32_t index);
+void cvm_vk_update_managed_buffer_reservations(cvm_vk_managed_buffer * mb);///creates more allocations as necessary
+
+cvm_vk_dynamic_buffer_allocation * cvm_vk_acquire_dynamic_buffer_allocation(cvm_vk_managed_buffer * mb,uint64_t size);
+void cvm_vk_relinquish_dynamic_buffer_allocation(cvm_vk_managed_buffer * mb,cvm_vk_dynamic_buffer_allocation * allocation);
+
+uint64_t cvm_vk_acquire_static_buffer_allocation(cvm_vk_managed_buffer * mb,uint64_t size,uint64_t alignment);
+
+
+
+
+
+
+
+///probably want to use pointers for all of these
+
+///can reasonably easily combine the node and the allocation list
+
+typedef struct cvm_vk_dynamic_buffer_allocation_3 cvm_vk_dynamic_buffer_allocation_3;
+
+/// *just* fits in one cache line
+struct cvm_vk_dynamic_buffer_allocation_3/// (dont ref this by pointer, only store index)
+{
+    ///horizontal structure
+    cvm_vk_dynamic_buffer_allocation_3 * left;
+    cvm_vk_dynamic_buffer_allocation_3 * right;
+
+    ///
+    cvm_vk_dynamic_buffer_allocation_3 * l_child;
+    cvm_vk_dynamic_buffer_allocation_3 * r_child;
+    cvm_vk_dynamic_buffer_allocation_3 * parent;///also used in singly linked list
+
+    uint64_t offset;
+    uint32_t size;
+    int8_t bias;
+    uint8_t free;///if copying contents of 2 allocations as part of defragger then DO NOT copy this variable
+};
+
+///no distinction between static and dynamic allocations
+typedef struct cvm_vk_managed_buffer_3
+{
+    VkBuffer buffer;
+    VkDeviceMemory memory;
+
+    void * mapping;///for use on UMA platforms
+
+    uint64_t total_space;
+    uint64_t used_space;
+    uint64_t base_alignment;
+
+    cvm_vk_dynamic_buffer_allocation_3 * first_unused_allocation;///singly linked list of allocations to assign space to, will only ever require a single new allocation at a time
+    cvm_vk_dynamic_buffer_allocation_3 * rightmost_allocation;///used for setting left/right of new allocations
+
+    uint32_t reserved_allocation_count;/// max allocations expected to be made per frame (amount to expand by when reallocing?)
+    uint32_t unused_allocation_count;
+}
+cvm_vk_managed_buffer_3;
+
+void cvm_vk_create_managed_buffer_3(cvm_vk_managed_buffer_3 * buffer,uint64_t buffer_size,uint32_t reserved_allocation_count,VkBufferUsageFlags usage);///determine alignment from usage flags and round size up to multiple
+void cvm_vk_destroy_managed_buffer_3(cvm_vk_managed_buffer_3 * mb);
+
+uint32_t cvm_vk_acquire_dynamic_buffer_allocation_3(cvm_vk_managed_buffer_3 * mb,uint64_t size);
+void cvm_vk_relinquish_dynamic_buffer_allocation_3(cvm_vk_managed_buffer_3 * mb,uint32_t index);
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 #endif
 
