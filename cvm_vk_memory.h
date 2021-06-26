@@ -51,12 +51,12 @@ struct cvm_vk_dynamic_buffer_allocation/// (dont ref this by pointer, only store
     /// does limit to 2M max allocations, but this should be more than enough
     cvm_vk_dynamic_buffer_allocation * left;
     cvm_vk_dynamic_buffer_allocation * right;
+
     union
     {
         cvm_vk_dynamic_buffer_allocation * next;
         uint32_t heap_index;
     }link;
-    //void * link;///can be either cvm_vk_dynamic_buffer_allocation or position in heap, if this is in fact faster, will need to make this either relative offset or a union with the index (actually isnt a terrible tbh)
 
     uint32_t offset;/// actual offset = base_size<<offset_factor base allocation size 10 allows 16G buffer (which i quite like)
     ///get bit for "is_right_buffer" by 1 & (offset >> size_factor) during recombination calculations (256M max buffer size and 256 byte min gives the required size of this)
@@ -84,6 +84,8 @@ typedef struct cvm_vk_managed_buffer
     uint32_t dynamic_offset;/// taken from start of buffer, is a multiple of base offset, actual offset = dynamic_offset<<base_dynamic_allocation_size_factor
     ///recursively free dynamic allocations (if they are the last allocation) when making available
     ///give error if dynamic_offset would become greater than static_offset
+    bool multithreaded;
+    atomic_uint_fast32_t spinlock;
 
     uint32_t reserved_allocation_count;/// max allocations expected to be made per frame (amount to expand by when reallocing?)
     cvm_vk_dynamic_buffer_allocation * first_unused_allocation;///singly linked list of allocations to assign space to
@@ -120,7 +122,7 @@ cvm_vk_managed_buffer;
 ///instead could allocate from power of 2 sections, storing neighbouring blocks when difference from power of 2 warrants it, and using start-end alignment to allow replacing paired block of mem
 /// would still allocate from power of 2 sections and free them in similar way...
 
-void cvm_vk_create_managed_buffer(cvm_vk_managed_buffer * buffer,uint32_t buffer_size,uint32_t min_size_factor,uint32_t max_size_factor,uint32_t reserved_allocation_count,VkBufferUsageFlags usage);
+void cvm_vk_create_managed_buffer(cvm_vk_managed_buffer * buffer,uint32_t buffer_size,uint32_t min_size_factor,uint32_t max_size_factor,uint32_t reserved_allocation_count,VkBufferUsageFlags usage,bool multithreaded);
 void cvm_vk_destroy_managed_buffer(cvm_vk_managed_buffer * mb);
 
 void cvm_vk_update_managed_buffer_reservations(cvm_vk_managed_buffer * mb);///creates more allocations as necessary

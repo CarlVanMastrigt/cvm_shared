@@ -31,7 +31,7 @@ along with cvm_shared.  If not, see <https://www.gnu.org/licenses/>.
 
 
 
-void cvm_vk_create_managed_buffer(cvm_vk_managed_buffer * mb,uint32_t buffer_size,uint32_t min_size_factor,uint32_t max_size_factor,uint32_t reserved_allocation_count,VkBufferUsageFlags usage)
+void cvm_vk_create_managed_buffer(cvm_vk_managed_buffer * mb,uint32_t buffer_size,uint32_t min_size_factor,uint32_t max_size_factor,uint32_t reserved_allocation_count,VkBufferUsageFlags usage,bool multithreaded)
 {
     uint32_t i;
     buffer_size=(((buffer_size-1) >> min_size_factor)+1) << min_size_factor;///round to multiple (complier warns about what i want as needing braces, lol)
@@ -67,6 +67,9 @@ void cvm_vk_create_managed_buffer(cvm_vk_managed_buffer * mb,uint32_t buffer_siz
     mb->available_dynamic_allocation_bitmask=0;
 
     mb->base_dynamic_allocation_size_factor=min_size_factor;
+
+    mb->multithreaded=multithreaded;
+    atomic_init(&mb->spinlock,0);
 
     #warning mb->mapping=cvm_vk_create_buffer(&mb->buffer,&mb->memory,usage,buffer_size,false);///if this is non-null then probably UMA and thus can circumvent staging buffer
 }
@@ -112,7 +115,12 @@ void cvm_vk_destroy_managed_buffer(cvm_vk_managed_buffer * mb)
 void cvm_vk_update_managed_buffer_reservations(cvm_vk_managed_buffer * mb)
 {
     uint32_t i;
+    uint_fast32_t lock;
     cvm_vk_dynamic_buffer_allocation *next,*dynamic_allocations;
+
+    if(mb->multithreaded)do lock=atomic_load(&mb->spinlock);
+    while(lock!=0 || !atomic_compare_exchange_weak(&mb->spinlock,&lock,1));
+    ///probably want to call this in critical section anyway but w/e
 
     if(mb->unused_allocation_count<mb->reserved_allocation_count)
     {
@@ -130,6 +138,8 @@ void cvm_vk_update_managed_buffer_reservations(cvm_vk_managed_buffer * mb)
         mb->first_unused_allocation=dynamic_allocations;
         mb->unused_allocation_count+=mb->reserved_allocation_count;
     }
+
+    atomic_store(&mb->spinlock,0);
 }
 
 cvm_vk_dynamic_buffer_allocation * cvm_vk_acquire_dynamic_buffer_allocation(cvm_vk_managed_buffer * mb,uint64_t size)
@@ -137,6 +147,7 @@ cvm_vk_dynamic_buffer_allocation * cvm_vk_acquire_dynamic_buffer_allocation(cvm_
     uint32_t i,o,m,u,d,c,size_factor,available_bitmask;
     cvm_vk_dynamic_buffer_allocation ** heap;
     cvm_vk_dynamic_buffer_allocation *l,*r;
+    uint_fast32_t lock;
 
     ///linear search should be fine as its assumed the vast majority of buffers will have size factor less than 3 (ergo better than binary search)
     for(size_factor=mb->base_dynamic_allocation_size_factor;0x0000000000000001<<size_factor < size;size_factor++);
@@ -144,12 +155,13 @@ cvm_vk_dynamic_buffer_allocation * cvm_vk_acquire_dynamic_buffer_allocation(cvm_
 
     if(size_factor>=mb->num_dynamic_allocation_sizes)return NULL;
 
-    /// ~~ lock here ~~
+    if(mb->multithreaded)do lock=atomic_load(&mb->spinlock);
+    while(lock!=0 || !atomic_compare_exchange_weak(&mb->spinlock,&lock,1));
 
     /// okay, seeing as this function must be as fast and light as possible, we should track unused allocation count to determine if there are enough unused allocations left (with allowance for inaccuracy)
     if(mb->unused_allocation_count < mb->num_dynamic_allocation_sizes)
     {
-        /// ~~ unlock here ~~
+        atomic_store(&mb->spinlock,0);
         return NULL;///there might not be enough unused allocations, early exit with failure (this should VERY rarely, if ever happen)
     }
     ///above ensures there will be enough unused allocations for any case below (is overly conservative. but is a quick, rarely failing test)
@@ -213,7 +225,7 @@ cvm_vk_dynamic_buffer_allocation * cvm_vk_acquire_dynamic_buffer_allocation(cvm_
 
         mb->available_dynamic_allocation_bitmask=available_bitmask;
 
-        /// ~~ unlock here ~~
+        atomic_store(&mb->spinlock,0);
 
         return l;
     }
@@ -276,7 +288,7 @@ cvm_vk_dynamic_buffer_allocation * cvm_vk_acquire_dynamic_buffer_allocation(cvm_
         mb->dynamic_offset=o+(1<<size_factor);
         mb->available_dynamic_allocation_bitmask=available_bitmask;
 
-        /// ~~ unlock here ~~
+        atomic_store(&mb->spinlock,0);
 
         return r;
     }
@@ -287,8 +299,10 @@ void cvm_vk_relinquish_dynamic_buffer_allocation(cvm_vk_managed_buffer * mb,cvm_
     uint32_t u,d,c,available_bitmask;
     cvm_vk_dynamic_buffer_allocation ** heap;
     cvm_vk_dynamic_buffer_allocation *n;///represents next or neighbour
+    uint_fast32_t lock;
 
-    /// ~~ lock here ~~
+    if(mb->multithreaded)do lock=atomic_load(&mb->spinlock);
+    while(lock!=0 || !atomic_compare_exchange_weak(&mb->spinlock,&lock,1));
 
     available_bitmask=mb->available_dynamic_allocation_bitmask;
 
@@ -416,29 +430,31 @@ void cvm_vk_relinquish_dynamic_buffer_allocation(cvm_vk_managed_buffer * mb,cvm_
         mb->available_dynamic_allocation_bitmask=available_bitmask;
     }
 
-    /// ~~ unlock here ~~
+    atomic_store(&mb->spinlock,0);
 }
 
 uint64_t cvm_vk_acquire_static_buffer_allocation(cvm_vk_managed_buffer * mb,uint64_t size,uint64_t alignment)///it is assumed alignment is power of 2, may want to ensure this is the case
 {
     uint64_t dynamic_offset,s,e,offset;
+    uint_fast32_t lock;
 
     size=((size+(alignment-1))& ~(alignment-1));///round up size t multiple of alignment (not strictly necessary but w/e)
 
-    /// ~~ lock here ~~
+    if(mb->multithreaded)do lock=atomic_load(&mb->spinlock);
+    while(lock!=0 || !atomic_compare_exchange_weak(&mb->spinlock,&lock,1));
 
     e=mb->static_offset& ~(alignment-1);
     s=((uint64_t)mb->dynamic_offset)<<mb->base_dynamic_allocation_size_factor;
 
     if(s+size > e || e==size)///must have enough space and cannot use whole buffer for static allocations (returning 0 is reserved for errors)
     {
-        /// ~~ unlock here ~~
+        atomic_store(&mb->spinlock,0);
         return 0;
     }
 
     mb->static_offset=e-size;
 
-    /// ~~ unlock here ~~
+    atomic_store(&mb->spinlock,0);
 
     return e-size;
 }
