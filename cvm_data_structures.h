@@ -130,7 +130,7 @@ static inline type * name##_list_ensure_space                                   
 
 
 #ifndef CVM_BIN_HEAP
-#define CVM_BIN_HEAP(type,name,cmp_func)                                        \
+#define CVM_BIN_HEAP(type,name)                                                 \
                                                                                 \
 typedef struct name##_bin_heap                                                  \
 {                                                                               \
@@ -154,11 +154,9 @@ static inline void name##_bin_heap_add( name##_bin_heap * h ,   type data )     
     uint32_t u,d;                                                               \
     d=h->count++;                                                               \
                                                                                 \
-    while(d)                                                                    \
+    while(d && (CVM_BIN_HEAP_CMP(data,h->heap[(u=(d-1)>>1)])))                  \
     {                                                                           \
-        u=(d-1)>>1;                                                             \
-        if(cmp_func(data,h->heap[u])) h->heap[d]=h->heap[u];                    \
-        else break;                                                             \
+        h->heap[d]=h->heap[u];                                                  \
         d=u;                                                                    \
     }                                                                           \
                                                                                 \
@@ -182,8 +180,8 @@ static inline bool name##_bin_heap_get( name##_bin_heap * h , type * data )     
                                                                                 \
     while((d=(u<<1)+1) < (h->count))                                            \
     {                                                                           \
-        d+=((d+1 < h->count)&&(cmp_func(h->heap[d+1],h->heap[d])));             \
-        if(cmp_func(r,h->heap[d])) break;                                       \
+        d+=((d+1 < h->count)&&(CVM_BIN_HEAP_CMP(h->heap[d+1],h->heap[d])));     \
+        if(CVM_BIN_HEAP_CMP(r,h->heap[d])) break;                               \
         h->heap[u]=h->heap[d];                                                  \
         u=d;                                                                    \
     }                                                                           \
