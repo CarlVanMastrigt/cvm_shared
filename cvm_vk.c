@@ -26,6 +26,7 @@ static VkPhysicalDevice cvm_vk_physical_device;
 static VkDevice cvm_vk_device;///"logical" device
 static VkSurfaceKHR cvm_vk_surface;
 static VkPhysicalDeviceMemoryProperties cvm_vk_memory_properties;
+static VkPhysicalDeviceProperties cvm_vk_device_properties;
 
 static VkSwapchainKHR cvm_vk_swapchain=VK_NULL_HANDLE;
 static VkSurfaceFormatKHR cvm_vk_surface_format;
@@ -127,17 +128,16 @@ static void cvm_vk_create_surface(SDL_Window * window)
 
 static bool check_physical_device_appropriate(bool dedicated_gpu_required,bool sync_compute_required)
 {
-    VkPhysicalDeviceProperties properties;
     uint32_t i,queue_family_count;
     VkQueueFamilyProperties * queue_family_properties=NULL;
     VkBool32 surface_supported;
     VkPhysicalDeviceFeatures features;
 
-    vkGetPhysicalDeviceProperties(cvm_vk_physical_device,&properties);
+    vkGetPhysicalDeviceProperties(cvm_vk_physical_device,&cvm_vk_device_properties);
 
-    if((dedicated_gpu_required)&&(properties.deviceType!=VK_PHYSICAL_DEVICE_TYPE_DISCRETE_GPU))return false;
+    if((dedicated_gpu_required)&&(cvm_vk_device_properties.deviceType!=VK_PHYSICAL_DEVICE_TYPE_DISCRETE_GPU))return false;
 
-    printf("testing GPU : %s\n",properties.deviceName);
+    printf("testing GPU : %s\n",cvm_vk_device_properties.deviceName);
 
     vkGetPhysicalDeviceFeatures(cvm_vk_physical_device,&features);
 
@@ -1046,8 +1046,34 @@ void cvm_vk_destroy_buffer(VkBuffer buffer,VkDeviceMemory memory,void * mapping)
     vkFreeMemory(cvm_vk_device,memory,NULL);
 }
 
+void cvm_vk_flush_buffer_memory_range(VkMappedMemoryRange * flush_range)
+{
+    CVM_VK_CHECK(vkFlushMappedMemoryRanges(cvm_vk_device,1,flush_range));
+}
 
+uint32_t cvm_vk_get_buffer_alignment_requirements(VkBufferUsageFlags usage)
+{
+    uint32_t alignment=1;
 
+    /// need specialised functions for vertex buffers and index buffers (or leave it up to user)
+    /// vertex: alignment = size largest primitive/type used in vertex inputs
+    /// index: size of index type used
+    /// indirect: 4
+
+    if(usage & (VK_BUFFER_USAGE_TRANSFER_SRC_BIT|VK_BUFFER_USAGE_TRANSFER_DST_BIT) && alignment < cvm_vk_device_properties.limits.optimalBufferCopyOffsetAlignment)
+        alignment=cvm_vk_device_properties.limits.optimalBufferCopyOffsetAlignment;
+
+    if(usage & (VK_BUFFER_USAGE_UNIFORM_TEXEL_BUFFER_BIT|VK_BUFFER_USAGE_STORAGE_TEXEL_BUFFER_BIT) && alignment < cvm_vk_device_properties.limits.minTexelBufferOffsetAlignment)
+        alignment = cvm_vk_device_properties.limits.minTexelBufferOffsetAlignment;
+
+    if(usage & VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT && alignment < cvm_vk_device_properties.limits.minUniformBufferOffsetAlignment)
+        alignment = cvm_vk_device_properties.limits.minUniformBufferOffsetAlignment;
+
+    if(usage & VK_BUFFER_USAGE_STORAGE_BUFFER_BIT && alignment < cvm_vk_device_properties.limits.minStorageBufferOffsetAlignment)
+        alignment = cvm_vk_device_properties.limits.minStorageBufferOffsetAlignment;
+
+    return alignment;
+}
 
 
 void cvm_vk_create_module_data(cvm_vk_module_data * module_data,bool in_separate_thread)
@@ -1256,185 +1282,3 @@ cvm_vk_module_graphics_block * cvm_vk_end_module_graphics_block(cvm_vk_module_da
 
 
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-///TEST FUNCTIONS FROM HERE, STRIP DOWN / USE AS BASIS FOR REAL VERSIONS
-
-
-
-static VkBuffer test_buffer;
-static VkDeviceMemory test_buffer_memory;
-
-VkBuffer * get_test_buffer(void)
-{
-    return &test_buffer;
-}
-
-
-
-
-
-
-
-
-
-
-
-
-static void create_vertex_buffer(void)
-{
-    test_render_data d[4];
-    d[0].c=(vec3f){1,0,0};
-    d[0].pos=(vec3f){-0.7,-0.7,0};
-
-    d[1].c=(vec3f){0,1,0};
-    d[1].pos=(vec3f){-0.7,0.7,0};
-
-    d[2].c=(vec3f){0,0,1};
-    d[2].pos=(vec3f){0.7,-0.7,0};
-
-    d[3].c=(vec3f){1,1,1};
-    d[3].pos=(vec3f){0.7,0.7,0};
-
-//    VkBufferCreateInfo tbc=(VkBufferCreateInfo)
-//    {
-//        .sType=VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO,
-//        .pNext=NULL,
-//        .flags=0,
-//        .size=sizeof(test_render_data)*4,
-//        .usage=VK_BUFFER_USAGE_VERTEX_BUFFER_BIT,
-//        .sharingMode=VK_SHARING_MODE_EXCLUSIVE,
-//        .queueFamilyIndexCount=0,
-//        .pQueueFamilyIndices=NULL
-//    };
-//
-//    VkBuffer tb;
-//
-//    CVM_VK_CHECK(vkCreateBuffer(cvm_vk_device,&tbc,NULL,&tb));
-//
-//    VkMemoryRequirements mr;
-//    vkGetBufferMemoryRequirements(cvm_vk_device,tb,&mr);
-//
-//    printf("a: %u\n",mr.alignment);
-//
-//    vkDestroyBuffer(cvm_vk_device,tb,NULL);
-
-    ///creation of buffer may be done wrong here, valgrind reports jump based on uninitialised value
-
-
-    VkBufferCreateInfo buffer_create_info=(VkBufferCreateInfo)
-    {
-        .sType=VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO,
-        .pNext=NULL,
-        .flags=0,
-        .size=sizeof(test_render_data)*4,
-        .usage=VK_BUFFER_USAGE_VERTEX_BUFFER_BIT,
-        .sharingMode=VK_SHARING_MODE_EXCLUSIVE,
-        .queueFamilyIndexCount=0,
-        .pQueueFamilyIndices=NULL
-    };
-
-    CVM_VK_CHECK(vkCreateBuffer(cvm_vk_device,&buffer_create_info,NULL,&test_buffer));
-
-
-    VkMemoryRequirements buffer_memory_requirements;
-    vkGetBufferMemoryRequirements(cvm_vk_device,test_buffer,&buffer_memory_requirements);
-
-    //VkPhysicalDeviceMemoryProperties memory_properties;///move this to gfx ? prevents calling it every time a buffer is allocated
-    //vkGetPhysicalDeviceMemoryProperties(cvm_vk_physical_device,&memory_properties);
-
-
-    uint32_t i;
-    VkMemoryAllocateInfo memory_allocate_info;
-
-    /// integrated graphics ONLY has shared heaps! means theres no good way to test everything is working, but also means there's room for optimisation
-    ///     ^ could FORCE staging buffer for now
-    ///     ^ if staging is detected as not needed then dont do it? (staging is useful for managing resources though...)
-    ///         ^ or perhaps if it would be copying in anyway then the managed transfer paradigm could work but without the staging transfer, just move in directly
-    ///             ^ does make synchronization (particularly delete more challenging though, will have to schedule things for deletion)
-
-//    for(i=0;i<memory_properties.memoryTypeCount;i++)
-//    {
-//        if(memory_properties.memoryTypes[i].propertyFlags&VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT)
-//        {
-//            printf("device local memory type: %u using heap: %u\n",i,memory_properties.memoryTypes[i].heapIndex);
-//        }
-//    }
-
-    for(i=0;i<cvm_vk_memory_properties.memoryTypeCount;i++)
-    {
-        printf("mem %u\n",cvm_vk_memory_properties.memoryTypes[i].propertyFlags);
-        if((buffer_memory_requirements.memoryTypeBits&(1<<i))&&(cvm_vk_memory_properties.memoryTypes[i].propertyFlags&VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT))
-        {
-            memory_allocate_info=(VkMemoryAllocateInfo)
-            {
-                .sType=VK_STRUCTURE_TYPE_MEMORY_ALLOCATE_INFO,
-                .pNext=NULL,
-                .allocationSize=buffer_memory_requirements.size,
-                .memoryTypeIndex=i
-            };
-
-            CVM_VK_CHECK(vkAllocateMemory(cvm_vk_device,&memory_allocate_info,NULL,&test_buffer_memory));
-            break;
-        }
-    }
-
-    if(i==cvm_vk_memory_properties.memoryTypeCount)
-    {
-        fprintf(stderr,"COULD NOT FIND APPROPRIATE MEMORY FOR ALLOCATION\n");
-        exit(-1);
-    }
-
-    CVM_VK_CHECK(vkBindBufferMemory(cvm_vk_device,test_buffer,test_buffer_memory,0));
-
-
-    void * data;
-    CVM_VK_CHECK(vkMapMemory(cvm_vk_device,test_buffer_memory,0,sizeof(test_render_data)*4,0,&data));
-
-    memcpy(data,d,sizeof(test_render_data)*4);
-
-    VkMappedMemoryRange flush_range=(VkMappedMemoryRange)
-    {
-        .sType=VK_STRUCTURE_TYPE_MAPPED_MEMORY_RANGE,
-        .pNext=NULL,
-        .memory=test_buffer_memory,
-        .offset=0,
-        .size=VK_WHOLE_SIZE
-    };
-
-    CVM_VK_CHECK(vkFlushMappedMemoryRanges(cvm_vk_device,1,&flush_range));
-
-    vkUnmapMemory(cvm_vk_device,test_buffer_memory);
-}
-
-
-
-
-
-void initialise_test_render_data()
-{
-    create_vertex_buffer();
-
-    initialise_test_render_data_ext();
-}
-
-void terminate_test_render_data()
-{
-    vkDestroyBuffer(cvm_vk_device,test_buffer,NULL);
-    vkFreeMemory(cvm_vk_device,test_buffer_memory,NULL);
-
-    terminate_test_render_data_ext();
-}

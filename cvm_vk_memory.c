@@ -31,7 +31,7 @@ along with cvm_shared.  If not, see <https://www.gnu.org/licenses/>.
 
 
 
-void cvm_vk_create_managed_buffer(cvm_vk_managed_buffer * mb,uint32_t buffer_size,uint32_t min_size_factor,uint32_t max_size_factor,uint32_t reserved_allocation_count,VkBufferUsageFlags usage,bool multithreaded)
+void cvm_vk_create_managed_buffer(cvm_vk_managed_buffer * mb,uint32_t buffer_size,uint32_t min_size_factor,uint32_t max_size_factor,uint32_t reserved_allocation_count,VkBufferUsageFlags usage,bool multithreaded,bool host_visible)
 {
     uint32_t i;
     buffer_size=(((buffer_size-1) >> min_size_factor)+1) << min_size_factor;///round to multiple (complier warns about what i want as needing braces, lol)
@@ -71,12 +71,12 @@ void cvm_vk_create_managed_buffer(cvm_vk_managed_buffer * mb,uint32_t buffer_siz
     mb->multithreaded=multithreaded;
     atomic_init(&mb->spinlock,0);
 
-    #warning mb->mapping=cvm_vk_create_buffer(&mb->buffer,&mb->memory,usage,buffer_size,false);///if this is non-null then probably UMA and thus can circumvent staging buffer
+    mb->mapping=cvm_vk_create_buffer(&mb->buffer,&mb->memory,usage,buffer_size,host_visible);///if this is non-null then probably UMA and thus can circumvent staging buffer
 }
 
 void cvm_vk_destroy_managed_buffer(cvm_vk_managed_buffer * mb)
 {
-    #warning cvm_vk_destroy_buffer(mb->buffer,mb->memory,mb->mapping);
+    cvm_vk_destroy_buffer(mb->buffer,mb->memory,mb->mapping);
     uint32_t i;
     cvm_vk_dynamic_buffer_allocation *f,*l,*current,*next;
 
@@ -139,7 +139,7 @@ void cvm_vk_update_managed_buffer_reservations(cvm_vk_managed_buffer * mb)
         mb->unused_allocation_count+=mb->reserved_allocation_count;
     }
 
-    atomic_store(&mb->spinlock,0);
+    if(mb->multithreaded) atomic_store(&mb->spinlock,0);
 }
 
 cvm_vk_dynamic_buffer_allocation * cvm_vk_acquire_dynamic_buffer_allocation(cvm_vk_managed_buffer * mb,uint64_t size)
@@ -225,7 +225,7 @@ cvm_vk_dynamic_buffer_allocation * cvm_vk_acquire_dynamic_buffer_allocation(cvm_
 
         mb->available_dynamic_allocation_bitmask=available_bitmask;
 
-        atomic_store(&mb->spinlock,0);
+        if(mb->multithreaded) atomic_store(&mb->spinlock,0);
 
         return p;
     }
@@ -284,7 +284,7 @@ cvm_vk_dynamic_buffer_allocation * cvm_vk_acquire_dynamic_buffer_allocation(cvm_
         mb->dynamic_offset=o+(1<<size_factor);
         mb->available_dynamic_allocation_bitmask=available_bitmask;
 
-        atomic_store(&mb->spinlock,0);
+        if(mb->multithreaded) atomic_store(&mb->spinlock,0);
 
         return n;
     }
@@ -426,12 +426,12 @@ void cvm_vk_relinquish_dynamic_buffer_allocation(cvm_vk_managed_buffer * mb,cvm_
         mb->available_dynamic_allocation_bitmask=available_bitmask;
     }
 
-    atomic_store(&mb->spinlock,0);
+    if(mb->multithreaded) atomic_store(&mb->spinlock,0);
 }
 
 uint64_t cvm_vk_acquire_static_buffer_allocation(cvm_vk_managed_buffer * mb,uint64_t size,uint64_t alignment)///it is assumed alignment is power of 2, may want to ensure this is the case
 {
-    uint64_t dynamic_offset,s,e,offset;
+    uint64_t s,e;
     uint_fast32_t lock;
 
     size=((size+(alignment-1))& ~(alignment-1));///round up size t multiple of alignment (not strictly necessary but w/e)
@@ -444,17 +444,185 @@ uint64_t cvm_vk_acquire_static_buffer_allocation(cvm_vk_managed_buffer * mb,uint
 
     if(s+size > e || e==size)///must have enough space and cannot use whole buffer for static allocations (returning 0 is reserved for errors)
     {
-        atomic_store(&mb->spinlock,0);
+        if(mb->multithreaded) atomic_store(&mb->spinlock,0);
         return 0;
     }
 
     mb->static_offset=e-size;
 
-    atomic_store(&mb->spinlock,0);
+    if(mb->multithreaded) atomic_store(&mb->spinlock,0);
 
     return e-size;
 }
 
+void * cvm_vk_get_dynamic_buffer_allocation_mapping(cvm_vk_managed_buffer * mb,cvm_vk_dynamic_buffer_allocation * allocation)
+{
+    return mb->mapping ? mb->mapping+(allocation->offset<<mb->base_dynamic_allocation_size_factor) : NULL;
+}
+
+void * cvm_vk_get_static_buffer_allocation_mapping(cvm_vk_managed_buffer * mb,uint64_t offset)
+{
+    return mb->mapping ? mb->mapping+offset : NULL;
+}
+
+void cvm_vk_bind_dymanic_allocation_vertex(VkCommandBuffer cmd_buf,cvm_vk_managed_buffer * mb,cvm_vk_dynamic_buffer_allocation * allocation,uint32_t binding)
+{
+    VkDeviceSize offset=allocation->offset << mb->base_dynamic_allocation_size_factor;
+    vkCmdBindVertexBuffers(cmd_buf,binding,1,&mb->buffer,&offset);
+}
+
+void cvm_vk_flush_buffer_allocation_mapping(cvm_vk_managed_buffer * mb,cvm_vk_dynamic_buffer_allocation * allocation)
+{
+    VkMappedMemoryRange flush_range=(VkMappedMemoryRange)
+    {
+        .sType=VK_STRUCTURE_TYPE_MAPPED_MEMORY_RANGE,
+        .pNext=NULL,
+        .memory=mb->memory,
+        .offset=allocation->offset,
+        .size=1<<(mb->base_dynamic_allocation_size_factor+allocation->size_factor)
+    };
+
+    cvm_vk_flush_buffer_memory_range(&flush_range);
+}
+
+void cvm_vk_flush_managed_buffer(cvm_vk_managed_buffer * mb)
+{
+    VkMappedMemoryRange flush_range=(VkMappedMemoryRange)
+    {
+        .sType=VK_STRUCTURE_TYPE_MAPPED_MEMORY_RANGE,
+        .pNext=NULL,
+        .memory=mb->memory,
+        .offset=0,
+        .size=VK_WHOLE_SIZE
+    };
+
+    cvm_vk_flush_buffer_memory_range(&flush_range);
+}
+
+
+
+
+
+
+
+
+
+
+
+
+
+void cvm_vk_create_ring_buffer(cvm_vk_ring_buffer * rb,VkBufferUsageFlags usage)
+{
+    ///size really needn't be a PO2, when overrunning we need to detect that anyway, ergo can probably just allocate exact amount desired
+    /// if taking above approach probably want to round everything in buffer to some base allocation offset to make amount of mem available constant across acquisition order
+    /// will have to pass requests for size through per buffer filter or generalised "across the board" filter that rounds to required alignment sizes
+
+    atomic_init(&rb->offset,0);
+    rb->max_offset=0;
+    rb->total_space=0;
+    rb->usage=usage;
+
+    uint32_t required_alignment=cvm_vk_get_buffer_alignment_requirements(usage);
+
+    for(rb->alignment_size_factor=0;1<<rb->alignment_size_factor < required_alignment;rb->alignment_size_factor++);///alignment_size_factor expected to be small, ~6
+    ///can catastrophically fail if required_alignment is greater than 2^31, but w/e
+
+    if(1<<rb->alignment_size_factor != required_alignment)
+    {
+        fprintf(stderr,"NON POWER OF 2 ALIGNMENTS NOT SUPPORTED!\n");
+        exit(-1);
+    }
+}
+
+void cvm_vk_update_ring_buffer(cvm_vk_ring_buffer * rb,uint32_t buffer_size)
+{
+    if(buffer_size != rb->total_space)
+    {
+        if(rb->total_space)
+        {
+            cvm_vk_destroy_buffer(rb->buffer,rb->memory,rb->mapping);
+        }
+
+        rb->mapping=cvm_vk_create_buffer(&rb->buffer,&rb->memory,rb->usage,buffer_size,true);
+
+        atomic_store(&rb->offset,0);
+        rb->max_offset=0;
+        rb->total_space=buffer_size;
+    }
+}
+
+void cvm_vk_destroy_ring_buffer(cvm_vk_ring_buffer * rb)
+{
+    cvm_vk_destroy_buffer(rb->buffer,rb->memory,rb->mapping);
+}
+
+uint32_t cvm_vk_ring_buffer_get_rounded_allocation_size(cvm_vk_ring_buffer * rb,uint32_t allocation_size)
+{
+    return (((allocation_size-1)>>rb->alignment_size_factor)+1)<<rb->alignment_size_factor;
+}
+
+void cvm_vk_begin_ring_buffer(cvm_vk_ring_buffer * rb,uint32_t old_offset)
+{
+    rb->max_offset=old_offset;
+}
+
+uint32_t cvm_vk_end_ring_buffer(cvm_vk_ring_buffer * rb,uint32_t start_offset)
+{
+    uint32_t offset=atomic_load(&rb->offset);///this should be happening after any multithreading but use atomic ops anyway
+
+    if(offset<start_offset)///if the buffer wrapped between begin and end
+    {
+        VkMappedMemoryRange flush_range=(VkMappedMemoryRange)
+        {
+            .sType=VK_STRUCTURE_TYPE_MAPPED_MEMORY_RANGE,
+            .pNext=NULL,
+            .memory=rb->memory,
+            .offset=start_offset,
+            .size=rb->total_space-start_offset
+        };
+
+        cvm_vk_flush_buffer_memory_range(&flush_range);
+
+        start_offset=0;
+    }
+
+    if(offset>start_offset)///if anything was written that wasnt handled by the previous branch
+    {
+        VkMappedMemoryRange flush_range=(VkMappedMemoryRange)
+        {
+            .sType=VK_STRUCTURE_TYPE_MAPPED_MEMORY_RANGE,
+            .pNext=NULL,
+            .memory=rb->memory,
+            .offset=start_offset,
+            .size=offset-start_offset
+        };
+
+        cvm_vk_flush_buffer_memory_range(&flush_range);
+    }
+
+    return offset;
+}
+
+void * cvm_vk_get_ring_buffer_allocation(cvm_vk_ring_buffer * rb,uint32_t allocation_size,VkDeviceSize * acquired_offset)
+{
+    allocation_size=(((allocation_size-1)>>rb->alignment_size_factor)+1)<<rb->alignment_size_factor;///round as required
+
+    uint32_t new_offset,offset;
+    uint_fast32_t old_offset;
+
+    old_offset=atomic_load(&rb->offset);
+    do
+    {
+        offset=old_offset*(old_offset+allocation_size < rb->total_space || rb->max_offset > old_offset);/// OR'd clause ensures we dont pass max offset
+        new_offset=offset+allocation_size;
+
+        if(new_offset > rb->max_offset && offset < rb->max_offset) return NULL;
+    }
+    while(atomic_compare_exchange_weak(&rb->offset,&old_offset,new_offset));
+
+    *acquired_offset=offset;
+    return rb->mapping+offset;
+}
 
 
 

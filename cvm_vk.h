@@ -140,6 +140,7 @@ cvm_vk_transfer_chain_data;
 typedef struct cvm_vk_module_data cvm_vk_module_data;
 
 ///combine concepts and call them work units?
+///using same names as vulkan would probably be best, graphics command, transfer command or just cvm_vk_commands
 typedef struct cvm_vk_module_graphics_block
 {
     /// synchronisation handled by the acquired frame/image
@@ -173,7 +174,7 @@ struct cvm_vk_module_data
 
     /// cannot be recreated! create once at start
     /// used for staging to device_only transfer, staging to image conversion, defragging of "static" buffers
-    cvm_vk_module_graphics_block * transfer_blocks;
+    cvm_vk_module_transfer_block * transfer_blocks;
 
     uint32_t graphics_block_count:8;
     uint32_t graphics_block_index:8;
@@ -215,7 +216,8 @@ void cvm_vk_destroy_shader_stage_info(VkPipelineShaderStageCreateInfo * stage_in
 
 void * cvm_vk_create_buffer(VkBuffer * buffer,VkDeviceMemory * memory,VkBufferUsageFlags usage,VkDeviceSize size,bool require_host_visible);
 void cvm_vk_destroy_buffer(VkBuffer buffer,VkDeviceMemory memory,void * mapping);
-
+void cvm_vk_flush_buffer_memory_range(VkMappedMemoryRange * flush_range);
+uint32_t cvm_vk_get_buffer_alignment_requirements(VkBufferUsageFlags usage);
 
 
 void cvm_vk_prepare_for_next_frame(bool rendering_resources_invalid);
@@ -246,16 +248,6 @@ VkCommandBuffer cvm_vk_begin_module_graphics_block(cvm_vk_module_data * module_d
 cvm_vk_module_graphics_block * cvm_vk_end_module_graphics_block(cvm_vk_module_data * module_data);
 
 
-
-
-
-
-
-///test stuff
-void initialise_test_render_data(void);
-void terminate_test_render_data(void);
-
-VkBuffer * get_test_buffer(void);///remove after memory mangement system is implemented
 
 
 

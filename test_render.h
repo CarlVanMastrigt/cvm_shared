@@ -32,15 +32,15 @@ typedef struct test_render_data
 }
 test_render_data;
 
-void initialise_test_render_data_ext(void);
-void terminate_test_render_data_ext(void);
+void initialise_test_render_data(void);
+void terminate_test_render_data(void);
 
 //void create_test_render_pass(VkFormat swapchain_format);
 
 /// applications responsibility to handle recreation of module resources (unless i can come up with a better approach)
 
-void initialise_test_swapchain_dependencies_ext(void);
-void terminate_test_swapchain_dependencies_ext(void);
+void initialise_test_swapchain_dependencies(void);
+void terminate_test_swapchain_dependencies(void);
 
 ///remove these (should only be accessible internally)
 VkPipeline get_test_pipeline(void);

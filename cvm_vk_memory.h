@@ -27,6 +27,9 @@ along with cvm_shared.  If not, see <https://www.gnu.org/licenses/>.
 
 
 
+/// consider making sized types that represent offsets VkDeviceSize ?? (but then cannot make assumptions about their size...)
+
+
 /// could use more complicated allocator that can recombine sections of arbatrary size with no power of 2 superstructure, may work reasonably well, especially if memory is grouped by expected lifetime
 ///     ^ this will definitely require a defragger!
 ///     ^ use expected lifetime to prioritise ordering of sections? will that happen naturally as chunks are allocated/deallocated
@@ -72,6 +75,8 @@ typedef struct cvm_vk_managed_buffer
     VkBuffer buffer;
     VkDeviceMemory memory;
 
+    ///VkBufferUsageFlags usage;/// for use if buffer ends up needing recreation
+
     uint64_t total_space;///actually DO need to track total buffer size so that buffer can be cleaned (all static and dynamic allocations removed in one go)
     uint64_t static_offset;/// taken from end of buffer
     uint32_t dynamic_offset;/// taken from start of buffer, is a multiple of base offset, actual offset = dynamic_offset<<base_dynamic_allocation_size_factor
@@ -110,7 +115,7 @@ cvm_vk_managed_buffer;
 ///instead could allocate from power of 2 sections, storing neighbouring blocks when difference from power of 2 warrants it, and using start-end alignment to allow replacing paired block of mem
 /// would still allocate from power of 2 sections and free them in similar way...
 
-void cvm_vk_create_managed_buffer(cvm_vk_managed_buffer * buffer,uint32_t buffer_size,uint32_t min_size_factor,uint32_t max_size_factor,uint32_t reserved_allocation_count,VkBufferUsageFlags usage,bool multithreaded);
+void cvm_vk_create_managed_buffer(cvm_vk_managed_buffer * buffer,uint32_t buffer_size,uint32_t min_size_factor,uint32_t max_size_factor,uint32_t reserved_allocation_count,VkBufferUsageFlags usage,bool multithreaded,bool host_visible);
 void cvm_vk_destroy_managed_buffer(cvm_vk_managed_buffer * mb);
 
 void cvm_vk_update_managed_buffer_reservations(cvm_vk_managed_buffer * mb);///creates more allocations as necessary
@@ -120,6 +125,17 @@ void cvm_vk_relinquish_dynamic_buffer_allocation(cvm_vk_managed_buffer * mb,cvm_
 
 uint64_t cvm_vk_acquire_static_buffer_allocation(cvm_vk_managed_buffer * mb,uint64_t size,uint64_t alignment);
 
+///worth making these inline?
+void * cvm_vk_get_dynamic_buffer_allocation_mapping(cvm_vk_managed_buffer * mb,cvm_vk_dynamic_buffer_allocation * allocation);
+void * cvm_vk_get_static_buffer_allocation_mapping(cvm_vk_managed_buffer * mb,uint64_t offset);
+
+void cvm_vk_bind_dymanic_allocation_vertex(VkCommandBuffer cmd_buf,cvm_vk_managed_buffer * mb,cvm_vk_dynamic_buffer_allocation * allocation,uint32_t binding);
+
+void cvm_vk_flush_buffer_allocation_mapping(cvm_vk_managed_buffer * mb,cvm_vk_dynamic_buffer_allocation * allocation);
+//void cvm_vk_get_flush_buffer_allocation_mapping(cvm_vk_managed_buffer * mb,uint64_t offset);
+///static allocations have no means to know their size so would have to collectively flush ALL static allocations, which will need profiling
+
+void cvm_vk_flush_managed_buffer(cvm_vk_managed_buffer * mb);
 
 
 
@@ -129,6 +145,8 @@ uint64_t cvm_vk_acquire_static_buffer_allocation(cvm_vk_managed_buffer * mb,uint
 ///probably want to use pointers for all of these
 
 ///can reasonably easily combine the node and the allocation list
+
+/// allocate the exact required size (rounded to multiple of largest targeted alignment) and recombine sections as necessary, trying to best fit any new allocations (does require defragger quite badly)
 
 //typedef struct cvm_vk_dynamic_buffer_allocation_3 cvm_vk_dynamic_buffer_allocation_3;
 //
@@ -181,14 +199,51 @@ uint64_t cvm_vk_acquire_static_buffer_allocation(cvm_vk_managed_buffer * mb,uint
 
 
 
+typedef struct cvm_vk_ring_buffer
+{
+    VkBuffer buffer;
+    VkDeviceMemory memory;
+
+    VkBufferUsageFlags usage;
+
+    uint32_t total_space;///round to PO2
+    uint32_t max_offset;///fence, should be updated before multithreading becomes applicable this frame
+    //uint32_t required_alignment;///could/should do this per type with offsetting being done to compensate, rounding size allocated to multiple of that base (can assume PO2, or make PO2)
+    //bool multithreaded;//implicitly supports multithreading b/c its easy :D
+    uint32_t alignment_size_factor;
+    atomic_uint_fast32_t offset;
+    ///need to test atomic version isn't (significatly) slower than non-atomic
+
+    ///instead have desired per frame upload space and per frame uniform space? no, that can be handled user side as desired
+
+    void * mapping;///ring buffer should REQUIRE mapability, use as intermediary when main buffer isn't mapable, should test mapping to determine necessary size based on this (user defined behaviour)
+}
+cvm_vk_ring_buffer;
+
+void cvm_vk_create_ring_buffer(cvm_vk_ring_buffer * rb,VkBufferUsageFlags usage);
+void cvm_vk_update_ring_buffer(cvm_vk_ring_buffer * rb,uint32_t buffer_size);
+void cvm_vk_destroy_ring_buffer(cvm_vk_ring_buffer * rb);
+
+uint32_t cvm_vk_ring_buffer_get_rounded_allocation_size(cvm_vk_ring_buffer * rb,uint32_t allocation_size);
+
+/// as size of ring buffer is (or should be) a product of swapchain image count its probably best to also have an upload buffer shared by all submodules used at initialisation time
+
+void cvm_vk_begin_ring_buffer(cvm_vk_ring_buffer * rb,uint32_t old_offset);
+uint32_t cvm_vk_end_ring_buffer(cvm_vk_ring_buffer * rb,uint32_t start_offset);
+
+void * cvm_vk_get_ring_buffer_allocation(cvm_vk_ring_buffer * rb,uint32_t allocation_size,VkDeviceSize * acquired_offset);///alignment_factor should be power of 2
+
+/// uniforms are allocated every frame and reserved at start, so can safely assume that the space they need will be refunded (from old_offset havving to have contained space for uniforms)
+/// but still need a way to handle out of memory such that we can
 
 
 
 
 
+///need texture management system(s)
 
 
-
+/// function to copy from ring buffer to both managed buffer and texture/image here??
 
 
 

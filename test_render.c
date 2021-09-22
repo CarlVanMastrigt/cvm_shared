@@ -33,8 +33,14 @@ static VkFramebuffer * test_framebuffers;
 static VkImageView test_framebuffer_attachments[1];///first reserved for swapchain, rest are views of locally created images
 
 
+static cvm_vk_managed_buffer test_buffer;
+static cvm_vk_dynamic_buffer_allocation * test_allocation_0;
+static cvm_vk_dynamic_buffer_allocation * test_allocation_1;
+static cvm_vk_dynamic_buffer_allocation * test_vertex_allocation;
 
-
+/// actually we want a way to handle uploads from here, and as dynamics are the same as instance data its probably worth having a dedicated buffer for them and uniforms AND upload/transfers
+static cvm_vk_dynamic_buffer_allocation * test_uniform_allocation;///create/destroy at start? (probably not possible) and conditionally recreate upon
+static uint32_t test_uniform_buffer_count=0;///how many are supported only create/alter in the initialise dependencies and destroy in terminate
 
 static void create_test_pipeline_layouts(void)
 {
@@ -308,7 +314,34 @@ static void create_test_framebuffers(VkRect2D screen_rectangle)
 
 ///put initialisation of transitory/mutable data inside init, then only alter as part of update
 
-void initialise_test_render_data_ext()
+static void create_test_vertex_buffer(void)
+{
+    test_allocation_0=cvm_vk_acquire_dynamic_buffer_allocation(&test_buffer,4096);
+    test_allocation_1=cvm_vk_acquire_dynamic_buffer_allocation(&test_buffer,2048);
+
+    ///====
+
+    test_render_data data[4];
+    data[0].c=(vec3f){1,0,0};
+    data[0].pos=(vec3f){-0.7,-0.7,0};
+
+    data[1].c=(vec3f){0,1,0};
+    data[1].pos=(vec3f){-0.7,0.7,0};
+
+    data[2].c=(vec3f){0,0,1};
+    data[2].pos=(vec3f){0.7,-0.7,0};
+
+    data[3].c=(vec3f){1,1,1};
+    data[3].pos=(vec3f){0.7,0.7,0};
+
+    test_vertex_allocation=cvm_vk_acquire_dynamic_buffer_allocation(&test_buffer,sizeof(test_render_data)*4);
+
+    memcpy(cvm_vk_get_dynamic_buffer_allocation_mapping(&test_buffer,test_vertex_allocation),data,sizeof(test_render_data)*4);
+
+    cvm_vk_flush_managed_buffer(&test_buffer);
+}
+
+void initialise_test_render_data()
 {
     create_test_render_pass(cvm_vk_get_screen_format(),VK_SAMPLE_COUNT_1_BIT);
 
@@ -318,9 +351,14 @@ void initialise_test_render_data_ext()
     cvm_vk_create_shader_stage_info(test_stages+1,"shaders/test_frag.spv",VK_SHADER_STAGE_FRAGMENT_BIT);
 
     cvm_vk_create_module_data(&test_module_data,false);
+
+
+    cvm_vk_create_managed_buffer(&test_buffer,65536,10,16,64,VK_BUFFER_USAGE_VERTEX_BUFFER_BIT,false,true);
+
+    create_test_vertex_buffer();
 }
 
-void terminate_test_render_data_ext()
+void terminate_test_render_data()
 {
     cvm_vk_destroy_render_pass(test_render_pass);
 
@@ -330,10 +368,17 @@ void terminate_test_render_data_ext()
     cvm_vk_destroy_pipeline_layout(test_pipeline_layout);
 
     cvm_vk_destroy_module_data(&test_module_data,false);
+
+
+    cvm_vk_relinquish_dynamic_buffer_allocation(&test_buffer,test_vertex_allocation);
+    cvm_vk_relinquish_dynamic_buffer_allocation(&test_buffer,test_allocation_1);
+    cvm_vk_relinquish_dynamic_buffer_allocation(&test_buffer,test_allocation_0);
+
+    cvm_vk_destroy_managed_buffer(&test_buffer);
 }
 
 
-void initialise_test_swapchain_dependencies_ext(void)
+void initialise_test_swapchain_dependencies(void)
 {
     VkRect2D screen_rectangle=cvm_vk_get_screen_rectangle();
 
@@ -344,7 +389,7 @@ void initialise_test_swapchain_dependencies_ext(void)
     cvm_vk_resize_module_graphics_data(&test_module_data,0);
 }
 
-void terminate_test_swapchain_dependencies_ext()
+void terminate_test_swapchain_dependencies()
 {
     uint32_t swapchain_image_count=cvm_vk_get_swapchain_image_count();
     uint32_t i;
@@ -403,8 +448,11 @@ cvm_vk_module_graphics_block * test_render_frame(void)
 
         vkCmdBindPipeline(command_buffer,VK_PIPELINE_BIND_POINT_GRAPHICS,test_pipeline);
 
-        VkDeviceSize offset=0;
-        vkCmdBindVertexBuffers(command_buffer,0,1,get_test_buffer(),&offset);
+
+        ///put following in a function?
+        //VkDeviceSize offset=test_vertex_allocation->offset<<test_buffer.base_dynamic_allocation_size_factor;
+        //vkCmdBindVertexBuffers(command_buffer,0,1,&test_buffer.buffer,&offset);
+        cvm_vk_bind_dymanic_allocation_vertex(command_buffer,&test_buffer,test_vertex_allocation,0);
 
         vkCmdDraw(command_buffer,4,1,0,0);
 
