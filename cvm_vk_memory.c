@@ -517,7 +517,8 @@ void cvm_vk_create_ring_buffer(cvm_vk_ring_buffer * rb,VkBufferUsageFlags usage)
     /// if taking above approach probably want to round everything in buffer to some base allocation offset to make amount of mem available constant across acquisition order
     /// will have to pass requests for size through per buffer filter or generalised "across the board" filter that rounds to required alignment sizes
 
-    atomic_init(&rb->offset,0);
+    atomic_init(&rb->space_remaining,0);
+    rb->initial_space_remaining=0;///doesn't really need to be set here
     rb->max_offset=0;
     rb->total_space=0;
     rb->usage=usage;
@@ -536,6 +537,12 @@ void cvm_vk_create_ring_buffer(cvm_vk_ring_buffer * rb,VkBufferUsageFlags usage)
 
 void cvm_vk_update_ring_buffer(cvm_vk_ring_buffer * rb,uint32_t buffer_size)
 {
+    if(atomic_load(&rb->space_remaining)!=rb->total_space)
+    {
+        fprintf(stderr,"NOT ALL RING_BUFFER SPACE_RELINQUISHED BEFORE RECREATION!\n");
+        exit(-1);
+    }
+
     if(buffer_size != rb->total_space)
     {
         if(rb->total_space)
@@ -545,7 +552,8 @@ void cvm_vk_update_ring_buffer(cvm_vk_ring_buffer * rb,uint32_t buffer_size)
 
         rb->mapping=cvm_vk_create_buffer(&rb->buffer,&rb->memory,rb->usage,buffer_size,true);
 
-        atomic_store(&rb->offset,0);
+        atomic_store(&rb->space_remaining,buffer_size);
+        rb->initial_space_remaining=0;///doesn't really need to be set here
         rb->max_offset=0;
         rb->total_space=buffer_size;
     }
@@ -553,6 +561,12 @@ void cvm_vk_update_ring_buffer(cvm_vk_ring_buffer * rb,uint32_t buffer_size)
 
 void cvm_vk_destroy_ring_buffer(cvm_vk_ring_buffer * rb)
 {
+    if(atomic_load(&rb->space_remaining)!=rb->total_space)
+    {
+        fprintf(stderr,"NOT ALL RING_BUFFER SPACE_RELINQUISHED BEFORE DESTRUCTION!\n");
+        exit(-1);
+    }
+
     cvm_vk_destroy_buffer(rb->buffer,rb->memory,rb->mapping);
 }
 
@@ -561,68 +575,97 @@ uint32_t cvm_vk_ring_buffer_get_rounded_allocation_size(cvm_vk_ring_buffer * rb,
     return (((allocation_size-1)>>rb->alignment_size_factor)+1)<<rb->alignment_size_factor;
 }
 
-void cvm_vk_begin_ring_buffer(cvm_vk_ring_buffer * rb,uint32_t old_offset)
+void cvm_vk_begin_ring_buffer(cvm_vk_ring_buffer * rb,uint32_t relinquished_space)
 {
-    rb->max_offset=old_offset;
+    rb->max_offset+=relinquished_space;
+    rb->max_offset-=rb->total_space*(rb->max_offset>=rb->total_space);
+
+    rb->initial_space_remaining=atomic_fetch_add(&rb->space_remaining,relinquished_space)+relinquished_space;
 }
 
-uint32_t cvm_vk_end_ring_buffer(cvm_vk_ring_buffer * rb,uint32_t start_offset)
+uint32_t cvm_vk_end_ring_buffer(cvm_vk_ring_buffer * rb)
 {
-    uint32_t offset=atomic_load(&rb->offset);///this should be happening after any multithreading but use atomic ops anyway
+    uint32_t acquired_space=rb->initial_space_remaining-atomic_load(&rb->space_remaining);
+    uint32_t offset,remaining_space;
 
-    if(offset<start_offset)///if the buffer wrapped between begin and end
+    offset=rb->max_offset-rb->initial_space_remaining + rb->total_space*(rb->initial_space_remaining > rb->max_offset);
+    remaining_space=acquired_space;
+
+
+    if(offset+remaining_space > rb->total_space)///if the buffer wrapped between begin and end
     {
         VkMappedMemoryRange flush_range=(VkMappedMemoryRange)
         {
             .sType=VK_STRUCTURE_TYPE_MAPPED_MEMORY_RANGE,
             .pNext=NULL,
             .memory=rb->memory,
-            .offset=start_offset,
-            .size=rb->total_space-start_offset
+            .offset=offset,
+            .size=rb->total_space-offset
         };
 
         cvm_vk_flush_buffer_memory_range(&flush_range);
 
-        start_offset=0;
+        remaining_space-=rb->total_space-offset;
+        offset=0;
     }
 
-    if(offset>start_offset)///if anything was written that wasnt handled by the previous branch
+    if(remaining_space)///if anything was written that wasnt handled by the previous branch
     {
         VkMappedMemoryRange flush_range=(VkMappedMemoryRange)
         {
             .sType=VK_STRUCTURE_TYPE_MAPPED_MEMORY_RANGE,
             .pNext=NULL,
             .memory=rb->memory,
-            .offset=start_offset,
-            .size=offset-start_offset
+            .offset=offset,
+            .size=remaining_space
         };
 
         cvm_vk_flush_buffer_memory_range(&flush_range);
     }
 
-    return offset;
+    return acquired_space;
 }
 
 void * cvm_vk_get_ring_buffer_allocation(cvm_vk_ring_buffer * rb,uint32_t allocation_size,VkDeviceSize * acquired_offset)
 {
     allocation_size=(((allocation_size-1)>>rb->alignment_size_factor)+1)<<rb->alignment_size_factor;///round as required
 
-    uint32_t new_offset,offset;
-    uint_fast32_t old_offset;
+    uint32_t offset,new_remaining;
+    uint_fast32_t old_remaining;
 
-    old_offset=atomic_load(&rb->offset);
+    old_remaining=atomic_load(&rb->space_remaining);
     do
     {
-        offset=old_offset*(old_offset+allocation_size < rb->total_space || rb->max_offset > old_offset);/// OR'd clause ensures we dont pass max offset
-        new_offset=offset+allocation_size;
+        new_remaining=old_remaining;
 
-        if(new_offset > rb->max_offset && offset < rb->max_offset) return NULL;
+        offset=rb->max_offset-old_remaining + rb->total_space*(old_remaining > rb->max_offset);
+
+        if(offset+allocation_size > rb->total_space)
+        {
+            new_remaining-=rb->total_space-offset;
+            offset=0;
+        }
+
+        if(allocation_size>new_remaining) return NULL;
+
+        new_remaining-=allocation_size;
     }
-    while(atomic_compare_exchange_weak(&rb->offset,&old_offset,new_offset));
+    while(!atomic_compare_exchange_weak(&rb->space_remaining,&old_remaining,new_remaining));
 
     *acquired_offset=offset;
     return rb->mapping+offset;
 }
+
+
+
+
+
+
+
+
+
+
+
 
 
 

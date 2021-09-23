@@ -211,7 +211,8 @@ typedef struct cvm_vk_ring_buffer
     //uint32_t required_alignment;///could/should do this per type with offsetting being done to compensate, rounding size allocated to multiple of that base (can assume PO2, or make PO2)
     //bool multithreaded;//implicitly supports multithreading b/c its easy :D
     uint32_t alignment_size_factor;
-    atomic_uint_fast32_t offset;
+    atomic_uint_fast32_t space_remaining;
+    uint32_t initial_space_remaining;
     ///need to test atomic version isn't (significatly) slower than non-atomic
 
     ///instead have desired per frame upload space and per frame uniform space? no, that can be handled user side as desired
@@ -228,8 +229,8 @@ uint32_t cvm_vk_ring_buffer_get_rounded_allocation_size(cvm_vk_ring_buffer * rb,
 
 /// as size of ring buffer is (or should be) a product of swapchain image count its probably best to also have an upload buffer shared by all submodules used at initialisation time
 
-void cvm_vk_begin_ring_buffer(cvm_vk_ring_buffer * rb,uint32_t old_offset);
-uint32_t cvm_vk_end_ring_buffer(cvm_vk_ring_buffer * rb,uint32_t start_offset);
+void cvm_vk_begin_ring_buffer(cvm_vk_ring_buffer * rb,uint32_t relinquished_space);
+uint32_t cvm_vk_end_ring_buffer(cvm_vk_ring_buffer * rb);
 
 void * cvm_vk_get_ring_buffer_allocation(cvm_vk_ring_buffer * rb,uint32_t allocation_size,VkDeviceSize * acquired_offset);///alignment_factor should be power of 2
 
