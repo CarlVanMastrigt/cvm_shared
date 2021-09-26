@@ -130,6 +130,7 @@ void * cvm_vk_get_dynamic_buffer_allocation_mapping(cvm_vk_managed_buffer * mb,c
 void * cvm_vk_get_static_buffer_allocation_mapping(cvm_vk_managed_buffer * mb,uint64_t offset);
 
 void cvm_vk_bind_dymanic_allocation_vertex(VkCommandBuffer cmd_buf,cvm_vk_managed_buffer * mb,cvm_vk_dynamic_buffer_allocation * allocation,uint32_t binding);
+void cvm_vk_bind_dymanic_allocation_index(VkCommandBuffer cmd_buf,cvm_vk_managed_buffer * mb,cvm_vk_dynamic_buffer_allocation * allocation,VkIndexType type);
 
 void cvm_vk_flush_buffer_allocation_mapping(cvm_vk_managed_buffer * mb,cvm_vk_dynamic_buffer_allocation * allocation);
 //void cvm_vk_get_flush_buffer_allocation_mapping(cvm_vk_managed_buffer * mb,uint64_t offset);
@@ -199,6 +200,31 @@ void cvm_vk_flush_managed_buffer(cvm_vk_managed_buffer * mb);
 
 
 
+/**
+ring buffer solves issues for uniform buffers and most of upload problems but isnt really extensible in the case of instance data
+
+instance data is somewhat problematic anyway, as it potentially varies a lot frame to frame, removing potential of allocating space only as necessary
+    and relying on enough being available this frame from memory being released this frame requires constant allocation with hard limits on particular instance data
+    this isnt the end of the world but it is wasteful both in terms of memory and flushing
+    a better approach might be to upfront allocate a LOT of space, using the same uniform space insurance BUT allowing space allocated for instance to expand as contract dependent on use
+        (even if this means frames where not everything gets drawn...) expanding available allocations by some count as necessary
+            perhaps increasing to ensure some max expected delta factor is satisfied while increasing in multiples of some some base allocation size, even though this is slightly wasteful it isn't terribly wasteful
+
+    this paradigm should also include the capacity of submodules to pause rendering while their allocated buffers expand.
+    BUT as ring buffer is completely transient there could be a system to seamlessly replace ring buffers with new, larger ones where possible (falling back to failed allocations when that happens)
+        ^ a system like this should expand by some reasonable factor, perhaps multiples of 2?
+        ^ this does sound more like user side code: probably good to provide example of this in use and/or default management tools to accomplish this (even though will likely end up implementation specific...)
+
+    uniform-  base constant allocation
+    instance- base unit, frame reserve space, expansion reserve space or factor (perhaps same as max expected allocation or half of it, used in sizing buffer)
+    upload-   expansion reserve space or factor (perhaps same as max expected allocation or half of it, used in sizing buffer)
+
+    perhaps expansion reserve ensures that at least that much (in multiples) will always be available when expanding/resizing buffer
+
+    immediate cleanup of space taken by finished frame ensures no space hangs around
+
+    by having error handling (unable to allocate space) and sufficient reserves having just 1 buffer to switch to when deciding to resize should be sufficient
+*/
 typedef struct cvm_vk_ring_buffer
 {
     VkBuffer buffer;
@@ -221,7 +247,7 @@ typedef struct cvm_vk_ring_buffer
 }
 cvm_vk_ring_buffer;
 
-void cvm_vk_create_ring_buffer(cvm_vk_ring_buffer * rb,VkBufferUsageFlags usage);
+void cvm_vk_create_ring_buffer(cvm_vk_ring_buffer * rb,VkBufferUsageFlags usage,uint32_t buffer_size);
 void cvm_vk_update_ring_buffer(cvm_vk_ring_buffer * rb,uint32_t buffer_size);
 void cvm_vk_destroy_ring_buffer(cvm_vk_ring_buffer * rb);
 
@@ -229,15 +255,22 @@ uint32_t cvm_vk_ring_buffer_get_rounded_allocation_size(cvm_vk_ring_buffer * rb,
 
 /// as size of ring buffer is (or should be) a product of swapchain image count its probably best to also have an upload buffer shared by all submodules used at initialisation time
 
-void cvm_vk_begin_ring_buffer(cvm_vk_ring_buffer * rb,uint32_t relinquished_space);
+void cvm_vk_begin_ring_buffer(cvm_vk_ring_buffer * rb);
 uint32_t cvm_vk_end_ring_buffer(cvm_vk_ring_buffer * rb);
 
 void * cvm_vk_get_ring_buffer_allocation(cvm_vk_ring_buffer * rb,uint32_t allocation_size,VkDeviceSize * acquired_offset);///alignment_factor should be power of 2
 
+//uint32_t cvm_vk_get_ring_buffer_unmapped_allocation(cvm_vk_ring_buffer * rb,uint32_t allocation_size);
+void cvm_vk_relinquish_ring_buffer_space(cvm_vk_ring_buffer * rb,uint32_t * relinquished_space);
+///used to pre allocate space for required uniform buffers in case buffer gets completely filled by upload requests on first run
+///     better approach to need for above may be to have separate buffers for uniform, instance and upload,
+///         but combing ANY with uniform can make above necessary (unless uniform alloc returning null is handled or buffers allocated as necessary when running out of mem)
+
+
 /// uniforms are allocated every frame and reserved at start, so can safely assume that the space they need will be refunded (from old_offset havving to have contained space for uniforms)
 /// but still need a way to handle out of memory such that we can
 
-
+///because uniforms are consistent across frames in my paradigm it may be worth them having buffer (to avoid need to update them)
 
 
 

@@ -27,8 +27,8 @@ along with cvm_shared.  If not, see <https://www.gnu.org/licenses/>.
 
 typedef struct test_render_data
 {
-    vec3f pos;
-    vec3f c;
+    float pos[3];
+    uint8_t col[3];
 }
 test_render_data;
 
@@ -47,7 +47,8 @@ VkPipeline get_test_pipeline(void);
 VkFramebuffer get_test_framebuffer(uint32_t swapchain_image_index);
 
 
-cvm_vk_module_graphics_block * test_render_frame(void);
+cvm_vk_module_graphics_block * test_render_frame(camera * c);
+void test_frame_cleanup(uint32_t swapchain_image_index);
 
 #endif
 

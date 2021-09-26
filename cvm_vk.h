@@ -214,13 +214,22 @@ void cvm_vk_destroy_shader_stage_info(VkPipelineShaderStageCreateInfo * stage_in
 
 
 
+void cvm_vk_create_descriptor_set_layout(VkDescriptorSetLayout * descriptor_set_layout,VkDescriptorSetLayoutCreateInfo * info);
+void cvm_vk_destroy_descriptor_set_layout(VkDescriptorSetLayout descriptor_set_layout);
+
+void cvm_vk_create_descriptor_pool(VkDescriptorPool * descriptor_pool,VkDescriptorPoolCreateInfo * info);
+void cvm_vk_destroy_descriptor_pool(VkDescriptorPool descriptor_pool);
+
+void cvm_vk_allocate_descriptor_sets(VkDescriptorSet * descriptor_sets,VkDescriptorSetAllocateInfo * info);
+void cvm_vk_write_descriptor_sets(VkWriteDescriptorSet * writes,uint32_t count);
+
 void * cvm_vk_create_buffer(VkBuffer * buffer,VkDeviceMemory * memory,VkBufferUsageFlags usage,VkDeviceSize size,bool require_host_visible);
 void cvm_vk_destroy_buffer(VkBuffer buffer,VkDeviceMemory memory,void * mapping);
 void cvm_vk_flush_buffer_memory_range(VkMappedMemoryRange * flush_range);
 uint32_t cvm_vk_get_buffer_alignment_requirements(VkBufferUsageFlags usage);
 
 
-void cvm_vk_prepare_for_next_frame(bool rendering_resources_invalid);
+uint32_t cvm_vk_prepare_for_next_frame(bool rendering_resources_invalid);
 void cvm_vk_transition_frame(void);///must be called in critical section!
 void cvm_vk_present_current_frame(cvm_vk_module_graphics_block ** graphics_blocks, uint32_t graphics_block_count);
 bool cvm_vk_recreate_rendering_resources(void);///this and operations resulting from it returning true, must be called in critical section
@@ -246,7 +255,6 @@ void cvm_vk_destroy_module_data(cvm_vk_module_data * module_data,bool in_separat
 
 VkCommandBuffer cvm_vk_begin_module_graphics_block(cvm_vk_module_data * module_data,uint32_t frame_offset,uint32_t * swapchain_image_index);///have this return bool? (VkCommandBuffer through ref.)
 cvm_vk_module_graphics_block * cvm_vk_end_module_graphics_block(cvm_vk_module_data * module_data);
-
 
 
 

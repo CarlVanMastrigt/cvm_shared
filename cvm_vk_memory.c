@@ -471,6 +471,12 @@ void cvm_vk_bind_dymanic_allocation_vertex(VkCommandBuffer cmd_buf,cvm_vk_manage
     vkCmdBindVertexBuffers(cmd_buf,binding,1,&mb->buffer,&offset);
 }
 
+void cvm_vk_bind_dymanic_allocation_index(VkCommandBuffer cmd_buf,cvm_vk_managed_buffer * mb,cvm_vk_dynamic_buffer_allocation * allocation,VkIndexType type)
+{
+    VkDeviceSize offset=allocation->offset << mb->base_dynamic_allocation_size_factor;
+    vkCmdBindIndexBuffer(cmd_buf,mb->buffer,offset,type);
+}
+
 void cvm_vk_flush_buffer_allocation_mapping(cvm_vk_managed_buffer * mb,cvm_vk_dynamic_buffer_allocation * allocation)
 {
     VkMappedMemoryRange flush_range=(VkMappedMemoryRange)
@@ -507,11 +513,25 @@ void cvm_vk_flush_managed_buffer(cvm_vk_managed_buffer * mb)
 
 
 
+/**
+
+FUUUUUUCK
+
+I have assumed that space allocated, i.e. frames allocated and freed happen in a distinct order, i.e. that swapchain images are always acquired and relinquished in the same order
+
+this is NOT necessarily the case and will require a smarter solution to address, will need to acquire and release blocks at a time, and a "ring" buffer as a concept may end up getting blocked at any point in execution
+
+simple solution is to have a buffer (sharing memory allocation ofc.) for each swapchain image
+
+alternate solution is to queue up and relinquish memory upon completion fence being reached rather than relinquishing upon reacquisition
+
+    ^ submodule cleanup function? pass prev/finished swapchain image back to submodule?
+
+*/
 
 
 
-
-void cvm_vk_create_ring_buffer(cvm_vk_ring_buffer * rb,VkBufferUsageFlags usage)
+void cvm_vk_create_ring_buffer(cvm_vk_ring_buffer * rb,VkBufferUsageFlags usage,uint32_t buffer_size)
 {
     ///size really needn't be a PO2, when overrunning we need to detect that anyway, ergo can probably just allocate exact amount desired
     /// if taking above approach probably want to round everything in buffer to some base allocation offset to make amount of mem available constant across acquisition order
@@ -533,6 +553,8 @@ void cvm_vk_create_ring_buffer(cvm_vk_ring_buffer * rb,VkBufferUsageFlags usage)
         fprintf(stderr,"NON POWER OF 2 ALIGNMENTS NOT SUPPORTED!\n");
         exit(-1);
     }
+
+    if(buffer_size) cvm_vk_update_ring_buffer(rb,buffer_size);
 }
 
 void cvm_vk_update_ring_buffer(cvm_vk_ring_buffer * rb,uint32_t buffer_size)
@@ -575,19 +597,16 @@ uint32_t cvm_vk_ring_buffer_get_rounded_allocation_size(cvm_vk_ring_buffer * rb,
     return (((allocation_size-1)>>rb->alignment_size_factor)+1)<<rb->alignment_size_factor;
 }
 
-void cvm_vk_begin_ring_buffer(cvm_vk_ring_buffer * rb,uint32_t relinquished_space)
+void cvm_vk_begin_ring_buffer(cvm_vk_ring_buffer * rb)
 {
-    rb->max_offset+=relinquished_space;
-    rb->max_offset-=rb->total_space*(rb->max_offset>=rb->total_space);
-
-    rb->initial_space_remaining=atomic_fetch_add(&rb->space_remaining,relinquished_space)+relinquished_space;
+    rb->initial_space_remaining=atomic_load(&rb->space_remaining);
 }
 
 uint32_t cvm_vk_end_ring_buffer(cvm_vk_ring_buffer * rb)
 {
-    uint32_t acquired_space=rb->initial_space_remaining-atomic_load(&rb->space_remaining);
-    uint32_t offset,remaining_space;
+    uint32_t acquired_space,offset,remaining_space;
 
+    acquired_space=rb->initial_space_remaining-atomic_load(&rb->space_remaining);
     offset=rb->max_offset-rb->initial_space_remaining + rb->total_space*(rb->initial_space_remaining > rb->max_offset);
     remaining_space=acquired_space;
 
@@ -656,10 +675,15 @@ void * cvm_vk_get_ring_buffer_allocation(cvm_vk_ring_buffer * rb,uint32_t alloca
     return rb->mapping+offset;
 }
 
+///should only ever be called during cleanup, not thread safe
+void cvm_vk_relinquish_ring_buffer_space(cvm_vk_ring_buffer * rb,uint32_t * relinquished_space)
+{
+    rb->max_offset+=*relinquished_space;
+    rb->max_offset-=rb->total_space*(rb->max_offset>=rb->total_space);
 
-
-
-
+    atomic_fetch_add(&rb->space_remaining,*relinquished_space);
+    *relinquished_space=0;
+}
 
 
 

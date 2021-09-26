@@ -674,13 +674,18 @@ void cvm_vk_terminate(void)
 ///      ^ this paradigm might even avoid swapchain recreation when not changing things that affect it! (e.g. 1 modules MSAA settings)
 /// need a better name for this
 /// rely on this func to detect swapchain resize? couldn't hurt to double check based on screen resize
-void cvm_vk_prepare_for_next_frame(bool rendering_resources_invalid)
+/// returns newly finished frames image index so that data waiting on it can be cleaned up for threads in upcoming critical section
+uint32_t cvm_vk_prepare_for_next_frame(bool rendering_resources_invalid)
 {
     if(rendering_resources_invalid)cvm_vk_rendering_resources_valid=false;
 
     cvm_vk_swapchain_image_acquisition_data * acquired_image = cvm_vk_acquired_images + (cvm_vk_current_acquired_image_index+cvm_vk_extra_swapchain_images+1)%cvm_vk_swapchain_image_count;
     /// next frame (+1) written to by module detached the most from presentation (+cvm_vk_extra_swapchain_images)
     /// this modulo op should be used everywhere a particular frame offset (offset from cvm_vk_current_image_acquisition_index) is needed
+
+    #warning need to validate this works when cvm_vk_extra_swapchain_images!=0
+
+    uint32_t old_acquired_image_index=acquired_image->image_index;
 
     if(acquired_image->image_index!=CVM_VK_INVALID_IMAGE_INDEX)
     {
@@ -723,6 +728,8 @@ void cvm_vk_prepare_for_next_frame(bool rendering_resources_invalid)
     {
         acquired_image->image_index=CVM_VK_INVALID_IMAGE_INDEX;
     }
+
+    return old_acquired_image_index;
 }
 
 void cvm_vk_transition_frame(void)///must be called in critical section!
@@ -972,6 +979,36 @@ void cvm_vk_destroy_shader_stage_info(VkPipelineShaderStageCreateInfo * stage_in
 
 
 
+void cvm_vk_create_descriptor_set_layout(VkDescriptorSetLayout * descriptor_set_layout,VkDescriptorSetLayoutCreateInfo * info)
+{
+    CVM_VK_CHECK(vkCreateDescriptorSetLayout(cvm_vk_device,info,NULL,descriptor_set_layout));
+}
+
+void cvm_vk_destroy_descriptor_set_layout(VkDescriptorSetLayout descriptor_set_layout)
+{
+    vkDestroyDescriptorSetLayout(cvm_vk_device,descriptor_set_layout,NULL);
+}
+
+void cvm_vk_create_descriptor_pool(VkDescriptorPool * descriptor_pool,VkDescriptorPoolCreateInfo * info)
+{
+    vkCreateDescriptorPool(cvm_vk_device,info,NULL,descriptor_pool);
+}
+
+void cvm_vk_destroy_descriptor_pool(VkDescriptorPool descriptor_pool)
+{
+    vkDestroyDescriptorPool(cvm_vk_device,descriptor_pool,NULL);
+}
+
+void cvm_vk_allocate_descriptor_sets(VkDescriptorSet * descriptor_sets,VkDescriptorSetAllocateInfo * info)
+{
+    vkAllocateDescriptorSets(cvm_vk_device,info,descriptor_sets);
+}
+
+void cvm_vk_write_descriptor_sets(VkWriteDescriptorSet * writes,uint32_t count)
+{
+    vkUpdateDescriptorSets(cvm_vk_device,count,writes,0,NULL);
+}
+
 ///unlike other functions, this one takes abstract/resultant data rather than just generic creation info
 void * cvm_vk_create_buffer(VkBuffer * buffer,VkDeviceMemory * memory,VkBufferUsageFlags usage,VkDeviceSize size,bool require_host_visible)
 {
@@ -1056,7 +1093,7 @@ uint32_t cvm_vk_get_buffer_alignment_requirements(VkBufferUsageFlags usage)
     uint32_t alignment=1;
 
     /// need specialised functions for vertex buffers and index buffers (or leave it up to user)
-    /// vertex: alignment = size largest primitive/type used in vertex inputs
+    /// vertex: alignment = size largest primitive/type used in vertex inputs - need way to handle this as it isnt really specified, perhaps assume 16? perhaps rely on user to ensure this is satisfied
     /// index: size of index type used
     /// indirect: 4
 
@@ -1269,6 +1306,7 @@ cvm_vk_module_graphics_block * cvm_vk_end_module_graphics_block(cvm_vk_module_da
 
     return block;
 }
+
 
 
 

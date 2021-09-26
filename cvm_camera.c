@@ -26,11 +26,11 @@ void change_camera_azimuthal_angle(float delta,camera * c)
     if(c->azimuthal_angle<-PI)c->azimuthal_angle+=2.0*PI;
 }
 
-void change_camera_polar_angle(float delta,camera * c)
+void change_camera_zenith_angle(float delta,camera * c)
 {
-    c->polar_angle+=delta;
-    if(c->polar_angle>0.0f)c->polar_angle=0.0f;
-    if(c->polar_angle<-PI)c->polar_angle=-PI;
+    c->zenith_angle+=delta;
+    if(c->zenith_angle>0.0f)c->zenith_angle=0.0f;
+    if(c->zenith_angle<-PI)c->zenith_angle=-PI;
 }
 
 void change_camera_zoom(float delta,camera * c)
@@ -47,7 +47,7 @@ void initialise_camera(int screen_w,int screen_h,float fov, float near,float foc
     if(focal_distance<0.0)puts("ERROR CAMERA FOCAL DISTANCE MUST BE POSITIVE");
     c->focal_distance=focal_distance;/// -10.0f
     c->azimuthal_angle=0.0;//PI*-0.25;
-    c->polar_angle=0.0;//-fov*0.5;
+    c->zenith_angle=0.0;//-fov*0.5;
 
 
     c->fov=fov;
@@ -66,7 +66,8 @@ void update_camera(int screen_w,int screen_h,camera * c)
 
 
     ///changes to angles here represent difference is spherical coordinate system and camera coordinate system
-    c->position=v3f_from_spherical(c->focal_distance,c->polar_angle,-c->azimuthal_angle+0.5*PI);
+    c->position=v3f_from_spherical(c->focal_distance,c->zenith_angle,-c->azimuthal_angle+0.5*PI);
+    #warning above is likely wrong! or at least needs revision
 
     c->position_buffer[0]=c->position.x;
     c->position_buffer[1]=c->position.y;
@@ -85,8 +86,8 @@ void update_camera(int screen_w,int screen_h,camera * c)
 
 
 
-    ca=cosf(c->polar_angle);
-    sa=sinf(c->polar_angle);
+    ca=cosf(c->zenith_angle);
+    sa=sinf(c->zenith_angle);
     rx.x.x=1.0f;rx.y.x=0.0f;rx.z.x=0.0f;rx.w.x=0.0f;
     rx.x.y=0.0f;rx.y.y=ca;  rx.z.y=-sa; rx.w.y=0.0f;
     rx.x.z=0.0f;rx.y.z=sa;  rx.z.z=ca;  rx.w.z=0.0f;

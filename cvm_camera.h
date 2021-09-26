@@ -40,7 +40,7 @@ typedef struct camera
 
     ///these angles represent the direction from which the camera is observing the scene, NOT the direction the camera is facing, within the cameras coordinate system
     float azimuthal_angle;
-    float polar_angle;
+    float zenith_angle;
 
     float focal_distance;
     float max_focal_distance;
@@ -66,7 +66,7 @@ typedef struct camera
 camera;
 
 void change_camera_azimuthal_angle(float delta,camera * c);
-void change_camera_polar_angle(float delta,camera * c);
+void change_camera_zenith_angle(float delta,camera * c);
 void change_camera_zoom(float delta,camera * c);
 
 
