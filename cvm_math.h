@@ -321,11 +321,11 @@ static inline vec3f v3f_rotate(vec3f v,vec3f k,float cos_theta,float sin_theta)/
                     .y= v.y*cos_theta  +  (k.z*v.x - k.x*v.z)*sin_theta  +  k.y*d,
                     .z= v.z*cos_theta  +  (k.x*v.y - k.y*v.x)*sin_theta  +  k.z*d};
 }
-static inline vec3f v3f_from_spherical(float r,float polar,float azimuth)
+static inline vec3f v3f_from_spherical(float r,float zenith,float azimuth)
 {
-    return (vec3f){ .x=r*cosf(azimuth)*sinf(polar),
-                    .y=r*sinf(azimuth)*sinf(polar),
-                    .z=r*cosf(polar)};
+    return (vec3f){ .x=r*cosf(azimuth)*sinf(zenith),
+                    .y=r*sinf(azimuth)*sinf(zenith),
+                    .z=r*cosf(zenith)};
 }
 static inline vec3f v3f_max(vec3f v1,vec3f v2)
 {

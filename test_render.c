@@ -38,8 +38,8 @@ static VkPipelineLayout test_pipeline_layout;///relevant descriptors, share as m
 static VkPipeline test_pipeline;
 static VkPipelineShaderStageCreateInfo test_stages[2];
 
-static VkFramebuffer * test_framebuffers;
-static VkImageView test_framebuffer_attachments[1];///first reserved for swapchain, rest are views of locally created images
+static VkFramebuffer * test_framebuffers[2];
+//static VkImageView test_framebuffer_attachments[1];///first reserved for swapchain, rest are views of locally created images
 
 
 static cvm_vk_managed_buffer test_buffer;
@@ -153,7 +153,7 @@ static void create_test_pipeline_layouts(void)
             {
                 .stageFlags=VK_SHADER_STAGE_VERTEX_BIT,
                 .offset=0,
-                .size=sizeof(float)*16
+                .size=sizeof(matrix4f)
             }
         }
     };
@@ -413,7 +413,8 @@ static void create_test_pipelines(VkRect2D screen_rectangle,VkSampleCountFlagBit
 
 static void create_test_framebuffers(VkRect2D screen_rectangle,uint32_t swapchain_image_count)
 {
-    uint32_t i;
+    uint32_t i,j;
+    VkImageView attachments[2];
 
     VkFramebufferCreateInfo create_info=(VkFramebufferCreateInfo)
     {
@@ -422,19 +423,22 @@ static void create_test_framebuffers(VkRect2D screen_rectangle,uint32_t swapchai
         .flags=0,
         .renderPass=test_render_pass,
         .attachmentCount=1,
-        .pAttachments=test_framebuffer_attachments,
+        .pAttachments=attachments,
         .width=screen_rectangle.extent.width,
         .height=screen_rectangle.extent.height,
         .layers=1
     };
 
-    test_framebuffers=malloc(swapchain_image_count*sizeof(VkFramebuffer));
-
-    for(i=0;i<swapchain_image_count;i++)
+    for(i=0;i<2;i++)
     {
-        test_framebuffer_attachments[0]=cvm_vk_get_swapchain_image_view(i);
+        test_framebuffers[i]=malloc(swapchain_image_count*sizeof(VkFramebuffer));
 
-        cvm_vk_create_framebuffer(test_framebuffers+i,&create_info);
+        for(j=0;j<swapchain_image_count;j++)
+        {
+            attachments[0]=cvm_vk_get_swapchain_image_view(j);
+
+            cvm_vk_create_framebuffer(test_framebuffers[i]+j,&create_info);
+        }
     }
 }
 
@@ -489,10 +493,8 @@ static void create_test_vertex_buffer(void)
         for(j=0;j<3;j++)
         {
             vertex_data[i].col[j]=!!(i&1<<j)*255;
-            vertex_data[i].pos[j]=((float)(!!(i&1<<j)*2-1))*0.7;
-            printf("%f,",vertex_data[i].pos[j]);
+            vertex_data[i].pos[j]=(float)(!!(i&1<<j)*2-1);
         }
-        printf("\n");
     }
 
     cvm_vk_flush_managed_buffer(&test_buffer);
@@ -566,14 +568,17 @@ void terminate_test_swapchain_dependencies()
 
     for(i=0;i<swapchain_image_count;i++)
     {
-        cvm_vk_destroy_framebuffer(test_framebuffers[i]);
+        cvm_vk_destroy_framebuffer(test_framebuffers[0][i]);
+        cvm_vk_destroy_framebuffer(test_framebuffers[1][i]);
         cvm_vk_relinquish_ring_buffer_space(&test_uniform_buffer,test_ring_buffer_acquisitions+i);
     }
+
 
     cvm_vk_destroy_descriptor_pool(test_descriptor_pool);
 
     free(test_descriptor_sets);
-    free(test_framebuffers);
+    free(test_framebuffers[0]);
+    free(test_framebuffers[1]);
     free(test_ring_buffer_acquisitions);
 }
 
@@ -584,7 +589,7 @@ VkPipeline get_test_pipeline(void)
 
 VkFramebuffer get_test_framebuffer(uint32_t swapchain_image_index)
 {
-    return test_framebuffers[swapchain_image_index];
+    return test_framebuffers[0][swapchain_image_index];
 }
 
 
@@ -621,16 +626,16 @@ cvm_vk_module_graphics_block * test_render_frame(camera * c)
 //        uniforms[2]=0.0;
 //        uniforms[3]=0.0;
 
-        uniforms[0]=1.0;//0.7+0.3*cos(SDL_GetTicks()*0.005);
-        uniforms[1]=1.0;//0.7+0.3*cos(SDL_GetTicks()*0.007);
-        uniforms[2]=1.0;//0.7+0.3*cos(SDL_GetTicks()*0.011);
+        uniforms[0]=0.7+0.3*cos(SDL_GetTicks()*0.005);
+        uniforms[1]=0.7+0.3*cos(SDL_GetTicks()*0.007);
+        uniforms[2]=0.7+0.3*cos(SDL_GetTicks()*0.011);
         uniforms[3]=1.0;
 
         update_and_bind_test_uniforms(swapchain_image_index,uniforms_offset);
 
 
 
-        vkCmdPushConstants(command_buffer,test_pipeline_layout,VK_SHADER_STAGE_VERTEX_BIT,0,sizeof(float)*16,get_view_matrix_buffer(c));
+        vkCmdPushConstants(command_buffer,test_pipeline_layout,VK_SHADER_STAGE_VERTEX_BIT,0,sizeof(matrix4f),get_view_matrix_pointer(c));
 
         vkCmdBindDescriptorSets(command_buffer,VK_PIPELINE_BIND_POINT_GRAPHICS,test_pipeline_layout,0,1,test_descriptor_sets+swapchain_image_index,0,NULL);
 
@@ -643,7 +648,7 @@ cvm_vk_module_graphics_block * test_render_frame(camera * c)
             .sType=VK_STRUCTURE_TYPE_RENDER_PASS_BEGIN_INFO,
             .pNext=NULL,
             .renderPass=test_render_pass,
-            .framebuffer=test_framebuffers[swapchain_image_index],
+            .framebuffer=test_framebuffers[0][swapchain_image_index],
             .renderArea=cvm_vk_get_screen_rectangle(),
             .clearValueCount=1,
             .pClearValues= &clear_value

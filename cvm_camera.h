@@ -42,12 +42,14 @@ typedef struct camera
     float azimuthal_angle;
     float zenith_angle;
 
-    float focal_distance;
+    //float focal_distance;
     float max_focal_distance;
     float min_focal_distance;
+    int current_zoom_step;
+    int max_zoom_step;
 
-    matrix4f view_mat;
-    matrix4f view_mat_inverse;
+    matrix4f view_matrix;
+    matrix4f view_matrix_inverse;
 
     plane bounds[num_frustrum_bounds];
 
@@ -56,8 +58,6 @@ typedef struct camera
 
     GLsizei screen_w;
     GLsizei screen_h;
-    GLfloat view_matrix_buffer[16];
-    GLfloat view_matrix_inverse_buffer[16];
     GLfloat aspect_ratio;///
     GLfloat pixel_to_fov_angle_ratio;
     GLfloat inverse_screen_dimensions[2];///x,y
@@ -67,23 +67,22 @@ camera;
 
 void change_camera_azimuthal_angle(float delta,camera * c);
 void change_camera_zenith_angle(float delta,camera * c);
-void change_camera_zoom(float delta,camera * c);
+void change_camera_zoom(int delta,camera * c);
 
 
-void initialise_camera(int screen_w,int screen_h,float fov,float near,float focal_distance,camera * c);
+void initialise_camera(int screen_w,int screen_h,float fov,float near,int zoom_steps,camera * c);
 
 void update_camera(int screen_w,int screen_h,camera * c);
 
-static inline GLfloat * get_view_matrix_buffer(camera * c)
+
+static inline matrix4f * get_view_matrix_pointer(camera * c)
 {
-    return c->view_matrix_buffer;
+    return &c->view_matrix;
 }
-static inline GLfloat * get_view_matrix_inverse_buffer(camera * c)
+static inline matrix4f * get_view_matrix_inverse_pointer(camera * c)
 {
-    return c->view_matrix_inverse_buffer;
+    return &c->view_matrix_inverse;
 }
-matrix4f * get_view_matrix_pointer(camera * c);///REMOVE
-matrix4f * get_view_matrix_inverse_pointer(camera * c);///REMOVE
 matrix4f get_view_matrix(camera * c);
 matrix4f get_view_matrix_inverse(camera * c);
 

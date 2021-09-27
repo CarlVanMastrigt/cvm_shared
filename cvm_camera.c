@@ -29,25 +29,28 @@ void change_camera_azimuthal_angle(float delta,camera * c)
 void change_camera_zenith_angle(float delta,camera * c)
 {
     c->zenith_angle+=delta;
-    if(c->zenith_angle>0.0f)c->zenith_angle=0.0f;
-    if(c->zenith_angle<-PI)c->zenith_angle=-PI;
+    if(c->zenith_angle>PI)c->zenith_angle=PI;
+    if(c->zenith_angle<0.0)c->zenith_angle=0.0;
+//    if(c->zenith_angle>PI)c->zenith_angle=PI;
+//    if(c->zenith_angle<0.0)c->zenith_angle=0.0;
 }
 
-void change_camera_zoom(float delta,camera * c)
+void change_camera_zoom(int delta,camera * c)
 {
-    float fd=c->focal_distance*delta;
-    if( (fd<c->max_focal_distance)&&(fd>c->min_focal_distance) )c->focal_distance=fd;///less strict limits
+    c->current_zoom_step+=delta;
+    if(c->current_zoom_step<0)c->current_zoom_step=0;
+    if(c->current_zoom_step>c->max_zoom_step)c->current_zoom_step=c->max_zoom_step;
 }
 
-void initialise_camera(int screen_w,int screen_h,float fov, float near,float focal_distance,camera * c)
+void initialise_camera(int screen_w,int screen_h,float fov, float near,int zoom_steps,camera * c)
 {
-    c->min_focal_distance=2.0f;
-    c->max_focal_distance=5000.0f;
+    c->min_focal_distance=3.0f;
+    c->max_focal_distance=100.0f;
 
-    if(focal_distance<0.0)puts("ERROR CAMERA FOCAL DISTANCE MUST BE POSITIVE");
-    c->focal_distance=focal_distance;/// -10.0f
+    c->max_zoom_step=zoom_steps;
+    c->current_zoom_step=zoom_steps/2;
     c->azimuthal_angle=0.0;//PI*-0.25;
-    c->zenith_angle=0.0;//-fov*0.5;
+    c->zenith_angle=PI*0.75;//-fov*0.5;
 
 
     c->fov=fov;
@@ -64,10 +67,25 @@ void update_camera(int screen_w,int screen_h,camera * c)
     float ca,sa,ar,tan_half_fov;
     vec3f ftr,ftl,fbr,fbl;
 
-
+    ///make zoom integer and calculate focal w/ log/power scale?
     ///changes to angles here represent difference is spherical coordinate system and camera coordinate system
-    c->position=v3f_from_spherical(c->focal_distance,c->zenith_angle,-c->azimuthal_angle+0.5*PI);
+    //c->position=v3f_from_spherical(c->focal_distance,c->zenith_angle,c->azimuthal_angle-0.5*PI);
+    float focal_distance=c->min_focal_distance*expf((logf(c->max_focal_distance) - logf(c->min_focal_distance))*((float)c->current_zoom_step)/((float)c->max_zoom_step));
+    c->position.x=-focal_distance*sinf(c->azimuthal_angle)*sinf(c->zenith_angle);
+    c->position.y=-focal_distance*cosf(c->azimuthal_angle)*sinf(c->zenith_angle);
+    c->position.z=-focal_distance*cosf(c->zenith_angle);
+
+    /// this doesnt work b/c basis of rotation (no rotation) assumes camera oriented along x axis, whereas its actually along y
+
+    ///INSTEAD: switch to system of camera orientation values representing actual camera rotations in world space! (complicated but tangible concept)
+
+    ///looking up from below needs to be default (unrotated) camera position/location/direction
+
     #warning above is likely wrong! or at least needs revision
+    //c->position=v3f_from_spherical(c->focal_distance,c->zenith_angle,c->azimuthal_angle);
+
+    //printf("cartesian: %f %f %f\n",c->position.x,c->position.y,c->position.z);
+    //printf("spherical: %f %f %f\n\n",-focal_distance,c->zenith_angle,c->azimuthal_angle);
 
     c->position_buffer[0]=c->position.x;
     c->position_buffer[1]=c->position.y;
@@ -102,28 +120,16 @@ void update_camera(int screen_w,int screen_h,camera * c)
 
     z.x.x=1.0f; z.y.x=0.0f; z.z.x=0.0f; z.w.x=0.0f;
     z.x.y=0.0f; z.y.y=1.0f; z.z.y=0.0f; z.w.y=0.0f;
-    z.x.z=0.0f; z.y.z=0.0f; z.z.z=1.0f; z.w.z= -c->focal_distance;///move camera backwards along its vector (direction from which it views scene)
+    z.x.z=0.0f; z.y.z=0.0f; z.z.z=1.0f; z.w.z=focal_distance;///move camera backwards along its vector (direction from which it views scene)
     z.x.w=0.0f; z.y.w=0.0f; z.z.w=0.0f; z.w.w=1.0f;
 
     proj.x.x=1.0f/(tan_half_fov*ar);proj.y.x=0.0f;              proj.z.x=0.0f;  proj.w.x=0.0;
     proj.x.y=0.0f;                  proj.y.y=1.0f/tan_half_fov; proj.z.y=0.0f;  proj.w.y=0.0;
     proj.x.z=0.0f;                  proj.y.z=0.0f;              proj.z.z=0.0f;  proj.w.z=c->near;
-    proj.x.w=0.0f;                  proj.y.w=0.0f;              proj.z.w=-1.0f; proj.w.w=0.0;
+    proj.x.w=0.0f;                  proj.y.w=0.0f;              proj.z.w=1.0f; proj.w.w=0.0;
 
-    c->view_mat=vm=m4f_mult(proj,m4f_mult(z,m4f_mult(rx,rz)));
-    c->view_mat_inverse=vmi=m4f_inv(vm);
-
-    c->view_matrix_buffer[0 ]=vm.x.x;c->view_matrix_buffer[1 ]=vm.x.y;c->view_matrix_buffer[2 ]=vm.x.z;c->view_matrix_buffer[3 ]=vm.x.w;
-    c->view_matrix_buffer[4 ]=vm.y.x;c->view_matrix_buffer[5 ]=vm.y.y;c->view_matrix_buffer[6 ]=vm.y.z;c->view_matrix_buffer[7 ]=vm.y.w;
-    c->view_matrix_buffer[8 ]=vm.z.x;c->view_matrix_buffer[9 ]=vm.z.y;c->view_matrix_buffer[10]=vm.z.z;c->view_matrix_buffer[11]=vm.z.w;
-    c->view_matrix_buffer[12]=vm.w.x;c->view_matrix_buffer[13]=vm.w.y;c->view_matrix_buffer[14]=vm.w.z;c->view_matrix_buffer[15]=vm.w.w;
-
-    c->view_matrix_inverse_buffer[0 ]=vmi.x.x;c->view_matrix_inverse_buffer[1 ]=vmi.x.y;c->view_matrix_inverse_buffer[2 ]=vmi.x.z;c->view_matrix_inverse_buffer[3 ]=vmi.x.w;
-    c->view_matrix_inverse_buffer[4 ]=vmi.y.x;c->view_matrix_inverse_buffer[5 ]=vmi.y.y;c->view_matrix_inverse_buffer[6 ]=vmi.y.z;c->view_matrix_inverse_buffer[7 ]=vmi.y.w;
-    c->view_matrix_inverse_buffer[8 ]=vmi.z.x;c->view_matrix_inverse_buffer[9 ]=vmi.z.y;c->view_matrix_inverse_buffer[10]=vmi.z.z;c->view_matrix_inverse_buffer[11]=vmi.z.w;
-    c->view_matrix_inverse_buffer[12]=vmi.w.x;c->view_matrix_inverse_buffer[13]=vmi.w.y;c->view_matrix_inverse_buffer[14]=vmi.w.z;c->view_matrix_inverse_buffer[15]=vmi.w.w;
-
-
+    c->view_matrix=vm=m4f_mult(proj,m4f_mult(z,m4f_mult(rx,rz)));
+    c->view_matrix_inverse=vmi=m4f_inv(vm);
 
     #warning make sure z of 1.0 vs 0.0 is appropriate, not zero and not massive/infinite
     #warning is frustrum_corners valid data to store? maybe just make local variables
