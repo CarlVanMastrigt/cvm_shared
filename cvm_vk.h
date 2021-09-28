@@ -223,6 +223,16 @@ void cvm_vk_destroy_descriptor_pool(VkDescriptorPool descriptor_pool);
 void cvm_vk_allocate_descriptor_sets(VkDescriptorSet * descriptor_sets,VkDescriptorSetAllocateInfo * info);
 void cvm_vk_write_descriptor_sets(VkWriteDescriptorSet * writes,uint32_t count);
 
+void cvm_vk_create_image(VkImage * image,VkImageCreateInfo * info);
+void cvm_vk_destroy_image(VkImage image);
+
+void cvm_vk_create_image_view(VkImageView * image_view,VkImageViewCreateInfo * info);
+void cvm_vk_destroy_image_view(VkImageView image_view);
+
+void cvm_vk_create_and_bind_memory_for_images(VkDeviceMemory * memory,VkImage * images,uint32_t image_count);
+
+void cvm_vk_free_memory(VkDeviceMemory memory);
+
 void * cvm_vk_create_buffer(VkBuffer * buffer,VkDeviceMemory * memory,VkBufferUsageFlags usage,VkDeviceSize size,bool require_host_visible);
 void cvm_vk_destroy_buffer(VkBuffer buffer,VkDeviceMemory memory,void * mapping);
 void cvm_vk_flush_buffer_memory_range(VkMappedMemoryRange * flush_range);

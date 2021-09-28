@@ -991,7 +991,7 @@ void cvm_vk_destroy_descriptor_set_layout(VkDescriptorSetLayout descriptor_set_l
 
 void cvm_vk_create_descriptor_pool(VkDescriptorPool * descriptor_pool,VkDescriptorPoolCreateInfo * info)
 {
-    vkCreateDescriptorPool(cvm_vk_device,info,NULL,descriptor_pool);
+    CVM_VK_CHECK(vkCreateDescriptorPool(cvm_vk_device,info,NULL,descriptor_pool));
 }
 
 void cvm_vk_destroy_descriptor_pool(VkDescriptorPool descriptor_pool)
@@ -1001,12 +1001,82 @@ void cvm_vk_destroy_descriptor_pool(VkDescriptorPool descriptor_pool)
 
 void cvm_vk_allocate_descriptor_sets(VkDescriptorSet * descriptor_sets,VkDescriptorSetAllocateInfo * info)
 {
-    vkAllocateDescriptorSets(cvm_vk_device,info,descriptor_sets);
+    CVM_VK_CHECK(vkAllocateDescriptorSets(cvm_vk_device,info,descriptor_sets));
 }
 
 void cvm_vk_write_descriptor_sets(VkWriteDescriptorSet * writes,uint32_t count)
 {
     vkUpdateDescriptorSets(cvm_vk_device,count,writes,0,NULL);
+}
+
+void cvm_vk_create_image(VkImage * image,VkImageCreateInfo * info)
+{
+    CVM_VK_CHECK(vkCreateImage(cvm_vk_device,info,NULL,image));
+}
+
+void cvm_vk_destroy_image(VkImage image)
+{
+    vkDestroyImage(cvm_vk_device,image,NULL);
+}
+
+void cvm_vk_create_image_view(VkImageView * image_view,VkImageViewCreateInfo * info)
+{
+    CVM_VK_CHECK(vkCreateImageView(cvm_vk_device,info,NULL,image_view));
+}
+
+void cvm_vk_destroy_image_view(VkImageView image_view)
+{
+    vkDestroyImageView(cvm_vk_device,image_view,NULL);
+}
+
+void cvm_vk_create_and_bind_memory_for_images(VkDeviceMemory * memory,VkImage * images,uint32_t image_count)
+{
+    VkDeviceSize offsets[image_count];
+    VkDeviceSize current_offset=0;
+    VkMemoryRequirements requirements;
+    uint32_t i,supported_type_bits=0xFFFFFFFF;
+
+    for(i=0;i<image_count;i++)
+    {
+        vkGetImageMemoryRequirements(cvm_vk_device,images[i],&requirements);
+        offsets[i]=(current_offset+requirements.alignment-1)& ~(requirements.alignment-1);
+        current_offset=offsets[i]+requirements.size;
+        supported_type_bits&=requirements.memoryTypeBits;
+    }
+
+    for(i=0;i<cvm_vk_memory_properties.memoryTypeCount;i++)
+    {
+        if( supported_type_bits & 1<<i )
+        {
+            VkMemoryAllocateInfo memory_allocate_info=(VkMemoryAllocateInfo)
+            {
+                .sType=VK_STRUCTURE_TYPE_MEMORY_ALLOCATE_INFO,
+                .pNext=NULL,
+                .allocationSize=current_offset,
+                .memoryTypeIndex=i
+            };
+
+            CVM_VK_CHECK(vkAllocateMemory(cvm_vk_device,&memory_allocate_info,NULL,memory));
+
+            break;
+        }
+    }
+
+    if(i==cvm_vk_memory_properties.memoryTypeCount)
+    {
+        fprintf(stderr,"COULD NOT FIND APPROPRIATE MEMORY FOR IMAGE ALLOCATION\n");
+        exit(-1);
+    }
+
+    for(i=0;i<image_count;i++)
+    {
+        CVM_VK_CHECK(vkBindImageMemory(cvm_vk_device,images[i],*memory,offsets[i]));
+    }
+}
+
+void cvm_vk_free_memory(VkDeviceMemory memory)
+{
+    vkFreeMemory(cvm_vk_device,memory,NULL);
 }
 
 ///unlike other functions, this one takes abstract/resultant data rather than just generic creation info
@@ -1068,7 +1138,7 @@ void * cvm_vk_create_buffer(VkBuffer * buffer,VkDeviceMemory * memory,VkBufferUs
         }
     }
 
-    fprintf(stderr,"COULD NOT FIND APPROPRIATE MEMORY FOR ALLOCATION\n");
+    fprintf(stderr,"COULD NOT FIND APPROPRIATE MEMORY FOR BUFFER ALLOCATION\n");
     exit(-1);
 }
 

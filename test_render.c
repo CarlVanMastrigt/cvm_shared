@@ -38,8 +38,21 @@ static VkPipelineLayout test_pipeline_layout;///relevant descriptors, share as m
 static VkPipeline test_pipeline;
 static VkPipelineShaderStageCreateInfo test_stages[2];
 
+enum
+{
+    TEST_FRAMEBUFFER_OUTPUT,///reserved for swapchain image
+    TEST_FRAMEBUFFER_DEPTH,
+    TEST_FRAMEBUFFER_RESULT,
+    TEST_FRAMEBUFFER_COLOUR,
+    TEST_FRAMEBUFFER_NORMAL,
+    TEST_FRAMEBUFFER_LIGHT,
+    TEST_FRAMEBUFFER_COUNT
+};
+
+static VkDeviceMemory test_framebuffer_image_memory;
 static VkFramebuffer * test_framebuffers[2];
-//static VkImageView test_framebuffer_attachments[1];///first reserved for swapchain, rest are views of locally created images
+static VkImage test_framebuffer_images[TEST_FRAMEBUFFER_COUNT];///array images i suppose
+static VkImageView test_framebuffer_image_views[2][TEST_FRAMEBUFFER_COUNT];///views of single array slice from image
 
 
 static cvm_vk_managed_buffer test_buffer;
@@ -480,10 +493,6 @@ static void create_test_vertex_buffer(void)
     memcpy(cvm_vk_get_dynamic_buffer_allocation_mapping(&test_buffer,test_index_allocation),index_data,sizeof(uint16_t)*36);
 
 
-
-
-
-
     test_vertex_allocation=cvm_vk_acquire_dynamic_buffer_allocation(&test_buffer,sizeof(test_render_data)*8);
 
     vertex_data=cvm_vk_get_dynamic_buffer_allocation_mapping(&test_buffer,test_vertex_allocation);
@@ -498,6 +507,115 @@ static void create_test_vertex_buffer(void)
     }
 
     cvm_vk_flush_managed_buffer(&test_buffer);
+}
+
+/// these need to be recreated whenever swapchain image changes size
+/// unless we allocate at max and alter with image views... investigate potential of this, use max size, let user set max_size from startup options?
+static void create_test_framebuffer_images(VkRect2D screen_rect,VkSampleCountFlagBits sample_count)
+{
+    uint32_t i,j;
+
+    VkImageCreateInfo image_creation_info=(VkImageCreateInfo)
+    {
+        .sType=VK_STRUCTURE_TYPE_IMAGE_CREATE_INFO,
+        .pNext=NULL,
+        .flags=0,
+        .imageType=VK_IMAGE_TYPE_2D,
+        .format=VK_FORMAT_UNDEFINED,///set later
+        .extent=(VkExtent3D)
+        {
+            .width=screen_rect.extent.width,
+            .height=screen_rect.extent.height,
+            .depth=1
+        },
+        .mipLevels=1,
+        .arrayLayers=2,///one for each level
+        .samples=sample_count,
+        .tiling=VK_IMAGE_TILING_OPTIMAL,
+        .usage=0,///set later
+        .sharingMode=VK_SHARING_MODE_EXCLUSIVE,
+        .queueFamilyIndexCount=0,
+        .pQueueFamilyIndices=NULL,
+        .initialLayout=VK_IMAGE_LAYOUT_UNDEFINED
+    };
+
+    VkImageViewCreateInfo view_creation_info=(VkImageViewCreateInfo)
+    {
+        .sType=VK_STRUCTURE_TYPE_IMAGE_VIEW_CREATE_INFO,
+        .pNext=NULL,
+        .flags=0,
+        .image=VK_NULL_HANDLE,///set later
+        .viewType=VK_IMAGE_VIEW_TYPE_2D,
+        .format=VK_FORMAT_UNDEFINED,///set later
+        .components=(VkComponentMapping)
+        {
+            .r=VK_COMPONENT_SWIZZLE_IDENTITY,
+            .g=VK_COMPONENT_SWIZZLE_IDENTITY,
+            .b=VK_COMPONENT_SWIZZLE_IDENTITY,
+            .a=VK_COMPONENT_SWIZZLE_IDENTITY
+        },
+        .subresourceRange=(VkImageSubresourceRange)
+        {
+            .aspectMask=0,///set later
+            .baseMipLevel=0,
+            .levelCount=1,
+            .baseArrayLayer=0,///set later
+            .layerCount=1
+        }
+    };
+
+
+
+    image_creation_info.format=VK_FORMAT_D32_SFLOAT_S8_UINT;
+    image_creation_info.usage=VK_IMAGE_USAGE_DEPTH_STENCIL_ATTACHMENT_BIT;
+    cvm_vk_create_image(&test_framebuffer_images[TEST_FRAMEBUFFER_DEPTH],&image_creation_info);
+
+    image_creation_info.format=VK_FORMAT_A2R10G10B10_UNORM_PACK32;
+    image_creation_info.usage=VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT;
+    cvm_vk_create_image(&test_framebuffer_images[TEST_FRAMEBUFFER_RESULT],&image_creation_info);
+
+    cvm_vk_create_and_bind_memory_for_images(&test_framebuffer_image_memory,test_framebuffer_images+TEST_FRAMEBUFFER_DEPTH,2);
+
+
+
+
+    view_creation_info.format=VK_FORMAT_D32_SFLOAT_S8_UINT;
+    view_creation_info.subresourceRange.aspectMask=VK_IMAGE_ASPECT_DEPTH_BIT|VK_IMAGE_ASPECT_STENCIL_BIT;
+    view_creation_info.image=test_framebuffer_images[TEST_FRAMEBUFFER_DEPTH];
+    view_creation_info.subresourceRange.baseArrayLayer=0;
+    cvm_vk_create_image_view(&test_framebuffer_image_views[0][TEST_FRAMEBUFFER_DEPTH],&view_creation_info);
+    view_creation_info.subresourceRange.baseArrayLayer=1;
+    cvm_vk_create_image_view(&test_framebuffer_image_views[1][TEST_FRAMEBUFFER_DEPTH],&view_creation_info);
+
+
+    view_creation_info.format=VK_FORMAT_A2R10G10B10_UNORM_PACK32;
+    view_creation_info.subresourceRange.aspectMask=VK_IMAGE_ASPECT_COLOR_BIT;
+    view_creation_info.image=test_framebuffer_images[TEST_FRAMEBUFFER_RESULT];
+    view_creation_info.subresourceRange.baseArrayLayer=0;
+    cvm_vk_create_image_view(&test_framebuffer_image_views[0][TEST_FRAMEBUFFER_RESULT],&view_creation_info);
+    view_creation_info.subresourceRange.baseArrayLayer=1;
+    cvm_vk_create_image_view(&test_framebuffer_image_views[1][TEST_FRAMEBUFFER_RESULT],&view_creation_info);
+
+
+
+
+    ///  | VK_IMAGE_USAGE_SAMPLED_BIT | VK_IMAGE_USAGE_INPUT_ATTACHMENT_BIT
+
+    ///VK_FORMAT_D32_SFLOAT_S8_UINT,
+    ///VK_IMAGE_USAGE_DEPTH_STENCIL_ATTACHMENT_BIT
+
+    /// for colour and normal attachments:
+    ///VK_FORMAT_A2R10G10B10_UNORM_PACK32
+    ///VK_FORMAT_A2R10G10B10_SNORM_PACK32
+    /// higher quality variants
+    ///VK_FORMAT_R16G16B16_UNORM
+    ///VK_FORMAT_R16G16B16_SNORM
+    /// lighting &c.
+    /// VK_FORMAT_R16_UNORM
+
+    ///VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT
+
+
 }
 
 void initialise_test_render_data()
@@ -550,6 +668,8 @@ void initialise_test_swapchain_dependencies(void)
 
     create_test_pipelines(screen_rectangle,VK_SAMPLE_COUNT_1_BIT,1.0);
 
+    create_test_framebuffer_images(screen_rectangle,VK_SAMPLE_COUNT_1_BIT);
+
     create_test_framebuffers(screen_rectangle,swapchain_image_count);
 
     create_test_descriptor_sets(swapchain_image_count);
@@ -572,6 +692,17 @@ void terminate_test_swapchain_dependencies()
         cvm_vk_destroy_framebuffer(test_framebuffers[1][i]);
         cvm_vk_relinquish_ring_buffer_space(&test_uniform_buffer,test_ring_buffer_acquisitions+i);
     }
+
+    for(i=0;i<2;i++)
+    {
+        cvm_vk_destroy_image_view(test_framebuffer_image_views[i][TEST_FRAMEBUFFER_DEPTH]);
+        cvm_vk_destroy_image_view(test_framebuffer_image_views[i][TEST_FRAMEBUFFER_RESULT]);
+    }
+
+    cvm_vk_destroy_image(test_framebuffer_images[TEST_FRAMEBUFFER_DEPTH]);
+    cvm_vk_destroy_image(test_framebuffer_images[TEST_FRAMEBUFFER_RESULT]);
+
+    cvm_vk_free_memory(test_framebuffer_image_memory);
 
 
     cvm_vk_destroy_descriptor_pool(test_descriptor_pool);
