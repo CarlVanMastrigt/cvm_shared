@@ -19,6 +19,8 @@ along with cvm_shared.  If not, see <https://www.gnu.org/licenses/>.
 
 #include "cvm_shared.h"
 
+#define TEST_FRAMEBUFFER_CYCLES 2
+
 /// should make all magic numbers const static integers (e.g. num attachments)
 
 ///switch to dynamic descriptors or use fixed in place uniform buffer (with appropriate size and no need to alter offset at any point)
@@ -36,23 +38,18 @@ static VkDescriptorSet * test_descriptor_sets;
 
 static VkPipelineLayout test_pipeline_layout;///relevant descriptors, share as much as possible
 static VkPipeline test_pipeline;
-static VkPipelineShaderStageCreateInfo test_stages[2];
+static VkPipelineShaderStageCreateInfo test_vertex_stage;
+static VkPipelineShaderStageCreateInfo test_fragment_stage;
 
-enum
-{
-    TEST_FRAMEBUFFER_OUTPUT,///reserved for swapchain image
-    TEST_FRAMEBUFFER_DEPTH,
-    TEST_FRAMEBUFFER_RESULT,
-    TEST_FRAMEBUFFER_COLOUR,
-    TEST_FRAMEBUFFER_NORMAL,
-    TEST_FRAMEBUFFER_LIGHT,
-    TEST_FRAMEBUFFER_COUNT
-};
+static VkFramebuffer * test_framebuffers[TEST_FRAMEBUFFER_CYCLES];
 
 static VkDeviceMemory test_framebuffer_image_memory;
-static VkFramebuffer * test_framebuffers[2];
-static VkImage test_framebuffer_images[TEST_FRAMEBUFFER_COUNT];///array images i suppose
-static VkImageView test_framebuffer_image_views[2][TEST_FRAMEBUFFER_COUNT];///views of single array slice from image
+
+static VkImage test_framebuffer_depth;
+static VkImageView test_framebuffer_depth_views[TEST_FRAMEBUFFER_CYCLES];///views of single array slice from image
+
+static VkImage test_framebuffer_colour;
+static VkImageView test_framebuffer_colour_views[TEST_FRAMEBUFFER_CYCLES];///views of single array slice from image
 
 
 static cvm_vk_managed_buffer test_buffer;
@@ -181,8 +178,8 @@ static void create_test_render_pass(VkFormat swapchain_format,VkSampleCountFlagB
         .sType=VK_STRUCTURE_TYPE_RENDER_PASS_CREATE_INFO,
         .pNext=NULL,
         .flags=0,
-        .attachmentCount=1,
-        .pAttachments=(VkAttachmentDescription[1])
+        .attachmentCount=2,
+        .pAttachments=(VkAttachmentDescription[2])
         {
             {
                 .flags=0,
@@ -193,7 +190,18 @@ static void create_test_render_pass(VkFormat swapchain_format,VkSampleCountFlagB
                 .stencilLoadOp=VK_ATTACHMENT_LOAD_OP_DONT_CARE,
                 .stencilStoreOp=VK_ATTACHMENT_STORE_OP_DONT_CARE,
                 .initialLayout=VK_IMAGE_LAYOUT_UNDEFINED,/// is first render pass (ergo the clear above) thus the VK_IMAGE_LAYOUT_UNDEFINED rather than VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL
-                .finalLayout=VK_IMAGE_LAYOUT_PRESENT_SRC_KHR///is last render pass thus the VK_IMAGE_LAYOUT_PRESENT_SRC_KHR rather than VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL
+                .finalLayout=VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL///VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL so that next pass can also write to swapchain image without transitioning layout
+            },
+            {
+                .flags=0,
+                .format=VK_FORMAT_D32_SFLOAT_S8_UINT,
+                .samples=sample_count,
+                .loadOp=VK_ATTACHMENT_LOAD_OP_CLEAR,
+                .storeOp=VK_ATTACHMENT_STORE_OP_DONT_CARE,
+                .stencilLoadOp=VK_ATTACHMENT_LOAD_OP_DONT_CARE,
+                .stencilStoreOp=VK_ATTACHMENT_STORE_OP_DONT_CARE,
+                .initialLayout=VK_IMAGE_LAYOUT_UNDEFINED,
+                .finalLayout=VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL
             }
         },
         .subpassCount=1,
@@ -213,30 +221,62 @@ static void create_test_render_pass(VkFormat swapchain_format,VkSampleCountFlagB
                     }
                 },
                 .pResolveAttachments=NULL,
-                .pDepthStencilAttachment=NULL,
+                .pDepthStencilAttachment=(VkAttachmentReference[1])
+                {
+                    {
+                        .attachment=1,
+                        .layout=VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL,
+                    }
+                },
                 .preserveAttachmentCount=0,
                 .pPreserveAttachments=NULL
             }
         },
-        .dependencyCount=2,
-        .pDependencies=(VkSubpassDependency[2])
+        .dependencyCount=4,
+        .pDependencies=(VkSubpassDependency[4])
         {
+            ///these define dependencies for both depth and swapchain/colour, can probably separate them to be just scope associated w/ colour/depth &c.
+            /// if future attachments aren't used until/after specific subpasses, then will need external dependencies for them as well
+            /// these dependencies don't necessarily mean multiple framebuffer images isnt a valid approach, as they are *sub* resource specific "barriers"
+            ///     ^ so image views from same array will be treated independently?
+            ///     ^ but reusing the exact same image view for every submission should also be handled i believe
+            /// wait... is scope (synchronisation) general or is it constrained to resources wo which it is applied??? - think so, yes
             {
                 .srcSubpass=VK_SUBPASS_EXTERNAL,
                 .dstSubpass=0,
-                .srcStageMask=VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT,///must be the same as wait stage in submit (the one associated w/ the relevant semaphore)
+                ///not sure on specific dependencies related to swapchain images being read/written by presentation engine
+                .srcStageMask=VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT,
                 .dstStageMask=VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT,
-                .srcAccessMask=0,
-                .dstAccessMask=VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT,
+                .srcAccessMask=VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT | VK_ACCESS_COLOR_ATTACHMENT_READ_BIT,
+                .dstAccessMask=VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT | VK_ACCESS_COLOR_ATTACHMENT_READ_BIT,
+                .dependencyFlags=VK_DEPENDENCY_BY_REGION_BIT
+            },
+            {
+                .srcSubpass=VK_SUBPASS_EXTERNAL,
+                .dstSubpass=0,
+                .srcStageMask=VK_PIPELINE_STAGE_EARLY_FRAGMENT_TESTS_BIT | VK_PIPELINE_STAGE_LATE_FRAGMENT_TESTS_BIT,
+                .dstStageMask=VK_PIPELINE_STAGE_EARLY_FRAGMENT_TESTS_BIT | VK_PIPELINE_STAGE_LATE_FRAGMENT_TESTS_BIT,
+                .srcAccessMask=VK_ACCESS_DEPTH_STENCIL_ATTACHMENT_WRITE_BIT | VK_ACCESS_DEPTH_STENCIL_ATTACHMENT_READ_BIT,
+                .dstAccessMask=VK_ACCESS_DEPTH_STENCIL_ATTACHMENT_WRITE_BIT | VK_ACCESS_DEPTH_STENCIL_ATTACHMENT_READ_BIT,
                 .dependencyFlags=VK_DEPENDENCY_BY_REGION_BIT
             },
             {
                 .srcSubpass=0,
                 .dstSubpass=VK_SUBPASS_EXTERNAL,
+                ///not sure on specific dependencies related to swapchain images being read/written by presentation engine
                 .srcStageMask=VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT,
-                .dstStageMask=VK_PIPELINE_STAGE_ALL_COMMANDS_BIT,///dont know which stage in present uses image data so use all
-                .srcAccessMask=VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT,
-                .dstAccessMask=VK_ACCESS_MEMORY_READ_BIT,
+                .dstStageMask=VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT,
+                .srcAccessMask=VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT | VK_ACCESS_COLOR_ATTACHMENT_READ_BIT,
+                .dstAccessMask=VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT | VK_ACCESS_COLOR_ATTACHMENT_READ_BIT,
+                .dependencyFlags=VK_DEPENDENCY_BY_REGION_BIT
+            },
+            {
+                .srcSubpass=0,
+                .dstSubpass=VK_SUBPASS_EXTERNAL,
+                .srcStageMask=VK_PIPELINE_STAGE_EARLY_FRAGMENT_TESTS_BIT | VK_PIPELINE_STAGE_LATE_FRAGMENT_TESTS_BIT,
+                .dstStageMask=VK_PIPELINE_STAGE_EARLY_FRAGMENT_TESTS_BIT | VK_PIPELINE_STAGE_LATE_FRAGMENT_TESTS_BIT,
+                .srcAccessMask=VK_ACCESS_DEPTH_STENCIL_ATTACHMENT_WRITE_BIT | VK_ACCESS_DEPTH_STENCIL_ATTACHMENT_READ_BIT,
+                .dstAccessMask=VK_ACCESS_DEPTH_STENCIL_ATTACHMENT_WRITE_BIT | VK_ACCESS_DEPTH_STENCIL_ATTACHMENT_READ_BIT,
                 .dependencyFlags=VK_DEPENDENCY_BY_REGION_BIT
             }
         }
@@ -253,7 +293,11 @@ static void create_test_pipelines(VkRect2D screen_rectangle,VkSampleCountFlagBit
         .pNext=NULL,
         .flags=0,
         .stageCount=2,
-        .pStages=test_stages,///could be null then provided by each actual pipeline type (for sets of pipelines only variant based on shader)
+        .pStages=(VkPipelineShaderStageCreateInfo[2])
+        {
+            test_vertex_stage,
+            test_fragment_stage
+        },///could be null then provided by each actual pipeline type (for sets of pipelines only variant based on shader)
         .pVertexInputState=(VkPipelineVertexInputStateCreateInfo[1])
         {
             {
@@ -358,10 +402,10 @@ static void create_test_pipelines(VkRect2D screen_rectangle,VkSampleCountFlagBit
                 .sType=VK_STRUCTURE_TYPE_PIPELINE_DEPTH_STENCIL_STATE_CREATE_INFO,
                 .pNext=NULL,
                 .flags=0,
-                .depthTestEnable=VK_FALSE,
-                .depthWriteEnable=VK_FALSE,
+                .depthTestEnable=VK_TRUE,
+                .depthWriteEnable=VK_TRUE,
                 .depthCompareOp=VK_COMPARE_OP_GREATER,
-                .depthBoundsTestEnable=VK_TRUE,
+                .depthBoundsTestEnable=VK_FALSE,
                 .stencilTestEnable=VK_FALSE,
                 .front=(VkStencilOpState)
                 {
@@ -435,20 +479,21 @@ static void create_test_framebuffers(VkRect2D screen_rectangle,uint32_t swapchai
         .pNext=NULL,
         .flags=0,
         .renderPass=test_render_pass,
-        .attachmentCount=1,
+        .attachmentCount=2,
         .pAttachments=attachments,
         .width=screen_rectangle.extent.width,
         .height=screen_rectangle.extent.height,
         .layers=1
     };
 
-    for(i=0;i<2;i++)
+    for(i=0;i<TEST_FRAMEBUFFER_CYCLES;i++)
     {
         test_framebuffers[i]=malloc(swapchain_image_count*sizeof(VkFramebuffer));
 
         for(j=0;j<swapchain_image_count;j++)
         {
             attachments[0]=cvm_vk_get_swapchain_image_view(j);
+            attachments[1]=test_framebuffer_depth_views[i];
 
             cvm_vk_create_framebuffer(test_framebuffers[i]+j,&create_info);
         }
@@ -513,7 +558,7 @@ static void create_test_vertex_buffer(void)
 /// unless we allocate at max and alter with image views... investigate potential of this, use max size, let user set max_size from startup options?
 static void create_test_framebuffer_images(VkRect2D screen_rect,VkSampleCountFlagBits sample_count)
 {
-    uint32_t i,j;
+    uint32_t i;
 
     VkImageCreateInfo image_creation_info=(VkImageCreateInfo)
     {
@@ -529,7 +574,7 @@ static void create_test_framebuffer_images(VkRect2D screen_rect,VkSampleCountFla
             .depth=1
         },
         .mipLevels=1,
-        .arrayLayers=2,///one for each level
+        .arrayLayers=TEST_FRAMEBUFFER_CYCLES,///one for each level
         .samples=sample_count,
         .tiling=VK_IMAGE_TILING_OPTIMAL,
         .usage=0,///set later
@@ -568,35 +613,30 @@ static void create_test_framebuffer_images(VkRect2D screen_rect,VkSampleCountFla
 
     image_creation_info.format=VK_FORMAT_D32_SFLOAT_S8_UINT;
     image_creation_info.usage=VK_IMAGE_USAGE_DEPTH_STENCIL_ATTACHMENT_BIT;
-    cvm_vk_create_image(&test_framebuffer_images[TEST_FRAMEBUFFER_DEPTH],&image_creation_info);
+    cvm_vk_create_image(&test_framebuffer_depth,&image_creation_info);
 
     image_creation_info.format=VK_FORMAT_A2R10G10B10_UNORM_PACK32;
     image_creation_info.usage=VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT;
-    cvm_vk_create_image(&test_framebuffer_images[TEST_FRAMEBUFFER_RESULT],&image_creation_info);
+    cvm_vk_create_image(&test_framebuffer_colour,&image_creation_info);
 
-    cvm_vk_create_and_bind_memory_for_images(&test_framebuffer_image_memory,test_framebuffer_images+TEST_FRAMEBUFFER_DEPTH,2);
-
-
-
-
-    view_creation_info.format=VK_FORMAT_D32_SFLOAT_S8_UINT;
-    view_creation_info.subresourceRange.aspectMask=VK_IMAGE_ASPECT_DEPTH_BIT|VK_IMAGE_ASPECT_STENCIL_BIT;
-    view_creation_info.image=test_framebuffer_images[TEST_FRAMEBUFFER_DEPTH];
-    view_creation_info.subresourceRange.baseArrayLayer=0;
-    cvm_vk_create_image_view(&test_framebuffer_image_views[0][TEST_FRAMEBUFFER_DEPTH],&view_creation_info);
-    view_creation_info.subresourceRange.baseArrayLayer=1;
-    cvm_vk_create_image_view(&test_framebuffer_image_views[1][TEST_FRAMEBUFFER_DEPTH],&view_creation_info);
+    VkImage images[TEST_FRAMEBUFFER_CYCLES]={test_framebuffer_depth,test_framebuffer_colour};
+    cvm_vk_create_and_bind_memory_for_images(&test_framebuffer_image_memory,images,TEST_FRAMEBUFFER_CYCLES);
 
 
-    view_creation_info.format=VK_FORMAT_A2R10G10B10_UNORM_PACK32;
-    view_creation_info.subresourceRange.aspectMask=VK_IMAGE_ASPECT_COLOR_BIT;
-    view_creation_info.image=test_framebuffer_images[TEST_FRAMEBUFFER_RESULT];
-    view_creation_info.subresourceRange.baseArrayLayer=0;
-    cvm_vk_create_image_view(&test_framebuffer_image_views[0][TEST_FRAMEBUFFER_RESULT],&view_creation_info);
-    view_creation_info.subresourceRange.baseArrayLayer=1;
-    cvm_vk_create_image_view(&test_framebuffer_image_views[1][TEST_FRAMEBUFFER_RESULT],&view_creation_info);
+    for(i=0;i<TEST_FRAMEBUFFER_CYCLES;i++)
+    {
+        view_creation_info.format=VK_FORMAT_D32_SFLOAT_S8_UINT;
+        view_creation_info.subresourceRange.aspectMask=VK_IMAGE_ASPECT_DEPTH_BIT|VK_IMAGE_ASPECT_STENCIL_BIT;
+        view_creation_info.image=test_framebuffer_depth;
+        view_creation_info.subresourceRange.baseArrayLayer=i;
+        cvm_vk_create_image_view(test_framebuffer_depth_views+i,&view_creation_info);
 
-
+        view_creation_info.format=VK_FORMAT_A2R10G10B10_UNORM_PACK32;
+        view_creation_info.subresourceRange.aspectMask=VK_IMAGE_ASPECT_COLOR_BIT;
+        view_creation_info.image=test_framebuffer_colour;
+        view_creation_info.subresourceRange.baseArrayLayer=i;
+        cvm_vk_create_image_view(test_framebuffer_colour_views+i,&view_creation_info);
+    }
 
 
     ///  | VK_IMAGE_USAGE_SAMPLED_BIT | VK_IMAGE_USAGE_INPUT_ATTACHMENT_BIT
@@ -626,8 +666,8 @@ void initialise_test_render_data()
 
     create_test_pipeline_layouts();
 
-    cvm_vk_create_shader_stage_info(test_stages+0,"shaders/test_vert.spv",VK_SHADER_STAGE_VERTEX_BIT);
-    cvm_vk_create_shader_stage_info(test_stages+1,"shaders/test_frag.spv",VK_SHADER_STAGE_FRAGMENT_BIT);
+    cvm_vk_create_shader_stage_info(&test_vertex_stage,"cvm_shared/shaders/test_vert.spv",VK_SHADER_STAGE_VERTEX_BIT);
+    cvm_vk_create_shader_stage_info(&test_fragment_stage,"cvm_shared/shaders/test_frag.spv",VK_SHADER_STAGE_FRAGMENT_BIT);
 
     cvm_vk_create_module_data(&test_module_data,false);
 
@@ -642,8 +682,8 @@ void terminate_test_render_data()
 {
     cvm_vk_destroy_render_pass(test_render_pass);
 
-    cvm_vk_destroy_shader_stage_info(test_stages+0);
-    cvm_vk_destroy_shader_stage_info(test_stages+1);
+    cvm_vk_destroy_shader_stage_info(&test_vertex_stage);
+    cvm_vk_destroy_shader_stage_info(&test_fragment_stage);
 
     cvm_vk_destroy_pipeline_layout(test_pipeline_layout);
 
@@ -682,28 +722,27 @@ void initialise_test_swapchain_dependencies(void)
 void terminate_test_swapchain_dependencies()
 {
     uint32_t swapchain_image_count=cvm_vk_get_swapchain_image_count();
-    uint32_t i;
+    uint32_t i,j;
 
     cvm_vk_destroy_pipeline(test_pipeline);
 
     for(i=0;i<swapchain_image_count;i++)
     {
-        cvm_vk_destroy_framebuffer(test_framebuffers[0][i]);
-        cvm_vk_destroy_framebuffer(test_framebuffers[1][i]);
+        for(j=0;j<TEST_FRAMEBUFFER_CYCLES;j++) cvm_vk_destroy_framebuffer(test_framebuffers[j][i]);
+
         cvm_vk_relinquish_ring_buffer_space(&test_uniform_buffer,test_ring_buffer_acquisitions+i);
     }
 
-    for(i=0;i<2;i++)
+    for(i=0;i<TEST_FRAMEBUFFER_CYCLES;i++)
     {
-        cvm_vk_destroy_image_view(test_framebuffer_image_views[i][TEST_FRAMEBUFFER_DEPTH]);
-        cvm_vk_destroy_image_view(test_framebuffer_image_views[i][TEST_FRAMEBUFFER_RESULT]);
+        cvm_vk_destroy_image_view(test_framebuffer_depth_views[i]);
+        cvm_vk_destroy_image_view(test_framebuffer_colour_views[i]);
     }
 
-    cvm_vk_destroy_image(test_framebuffer_images[TEST_FRAMEBUFFER_DEPTH]);
-    cvm_vk_destroy_image(test_framebuffer_images[TEST_FRAMEBUFFER_RESULT]);
+    cvm_vk_destroy_image(test_framebuffer_depth);
+    cvm_vk_destroy_image(test_framebuffer_colour);
 
     cvm_vk_free_memory(test_framebuffer_image_memory);
-
 
     cvm_vk_destroy_descriptor_pool(test_descriptor_pool);
 
@@ -712,17 +751,6 @@ void terminate_test_swapchain_dependencies()
     free(test_framebuffers[1]);
     free(test_ring_buffer_acquisitions);
 }
-
-VkPipeline get_test_pipeline(void)
-{
-    return test_pipeline;
-}
-
-VkFramebuffer get_test_framebuffer(uint32_t swapchain_image_index)
-{
-    return test_framebuffers[0][swapchain_image_index];
-}
-
 
 cvm_vk_module_graphics_block * test_render_frame(camera * c)
 {
@@ -740,7 +768,12 @@ cvm_vk_module_graphics_block * test_render_frame(camera * c)
     command_buffer = cvm_vk_begin_module_graphics_block(&test_module_data,0,&swapchain_image_index);
 
 
-    ///float multipliers[4];
+
+    /// definitely want to clean up targets &c.
+    /// "resultant" (swapchain) attachment goes at end
+    /// actually loop framebuffers, look into benefit
+    /// define state that varies between attachments in base, referenceable struct that can be shared across functions and invocations (inc. clear values?)
+    /// dont bother storing framebuffer images/data in enumed array, store individually
 
 
     if(command_buffer!=VK_NULL_HANDLE)
@@ -771,8 +804,9 @@ cvm_vk_module_graphics_block * test_render_frame(camera * c)
         vkCmdBindDescriptorSets(command_buffer,VK_PIPELINE_BIND_POINT_GRAPHICS,test_pipeline_layout,0,1,test_descriptor_sets+swapchain_image_index,0,NULL);
 
         ///do graphics
-        VkClearValue clear_value;///other clear colours should probably be provided by other chunks of application
-        clear_value.color=(VkClearColorValue){{0.95f,0.5f,0.75f,1.0f}};
+        VkClearValue clear_values[2];///other clear colours should probably be provided by other chunks of application
+        clear_values[0].color=(VkClearColorValue){{0.95f,0.5f,0.75f,1.0f}};
+        clear_values[1].depthStencil=(VkClearDepthStencilValue){.depth=0.0,.stencil=0};
 
         VkRenderPassBeginInfo render_pass_begin_info=(VkRenderPassBeginInfo)
         {
@@ -781,8 +815,8 @@ cvm_vk_module_graphics_block * test_render_frame(camera * c)
             .renderPass=test_render_pass,
             .framebuffer=test_framebuffers[0][swapchain_image_index],
             .renderArea=cvm_vk_get_screen_rectangle(),
-            .clearValueCount=1,
-            .pClearValues= &clear_value
+            .clearValueCount=2,
+            .pClearValues=clear_values
         };
 
         vkCmdBeginRenderPass(command_buffer,&render_pass_begin_info,VK_SUBPASS_CONTENTS_INLINE);///================

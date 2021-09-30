@@ -42,11 +42,6 @@ void terminate_test_render_data(void);
 void initialise_test_swapchain_dependencies(void);
 void terminate_test_swapchain_dependencies(void);
 
-///remove these (should only be accessible internally)
-VkPipeline get_test_pipeline(void);
-VkFramebuffer get_test_framebuffer(uint32_t swapchain_image_index);
-
-
 cvm_vk_module_graphics_block * test_render_frame(camera * c);
 void test_frame_cleanup(uint32_t swapchain_image_index);
 

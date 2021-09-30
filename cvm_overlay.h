@@ -108,6 +108,14 @@ typedef struct overlay_render_data
 }
 overlay_render_data;
 
+typedef struct overlay_render_data_
+{
+    uint16_t data1[4];
+    uint16_t data2[4];
+    uint16_t data3[4];
+}
+overlay_render_data_;
+
 typedef struct overlay_data
 {
     overlay_render_data * data;
@@ -268,6 +276,17 @@ overlay_element_type;
 void initialise_overlay(gl_functions * glf);
 void render_overlay(gl_functions * glf,overlay_data * od,overlay_theme * theme,int screen_w,int screen_h,vec4f * overlay_colours);
 
+
+
+void initialise_overlay_render_data(void);
+void terminate_overlay_render_data(void);
+
+void initialise_overlay_swapchain_dependencies(void);
+void terminate_overlay_swapchain_dependencies(void);
+
+cvm_vk_module_graphics_block * overlay_render_frame(int screen_w,int screen_h);
+
+void overlay_frame_cleanup(uint32_t swapchain_image_index);
 
 
 void initialise_overlay_data(overlay_data * od);///make malloced pointer instead

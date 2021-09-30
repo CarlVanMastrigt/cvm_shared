@@ -31,8 +31,6 @@ void change_camera_zenith_angle(float delta,camera * c)
     c->zenith_angle+=delta;
     if(c->zenith_angle>PI)c->zenith_angle=PI;
     if(c->zenith_angle<0.0)c->zenith_angle=0.0;
-//    if(c->zenith_angle>PI)c->zenith_angle=PI;
-//    if(c->zenith_angle<0.0)c->zenith_angle=0.0;
 }
 
 void change_camera_zoom(int delta,camera * c)
