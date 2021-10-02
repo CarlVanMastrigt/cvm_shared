@@ -42,6 +42,7 @@ static VkPipelineShaderStageCreateInfo test_vertex_stage;
 static VkPipelineShaderStageCreateInfo test_fragment_stage;
 
 static VkFramebuffer * test_framebuffers[TEST_FRAMEBUFFER_CYCLES];
+static uint32_t test_current_framebuffer_index;
 
 static VkDeviceMemory test_framebuffer_image_memory;
 
@@ -473,6 +474,8 @@ static void create_test_framebuffers(VkRect2D screen_rectangle,uint32_t swapchai
     uint32_t i,j;
     VkImageView attachments[2];
 
+    test_current_framebuffer_index=0;
+
     VkFramebufferCreateInfo create_info=(VkFramebufferCreateInfo)
     {
         .sType=VK_STRUCTURE_TYPE_FRAMEBUFFER_CREATE_INFO,
@@ -619,8 +622,8 @@ static void create_test_framebuffer_images(VkRect2D screen_rect,VkSampleCountFla
     image_creation_info.usage=VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT;
     cvm_vk_create_image(&test_framebuffer_colour,&image_creation_info);
 
-    VkImage images[TEST_FRAMEBUFFER_CYCLES]={test_framebuffer_depth,test_framebuffer_colour};
-    cvm_vk_create_and_bind_memory_for_images(&test_framebuffer_image_memory,images,TEST_FRAMEBUFFER_CYCLES);
+    VkImage images[2]={test_framebuffer_depth,test_framebuffer_colour};
+    cvm_vk_create_and_bind_memory_for_images(&test_framebuffer_image_memory,images,2);
 
 
     for(i=0;i<TEST_FRAMEBUFFER_CYCLES;i++)
@@ -747,8 +750,7 @@ void terminate_test_swapchain_dependencies()
     cvm_vk_destroy_descriptor_pool(test_descriptor_pool);
 
     free(test_descriptor_sets);
-    free(test_framebuffers[0]);
-    free(test_framebuffers[1]);
+    for(i=0;i<TEST_FRAMEBUFFER_CYCLES;i++)free(test_framebuffers[i]);
     free(test_ring_buffer_acquisitions);
 }
 
@@ -813,7 +815,7 @@ cvm_vk_module_graphics_block * test_render_frame(camera * c)
             .sType=VK_STRUCTURE_TYPE_RENDER_PASS_BEGIN_INFO,
             .pNext=NULL,
             .renderPass=test_render_pass,
-            .framebuffer=test_framebuffers[0][swapchain_image_index],
+            .framebuffer=test_framebuffers[test_current_framebuffer_index][swapchain_image_index],
             .renderArea=cvm_vk_get_screen_rectangle(),
             .clearValueCount=2,
             .pClearValues=clear_values
@@ -837,6 +839,8 @@ cvm_vk_module_graphics_block * test_render_frame(camera * c)
 
 
         test_ring_buffer_acquisitions[swapchain_image_index]=cvm_vk_end_ring_buffer(&test_uniform_buffer);
+
+        test_current_framebuffer_index*= ++test_current_framebuffer_index<TEST_FRAMEBUFFER_CYCLES;
     }
 
     return cvm_vk_end_module_graphics_block(&test_module_data);
