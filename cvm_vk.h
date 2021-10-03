@@ -270,7 +270,7 @@ cvm_vk_module_graphics_block * cvm_vk_end_module_graphics_block(cvm_vk_module_da
 
 
 #include "cvm_vk_memory.h"
-
+#include "cvm_vk_image.h"
 
 
 

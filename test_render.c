@@ -674,7 +674,7 @@ void initialise_test_render_data()
 
     cvm_vk_create_module_data(&test_module_data,false);
 
-    cvm_vk_create_managed_buffer(&test_buffer,65536,10,16,64,VK_BUFFER_USAGE_VERTEX_BUFFER_BIT|VK_BUFFER_USAGE_INDEX_BUFFER_BIT,false,true);
+    cvm_vk_create_managed_buffer(&test_buffer,65536,10,16,VK_BUFFER_USAGE_VERTEX_BUFFER_BIT|VK_BUFFER_USAGE_INDEX_BUFFER_BIT,false,true);
 
     cvm_vk_create_ring_buffer(&test_uniform_buffer,VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT,1024);
 

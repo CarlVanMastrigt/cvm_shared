@@ -31,7 +31,7 @@ along with cvm_shared.  If not, see <https://www.gnu.org/licenses/>.
 
 
 
-void cvm_vk_create_managed_buffer(cvm_vk_managed_buffer * mb,uint32_t buffer_size,uint32_t min_size_factor,uint32_t max_size_factor,uint32_t reserved_allocation_count,VkBufferUsageFlags usage,bool multithreaded,bool host_visible)
+void cvm_vk_create_managed_buffer(cvm_vk_managed_buffer * mb,uint32_t buffer_size,uint32_t min_size_factor,uint32_t max_size_factor,VkBufferUsageFlags usage,bool multithreaded,bool host_visible)
 {
     uint32_t i;
     buffer_size=(((buffer_size-1) >> min_size_factor)+1) << min_size_factor;///round to multiple (complier warns about what i want as needing braces, lol)
@@ -39,10 +39,10 @@ void cvm_vk_create_managed_buffer(cvm_vk_managed_buffer * mb,uint32_t buffer_siz
     mb->static_offset=buffer_size;
     mb->dynamic_offset=0;
 
-    cvm_vk_dynamic_buffer_allocation * dynamic_allocations=malloc(sizeof(cvm_vk_dynamic_buffer_allocation)*reserved_allocation_count);
+    cvm_vk_dynamic_buffer_allocation * dynamic_allocations=malloc(CVM_VK_RESERVED_DYNAMIC_BUFFER_ALLOCATION_COUNT*sizeof(cvm_vk_dynamic_buffer_allocation));
 
     cvm_vk_dynamic_buffer_allocation * next=NULL;
-    i=reserved_allocation_count;
+    i=CVM_VK_RESERVED_DYNAMIC_BUFFER_ALLOCATION_COUNT;
     while(i--)
     {
         dynamic_allocations[i].next=next;
@@ -51,16 +51,15 @@ void cvm_vk_create_managed_buffer(cvm_vk_managed_buffer * mb,uint32_t buffer_siz
     }
 
     mb->first_unused_allocation=dynamic_allocations;///put all allocations in linked list of unused allocations
-    mb->unused_allocation_count=reserved_allocation_count;
-    mb->reserved_allocation_count=reserved_allocation_count;
+    mb->unused_allocation_count=CVM_VK_RESERVED_DYNAMIC_BUFFER_ALLOCATION_COUNT;
     mb->last_used_allocation=NULL;///rightmost doesn't exist as it hasn't been allocated
 
 
     mb->num_dynamic_allocation_sizes=max_size_factor-min_size_factor;
-    mb->available_dynamic_allocations=malloc(sizeof(cvm_vk_availablility_heap)*mb->num_dynamic_allocation_sizes);
+    mb->available_dynamic_allocations=malloc(mb->num_dynamic_allocation_sizes*sizeof(cvm_vk_available_dynamic_allocation_heap));
     for(i=0;i<mb->num_dynamic_allocation_sizes;i++)
     {
-        mb->available_dynamic_allocations[i].heap=malloc(sizeof(cvm_vk_dynamic_buffer_allocation*)*16);
+        mb->available_dynamic_allocations[i].heap=malloc(16*sizeof(cvm_vk_dynamic_buffer_allocation*));
         mb->available_dynamic_allocations[i].space=16;
         mb->available_dynamic_allocations[i].count=0;
     }
@@ -78,7 +77,7 @@ void cvm_vk_destroy_managed_buffer(cvm_vk_managed_buffer * mb)
 {
     cvm_vk_destroy_buffer(mb->buffer,mb->memory,mb->mapping);
     uint32_t i;
-    cvm_vk_dynamic_buffer_allocation *f,*l,*current,*next;
+    cvm_vk_dynamic_buffer_allocation *first,*last,*current,*next;
 
     for(i=0;i<mb->num_dynamic_allocation_sizes;i++)free(mb->available_dynamic_allocations[i].heap);
     free(mb->available_dynamic_allocations);
@@ -92,54 +91,24 @@ void cvm_vk_destroy_managed_buffer(cvm_vk_managed_buffer * mb)
     }
 
 
-    f=l=NULL;
+    first=last=NULL;
     ///get all base allocations in their own linked list, discarding all others
     for(current=mb->first_unused_allocation;current;current=next)
     {
         next=current->next;
         if(current->is_base)
         {
-            if(l) l=l->next=current;
-            else f=l=current;
+            if(last) last=last->next=current;
+            else first=last=current;
         }
     }
-    l->next=NULL;
+    last->next=NULL;
 
-    for(current=f;current;current=next)
+    for(current=first;current;current=next)
     {
         next=current->next;
         free(current);///free all base allocations (to mathch appropriate allocs)
     }
-}
-
-void cvm_vk_update_managed_buffer_reservations(cvm_vk_managed_buffer * mb)
-{
-    uint32_t i;
-    uint_fast32_t lock;
-    cvm_vk_dynamic_buffer_allocation *next,*dynamic_allocations;
-
-    if(mb->multithreaded)do lock=atomic_load(&mb->spinlock);
-    while(lock!=0 || !atomic_compare_exchange_weak(&mb->spinlock,&lock,1));
-    ///probably want to call this in critical section anyway but w/e
-
-    if(mb->unused_allocation_count<mb->reserved_allocation_count)
-    {
-        dynamic_allocations=malloc(sizeof(cvm_vk_dynamic_buffer_allocation)*mb->reserved_allocation_count);
-
-        next=mb->first_unused_allocation;
-        i=mb->reserved_allocation_count;
-        while(i--)
-        {
-            dynamic_allocations[i].next=next;
-            dynamic_allocations[i].is_base=!i;
-            next=dynamic_allocations+i;
-        }
-
-        mb->first_unused_allocation=dynamic_allocations;
-        mb->unused_allocation_count+=mb->reserved_allocation_count;
-    }
-
-    if(mb->multithreaded) atomic_store(&mb->spinlock,0);
 }
 
 cvm_vk_dynamic_buffer_allocation * cvm_vk_acquire_dynamic_buffer_allocation(cvm_vk_managed_buffer * mb,uint64_t size)
@@ -162,8 +131,19 @@ cvm_vk_dynamic_buffer_allocation * cvm_vk_acquire_dynamic_buffer_allocation(cvm_
     /// okay, seeing as this function must be as fast and light as possible, we should track unused allocation count to determine if there are enough unused allocations left (with allowance for inaccuracy)
     if(mb->unused_allocation_count < mb->num_dynamic_allocation_sizes)
     {
-        atomic_store(&mb->spinlock,0);
-        return NULL;///there might not be enough unused allocations, early exit with failure (this should VERY rarely, if ever happen)
+        p=malloc(CVM_VK_RESERVED_DYNAMIC_BUFFER_ALLOCATION_COUNT*sizeof(cvm_vk_dynamic_buffer_allocation));
+
+        n=mb->first_unused_allocation;
+        i=CVM_VK_RESERVED_DYNAMIC_BUFFER_ALLOCATION_COUNT;
+        while(i--)
+        {
+            p[i].next=n;
+            p[i].is_base=!i;
+            n=p+i;
+        }
+
+        mb->first_unused_allocation=p;
+        mb->unused_allocation_count+=CVM_VK_RESERVED_DYNAMIC_BUFFER_ALLOCATION_COUNT;
     }
     ///above ensures there will be enough unused allocations for any case below (is overly conservative. but is a quick, rarely failing test)
 
@@ -235,7 +215,11 @@ cvm_vk_dynamic_buffer_allocation * cvm_vk_acquire_dynamic_buffer_allocation(cvm_
 
         m=(1<<size_factor)-1;
 
-        if( ((uint64_t)((((o+m)>>size_factor)<<size_factor) + (1<<size_factor))) << mb->base_dynamic_allocation_size_factor > mb->static_offset) return NULL;///not enough memory left
+        if( ((uint64_t)((((o+m)>>size_factor)<<size_factor) + (1<<size_factor))) << mb->base_dynamic_allocation_size_factor > mb->static_offset)
+        {
+            if(mb->multithreaded) atomic_store(&mb->spinlock,0);
+            return NULL;///not enough memory left
+        }
         /// ^ extra brackets to make compiler shut up :sob:
 
         p=mb->last_used_allocation;
@@ -434,7 +418,7 @@ uint64_t cvm_vk_acquire_static_buffer_allocation(cvm_vk_managed_buffer * mb,uint
     uint64_t s,e;
     uint_fast32_t lock;
 
-    size=((size+(alignment-1))& ~(alignment-1));///round up size t multiple of alignment (not strictly necessary but w/e)
+    size=((size+(alignment-1))& ~(alignment-1));///round up size t multiple of alignment (not strictly necessary but w/e), assumes alignment is power of 2, should really check this is the case before using
 
     if(mb->multithreaded)do lock=atomic_load(&mb->spinlock);
     while(lock!=0 || !atomic_compare_exchange_weak(&mb->spinlock,&lock,1));
@@ -507,27 +491,6 @@ void cvm_vk_flush_managed_buffer(cvm_vk_managed_buffer * mb)
 
 
 
-
-
-
-
-
-
-/**
-
-FUUUUUUCK
-
-I have assumed that space allocated, i.e. frames allocated and freed happen in a distinct order, i.e. that swapchain images are always acquired and relinquished in the same order
-
-this is NOT necessarily the case and will require a smarter solution to address, will need to acquire and release blocks at a time, and a "ring" buffer as a concept may end up getting blocked at any point in execution
-
-simple solution is to have a buffer (sharing memory allocation ofc.) for each swapchain image
-
-alternate solution is to queue up and relinquish memory upon completion fence being reached rather than relinquishing upon reacquisition
-
-    ^ submodule cleanup function? pass prev/finished swapchain image back to submodule?
-
-*/
 
 
 

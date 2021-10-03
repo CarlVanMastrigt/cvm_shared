@@ -25,6 +25,8 @@ along with cvm_shared.  If not, see <https://www.gnu.org/licenses/>.
 #ifndef CVM_VK_MEMORY_H
 #define CVM_VK_MEMORY_H
 
+#define CVM_VK_RESERVED_DYNAMIC_BUFFER_ALLOCATION_COUNT 256
+
 
 
 /// consider making sized types that represent offsets VkDeviceSize ?? (but then cannot make assumptions about their size...)
@@ -62,13 +64,13 @@ struct cvm_vk_dynamic_buffer_allocation/// (dont ref this by pointer, only store
 };
 
 ///need to ensure heap ALWAYS has enough space for this test,create heap with max number of allocations! (2^16)
-typedef struct cvm_vk_availablility_heap
+typedef struct cvm_vk_available_dynamic_allocation_heap
 {
     cvm_vk_dynamic_buffer_allocation ** heap;///potentially worth testing the effect of storing in a struct with the pointer to the allocation (avoids double indirection in about half of cases)
     uint32_t space;
     uint32_t count;
 }
-cvm_vk_availablility_heap;
+cvm_vk_available_dynamic_allocation_heap;
 
 typedef struct cvm_vk_managed_buffer
 {
@@ -85,14 +87,13 @@ typedef struct cvm_vk_managed_buffer
     bool multithreaded;
     atomic_uint_fast32_t spinlock;
 
-    uint32_t reserved_allocation_count;/// max allocations expected to be made per frame (amount to expand by when reallocing?)
     cvm_vk_dynamic_buffer_allocation * first_unused_allocation;///singly linked list of allocations to assign space to
     uint32_t unused_allocation_count;
 
     cvm_vk_dynamic_buffer_allocation * last_used_allocation;///used for setting left/right of new allocations
 
     ///consider making following fixed array with max size of ~24 (whole struct should fit on 2-3 cache lines)
-    cvm_vk_availablility_heap * available_dynamic_allocations;
+    cvm_vk_available_dynamic_allocation_heap * available_dynamic_allocations;
     ///intelligent application of last pointer to linked list creation isn't applicable, cannot reference/dereference bitfield!
     uint32_t num_dynamic_allocation_sizes;///essentially max value of dynamic_buffer_allocation.size_factor derived from the exponent of max_allocation_size/base_allocation_size
     uint32_t available_dynamic_allocation_bitmask;
@@ -102,23 +103,8 @@ typedef struct cvm_vk_managed_buffer
 }
 cvm_vk_managed_buffer;
 
-///wait, number of dynamic_buffer_allocation can be realloced in critical section, right...?
-/// also having a threshold of required available dynamic_buffer_allocation is reasonable as staging buffer limits new contents anyway
-
-/// may want to register all modules memory together (before creating allocation/buffers) so that they can share a memory allocation
-
-/// may be possible to have multiple allocations/buffers for enabling expanding memory, would be a good use of leftover bits in cvm_vk_dynamic_buffer_index (and is also possible in cvm_vk_static_buffer_offset)
-///     ^ can have bitmask of available allocation sizes in managed binary tree across all allocations
-///     ^ though tbh this whole idea is definitely overkill, and still needs a way to manage failure case of system running out of memory... (do as advanced version?) (current imp. will likely be quicker)
-
-
-///instead could allocate from power of 2 sections, storing neighbouring blocks when difference from power of 2 warrants it, and using start-end alignment to allow replacing paired block of mem
-/// would still allocate from power of 2 sections and free them in similar way...
-
-void cvm_vk_create_managed_buffer(cvm_vk_managed_buffer * buffer,uint32_t buffer_size,uint32_t min_size_factor,uint32_t max_size_factor,uint32_t reserved_allocation_count,VkBufferUsageFlags usage,bool multithreaded,bool host_visible);
+void cvm_vk_create_managed_buffer(cvm_vk_managed_buffer * buffer,uint32_t buffer_size,uint32_t min_size_factor,uint32_t max_size_factor,VkBufferUsageFlags usage,bool multithreaded,bool host_visible);
 void cvm_vk_destroy_managed_buffer(cvm_vk_managed_buffer * mb);
-
-void cvm_vk_update_managed_buffer_reservations(cvm_vk_managed_buffer * mb);///creates more allocations as necessary
 
 cvm_vk_dynamic_buffer_allocation * cvm_vk_acquire_dynamic_buffer_allocation(cvm_vk_managed_buffer * mb,uint64_t size);
 void cvm_vk_relinquish_dynamic_buffer_allocation(cvm_vk_managed_buffer * mb,cvm_vk_dynamic_buffer_allocation * allocation);
@@ -260,24 +246,12 @@ uint32_t cvm_vk_end_ring_buffer(cvm_vk_ring_buffer * rb);
 
 void * cvm_vk_get_ring_buffer_allocation(cvm_vk_ring_buffer * rb,uint32_t allocation_size,VkDeviceSize * acquired_offset);///alignment_factor should be power of 2
 
-//uint32_t cvm_vk_get_ring_buffer_unmapped_allocation(cvm_vk_ring_buffer * rb,uint32_t allocation_size);
 void cvm_vk_relinquish_ring_buffer_space(cvm_vk_ring_buffer * rb,uint32_t * relinquished_space);
-///used to pre allocate space for required uniform buffers in case buffer gets completely filled by upload requests on first run
-///     better approach to need for above may be to have separate buffers for uniform, instance and upload,
-///         but combing ANY with uniform can make above necessary (unless uniform alloc returning null is handled or buffers allocated as necessary when running out of mem)
-
-
-/// uniforms are allocated every frame and reserved at start, so can safely assume that the space they need will be refunded (from old_offset havving to have contained space for uniforms)
-/// but still need a way to handle out of memory such that we can
-
-///because uniforms are consistent across frames in my paradigm it may be worth them having buffer (to avoid need to update them)
-
-
-
-///need texture management system(s)
-
 
 /// function to copy from ring buffer to both managed buffer and texture/image here??
+
+
+///ring buffer paradigm works well for upload/staging buffer but not as well for uploading rendering data (instance and uniform) may want separate design with fixed maximum sizes?
 
 
 
