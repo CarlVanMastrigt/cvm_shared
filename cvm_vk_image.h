@@ -29,9 +29,9 @@ along with cvm_shared.  If not, see <https://www.gnu.org/licenses/>.
 #define CVM_VK_BASE_TILE_SIZE_FACTOR 2
 #define CVM_VK_RESERVED_IMAGE_ATLAS_TILE_COUNT 256
 
-#define CVM_VK_GET_IMAGE_ATLAS_POS_X(O) (O>>16)
-#define CVM_VK_GET_IMAGE_ATLAS_POS_Y(O) (O&0x0000FFFF)
-#define CVM_VK_SET_IMAGE_ATLAS_POS(X,Y) (X<<16|Y&0x0000FFFF)
+//#define CVM_VK_GET_IMAGE_ATLAS_POS_X(O) (O>>16)
+//#define CVM_VK_GET_IMAGE_ATLAS_POS_Y(O) (O&0x0000FFFF)
+//#define CVM_VK_SET_IMAGE_ATLAS_POS(X,Y) (X<<16|Y&0x0000FFFF)
 
 ///probably want to use a base tile size of 4 by default? yeah, i think i should use this
 

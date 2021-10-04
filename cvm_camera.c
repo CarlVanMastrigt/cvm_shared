@@ -65,25 +65,11 @@ void update_camera(int screen_w,int screen_h,camera * c)
     float ca,sa,ar,tan_half_fov;
     vec3f ftr,ftl,fbr,fbl;
 
-    ///make zoom integer and calculate focal w/ log/power scale?
-    ///changes to angles here represent difference is spherical coordinate system and camera coordinate system
-    //c->position=v3f_from_spherical(c->focal_distance,c->zenith_angle,c->azimuthal_angle-0.5*PI);
     float focal_distance=c->min_focal_distance*expf((logf(c->max_focal_distance) - logf(c->min_focal_distance))*((float)c->current_zoom_step)/((float)c->max_zoom_step));
     c->position.x=-focal_distance*sinf(c->azimuthal_angle)*sinf(c->zenith_angle);
     c->position.y=-focal_distance*cosf(c->azimuthal_angle)*sinf(c->zenith_angle);
     c->position.z=-focal_distance*cosf(c->zenith_angle);
 
-    /// this doesnt work b/c basis of rotation (no rotation) assumes camera oriented along x axis, whereas its actually along y
-
-    ///INSTEAD: switch to system of camera orientation values representing actual camera rotations in world space! (complicated but tangible concept)
-
-    ///looking up from below needs to be default (unrotated) camera position/location/direction
-
-    #warning above is likely wrong! or at least needs revision
-    //c->position=v3f_from_spherical(c->focal_distance,c->zenith_angle,c->azimuthal_angle);
-
-    //printf("cartesian: %f %f %f\n",c->position.x,c->position.y,c->position.z);
-    //printf("spherical: %f %f %f\n\n",-focal_distance,c->zenith_angle,c->azimuthal_angle);
 
     c->position_buffer[0]=c->position.x;
     c->position_buffer[1]=c->position.y;

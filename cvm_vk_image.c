@@ -147,8 +147,8 @@ void cvm_vk_destroy_image_atlas(cvm_vk_image_atlas * ia)
 
 cvm_vk_image_atlas_tile * cvm_vk_acquire_image_atlas_tile(cvm_vk_image_atlas * ia,uint32_t width,uint32_t height)
 {
-    uint32_t size_h,size_v,parent_size_h,parent_size_v,i,j,split_count,c,u,d;
-    cvm_vk_image_atlas_tile *p,*n,*parent;
+    uint32_t size_h,size_v,current_size_h,current_size_v,i,j,split_count,c,u,d,o,o_mid,o_end;///a lot of these could be recycled...
+    cvm_vk_image_atlas_tile *p,*n,*t;
     uint_fast32_t lock;
     cvm_vk_image_atlas_tile ** heap;
 
@@ -177,17 +177,6 @@ cvm_vk_image_atlas_tile * cvm_vk_acquire_image_atlas_tile(cvm_vk_image_atlas * i
         ia->unused_tile_count+=CVM_VK_RESERVED_IMAGE_ATLAS_TILE_COUNT;
     }
 
-    ///figure out which tile size to use, squareize first then give prefernce to either v or h
-    ///as squarising is preferred (?), start by testing anything is available in h/v presently used
-
-    ///bias towards longer tiles vertically as this will support glyphs better
-
-
-
-    //ts_h=s_h;
-    //ts_v=s_v;
-
-    //bool test_h=s_h>s_v;///slight bias towards vertical splits when s_v==s_h
 
     split_count=33;///larger than maximum supported split count (32)
 
@@ -199,8 +188,8 @@ cvm_vk_image_atlas_tile * cvm_vk_acquire_image_atlas_tile(cvm_vk_image_atlas * i
             if(i-size_h + j-size_v < split_count)
             {
                 split_count=i-size_h + j-size_v;
-                parent_size_h=i;
-                parent_size_v=j;
+                current_size_h=i;
+                current_size_v=j;
             }
         }
     }
@@ -212,11 +201,11 @@ cvm_vk_image_atlas_tile * cvm_vk_acquire_image_atlas_tile(cvm_vk_image_atlas * i
     }
 
     ///extract p from heap
-    heap=ia->available_tiles[parent_size_h][parent_size_v].heap;
+    heap=ia->available_tiles[current_size_h][current_size_v].heap;
 
     p=heap[0];
 
-    if((c= --ia->available_tiles[parent_size_h][parent_size_v].count))
+    if((c= --ia->available_tiles[current_size_h][current_size_v].count))
     {
         u=0;
 
@@ -232,61 +221,131 @@ cvm_vk_image_atlas_tile * cvm_vk_acquire_image_atlas_tile(cvm_vk_image_atlas * i
         heap[c]->heap_index=u;
         heap[u]=heap[c];
     }
-    else ia->available_tiles_bitmasks[parent_size_h]&= ~(1<<parent_size_v);
+    else ia->available_tiles_bitmasks[current_size_h]&= ~(1<<current_size_v);///took last tile of this size
 
-    while(parent_size_h>size_h && parent_size_v>size_v)
+
+    while(current_size_h>size_h && current_size_v>size_v)
     {
         n=ia->first_unused_tile;
         ia->first_unused_tile=n->next_h;
         ia->unused_tile_count--;
 
-        n->available=true;
-        n->heap_index=0;///must be no tiles already in heap this tile will be put in (otherwise we'd be splitting that one)
-
-        if(parent_size_h != size_h && (parent_size_v==size_v || parent_size_h>parent_size_v))
+        if(current_size_h != size_h && (current_size_v==size_v || current_size_h>current_size_v))///try to keep tiles square where possible, with slight bia towards longer thinner tiles
         {
             ///split vertically
-            n->size_factor_h= --p->size_factor_h;
+            current_size_h--;
+
+            n->offset=p->offset+(1<<(current_size_h+16));///x offset stored in top 16 bits
+
+            t=n->next_h=p->next_h;
+            n->prev_h=p;
+            p->next_h=n;
+
+            ///adjust adjacency info, traverse all edges finding tiles that should link to n
+
+            ///traverse right edge
+            o=p->offset&0x0000FFFF;///y offset stored in bottom 16 bits
+            o_end=o+(1<<current_size_v);
+            if(t && t->size_factor_v <= current_size_v) while(o < o_end)
+            {
+                t->prev_h=n;
+                o+=1<<t->size_factor_v;
+                t=t->next_v;
+            }
+
+            ///traverse bottom edge
+            t=n->next_v=p->next_v;
+            o=p->offset>>16;///x offset stored in top 16 bits
+            o_mid=o+(1<<current_size_h);
+            o_end=o_mid+(1<<current_size_h);
+            if(t && t->size_factor_h <= current_size_h) while(o < o_end) /// huh, <= also works here
+            {
+                if(o==o_mid)n->next_v=t;
+                if(o>=o_mid)t->prev_v=n;
+                o+=1<<t->size_factor_h;
+                t=t->next_h;
+            }
+
+            ///traverse top edge
+            t=n->prev_v=p->prev_v;
+            o=p->offset>>16;///x offset stored in top 16 bits
+            /// o_mid and o_end unchanged
+            if(t && t->size_factor_h <= current_size_h)while(o < o_end)
+            {
+                while(t->next_v!=p)t=t->next_v;
+                if(o==o_mid)n->prev_v=t;
+                if(o>=o_mid)t->next_v=n;
+                o+=1<<t->size_factor_h;
+                t=t->next_h;
+            }
         }
         else
         {
             ///split horizontally
+            current_size_v--;
+
+            n->offset=p->offset+(1<<current_size_v);///y offset stored in bottom 16 bits
+
+            t=n->next_v=p->next_v;
+            n->prev_v=p;
+            p->next_v=n;
+
+            ///adjust adjacency info, traverse all edges finding tiles that should link to n
+
+            ///traverse bottom edge
+            o=p->offset>>16;///x offset stored in top 16 bits
+            o_end=o+(1<<current_size_h);
+            if(t && t->size_factor_h<= current_size_h) while(o < o_end)
+            {
+                t->prev_v=n;
+                o+=1<<t->size_factor_h;
+                t=t->next_h;
+            }
+
+            ///traverse right edge
+            t=n->next_h=p->next_h;
+            o=p->offset&0x0000FFFF;///y offset stored in bottom 16 bits
+            o_mid=o+(1<<current_size_v);
+            o_end=o_mid+(1<<current_size_v);
+            if(t && t->size_factor_v <= current_size_v) while(o < o_end)
+            {
+                if(o==o_mid)n->next_h=t;
+                if(o>=o_mid)t->prev_h=n;
+                o+=1<<t->size_factor_v;
+                t=t->next_v;
+            }
+
+            ///traverse left edge
+            t=n->prev_h=p->prev_h;
+            o=p->offset&0x0000FFFF;///y offset stored in bottom 16 bits
+            /// o_mid and o_end unchanged
+            if(t && t->size_factor_v <= current_size_v) while(o < o_end)
+            {
+                while(t->next_h!=p)t=t->next_h; /// not the case when t starts before o
+                if(o==o_mid)n->prev_h=t;
+                if(o>=o_mid)t->next_h=n;
+                o+=1<<t->size_factor_v;
+                t=t->next_v;
+            }
         }
+
+        n->heap_index=0;///must be no tiles already in heap this tile will be put in (otherwise we'd be splitting that one)
+        ia->available_tiles[current_size_h][current_size_v].heap[0]=n;
+        ia->available_tiles[current_size_h][current_size_v].count=1;
+
+        ia->available_tiles_bitmasks[current_size_h] |= 1<<current_size_v;
+
+        n->available=true;
+        n->size_factor_h=current_size_h;
+        n->size_factor_v=current_size_v;
     }
 
+    p->available=false;
+    p->size_factor_h=size_h;
+    p->size_factor_v=size_v;
 
-//    while(ia->available_tiles[ts_h][ts_v].count==0)///bitmask may be unhelpful...
-//    {
-//        ///instead of JUST preferring squarisation, prefernce fewer splits
-//
-//        ///mash CAN work well! just needs to be 16 uint array (with size of 16) for hast loads, still use same search algorithm for best fit tile to split
-//
-//        /// cant just iterate through available stepping through v or h, need to check all available with same req. split count, v/h bias informs search traversal direction?
-//
-//
-//        /// this paradigm will result in double checks of bitmask if only one of ts_h & ts_v change...
-////        if(ts_h>ts_v)
-////        {
-////            if(ia->available_tiles_bitmasks_h[ts_h]>1<<s_v)///prefer h
-////            {
-////                ///found tile
-////            }
-////            else if(ia->available_tiles_bitmasks_v[ts_v]>1<<s_h)
-////            {
-////                ///found tile
-////            }
-////            else
-////            {
-////                ///increment
-////            }
-////        }
-////        else
-////        {
-////        }
-//    }
-
-
-
+    if(ia->multithreaded) atomic_store(&ia->spinlock,0);
+    return p;
 }
 
 
