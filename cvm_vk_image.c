@@ -82,7 +82,8 @@ void cvm_vk_create_image_atlas(cvm_vk_image_atlas * ia,uint32_t width,uint32_t h
     t->prev_v=NULL;
     t->next_v=NULL;
 
-    t->offset=0;
+    t->x_pos=0;
+    t->y_pos=0;
 
     t->heap_index=0;
     t->size_factor_h=ia->num_tile_sizes_h-1;
@@ -230,12 +231,15 @@ cvm_vk_image_atlas_tile * cvm_vk_acquire_image_atlas_tile(cvm_vk_image_atlas * i
         ia->first_unused_tile=n->next_h;
         ia->unused_tile_count--;
 
+        ///here if offset(o) isnt equal to relevant adjacent(t) position then adjacent is larget and start before the relevant (v/h) block that contains the tile we're spliting
+
         if(current_size_h != size_h && (current_size_v==size_v || current_size_h>current_size_v))///try to keep tiles square where possible, with slight bia towards longer thinner tiles
         {
             ///split vertically
             current_size_h--;
 
-            n->offset=p->offset+(1<<(current_size_h+16));///x offset stored in top 16 bits
+            n->offset=p->offset;
+            n->x_pos+=1<<current_size_h;
 
             t=n->next_h=p->next_h;
             n->prev_h=p;
@@ -244,9 +248,9 @@ cvm_vk_image_atlas_tile * cvm_vk_acquire_image_atlas_tile(cvm_vk_image_atlas * i
             ///adjust adjacency info, traverse all edges finding tiles that should link to n
 
             ///traverse right edge
-            o=p->offset&0x0000FFFF;///y offset stored in bottom 16 bits
+            o=p->y_pos;
             o_end=o+(1<<current_size_v);
-            if(t && t->size_factor_v <= current_size_v) while(o < o_end)
+            if(t && t->y_pos == o) while(o < o_end)
             {
                 t->prev_h=n;
                 o+=1<<t->size_factor_v;
@@ -255,10 +259,10 @@ cvm_vk_image_atlas_tile * cvm_vk_acquire_image_atlas_tile(cvm_vk_image_atlas * i
 
             ///traverse bottom edge
             t=n->next_v=p->next_v;
-            o=p->offset>>16;///x offset stored in top 16 bits
+            o=p->x_pos;
             o_mid=o+(1<<current_size_h);
             o_end=o_mid+(1<<current_size_h);
-            if(t && t->size_factor_h <= current_size_h) while(o < o_end) /// huh, <= also works here
+            if(t && t->x_pos == o) while(o < o_end)
             {
                 if(o==o_mid)n->next_v=t;
                 if(o>=o_mid)t->prev_v=n;
@@ -268,11 +272,11 @@ cvm_vk_image_atlas_tile * cvm_vk_acquire_image_atlas_tile(cvm_vk_image_atlas * i
 
             ///traverse top edge
             t=n->prev_v=p->prev_v;
-            o=p->offset>>16;///x offset stored in top 16 bits
+            o=p->x_pos;
             /// o_mid and o_end unchanged
-            if(t && t->size_factor_h <= current_size_h)while(o < o_end)
+            if(t && t->x_pos == o) while(o < o_end)
             {
-                while(t->next_v!=p)t=t->next_v;
+                while(t->next_v!=p) t=t->next_v;
                 if(o==o_mid)n->prev_v=t;
                 if(o>=o_mid)t->next_v=n;
                 o+=1<<t->size_factor_h;
@@ -284,7 +288,8 @@ cvm_vk_image_atlas_tile * cvm_vk_acquire_image_atlas_tile(cvm_vk_image_atlas * i
             ///split horizontally
             current_size_v--;
 
-            n->offset=p->offset+(1<<current_size_v);///y offset stored in bottom 16 bits
+            n->offset=p->offset;
+            n->y_pos+=1<<current_size_v;
 
             t=n->next_v=p->next_v;
             n->prev_v=p;
@@ -293,9 +298,9 @@ cvm_vk_image_atlas_tile * cvm_vk_acquire_image_atlas_tile(cvm_vk_image_atlas * i
             ///adjust adjacency info, traverse all edges finding tiles that should link to n
 
             ///traverse bottom edge
-            o=p->offset>>16;///x offset stored in top 16 bits
+            o=p->x_pos;
             o_end=o+(1<<current_size_h);
-            if(t && t->size_factor_h<= current_size_h) while(o < o_end)
+            if(t && t->x_pos == o) while(o < o_end)
             {
                 t->prev_v=n;
                 o+=1<<t->size_factor_h;
@@ -304,10 +309,10 @@ cvm_vk_image_atlas_tile * cvm_vk_acquire_image_atlas_tile(cvm_vk_image_atlas * i
 
             ///traverse right edge
             t=n->next_h=p->next_h;
-            o=p->offset&0x0000FFFF;///y offset stored in bottom 16 bits
+            o=p->y_pos;
             o_mid=o+(1<<current_size_v);
             o_end=o_mid+(1<<current_size_v);
-            if(t && t->size_factor_v <= current_size_v) while(o < o_end)
+            if(t && t->y_pos == o) while(o < o_end)
             {
                 if(o==o_mid)n->next_h=t;
                 if(o>=o_mid)t->prev_h=n;
@@ -317,11 +322,11 @@ cvm_vk_image_atlas_tile * cvm_vk_acquire_image_atlas_tile(cvm_vk_image_atlas * i
 
             ///traverse left edge
             t=n->prev_h=p->prev_h;
-            o=p->offset&0x0000FFFF;///y offset stored in bottom 16 bits
+            o=p->y_pos;
             /// o_mid and o_end unchanged
-            if(t && t->size_factor_v <= current_size_v) while(o < o_end)
+            if(t && t->y_pos == o) while(o < o_end)
             {
-                while(t->next_h!=p)t=t->next_h; /// not the case when t starts before o
+                while(t->next_h!=p) t=t->next_h; /// not the case when t starts before o
                 if(o==o_mid)n->prev_h=t;
                 if(o>=o_mid)t->next_h=n;
                 o+=1<<t->size_factor_v;
@@ -348,4 +353,89 @@ cvm_vk_image_atlas_tile * cvm_vk_acquire_image_atlas_tile(cvm_vk_image_atlas * i
     return p;
 }
 
+void cvm_vk_relinquish_image_atlas_tile(cvm_vk_image_atlas * ia,cvm_vk_image_atlas_tile * base)
+{
+    uint32_t size_h,size_v,current_size_h,current_size_v,i,j,split_count,c,u,d,o,o_mid,o_end;///a lot of these could be recycled...
+    cvm_vk_image_atlas_tile *partner,*adjacent;
+    uint_fast32_t lock;
+    cvm_vk_image_atlas_tile ** heap;
+    bool finished_h,finished_v;
 
+    ///base,partner,test
+
+    if(ia->multithreaded)do lock=atomic_load(&ia->spinlock);
+    while(lock!=0 || !atomic_compare_exchange_weak(&ia->spinlock,&lock,1));
+
+    current_size_h=base->size_factor_h;
+    current_size_v=base->size_factor_v;
+
+    finished_h=finished_v=false;
+
+    do
+    {
+        ///combine horizontally adjacent
+        while(current_size_h<=current_size_v || finished_v)
+        {
+            if(base->x_pos & 1<<current_size_h)///right of current horizontal tile pair
+            {
+                if((partner=base->prev_h) && partner->size_factor_h==current_size_h && partner->size_factor_v==current_size_v && partner->available)
+                {
+
+                    ///traverse left side
+                    adjacent=partner->prev_h;
+                    base->prev_h=adjacent;
+
+                    o=partner->y_pos;
+                    o_end=o+(1<<current_size_v);
+                    if(adjacent && adjacent->y_pos==o) while(o < o_end)
+                    {
+                        while(adjacent->next_h!=partner)adjacent=adjacent->next_h;
+                        adjacent->next_h=base;
+                        o+=1<<adjacent->size_factor_v;
+                        adjacent=adjacent->next_v;
+                    }
+
+                    finished_v=false;///new combination potential
+                }
+                else finished_h=true;
+            }
+            else///left of current horizontal tile pair
+            {
+                if((partner=base->next_h) && partner->size_factor_h==current_size_h && partner->size_factor_v==current_size_v && partner->available)
+                {
+                    ///can combine
+
+                    finished_v=false;///new combination potential
+                }
+                else finished_h=true;
+            }
+        }
+
+        ///combine vertically adjacent
+        while(current_size_v<=current_size_h || finished_h)
+        {
+            if(base->y_pos & 1<<current_size_v)///bottom of current vertical tile pair
+            {
+                if((partner=base->prev_v) && partner->size_factor_h==current_size_h && partner->size_factor_v==current_size_v && partner->available)
+                {
+                    ///can combine
+
+                    finished_h=false;///new combination potential
+                }
+                else finished_v=true;
+            }
+            else///top of current vertical tile pair
+            {
+                if((partner=base->next_v) && partner->size_factor_h==current_size_h && partner->size_factor_v==current_size_v && partner->available)
+                {
+                    ///can combine
+
+                    finished_h=false;///new combination potential
+                }
+                else finished_v=true;
+            }
+        }
+
+    }
+    while(!finished_h || !finished_v);
+}

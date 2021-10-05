@@ -35,54 +35,34 @@ along with cvm_shared.  If not, see <https://www.gnu.org/licenses/>.
 
 ///probably want to use a base tile size of 4 by default? yeah, i think i should use this
 
-/// need to search 2d grid for best available sized tile, have overarching input to prefer horizontal or vertical entries
-
-/// 2d grid of available tiles prefers those in same column/row
-
-/// error handling, if none available then have base error texture or render red box in overlay, will have to be implementation dependent
-
-///the most difficult part is definitely recombination, have structure of linked list, h_prev,h_next,v_prev,v_next for recombining
-
-///selection/search: probably want one that reqires fewest splits of resources... even though this may limit recombination substantially...
-
-///prev and next management is particularly challenging, needs to reference the tile it can be recombined with, but that tile can get split up, so adjacent references need to be very careful.
-/// actually, because spliting/recombination can alter which tile is actually considered adjacent, and one can be th prev/next of many it may actually be impossible,
-/// or close to it to do without traversing linked lists, which is definitely undesirable, may be possible to alleviate this by limiting v/h ratio to 2,
-/// but maybe the limits on what can be recombined/split (at size matched po2 bounds) means this isnt actually a problem and everything will just work fine
-
-/// could track which size it was split from at which time? any approach does will to fragmentation though...
-
-/// by setting adjacency data for tiles not from original split to NULL we can signal that this isnt the direction to recombine in, which might not even be necessary.
-/// just using naive inherited prev/next along with sizes it should be ensured that tiles are recombined in order they were split and with it ensure everything works okay (despite some "unnecessary" fragmentation)
-
-///need to track how many tiles reference a tile from each given diection
-
 typedef struct cvm_vk_image_atlas_tile cvm_vk_image_atlas_tile;
 
 struct cvm_vk_image_atlas_tile/// (dont ref this by pointer, only store index)
 {
     ///probably use h in list of unused tiles
     /// both prev and next sets must always be the topmost and leftmost relevant adjacent tile
-    cvm_vk_image_atlas_tile * prev_h;
-    cvm_vk_image_atlas_tile * next_h;
+    cvm_vk_image_atlas_tile * prev_h;///left
+    cvm_vk_image_atlas_tile * next_h;///right
 
-    cvm_vk_image_atlas_tile * prev_v;
-    cvm_vk_image_atlas_tile * next_v;
+    cvm_vk_image_atlas_tile * prev_v;///up (screen space coordinates)
+    cvm_vk_image_atlas_tile * next_v;///down (screen space coordinates)
 
-//    union
-//    {
-//        uint32_t offset;
-//        struct
-//        {
-//            uint32_t x:16;
-//            uint32_t y:16;
-//        }pos;
-//    }location;
-    uint32_t offset;///top 16 bits are x location, bottom 16 are y location
+    union
+    {
+        uint32_t offset;
+        struct
+        {
+            uint16_t x_pos;
+            uint16_t y_pos;
+        };
+    };
+    //uint32_t offset;///top 16 bits are x location, bottom 16 are y location
     ///get bit for "is_right_buffer" by 1 & (offset >> size_factor) during recombination calculations (256M max buffer size and 256 byte min gives the required size of this)
     uint32_t heap_index:22;///4m should be enough...
-    uint32_t size_factor_h:4;///32788 * base size is definitely enough
-    uint32_t size_factor_v:4;
+
+    ///32788 * base size is definitely enough
+    uint32_t size_factor_h:4;///width
+    uint32_t size_factor_v:4;///height
     ///above leads to 256 max sized heaps, which is reasonable
     uint32_t available:1;///does not have contents, can be retrieved by new allocation or recombined into
     uint32_t is_base:1;///need to free this pointer at end
@@ -129,6 +109,7 @@ void cvm_vk_create_image_atlas(cvm_vk_image_atlas * ia,uint32_t width,uint32_t h
 void cvm_vk_destroy_image_atlas(cvm_vk_image_atlas * ia);
 
 cvm_vk_image_atlas_tile * cvm_vk_acquire_image_atlas_tile(cvm_vk_image_atlas * ia,uint32_t width,uint32_t height);
+void cvm_vk_relinquish_image_atlas_tile(cvm_vk_image_atlas * ia,cvm_vk_image_atlas_tile * t);
 
 #endif
 
