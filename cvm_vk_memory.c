@@ -276,15 +276,13 @@ cvm_vk_dynamic_buffer_allocation * cvm_vk_acquire_dynamic_buffer_allocation(cvm_
 
 void cvm_vk_relinquish_dynamic_buffer_allocation(cvm_vk_managed_buffer * mb,cvm_vk_dynamic_buffer_allocation * a)
 {
-    uint32_t u,d,c,available_bitmask;
+    uint32_t u,d,c;
     cvm_vk_dynamic_buffer_allocation ** heap;
     cvm_vk_dynamic_buffer_allocation *n;///represents next or neighbour
     uint_fast32_t lock;
 
     if(mb->multithreaded)do lock=atomic_load(&mb->spinlock);
     while(lock!=0 || !atomic_compare_exchange_weak(&mb->spinlock,&lock,1));
-
-    available_bitmask=mb->available_dynamic_allocation_bitmask;
 
     if(a==mb->last_used_allocation)///could also check a->right==NULL
     {
@@ -315,7 +313,7 @@ void cvm_vk_relinquish_dynamic_buffer_allocation(cvm_vk_managed_buffer * mb,cvm_
                 heap[c]->heap_index=d;
                 heap[d]=heap[c];
             }
-            else available_bitmask&= ~(1<<a->size_factor);///just removed last available allocation of this size
+            else mb->available_dynamic_allocation_bitmask&= ~(1<<a->size_factor);///just removed last available allocation of this size
 
             ///put into unused linked list
             a->next=n;
@@ -329,7 +327,6 @@ void cvm_vk_relinquish_dynamic_buffer_allocation(cvm_vk_managed_buffer * mb,cvm_
         mb->last_used_allocation=a;
         if(a)a->next=NULL;
         mb->dynamic_offset=n->offset;///despite having been conceptually moved this data is still available and valid
-        mb->available_dynamic_allocation_bitmask=available_bitmask;
     }
     else /// the difficult one...
     {
@@ -365,7 +362,7 @@ void cvm_vk_relinquish_dynamic_buffer_allocation(cvm_vk_managed_buffer * mb,cvm_
                 heap[c]->heap_index=u;
                 heap[u]=heap[c];
             }
-            else available_bitmask&= ~(1<<n->size_factor);///just removed last available allocation of this size
+            else mb->available_dynamic_allocation_bitmask&= ~(1<<n->size_factor);///just removed last available allocation of this size
 
             ///change bindings
             if(a->offset&1<<a->size_factor) /// a is next/right
@@ -405,9 +402,7 @@ void cvm_vk_relinquish_dynamic_buffer_allocation(cvm_vk_managed_buffer * mb,cvm_
         a->heap_index=d;
         heap[d]=a;
 
-        available_bitmask|=1<<a->size_factor;
-
-        mb->available_dynamic_allocation_bitmask=available_bitmask;
+        mb->available_dynamic_allocation_bitmask|=1<<a->size_factor;
     }
 
     if(mb->multithreaded) atomic_store(&mb->spinlock,0);
