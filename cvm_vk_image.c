@@ -60,7 +60,7 @@ void cvm_vk_create_image_atlas(cvm_vk_image_atlas * ia,uint32_t width,uint32_t h
     {
         ia->available_tiles[i]=malloc(ia->num_tile_sizes_v*sizeof(cvm_vk_available_atlas_tile_heap));
 
-        for(j=0;j<ia->num_tile_sizes_v;i++)
+        for(j=0;j<ia->num_tile_sizes_v;j++)
         {
             ia->available_tiles[i][j].heap=malloc(4*sizeof(cvm_vk_image_atlas_tile*));
             ia->available_tiles[i][j].space=4;
@@ -225,7 +225,7 @@ cvm_vk_image_atlas_tile * cvm_vk_acquire_image_atlas_tile(cvm_vk_image_atlas * i
     else ia->available_tiles_bitmasks[current_size_h]&= ~(1<<current_size_v);///took last tile of this size
 
 
-    while(current_size_h>size_h && current_size_v>size_v)
+    while(current_size_h>size_h || current_size_v>size_v)
     {
         n=ia->first_unused_tile;
         ia->first_unused_tile=n->next_h;
@@ -413,7 +413,7 @@ void cvm_vk_relinquish_image_atlas_tile(cvm_vk_image_atlas * ia,cvm_vk_image_atl
         {
             if(base->x_pos & 1<<base->size_factor_h)///base is right of current horizontal tile pair
             {
-                if((partner=base->prev_h) && partner->size_factor_h==base->size_factor_h && partner->size_factor_v==base->size_factor_h && partner->available)
+                if((partner=base->prev_h) && partner->size_factor_h==base->size_factor_h && partner->size_factor_v==base->size_factor_v && partner->available)
                 {
                     base->offset=partner->offset;
                     ///traverse left side
@@ -516,7 +516,7 @@ void cvm_vk_relinquish_image_atlas_tile(cvm_vk_image_atlas * ia,cvm_vk_image_atl
                 {
                     base->offset=partner->offset;
                     ///traverse top side
-                    adjacent=partner->prev_v;
+                    adjacent=base->prev_v=partner->prev_v;
                     o=partner->x_pos;
                     o_end=o+(1<<base->size_factor_h);
                     if(adjacent && adjacent->x_pos==o) while(o < o_end)
