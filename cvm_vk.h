@@ -226,10 +226,10 @@ void cvm_vk_write_descriptor_sets(VkWriteDescriptorSet * writes,uint32_t count);
 void cvm_vk_create_image(VkImage * image,VkImageCreateInfo * info);
 void cvm_vk_destroy_image(VkImage image);
 
+void cvm_vk_create_and_bind_memory_for_images(VkDeviceMemory * memory,VkImage * images,uint32_t image_count);
+
 void cvm_vk_create_image_view(VkImageView * image_view,VkImageViewCreateInfo * info);
 void cvm_vk_destroy_image_view(VkImageView image_view);
-
-void cvm_vk_create_and_bind_memory_for_images(VkDeviceMemory * memory,VkImage * images,uint32_t image_count);
 
 void cvm_vk_free_memory(VkDeviceMemory memory);
 

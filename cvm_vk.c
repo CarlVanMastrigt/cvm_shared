@@ -1019,16 +1019,6 @@ void cvm_vk_destroy_image(VkImage image)
     vkDestroyImage(cvm_vk_device,image,NULL);
 }
 
-void cvm_vk_create_image_view(VkImageView * image_view,VkImageViewCreateInfo * info)
-{
-    CVM_VK_CHECK(vkCreateImageView(cvm_vk_device,info,NULL,image_view));
-}
-
-void cvm_vk_destroy_image_view(VkImageView image_view)
-{
-    vkDestroyImageView(cvm_vk_device,image_view,NULL);
-}
-
 void cvm_vk_create_and_bind_memory_for_images(VkDeviceMemory * memory,VkImage * images,uint32_t image_count)
 {
     VkDeviceSize offsets[image_count];
@@ -1072,6 +1062,16 @@ void cvm_vk_create_and_bind_memory_for_images(VkDeviceMemory * memory,VkImage * 
     {
         CVM_VK_CHECK(vkBindImageMemory(cvm_vk_device,images[i],*memory,offsets[i]));
     }
+}
+
+void cvm_vk_create_image_view(VkImageView * image_view,VkImageViewCreateInfo * info)
+{
+    CVM_VK_CHECK(vkCreateImageView(cvm_vk_device,info,NULL,image_view));
+}
+
+void cvm_vk_destroy_image_view(VkImageView image_view)
+{
+    vkDestroyImageView(cvm_vk_device,image_view,NULL);
 }
 
 void cvm_vk_free_memory(VkDeviceMemory memory)

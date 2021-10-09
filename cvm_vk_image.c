@@ -148,8 +148,8 @@ void cvm_vk_destroy_image_atlas(cvm_vk_image_atlas * ia)
 
 cvm_vk_image_atlas_tile * cvm_vk_acquire_image_atlas_tile(cvm_vk_image_atlas * ia,uint32_t width,uint32_t height)
 {
-    uint32_t size_h,size_v,current_size_h,current_size_v,i,j,split_count,c,u,d,o,o_mid,o_end;///a lot of these could be recycled...
-    cvm_vk_image_atlas_tile *p,*n,*t;
+    uint32_t size_h,size_v,i,j,c,u,d,o,o_mid,o_end;///a lot of these could be recycled...
+    cvm_vk_image_atlas_tile *base,*partner,*adjacent;
     uint_fast32_t lock;
     cvm_vk_image_atlas_tile ** heap;
 
@@ -163,50 +163,46 @@ cvm_vk_image_atlas_tile * cvm_vk_acquire_image_atlas_tile(cvm_vk_image_atlas * i
 
     if(ia->unused_tile_count < ia->num_tile_sizes_h+ ia->num_tile_sizes_v)
     {
-        p=malloc(CVM_VK_RESERVED_IMAGE_ATLAS_TILE_COUNT*sizeof(cvm_vk_image_atlas_tile));
+        base=malloc(CVM_VK_RESERVED_IMAGE_ATLAS_TILE_COUNT*sizeof(cvm_vk_image_atlas_tile));
 
-        n=ia->first_unused_tile;
+        partner=ia->first_unused_tile;
         i=CVM_VK_RESERVED_IMAGE_ATLAS_TILE_COUNT;
         while(i--)
         {
-            p[i].next_h=n;
-            p[i].is_base=!i;
-            n=p+i;
+            base[i].next_h=partner;
+            base[i].is_base=!i;
+            partner=base+i;
         }
 
-        ia->first_unused_tile=p;
+        ia->first_unused_tile=base;
         ia->unused_tile_count+=CVM_VK_RESERVED_IMAGE_ATLAS_TILE_COUNT;
     }
 
 
-    split_count=33;///larger than maximum supported split count (32)
+    base=NULL;
 
     for(i=size_h;i<ia->num_tile_sizes_h;i++)
     {
         if(ia->available_tiles_bitmasks[i]>=1<<size_v)
         {
             for(j=size_v;!(ia->available_tiles_bitmasks[i] & 1<<j);j++);///get lowest bitmasked entry
-            if(i-size_h + j-size_v < split_count)
+            if(!base || base->size_factor_h+base->size_factor_v > i+j)
             {
-                split_count=i-size_h + j-size_v;
-                current_size_h=i;
-                current_size_v=j;
+                base=ia->available_tiles[i][j].heap[0];
             }
         }
     }
 
-    if(split_count==33)///a tile to split was not found!
+    if(!base)///a tile to split was not found!
     {
         if(ia->multithreaded) atomic_store(&ia->spinlock,0);
         return NULL;///no tile large enough exists
     }
 
-    ///extract p from heap
-    heap=ia->available_tiles[current_size_h][current_size_v].heap;
+    ///extract from heap
+    heap=ia->available_tiles[base->size_factor_h][base->size_factor_v].heap;
 
-    p=heap[0];
-
-    if((c= --ia->available_tiles[current_size_h][current_size_v].count))
+    if((c= --ia->available_tiles[base->size_factor_h][base->size_factor_v].count))
     {
         u=0;
 
@@ -222,135 +218,133 @@ cvm_vk_image_atlas_tile * cvm_vk_acquire_image_atlas_tile(cvm_vk_image_atlas * i
         heap[c]->heap_index=u;
         heap[u]=heap[c];
     }
-    else ia->available_tiles_bitmasks[current_size_h]&= ~(1<<current_size_v);///took last tile of this size
+    else ia->available_tiles_bitmasks[base->size_factor_h]&= ~(1<<base->size_factor_v);///took last tile of this size
 
 
-    while(current_size_h>size_h || current_size_v>size_v)
+    while(base->size_factor_h>size_h || base->size_factor_v>size_v)
     {
-        n=ia->first_unused_tile;
-        ia->first_unused_tile=n->next_h;
+        partner=ia->first_unused_tile;
+        ia->first_unused_tile=partner->next_h;
         ia->unused_tile_count--;
 
-        ///here if offset(o) isnt equal to relevant adjacent(t) position then adjacent is larget and start before the relevant (v/h) block that contains the tile we're spliting
+        ///here if offset(o) isnt equal to relevant adjacent position then adjacent is larger and starts before the relevant (v/h) block that contains the tile we're splitting
 
-        if(current_size_h != size_h && (current_size_v==size_v || current_size_h>current_size_v))///try to keep tiles square where possible, with slight bia towards longer thinner tiles
+        if(base->size_factor_h != size_h && (base->size_factor_v==size_v || base->size_factor_h>base->size_factor_v))///try to keep tiles square where possible, with slight bias towards longer thinner tiles
         {
             ///split vertically
-            current_size_h--;
+            base->size_factor_h--;
 
-            n->offset=p->offset;
-            n->x_pos+=1<<current_size_h;
+            partner->offset=base->offset;
+            partner->x_pos+=1<<base->size_factor_h;
 
-            t=n->next_h=p->next_h;
-            n->prev_h=p;
-            p->next_h=n;
+            adjacent=partner->next_h=base->next_h;
+            partner->prev_h=base;
+            base->next_h=partner;
 
-            ///adjust adjacency info, traverse all edges finding tiles that should link to n
+            ///adjust adjacency info, traverse all edges finding tiles that should link to partner now
 
             ///traverse right edge
-            o=p->y_pos;
-            o_end=o+(1<<current_size_v);
-            if(t && t->y_pos == o) while(o < o_end)
+            o=base->y_pos;
+            o_end=o+(1<<base->size_factor_v);
+            if(adjacent && adjacent->y_pos == o) while(o < o_end)
             {
-                t->prev_h=n;
-                o+=1<<t->size_factor_v;
-                t=t->next_v;
+                adjacent->prev_h=partner;
+                o+=1<<adjacent->size_factor_v;
+                adjacent=adjacent->next_v;
             }
 
             ///traverse bottom edge
-            t=n->next_v=p->next_v;
-            o=p->x_pos;
-            o_mid=o+(1<<current_size_h);
-            o_end=o_mid+(1<<current_size_h);
-            if(t && t->x_pos == o) while(o < o_end)
+            adjacent=partner->next_v=base->next_v;
+            o=base->x_pos;
+            o_mid=o+(1<<base->size_factor_h);
+            o_end=o_mid+(1<<base->size_factor_h);
+            if(adjacent && adjacent->x_pos == o) while(o < o_end)
             {
-                if(o==o_mid)n->next_v=t;
-                if(o>=o_mid)t->prev_v=n;
-                o+=1<<t->size_factor_h;
-                t=t->next_h;
+                if(o==o_mid)partner->next_v=adjacent;
+                if(o>=o_mid)adjacent->prev_v=partner;
+                o+=1<<adjacent->size_factor_h;
+                adjacent=adjacent->next_h;
             }
 
             ///traverse top edge
-            t=n->prev_v=p->prev_v;
-            o=p->x_pos;
+            adjacent=partner->prev_v=base->prev_v;
+            o=base->x_pos;
             /// o_mid and o_end unchanged
-            if(t && t->x_pos == o) while(o < o_end)
+            if(adjacent && adjacent->x_pos == o) while(o < o_end)
             {
-                while(t->next_v!=p) t=t->next_v;
-                if(o==o_mid)n->prev_v=t;
-                if(o>=o_mid)t->next_v=n;
-                o+=1<<t->size_factor_h;
-                t=t->next_h;
+                while(adjacent->next_v!=base) adjacent=adjacent->next_v;
+                if(o==o_mid)partner->prev_v=adjacent;
+                if(o>=o_mid)adjacent->next_v=partner;
+                o+=1<<adjacent->size_factor_h;
+                adjacent=adjacent->next_h;
             }
         }
         else
         {
             ///split horizontally
-            current_size_v--;
+            base->size_factor_v--;
 
-            n->offset=p->offset;
-            n->y_pos+=1<<current_size_v;
+            partner->offset=base->offset;
+            partner->y_pos+=1<<base->size_factor_v;
 
-            t=n->next_v=p->next_v;
-            n->prev_v=p;
-            p->next_v=n;
+            adjacent=partner->next_v=base->next_v;
+            partner->prev_v=base;
+            base->next_v=partner;
 
-            ///adjust adjacency info, traverse all edges finding tiles that should link to n
+            ///adjust adjacency info, traverse all edges finding tiles that should link to partner now
 
             ///traverse bottom edge
-            o=p->x_pos;
-            o_end=o+(1<<current_size_h);
-            if(t && t->x_pos == o) while(o < o_end)
+            o=base->x_pos;
+            o_end=o+(1<<base->size_factor_h);
+            if(adjacent && adjacent->x_pos == o) while(o < o_end)
             {
-                t->prev_v=n;
-                o+=1<<t->size_factor_h;
-                t=t->next_h;
+                adjacent->prev_v=partner;
+                o+=1<<adjacent->size_factor_h;
+                adjacent=adjacent->next_h;
             }
 
             ///traverse right edge
-            t=n->next_h=p->next_h;
-            o=p->y_pos;
-            o_mid=o+(1<<current_size_v);
-            o_end=o_mid+(1<<current_size_v);
-            if(t && t->y_pos == o) while(o < o_end)
+            adjacent=partner->next_h=base->next_h;
+            o=base->y_pos;
+            o_mid=o+(1<<base->size_factor_v);
+            o_end=o_mid+(1<<base->size_factor_v);
+            if(adjacent && adjacent->y_pos == o) while(o < o_end)
             {
-                if(o==o_mid)n->next_h=t;
-                if(o>=o_mid)t->prev_h=n;
-                o+=1<<t->size_factor_v;
-                t=t->next_v;
+                if(o==o_mid)partner->next_h=adjacent;
+                if(o>=o_mid)adjacent->prev_h=partner;
+                o+=1<<adjacent->size_factor_v;
+                adjacent=adjacent->next_v;
             }
 
             ///traverse left edge
-            t=n->prev_h=p->prev_h;
-            o=p->y_pos;
+            adjacent=partner->prev_h=base->prev_h;
+            o=base->y_pos;
             /// o_mid and o_end unchanged
-            if(t && t->y_pos == o) while(o < o_end)
+            if(adjacent && adjacent->y_pos == o) while(o < o_end)
             {
-                while(t->next_h!=p) t=t->next_h; /// not the case when t starts before o
-                if(o==o_mid)n->prev_h=t;
-                if(o>=o_mid)t->next_h=n;
-                o+=1<<t->size_factor_v;
-                t=t->next_v;
+                while(adjacent->next_h!=base) adjacent=adjacent->next_h; /// not the case when t starts before o
+                if(o==o_mid)partner->prev_h=adjacent;
+                if(o>=o_mid)adjacent->next_h=partner;
+                o+=1<<adjacent->size_factor_v;
+                adjacent=adjacent->next_v;
             }
         }
 
-        n->heap_index=0;///must be no tiles already in heap this tile will be put in (otherwise we'd be splitting that one)
-        ia->available_tiles[current_size_h][current_size_v].heap[0]=n;
-        ia->available_tiles[current_size_h][current_size_v].count=1;
+        partner->heap_index=0;///must be no tiles already in heap this tile will be put in (otherwise we'd be splitting that one)
+        ia->available_tiles[base->size_factor_h][base->size_factor_v].heap[0]=partner;
+        ia->available_tiles[base->size_factor_h][base->size_factor_v].count=1;
 
-        ia->available_tiles_bitmasks[current_size_h] |= 1<<current_size_v;
+        ia->available_tiles_bitmasks[base->size_factor_h] |= 1<<base->size_factor_v;
 
-        n->available=true;
-        n->size_factor_h=current_size_h;
-        n->size_factor_v=current_size_v;
+        partner->available=true;
+        partner->size_factor_h=base->size_factor_h;
+        partner->size_factor_v=base->size_factor_v;
     }
 
-    p->available=false;
-    p->size_factor_h=size_h;
-    p->size_factor_v=size_v;
+    base->available=false;
 
     if(ia->multithreaded) atomic_store(&ia->spinlock,0);
-    return p;
+    return base;
 }
 
 static inline void remove_tile_from_availability_heap(cvm_vk_image_atlas * ia,cvm_vk_image_atlas_tile * t,uint32_t s_h,uint32_t s_v)
