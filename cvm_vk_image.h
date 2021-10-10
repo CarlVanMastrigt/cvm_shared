@@ -81,9 +81,9 @@ cvm_vk_available_atlas_tile_heap;
 
 typedef struct cvm_vk_image_atlas
 {
-    VkImage image;
+    //VkImage image;
     VkImageView image_view;
-    VkDeviceMemory memory;
+    //VkDeviceMemory memory;
 
     uint32_t width;
     uint32_t height;
@@ -105,7 +105,7 @@ cvm_vk_image_atlas;
 ///probably just going to use simple 2d version of PO2 allocator used in memory...
 
 
-void cvm_vk_create_image_atlas(cvm_vk_image_atlas * ia,uint32_t width,uint32_t height,bool multithreaded);
+void cvm_vk_create_image_atlas(cvm_vk_image_atlas * ia,VkImageView image_view,uint32_t width,uint32_t height,bool multithreaded);
 void cvm_vk_destroy_image_atlas(cvm_vk_image_atlas * ia);
 
 cvm_vk_image_atlas_tile * cvm_vk_acquire_image_atlas_tile(cvm_vk_image_atlas * ia,uint32_t width,uint32_t height);

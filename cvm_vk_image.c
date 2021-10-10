@@ -19,7 +19,7 @@ along with cvm_shared.  If not, see <https://www.gnu.org/licenses/>.
 
 #include "cvm_shared.h"
 
-void cvm_vk_create_image_atlas(cvm_vk_image_atlas * ia,uint32_t width,uint32_t height,bool multithreaded)
+void cvm_vk_create_image_atlas(cvm_vk_image_atlas * ia,VkImageView image_view,uint32_t width,uint32_t height,bool multithreaded)
 {
     uint32_t i,j;
 
@@ -29,13 +29,19 @@ void cvm_vk_create_image_atlas(cvm_vk_image_atlas * ia,uint32_t width,uint32_t h
         exit(-1);
     }
 
+    ia->image_view=image_view;
+
+    if(width & width-1 || height & height-1)
+    {
+        fprintf(stderr,"IMAGE ATLAS MUST BE CREATED AT POWER OF 2 WIDTH AND HEIGHT\n");
+        exit(-1);
+    }
+
     for(i=0;width>1<<i;i++);
     ia->num_tile_sizes_h=i-CVM_VK_BASE_TILE_SIZE_FACTOR+1;
-    ia->width=1<<i;
 
     for(i=0;height>1<<i;i++);
     ia->num_tile_sizes_v=i-CVM_VK_BASE_TILE_SIZE_FACTOR+1;
-    ia->height=1<<i;
 
     ia->multithreaded=multithreaded;
     atomic_init(&ia->spinlock,0);
@@ -109,6 +115,10 @@ void cvm_vk_destroy_image_atlas(cvm_vk_image_atlas * ia)
         ///could instead just rightmost to offload all active buffers to the unused linked list
     }
 
+    first=ia->available_tiles[ia->num_tile_sizes_h-1][ia->num_tile_sizes_v-1].heap[0];///return the last, base tile to the list to be processed (unused tiles)
+    first->next_h=ia->first_unused_tile;
+    ia->first_unused_tile=first;
+
     for(i=0;i<ia->num_tile_sizes_h;i++)
     {
         for(j=0;j<ia->num_tile_sizes_v;j++)
@@ -120,7 +130,6 @@ void cvm_vk_destroy_image_atlas(cvm_vk_image_atlas * ia)
     }
 
     free(ia->available_tiles);
-
 
     first=last=NULL;
     ///get all base tiles in their own linked list, discarding all others
