@@ -61,7 +61,7 @@ static uint32_t cvm_vk_min_swapchain_images;
 static uint32_t cvm_vk_extra_swapchain_images;///thread separation, applicable to transfer as well, name *should* reflect this
 static bool cvm_vk_rendering_resources_valid=false;///can this be determined for next frame during critical section?
 
-
+static VkSampler cvm_vk_fetch_sampler;
 //static uint32_t cvm_vk_transfer_cycle_count;
 
 
@@ -327,7 +327,7 @@ static void cvm_vk_create_logical_device(void)
     vkGetDeviceQueue(cvm_vk_device,cvm_vk_present_queue_family,0,&cvm_vk_present_queue);
 }
 
-static void cvm_vk_create_default_command_pools()
+static void cvm_vk_create_default_command_pools(void)
 {
     VkCommandPoolCreateInfo command_pool_create_info=(VkCommandPoolCreateInfo)
     {
@@ -354,14 +354,44 @@ static void cvm_vk_create_default_command_pools()
     }
 }
 
-static void cvm_vk_destroy_default_command_pools()
+static void cvm_vk_destroy_default_command_pools(void)
 {
     vkDestroyCommandPool(cvm_vk_device,cvm_vk_transfer_command_pool,NULL);
     if(cvm_vk_graphics_queue_family!=cvm_vk_transfer_queue_family) vkDestroyCommandPool(cvm_vk_device,cvm_vk_graphics_command_pool,NULL);
     if(cvm_vk_present_queue_family!=cvm_vk_transfer_queue_family) vkDestroyCommandPool(cvm_vk_device,cvm_vk_present_command_pool,NULL);
 }
 
+static void cvm_vk_create_default_samplers(void)
+{
+    VkSamplerCreateInfo fetch_sampler_creation_info=(VkSamplerCreateInfo)
+    {
+        .sType=VK_STRUCTURE_TYPE_SAMPLER_CREATE_INFO,
+        .pNext=NULL,
+        .flags=0,
+        .magFilter=VK_FILTER_NEAREST,
+        .minFilter=VK_FILTER_NEAREST,
+        .mipmapMode=VK_SAMPLER_MIPMAP_MODE_NEAREST,
+        .addressModeU=VK_SAMPLER_ADDRESS_MODE_CLAMP_TO_EDGE,
+        .addressModeV=VK_SAMPLER_ADDRESS_MODE_CLAMP_TO_EDGE,
+        .addressModeW=VK_SAMPLER_ADDRESS_MODE_CLAMP_TO_EDGE,
+        .mipLodBias=0.0f,
+        .anisotropyEnable=VK_FALSE,
+        .maxAnisotropy=0.0f,
+        .compareEnable=VK_FALSE,
+        .compareOp=VK_COMPARE_OP_NEVER,
+        .minLod=0.0f,
+        .maxLod=0.0f,
+        .borderColor=VK_BORDER_COLOR_FLOAT_TRANSPARENT_BLACK,
+        .unnormalizedCoordinates=VK_TRUE,
+    };
 
+    CVM_VK_CHECK(vkCreateSampler(cvm_vk_device,&fetch_sampler_creation_info,NULL,&cvm_vk_fetch_sampler));
+}
+
+static void cvm_vk_destroy_default_samplers(void)
+{
+    vkDestroySampler(cvm_vk_device,cvm_vk_fetch_sampler,NULL);
+}
 
 void cvm_vk_create_swapchain(void)
 {
@@ -643,6 +673,11 @@ VkImageView cvm_vk_get_swapchain_image_view(uint32_t index)
     return cvm_vk_presenting_images[index].image_view;
 }
 
+VkSampler cvm_vk_get_fetch_sampler(void)
+{
+    return cvm_vk_fetch_sampler;
+}
+
 void cvm_vk_initialise(SDL_Window * window,uint32_t min_swapchain_images,uint32_t extra_swapchain_images,bool sync_compute_required)
 {
     cvm_vk_min_swapchain_images=min_swapchain_images;
@@ -653,10 +688,12 @@ void cvm_vk_initialise(SDL_Window * window,uint32_t min_swapchain_images,uint32_
     cvm_vk_create_physical_device(sync_compute_required);
     cvm_vk_create_logical_device();
     cvm_vk_create_default_command_pools();
+    cvm_vk_create_default_samplers();
 }
 
 void cvm_vk_terminate(void)
 {
+    cvm_vk_destroy_default_samplers();
     cvm_vk_destroy_default_command_pools();
 
     free(cvm_vk_acquired_images);

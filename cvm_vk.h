@@ -250,6 +250,8 @@ VkFormat cvm_vk_get_screen_format(void);///can remove?
 uint32_t cvm_vk_get_swapchain_image_count(void);
 VkImageView cvm_vk_get_swapchain_image_view(uint32_t index);
 
+VkSampler cvm_vk_get_fetch_sampler(void);
+
 /// (NYI) these are needed for cases where modules delegate rendering to a worker thread by way of secondary command buffers, which then need their own command pool
 /// also need functions to allocate command buffers from these pools
 //void cvm_vk_create_graphics_command_pool(VkCommandPool * command_pool);
