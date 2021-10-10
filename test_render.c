@@ -615,11 +615,11 @@ static void create_test_framebuffer_images(VkRect2D screen_rect,VkSampleCountFla
 
 
     image_creation_info.format=VK_FORMAT_D32_SFLOAT_S8_UINT;
-    image_creation_info.usage=VK_IMAGE_USAGE_DEPTH_STENCIL_ATTACHMENT_BIT;
+    image_creation_info.usage=VK_IMAGE_USAGE_DEPTH_STENCIL_ATTACHMENT_BIT;///VK_IMAGE_USAGE_INPUT_ATTACHMENT_BIT
     cvm_vk_create_image(&test_framebuffer_depth,&image_creation_info);
 
     image_creation_info.format=VK_FORMAT_A2R10G10B10_UNORM_PACK32;
-    image_creation_info.usage=VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT;
+    image_creation_info.usage=VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT;///VK_IMAGE_USAGE_INPUT_ATTACHMENT_BIT
     cvm_vk_create_image(&test_framebuffer_colour,&image_creation_info);
 
     VkImage images[2]={test_framebuffer_depth,test_framebuffer_colour};
