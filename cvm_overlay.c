@@ -28,12 +28,15 @@ static cvm_vk_module_data overlay_module_data;
 
 static VkRenderPass overlay_render_pass;
 
-static VkDescriptorSetLayout overlay_descriptor_set_layout;
-static VkDescriptorPool overlay_descriptor_pool;
+///if uniform paradigm is based on max per frame being respected then the descrptor sets can be pre baked with offsets per swapchain image
+/// separate uniform buffer for fixed data (colour, screen size &c.) ?
+static VkDescriptorSetLayout overlay_descriptor_set_layout;///rename this set to uniform
+static VkDescriptorPool overlay_descriptor_pool;///make separate pool for swapchain dependent and swapchain independent resources
 static VkDescriptorSet * overlay_descriptor_sets;
 
-static VkDescriptorSetLayout overlay_test_descriptor_set_layout;
-static VkDescriptorSet overlay_test_descriptor_set;
+static VkDescriptorPool overlay_consistent_descriptor_pool;
+static VkDescriptorSetLayout overlay_consistent_descriptor_set_layout;///rename this set to image
+static VkDescriptorSet overlay_consistent_descriptor_set;
 
 static VkPipelineLayout overlay_pipeline_layout;///relevant descriptors, share as much as possible
 static VkPipeline overlay_pipeline;
@@ -54,13 +57,34 @@ static cvm_vk_image_atlas overlay_colour_image_atlas;
 
 /// actually we want a way to handle uploads from here, and as dynamics are the same as instance data its probably worth having a dedicated buffer for them and uniforms AND upload/transfers
 static cvm_vk_ring_buffer overlay_uniform_buffer;
-static uint32_t * overlay_ring_buffer_acquisitions;
+static uint32_t * overlay_uniform_buffer_acquisitions;
+
+static cvm_vk_ring_buffer overlay_staging_buffer;
+static uint32_t * overlay_staging_buffer_acquisitions;
+
+static VkDependencyInfoKHR overlay_uninitialised_to_transfer_dependencies;
+static VkImageMemoryBarrier2KHR overlay_uninitialised_to_transfer_image_barriers[2];
+
+static VkDependencyInfoKHR overlay_transfer_to_graphics_dependencies;
+static VkImageMemoryBarrier2KHR overlay_transfer_to_graphics_image_barriers[2];
+
+static VkDependencyInfoKHR overlay_graphics_to_transfer_dependencies;
+static VkImageMemoryBarrier2KHR overlay_graphics_to_transfer_image_barriers[2];
+
+//static bool overlay_graphics_transfer_ownership_changes;
+
+
+
+///temporary test stuff
+static cvm_overlay_font overlay_test_font;
 
 static void create_overlay_descriptor_set_layouts(void)
 {
     VkSampler fetch_sampler=cvm_vk_get_fetch_sampler();
 
-    VkDescriptorSetLayoutCreateInfo layout_create_info=(VkDescriptorSetLayoutCreateInfo)
+    VkDescriptorSetLayoutCreateInfo layout_create_info;
+
+    layout_create_info=(VkDescriptorSetLayoutCreateInfo)
     {
         .sType=VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO,
         .pNext=NULL,
@@ -74,20 +98,16 @@ static void create_overlay_descriptor_set_layouts(void)
                 .descriptorCount=1,
                 .stageFlags=VK_SHADER_STAGE_FRAGMENT_BIT,
                 .pImmutableSamplers=NULL
-            }//,
-//            {
-//                .binding=1,
-//                .descriptorType=VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER,///VK_DESCRIPTOR_TYPE_UNIFORM_TEXEL_BUFFER probably preferable here...
-//                .descriptorCount=1,
-//                .stageFlags=VK_SHADER_STAGE_FRAGMENT_BIT,
-//                .pImmutableSamplers=&fetch_sampler /// also test w/ null & setting samplers directly
-//            }
+            }
         }
     };
 
     cvm_vk_create_descriptor_set_layout(&overlay_descriptor_set_layout,&layout_create_info);
 
-    VkDescriptorSetLayoutCreateInfo test_layout_create_info=(VkDescriptorSetLayoutCreateInfo)
+
+
+    ///consistent sets
+    layout_create_info=(VkDescriptorSetLayoutCreateInfo)
     {
         .sType=VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO,
         .pNext=NULL,
@@ -105,31 +125,20 @@ static void create_overlay_descriptor_set_layouts(void)
         }
     };
 
-    cvm_vk_create_descriptor_set_layout(&overlay_test_descriptor_set_layout,&test_layout_create_info);
+    cvm_vk_create_descriptor_set_layout(&overlay_consistent_descriptor_set_layout,&layout_create_info);
 }
 
-static void create_overlay_descriptor_sets(uint32_t swapchain_image_count)
+static void create_overlay_consistent_descriptors(void)
 {
-    uint32_t i;
-    VkDescriptorSetLayout set_layouts[swapchain_image_count];
-    for(i=0;i<swapchain_image_count;i++)set_layouts[i]=overlay_descriptor_set_layout;
-
-    ///separate pool for image descriptor sets? (so that they dont need to be reallocated/recreated upon swapchain changes)
-
-    ///pool size dependent upon swapchain image count so must go here
     VkDescriptorPoolCreateInfo pool_create_info=(VkDescriptorPoolCreateInfo)
     {
         .sType=VK_STRUCTURE_TYPE_DESCRIPTOR_POOL_CREATE_INFO,
         .pNext=NULL,
         .flags=0,///by not specifying individual free must reset whole pool (which is fine)
-        .maxSets=swapchain_image_count+1,
-        .poolSizeCount=2,
-        .pPoolSizes=(VkDescriptorPoolSize[2])
+        .maxSets=1,
+        .poolSizeCount=1,
+        .pPoolSizes=(VkDescriptorPoolSize[1])
         {
-            {
-                .type=VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER,///VK_DESCRIPTOR_TYPE_UNIFORM_TEXEL_BUFFER probably preferable here...
-                .descriptorCount=swapchain_image_count
-            },
             {
                 .type=VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER,
                 .descriptorCount=1
@@ -137,35 +146,18 @@ static void create_overlay_descriptor_sets(uint32_t swapchain_image_count)
         }
     };
 
-    cvm_vk_create_descriptor_pool(&overlay_descriptor_pool,&pool_create_info);
+    cvm_vk_create_descriptor_pool(&overlay_consistent_descriptor_pool,&pool_create_info);
 
     VkDescriptorSetAllocateInfo descriptor_set_allocate_info=(VkDescriptorSetAllocateInfo)
     {
         .sType=VK_STRUCTURE_TYPE_DESCRIPTOR_SET_ALLOCATE_INFO,
         .pNext=NULL,
-        .descriptorPool=overlay_descriptor_pool,
-        .descriptorSetCount=swapchain_image_count,
-        .pSetLayouts=set_layouts
-    };
-
-    overlay_descriptor_sets=malloc(swapchain_image_count*sizeof(VkDescriptorSet));
-
-    cvm_vk_allocate_descriptor_sets(overlay_descriptor_sets,&descriptor_set_allocate_info);
-
-
-    VkDescriptorSetAllocateInfo test_descriptor_set_allocate_info=(VkDescriptorSetAllocateInfo)
-    {
-        .sType=VK_STRUCTURE_TYPE_DESCRIPTOR_SET_ALLOCATE_INFO,
-        .pNext=NULL,
-        .descriptorPool=overlay_descriptor_pool,
+        .descriptorPool=overlay_consistent_descriptor_pool,
         .descriptorSetCount=1,
-        .pSetLayouts=&overlay_test_descriptor_set_layout
+        .pSetLayouts=&overlay_consistent_descriptor_set_layout
     };
 
-    cvm_vk_allocate_descriptor_sets(&overlay_test_descriptor_set,&test_descriptor_set_allocate_info);
-
-
-
+    cvm_vk_allocate_descriptor_sets(&overlay_consistent_descriptor_set,&descriptor_set_allocate_info);
 
     VkWriteDescriptorSet writes[1]=
     {
@@ -173,7 +165,7 @@ static void create_overlay_descriptor_sets(uint32_t swapchain_image_count)
         {
             .sType=VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET,
             .pNext=NULL,
-            .dstSet=overlay_test_descriptor_set,
+            .dstSet=overlay_consistent_descriptor_set,
             .dstBinding=0,
             .dstArrayElement=0,
             .descriptorCount=1,
@@ -194,18 +186,49 @@ static void create_overlay_descriptor_sets(uint32_t swapchain_image_count)
     cvm_vk_write_descriptor_sets(writes,1);
 }
 
+static void create_overlay_descriptor_sets(uint32_t swapchain_image_count)
+{
+    uint32_t i;
+    VkDescriptorSetLayout set_layouts[swapchain_image_count];
+    for(i=0;i<swapchain_image_count;i++)set_layouts[i]=overlay_descriptor_set_layout;
+
+    ///separate pool for image descriptor sets? (so that they dont need to be reallocated/recreated upon swapchain changes)
+
+    ///pool size dependent upon swapchain image count so must go here
+    VkDescriptorPoolCreateInfo pool_create_info=(VkDescriptorPoolCreateInfo)
+    {
+        .sType=VK_STRUCTURE_TYPE_DESCRIPTOR_POOL_CREATE_INFO,
+        .pNext=NULL,
+        .flags=0,///by not specifying individual free must reset whole pool (which is fine)
+        .maxSets=swapchain_image_count,
+        .poolSizeCount=1,
+        .pPoolSizes=(VkDescriptorPoolSize[1])
+        {
+            {
+                .type=VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER,///VK_DESCRIPTOR_TYPE_UNIFORM_TEXEL_BUFFER probably preferable here...
+                .descriptorCount=swapchain_image_count
+            }
+        }
+    };
+
+    cvm_vk_create_descriptor_pool(&overlay_descriptor_pool,&pool_create_info);
+
+    VkDescriptorSetAllocateInfo descriptor_set_allocate_info=(VkDescriptorSetAllocateInfo)
+    {
+        .sType=VK_STRUCTURE_TYPE_DESCRIPTOR_SET_ALLOCATE_INFO,
+        .pNext=NULL,
+        .descriptorPool=overlay_descriptor_pool,
+        .descriptorSetCount=swapchain_image_count,
+        .pSetLayouts=set_layouts
+    };
+
+    overlay_descriptor_sets=malloc(swapchain_image_count*sizeof(VkDescriptorSet));
+
+    cvm_vk_allocate_descriptor_sets(overlay_descriptor_sets,&descriptor_set_allocate_info);
+}
+
 static void update_overlay_uniforms(uint32_t swapchain_image,VkDeviceSize offset,uint32_t colour_count)
 {
-//    .pImageInfo=(VkDescriptorImageInfo[1])
-//    {
-//        {
-//            .sampler=,
-//            .imageView=,
-//            .imageLayout=,
-//        }
-//    }
-
-//    VkSampler fetch_sampler=cvm_vk_get_fetch_sampler();
     ///investigate whether its necessary to update this every frame if its basically unchanging data and war hazards are a problem. may want to avoid just to stop validation from picking it up.
     VkWriteDescriptorSet writes[1]=
     {
@@ -228,27 +251,7 @@ static void update_overlay_uniforms(uint32_t swapchain_image,VkDeviceSize offset
                 }
             },
             .pTexelBufferView=NULL
-        }//,
-//        (VkWriteDescriptorSet)
-//        {
-//            .sType=VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET,
-//            .pNext=NULL,
-//            .dstSet=overlay_descriptor_sets[swapchain_image],
-//            .dstBinding=1,
-//            .dstArrayElement=0,
-//            .descriptorCount=1,
-//            .descriptorType=VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER,
-//            .pImageInfo=(VkDescriptorImageInfo[1])
-//            {
-//                {
-//                    .sampler=VK_NULL_HANDLE,///using immutable sampler (for now)
-//                    .imageView=overlay_transparency_image_view,
-//                    .imageLayout=VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL
-//                }
-//            },
-//            .pBufferInfo=NULL,
-//            .pTexelBufferView=NULL
-//        }
+        }
     };
 
     cvm_vk_write_descriptor_sets(writes,1);
@@ -265,7 +268,7 @@ static void create_overlay_pipeline_layouts(void)
         .pSetLayouts=(VkDescriptorSetLayout[2])
         {
             overlay_descriptor_set_layout,
-            overlay_test_descriptor_set_layout
+            overlay_consistent_descriptor_set_layout
         },
         .pushConstantRangeCount=1,
         .pPushConstantRanges=(VkPushConstantRange[1])
@@ -563,13 +566,13 @@ static void create_overlay_images(uint32_t t_w,uint32_t t_h,uint32_t c_w,uint32_
 
 
     image_creation_info.format=VK_FORMAT_R8_UNORM;
-    image_creation_info.usage=VK_IMAGE_USAGE_SAMPLED_BIT;
+    image_creation_info.usage=VK_IMAGE_USAGE_SAMPLED_BIT | VK_IMAGE_USAGE_TRANSFER_DST_BIT;
     image_creation_info.extent.width=t_w;
     image_creation_info.extent.height=t_h;
     cvm_vk_create_image(&overlay_transparency_image,&image_creation_info);
 
     image_creation_info.format=VK_FORMAT_R8G8B8A8_UNORM;
-    image_creation_info.usage=VK_IMAGE_USAGE_SAMPLED_BIT;///conditionally VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT ???
+    image_creation_info.usage=VK_IMAGE_USAGE_SAMPLED_BIT | VK_IMAGE_USAGE_TRANSFER_DST_BIT;///conditionally VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT ???
     image_creation_info.extent.width=c_w;
     image_creation_info.extent.height=c_h;
     cvm_vk_create_image(&overlay_colour_image,&image_creation_info);
@@ -617,6 +620,112 @@ static void create_overlay_images(uint32_t t_w,uint32_t t_h,uint32_t c_w,uint32_
     cvm_vk_create_image_atlas(&overlay_colour_image_atlas,overlay_colour_image_view,c_w,c_h,false);
 }
 
+static void create_overlay_barriers()
+{
+    //overlay_graphics_transfer_ownership_changes = cvm_vk_get_transfer_queue_family()==cvm_vk_get_graphics_queue_family();
+    ///put back queue ownership transfers as soon as its possible to test and profile, also needs backing structure to handle it
+
+    VkImageMemoryBarrier2KHR image_barrier=(VkImageMemoryBarrier2KHR)///initialise all shared values;
+    {
+        .sType=VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER_2_KHR,
+        .pNext=NULL,
+        .subresourceRange=(VkImageSubresourceRange)
+        {
+            .aspectMask=VK_IMAGE_ASPECT_COLOR_BIT,
+            .baseMipLevel=0,
+            .levelCount=1,
+            .baseArrayLayer=0,
+            .layerCount=1
+        }
+    };
+
+    ///uninitialised to transfer
+    image_barrier.srcStageMask=0;
+    image_barrier.srcAccessMask=0;
+    image_barrier.dstStageMask=VK_PIPELINE_STAGE_2_TRANSFER_BIT_KHR;
+    image_barrier.dstAccessMask=VK_ACCESS_2_TRANSFER_WRITE_BIT_KHR;
+    image_barrier.oldLayout=VK_IMAGE_LAYOUT_UNDEFINED;
+    image_barrier.newLayout=VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL;
+    image_barrier.srcQueueFamilyIndex=VK_QUEUE_FAMILY_IGNORED;
+    image_barrier.dstQueueFamilyIndex=VK_QUEUE_FAMILY_IGNORED;
+
+    image_barrier.image=overlay_transparency_image;
+    overlay_uninitialised_to_transfer_image_barriers[0]=image_barrier;
+
+    image_barrier.image=overlay_colour_image;
+    overlay_uninitialised_to_transfer_image_barriers[1]=image_barrier;
+
+    overlay_uninitialised_to_transfer_dependencies=(VkDependencyInfoKHR)
+    {
+        .sType=VK_STRUCTURE_TYPE_DEPENDENCY_INFO_KHR,
+        .pNext=NULL,
+        .dependencyFlags=0,
+        .memoryBarrierCount=0,
+        .pMemoryBarriers=NULL,
+        .bufferMemoryBarrierCount=0,
+        .pBufferMemoryBarriers=NULL,
+        .imageMemoryBarrierCount=2,
+        .pImageMemoryBarriers=overlay_uninitialised_to_transfer_image_barriers
+    };
+
+    ///transfer to graphics
+    image_barrier.srcStageMask=VK_PIPELINE_STAGE_2_TRANSFER_BIT_KHR;
+    image_barrier.srcAccessMask=VK_ACCESS_2_TRANSFER_WRITE_BIT_KHR;
+    image_barrier.dstStageMask=VK_PIPELINE_STAGE_2_FRAGMENT_SHADER_BIT_KHR;
+    image_barrier.dstAccessMask=VK_ACCESS_2_SHADER_READ_BIT_KHR;
+    image_barrier.oldLayout=VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL;
+    image_barrier.newLayout=VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
+    image_barrier.srcQueueFamilyIndex=VK_QUEUE_FAMILY_IGNORED,//cvm_vk_get_transfer_queue_family();
+    image_barrier.dstQueueFamilyIndex=VK_QUEUE_FAMILY_IGNORED,//cvm_vk_get_graphics_queue_family();
+
+    image_barrier.image=overlay_transparency_image;
+    overlay_transfer_to_graphics_image_barriers[0]=image_barrier;
+
+    image_barrier.image=overlay_colour_image;
+    overlay_transfer_to_graphics_image_barriers[1]=image_barrier;
+
+    overlay_transfer_to_graphics_dependencies=(VkDependencyInfoKHR)
+    {
+        .sType=VK_STRUCTURE_TYPE_DEPENDENCY_INFO_KHR,
+        .pNext=NULL,
+        .dependencyFlags=0,
+        .memoryBarrierCount=0,
+        .pMemoryBarriers=NULL,
+        .bufferMemoryBarrierCount=0,
+        .pBufferMemoryBarriers=NULL,
+        .imageMemoryBarrierCount=2,
+        .pImageMemoryBarriers=overlay_transfer_to_graphics_image_barriers
+    };
+
+    ///graphics to transfer
+    image_barrier.srcStageMask=VK_PIPELINE_STAGE_2_FRAGMENT_SHADER_BIT_KHR;
+    image_barrier.srcAccessMask=VK_ACCESS_2_SHADER_READ_BIT_KHR;
+    image_barrier.dstStageMask=VK_PIPELINE_STAGE_2_TRANSFER_BIT_KHR;
+    image_barrier.dstAccessMask=VK_ACCESS_2_TRANSFER_WRITE_BIT_KHR;
+    image_barrier.oldLayout=VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
+    image_barrier.newLayout=VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL;
+    image_barrier.srcQueueFamilyIndex=VK_QUEUE_FAMILY_IGNORED,//cvm_vk_get_graphics_queue_family();
+    image_barrier.dstQueueFamilyIndex=VK_QUEUE_FAMILY_IGNORED,//cvm_vk_get_transfer_queue_family();
+
+    image_barrier.image=overlay_transparency_image;
+    overlay_graphics_to_transfer_image_barriers[0]=image_barrier;
+
+    image_barrier.image=overlay_colour_image;
+    overlay_graphics_to_transfer_image_barriers[1]=image_barrier;
+
+    overlay_graphics_to_transfer_dependencies=(VkDependencyInfoKHR)
+    {
+        .sType=VK_STRUCTURE_TYPE_DEPENDENCY_INFO_KHR,
+        .pNext=NULL,
+        .dependencyFlags=0,
+        .memoryBarrierCount=0,
+        .pMemoryBarriers=NULL,
+        .bufferMemoryBarrierCount=0,
+        .pBufferMemoryBarriers=NULL,
+        .imageMemoryBarrierCount=2,
+        .pImageMemoryBarriers=overlay_graphics_to_transfer_image_barriers
+    };
+}
 
 void initialise_overlay_render_data(void)
 {
@@ -631,13 +740,21 @@ void initialise_overlay_render_data(void)
 
     cvm_vk_create_module_data(&overlay_module_data,false);
 
-    cvm_vk_create_ring_buffer(&overlay_uniform_buffer,VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT,1024);
+    cvm_vk_create_ring_buffer(&overlay_uniform_buffer,VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT,0);
+    cvm_vk_create_ring_buffer(&overlay_staging_buffer,VK_BUFFER_USAGE_TRANSFER_SRC_BIT,0);
 
     create_overlay_images(1024,1024,1024,1024);
+    create_overlay_barriers();///must go after creation of all resources these barriers act upon
+
+    create_overlay_consistent_descriptors();
+
+    cvm_overlay_create_font(&overlay_test_font,"cvm_shared/resources/cvm_font_1.ttf",32);
 }
 
 void terminate_overlay_render_data(void)
 {
+    cvm_overlay_destroy_font(&overlay_test_font);
+
     cvm_vk_destroy_image_atlas(&overlay_transparency_image_atlas);
     cvm_vk_destroy_image_atlas(&overlay_colour_image_atlas);
 
@@ -656,12 +773,15 @@ void terminate_overlay_render_data(void)
 
     cvm_vk_destroy_pipeline_layout(overlay_pipeline_layout);
 
+    cvm_vk_destroy_descriptor_pool(overlay_consistent_descriptor_pool);
+
     cvm_vk_destroy_descriptor_set_layout(overlay_descriptor_set_layout);
-    cvm_vk_destroy_descriptor_set_layout(overlay_test_descriptor_set_layout);
+    cvm_vk_destroy_descriptor_set_layout(overlay_consistent_descriptor_set_layout);
 
     cvm_vk_destroy_module_data(&overlay_module_data,false);
 
     cvm_vk_destroy_ring_buffer(&overlay_uniform_buffer);
+    cvm_vk_destroy_ring_buffer(&overlay_staging_buffer);
 }
 
 
@@ -678,7 +798,15 @@ void initialise_overlay_swapchain_dependencies(void)
 
     cvm_vk_resize_module_graphics_data(&overlay_module_data,0);
 
-    overlay_ring_buffer_acquisitions=calloc(swapchain_image_count,sizeof(uint32_t));
+    ///set these properly at some point
+    uint32_t uniform_size=1024;
+    uint32_t staging_size=4096;
+
+    cvm_vk_update_ring_buffer(&overlay_uniform_buffer,swapchain_image_count*uniform_size);
+    cvm_vk_update_ring_buffer(&overlay_staging_buffer,swapchain_image_count*staging_size);
+
+    overlay_uniform_buffer_acquisitions=calloc(swapchain_image_count,sizeof(uint32_t));
+    overlay_staging_buffer_acquisitions=calloc(swapchain_image_count,sizeof(uint32_t));
 }
 
 void terminate_overlay_swapchain_dependencies(void)
@@ -692,31 +820,202 @@ void terminate_overlay_swapchain_dependencies(void)
     {
         cvm_vk_destroy_framebuffer(overlay_framebuffers[i]);
 
-        cvm_vk_relinquish_ring_buffer_space(&overlay_uniform_buffer,overlay_ring_buffer_acquisitions+i);
+        cvm_vk_relinquish_ring_buffer_space(&overlay_uniform_buffer,overlay_uniform_buffer_acquisitions+i);
+        cvm_vk_relinquish_ring_buffer_space(&overlay_staging_buffer,overlay_staging_buffer_acquisitions+i);
     }
 
     cvm_vk_destroy_descriptor_pool(overlay_descriptor_pool);
 
     free(overlay_descriptor_sets);
     free(overlay_framebuffers);
-    free(overlay_ring_buffer_acquisitions);
+    free(overlay_uniform_buffer_acquisitions);
+    free(overlay_staging_buffer_acquisitions);
+}
+/*
+static uint32_t calculate_code_point(uint8_t * text)
+{
+    uint32_t id;
+
+    if(*text & 0x80)
+    {
+        id=0;
+        while(*text & (0x80 >> incr))
+        {
+            ///error check, dont put in release version
+            if((text[incr]&0xC0) != 0x80)
+            {
+                fprintf(stderr,"ATTEMPTING TO RENDER AS INVALID UTF-8 STRING (TOP BIT MISMATCH)\n");
+                exit(-1);
+            }
+            id<<=6;
+            printf("=====%x\n",text[incr]&0x3F);
+            id|=text[incr]&0x3F;
+            incr++;
+        }
+        id|=(*text&(1<<(7-incr))-1)   <<(6u*incr-6u);
+        ///error check, dont put in release version
+        if(incr==1)
+        {
+            fprintf(stderr,"ATTEMPTING TO RENDER AS INVALID UTF-8 STRING (INVALID LENGTH SPECIFIED)\n");
+            exit(-1);
+        }
+    }
+    else
+    {
+        id=*text;
+    }
+
+    return id;
+}
+*/
+
+
+static void overlay_render_text(VkCommandBuffer upload_buffer,cvm_overlay_font * font,uint8_t * text,int x,int y)
+{
+    uint32_t id,index,incr,s,e,w;
+    int s_x=x;
+    uint8_t tmp;///extracted value to allow valid string of just this utf8 character (i.e. "current" text variable) to quickly be used by replacing following char w/ null terminator
+    SDL_Surface * text_surface;
+    VkDeviceSize upload_offset;
+    uint8_t * staging;
+    cvm_vk_image_atlas_tile * tile;
+
+    while(*text)
+    {
+        incr=1;
+        if(*text & 0x80)
+        {
+            id=0;
+            while(*text & (0x80 >> incr))
+            {
+                ///error check, dont put in release version
+                if((text[incr]&0xC0) != 0x80)
+                {
+                    fprintf(stderr,"ATTEMPTING TO RENDER AS INVALID UTF-8 STRING (TOP BIT MISMATCH)\n");
+                    exit(-1);
+                }
+                id<<=8;
+                id|=text[incr];
+                incr++;
+            }
+            id|=*text<<(8*incr-8);
+            ///error check, dont put in release version
+            if(incr==1)
+            {
+                fprintf(stderr,"ATTEMPTING TO RENDER AS INVALID UTF-8 STRING (INVALID LENGTH SPECIFIED)\n");
+                exit(-1);
+            }
+        }
+        else id=*text;
+
+        ///special handling for space and other non-glyph characters here???
+
+        s=0;
+        e=font->glyph_count;
+        if(e)while(font->glyphs[(index=(s+e)>>1)].id!=id)
+        {
+            if(index==s)
+            {
+                ///does not exist, insert at index | index+1
+                index+=(font->glyphs[index].id<id);
+
+                if(font->glyph_count==font->glyph_space)font->glyphs=realloc(font->glyphs,sizeof(cvm_overlay_glyph)*(font->glyph_space*=2));
+
+                memmove(font->glyphs+index+1,font->glyphs+index,(font->glyph_count-index)*sizeof(cvm_overlay_glyph));
+
+                font->glyphs[index].tile=NULL;
+                font->glyphs[index].id=id;
+
+                font->glyph_count++;
+
+                break;
+            }
+            else if(font->glyphs[index].id<id) s=index;
+            else e=index;
+        }
+        else
+        {
+            index=0;
+
+            font->glyphs[0].tile=NULL;
+            font->glyphs[0].id=id;
+            font->glyph_count++;
+        }
+
+        printf("%u\n",index);
+
+        tile=font->glyphs[index].tile;
+        if(tile==NULL)
+        {
+            tmp=text[incr];
+            text[incr]='\0';
+            if((text_surface=TTF_RenderUTF8_Shaded(font->font,(const char*)text,(SDL_Color){255,255,255,255},(SDL_Color){0,0,0,0})))
+            {
+                w=((text_surface->w-1)&~3)+4;
+                staging = cvm_vk_get_ring_buffer_allocation(&overlay_staging_buffer,sizeof(uint8_t)*w*text_surface->h,&upload_offset);
+
+                if(staging)
+                {
+                    tile=font->glyphs[index].tile=cvm_vk_acquire_image_atlas_tile(&overlay_transparency_image_atlas,w,text_surface->h);
+                    if(tile)
+                    {
+                        memcpy(staging,text_surface->pixels,sizeof(uint8_t)*w*text_surface->h);
+
+                        VkBufferImageCopy cpy=(VkBufferImageCopy)
+                        {
+                            .bufferOffset=upload_offset,
+                            .bufferRowLength=w,
+                            .bufferImageHeight=text_surface->h,
+                            .imageSubresource=(VkImageSubresourceLayers)
+                            {
+                                .aspectMask=VK_IMAGE_ASPECT_COLOR_BIT,
+                                .mipLevel=0,
+                                .baseArrayLayer=0,
+                                .layerCount=1
+                            },
+                            .imageOffset=(VkOffset3D)
+                            {
+                                .x=tile->x_pos<<CVM_VK_BASE_TILE_SIZE_FACTOR,
+                                .y=tile->y_pos<<CVM_VK_BASE_TILE_SIZE_FACTOR,
+                                .z=0
+                            },
+                            .imageExtent=(VkExtent3D)
+                            {
+                                .width=w,
+                                .height=text_surface->h,
+                                .depth=1,
+                            }
+                        };
+
+                        vkCmdCopyBufferToImage(upload_buffer,overlay_staging_buffer.buffer,overlay_transparency_image,VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,1,&cpy);
+                    }
+                }
+
+                SDL_FreeSurface(text_surface);
+            }
+            text[incr]=tmp;
+        }
+//
+//        if(tile)///need to check again as can return null once again;
+//        {
+//            ///
+//        }
+
+        text+=incr;
+    }
 }
 
-
-cvm_vk_module_graphics_block * overlay_render_frame(int screen_w,int screen_h)
+cvm_vk_module_work_block * overlay_render_frame(int screen_w,int screen_h)
 {
-    VkCommandBuffer command_buffer;
+    cvm_vk_module_work_block * work_block;
     uint32_t swapchain_image_index;
 
-//    command_buffer = cvm_vk_begin_module_frame_transfer(&overlay_module_data,false);
-//    if(command_buffer!=VK_NULL_HANDLE)
-//    {
-//        ///do transfers
-//    }
+    static bool first=true;
+
 
 
     ///perhaps this should return previous image index as well, such that that value can be used in cleanup (e.g. relinquishing ring buffer space)
-    command_buffer = cvm_vk_begin_module_graphics_block(&overlay_module_data,0,&swapchain_image_index);
+    work_block = cvm_vk_begin_module_work_block(&overlay_module_data,0,&swapchain_image_index);
 
 
 
@@ -726,37 +1025,100 @@ cvm_vk_module_graphics_block * overlay_render_frame(int screen_w,int screen_h)
     /// define state that varies between attachments in base, referenceable struct that can be shared across functions and invocations (inc. clear values?)
     /// dont bother storing framebuffer images/data in enumed array, store individually
 
+    /// could have a single image atlas and use different aspects of part of it (r,g,b,a via image views) for different alpha/transparent image_atlases
+    /// this would be fairly inefficient to retrieve though..., probably better not to.
 
-    static bool first=true;
 
-    if(command_buffer!=VK_NULL_HANDLE)
+    if(swapchain_image_index!=CVM_VK_INVALID_IMAGE_INDEX)
     {
+        cvm_vk_begin_ring_buffer(&overlay_staging_buffer);///build barriers into begin/end paradigm maybe???
+        #warning need to use the appropriate queue for all following transfer ops
+        ///     ^ possibly detect when they're different and use gfx directly to avoid double submission?
+        ///         ^ have cvm_vk_begin_module_work_block return same command buffer?
+        ///             ^could have meta level function that inserts both barriers to appropriate queues simultaneously as necessary??? (VK_NULL_HANDLE when unit-transfer?)
+        ///   module handles semaphore when necessary, perhaps it can also handle some aspect(s) of barriers?
         if(first)
         {
-            VkImageMemoryBarrier barrier=(VkImageMemoryBarrier)
-            {
-                .sType=VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER,
-                .pNext=NULL,
-                .srcAccessMask=VK_ACCESS_TRANSFER_WRITE_BIT,
-                .dstAccessMask=VK_ACCESS_SHADER_READ_BIT,
-                .oldLayout=VK_IMAGE_LAYOUT_UNDEFINED,
-                .newLayout=VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL,
-                .srcQueueFamilyIndex=0,
-                .dstQueueFamilyIndex=0,
-                .image=overlay_transparency_image,
-                .subresourceRange=(VkImageSubresourceRange)
-                {
-                    .aspectMask=VK_IMAGE_ASPECT_COLOR_BIT,
-                    .baseMipLevel=0,
-                    .levelCount=1,
-                    .baseArrayLayer=0,
-                    .layerCount=1
-                }
-            };
-
-            vkCmdPipelineBarrier(command_buffer,VK_PIPELINE_STAGE_TRANSFER_BIT,VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT,0,0,NULL,0,NULL,1,&barrier);
+            CVM_TMP_vkCmdPipelineBarrier2KHR(work_block->graphics_work,&overlay_uninitialised_to_transfer_dependencies);
             first=false;
+
+
+            VkDeviceSize upload_offset;
+
+            //TTF_Font * this_font = TTF_OpenFont("cvm_shared/resources/cvm_font_1.ttf",16);
+//            TTF_Font * this_font = TTF_OpenFont("cvm_shared/resources/FreeMono.ttf",24);
+//            TTF_Font * this_font = TTF_OpenFont("cvm_shared/resources/HanaMinA.ttf",32);
+
+
+            SDL_Surface *text_surface;
+//            char str[]={0xC3,0xBE,0x00,0x00,0x00};
+            //char str[]={0xFF66,0x00,0x00,0x00};
+            SDL_Color fg={255,255,255,255};
+            SDL_Color bg={0,0,0,0};
+            //if((text_surface=TTF_RenderUNICODE_Shaded(this_font,str,fg,bg)))//
+            char * str=strdup("Hello\tWorld! ばか");
+            if((text_surface=TTF_RenderUTF8_Shaded(overlay_test_font.font,str,fg,bg)))//
+            {
+
+                overlay_render_text(work_block->graphics_work,&overlay_test_font,(uint8_t*)str,0,0);
+
+                uint8_t * staging = cvm_vk_get_ring_buffer_allocation(&overlay_staging_buffer,sizeof(uint8_t)*text_surface->w*text_surface->h,&upload_offset);
+
+                //SDL_LockSurface(text_surface);
+                int i,j,w;
+                w=((text_surface->w-1)&~3)+4;
+                //w=text_surface->w;
+                for(i=0;i<text_surface->h;i++)
+                {
+                    for(j=0;j<text_surface->w;j++)
+                    {
+                        //TTF_GetFontKerningSizeGlyphs();
+                        staging[i*text_surface->w+j]=((uint8_t*)text_surface->pixels)[i*w+j];
+                    }
+                }
+//                uint8_t * ss="ばか";
+//                for(i=0;ss[i];i++)printf("%x\n",(ss[i]));
+                //memcpy(staging,text_surface->pixels,sizeof(uint8_t)*text_surface->w*text_surface->h);
+                //SDL_UnlockSurface(text_surface);
+                //memset(staging,255,sizeof(uint8_t)*text_surface->w*text_surface->h);
+
+                VkBufferImageCopy cpy=(VkBufferImageCopy)
+                {
+                    .bufferOffset=upload_offset,
+                    .bufferRowLength=text_surface->w,
+                    .bufferImageHeight=text_surface->h,
+                    .imageSubresource=(VkImageSubresourceLayers)
+                    {
+                        .aspectMask=VK_IMAGE_ASPECT_COLOR_BIT,
+                        .mipLevel=0,
+                        .baseArrayLayer=0,
+                        .layerCount=1
+                    },
+                    .imageOffset=(VkOffset3D)
+                    {
+                        .x=350,
+                        .y=200,
+                        .z=0
+                    },
+                    .imageExtent=(VkExtent3D)
+                    {
+                        .width=text_surface->w,
+                        .height=text_surface->h,
+                        .depth=1,
+                    }
+                };
+                vkCmdCopyBufferToImage(work_block->graphics_work,overlay_staging_buffer.buffer,overlay_transparency_image,VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,1,&cpy);
+
+                SDL_FreeSurface(text_surface);
+            }
+            free(str);
         }
+        else
+        {
+            CVM_TMP_vkCmdPipelineBarrier2KHR(work_block->graphics_work,&overlay_graphics_to_transfer_dependencies);
+        }
+
+        CVM_TMP_vkCmdPipelineBarrier2KHR(work_block->graphics_work,&overlay_transfer_to_graphics_dependencies);
 
 
 
@@ -776,19 +1138,15 @@ cvm_vk_module_graphics_block * overlay_render_frame(int screen_w,int screen_h)
         uniforms[6]=0;
         uniforms[7]=1.0;
 
-        update_overlay_uniforms(swapchain_image_index,uniforms_offset,2);
+        update_overlay_uniforms(swapchain_image_index,uniforms_offset,2);///should really build buffer acquisition into update uniforms function
 
         float screen_dimensions[4]={1.0/((float)screen_w),1.0/((float)screen_h),(float)screen_w,(float)screen_h};
 
-        vkCmdPushConstants(command_buffer,overlay_pipeline_layout,VK_SHADER_STAGE_VERTEX_BIT|VK_SHADER_STAGE_FRAGMENT_BIT,0,4*sizeof(float),screen_dimensions);
+        vkCmdPushConstants(work_block->graphics_work,overlay_pipeline_layout,VK_SHADER_STAGE_VERTEX_BIT|VK_SHADER_STAGE_FRAGMENT_BIT,0,4*sizeof(float),screen_dimensions);
 
-        vkCmdBindDescriptorSets(command_buffer,VK_PIPELINE_BIND_POINT_GRAPHICS,overlay_pipeline_layout,0,1,overlay_descriptor_sets+swapchain_image_index,0,NULL);
+        vkCmdBindDescriptorSets(work_block->graphics_work,VK_PIPELINE_BIND_POINT_GRAPHICS,overlay_pipeline_layout,0,1,overlay_descriptor_sets+swapchain_image_index,0,NULL);
 
-        vkCmdBindDescriptorSets(command_buffer,VK_PIPELINE_BIND_POINT_GRAPHICS,overlay_pipeline_layout,1,1,&overlay_test_descriptor_set,0,NULL);
-
-        ///do graphics
-//        VkClearValue clear_values[1];///other clear colours should probably be provided by other chunks of application
-//        clear_values[0].color=(VkClearColorValue){{0.0f,0.5f,0.0f,1.0f}};
+        vkCmdBindDescriptorSets(work_block->graphics_work,VK_PIPELINE_BIND_POINT_GRAPHICS,overlay_pipeline_layout,1,1,&overlay_consistent_descriptor_set,0,NULL);
 
         VkRenderPassBeginInfo render_pass_begin_info=(VkRenderPassBeginInfo)
         {
@@ -801,39 +1159,115 @@ cvm_vk_module_graphics_block * overlay_render_frame(int screen_w,int screen_h)
             .pClearValues=NULL
         };
 
-        vkCmdBeginRenderPass(command_buffer,&render_pass_begin_info,VK_SUBPASS_CONTENTS_INLINE);///================
+        vkCmdBeginRenderPass(work_block->graphics_work,&render_pass_begin_info,VK_SUBPASS_CONTENTS_INLINE);///================
 
-        vkCmdBindPipeline(command_buffer,VK_PIPELINE_BIND_POINT_GRAPHICS,overlay_pipeline);
+        vkCmdBindPipeline(work_block->graphics_work,VK_PIPELINE_BIND_POINT_GRAPHICS,overlay_pipeline);
 
+        vkCmdDraw(work_block->graphics_work,4,1,0,0);
 
-        ///put following in a function?
-        //VkDeviceSize offset=overlay_vertex_allocation->offset<<overlay_buffer.base_dynamic_allocation_size_factor;
-        //vkCmdBindVertexBuffers(command_buffer,0,1,&overlay_buffer.buffer,&offset);
-        //cvm_vk_bind_dymanic_allocation_vertex(command_buffer,&overlay_buffer,overlay_vertex_allocation,0);
-
-        vkCmdDraw(command_buffer,4,1,0,0);
-        //vkCmdDrawIndexed(command_buffer,36,1,0,0,0);
-
-        vkCmdEndRenderPass(command_buffer);///================
+        vkCmdEndRenderPass(work_block->graphics_work);///================
 
 
-        overlay_ring_buffer_acquisitions[swapchain_image_index]=cvm_vk_end_ring_buffer(&overlay_uniform_buffer);
+        overlay_uniform_buffer_acquisitions[swapchain_image_index]=cvm_vk_end_ring_buffer(&overlay_uniform_buffer);
+        overlay_staging_buffer_acquisitions[swapchain_image_index]=cvm_vk_end_ring_buffer(&overlay_staging_buffer);
     }
 
-    return cvm_vk_end_module_graphics_block(&overlay_module_data);
+    return cvm_vk_end_module_work_block(&overlay_module_data);
 }
 
 void overlay_frame_cleanup(uint32_t swapchain_image_index)
 {
     if(swapchain_image_index!=CVM_VK_INVALID_IMAGE_INDEX)
     {
-        cvm_vk_relinquish_ring_buffer_space(&overlay_uniform_buffer,overlay_ring_buffer_acquisitions+swapchain_image_index);
+        cvm_vk_relinquish_ring_buffer_space(&overlay_uniform_buffer,overlay_uniform_buffer_acquisitions+swapchain_image_index);
+        cvm_vk_relinquish_ring_buffer_space(&overlay_staging_buffer,overlay_staging_buffer_acquisitions+swapchain_image_index);
     }
 }
 
 
+void cvm_overlay_create_font(cvm_overlay_font * font,char * filename,int pixel_size)
+{
+    font->font = TTF_OpenFont(filename,pixel_size);
 
+    if(!font->font)
+    {
+        fprintf(stderr,"COULD NOT LOAD FONT FILE %s\n",filename);
+        exit(-1);
+    }
 
+    font->glyphs=malloc(4*sizeof(cvm_overlay_glyph));
+    font->glyph_space=4;
+    font->glyph_count=0;
+}
+
+void cvm_overlay_destroy_font(cvm_overlay_font * font)
+{
+    uint32_t i;
+    TTF_CloseFont(font->font);
+
+    for(i=0;i<font->glyph_count;i++)
+    {
+        cvm_vk_relinquish_image_atlas_tile(&overlay_transparency_image_atlas,font->glyphs[i].tile);
+    }
+
+    free(font->glyphs);
+}
+
+/*
+int test(void)
+{
+    SDL_Color color={0,0,0};
+    SDL_Surface *text_surface;
+    if(!(text_surface=TTF_RenderUTF8_Solid(font,"Hello World!",color))) {
+        //handle error here, perhaps print TTF_GetError at least
+    } else {
+        SDL_BlitSurface(text_surface,NULL,screen,NULL);
+        //perhaps we can reuse it, but I assume not for simplicity.
+        SDL_FreeSurface(text_surface);
+}
+}
+*/
+
+/*
+void overlay_test(void)
+{
+    struct timespec ts1,ts2;
+    uint64_t t_total;
+    char str[10];
+    int t,w;
+    str[2]=' ';
+    str[3]='i';
+    str[4]='j';
+    str[5]=' ';
+    str[6]='0';
+    str[7]='1';
+    str[8]='0';
+    str[9]='\0';
+
+    TTF_Font * this_font = TTF_OpenFont("cvm_shared/resources/CVM_font_1.ttf",16);
+    t=0;
+    clock_gettime(CLOCK_REALTIME,&ts1);
+//    for(str[0]='!';str[0]<='~';str[0]++)
+//    {
+//        for(str[1]='!';str[1]<='~';str[1]++)
+//        {
+//            TTF_SizeUTF8(this_font,str,&w,NULL);
+//            t+=w;
+//        }
+//    }
+TTF_SizeUTF8(this_font,"ab",&t,NULL);
+puts("a\tb");
+
+    clock_gettime(CLOCK_REALTIME,&ts2);
+
+    t_total=(ts2.tv_sec-ts1.tv_sec)*1000000000 + ts2.tv_nsec-ts1.tv_nsec;
+
+    printf("overlay_test time: %lu %u\n",t_total/1000,t);
+
+    TTF_CloseFont(this_font);
+}
+
+*/
 
 
 

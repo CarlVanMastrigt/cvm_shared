@@ -25,15 +25,91 @@ along with cvm_shared.  If not, see <https://www.gnu.org/licenses/>.
 #define CVM_OVERLAY_H
 
 
+
+
+
+
+
+
+typedef struct cvm_overlay_render_data
+{
+    uint16_t data1[4];///position, unorm probably
+    uint16_t data2[4];///int data: type, tex_lookup.xy, ?    alternatively some of these can be type based flags, e.g. which texture to pull from, if any (and with it whether to apply colouring)
+    uint16_t data3[4];/// ? ? ? ?
+}
+cvm_overlay_render_data;
+
+///optimised compared to other 2 similar purpose elements b/c glyphs are expected to be such a common element
+typedef struct cvm_overlay_glyph
+{
+    cvm_vk_image_atlas_tile * tile;///if null create upon render
+
+    uint32_t id;///"technically" 36 bits is maximum utf-8 range, but apparently only 21 are used...
+    uint32_t usage_counter;///when hitting 0 it gets deleted? (or scheduled for deletion) is this even necessary?
+    ///perhaps need better way to handle unused overlay elements and glyphs (could just agressively delete...)
+}
+cvm_overlay_glyph;///hmmm, glyph vs string based rendering... glyph has more potential to be loaded at once and is faster in worst case, but slower in average
+
+typedef struct cvm_overlay_font
+{
+    TTF_Font * font;
+
+    ///not a great solution but bubble sort new glyphs from end?, is rare enough op and gives low enough cache use to justify?
+    cvm_overlay_glyph * glyphs;
+    uint32_t glyph_count;
+    uint32_t glyph_space;
+}
+cvm_overlay_font;
+
+///usually these will contain names of sprites common to all themes its possible to use
+typedef struct cvm_overlay_sprite
+{
+    cvm_vk_image_atlas_tile * tile;
+    uint32_t coloured:1;///which image atlas to use...
+    char * name;
+}
+cvm_overlay_sprite;
+
+///created per theme in numbers dictated by the theme, should be referenced and handled externally
+typedef struct cvm_overlay_interactable_element
+{
+    cvm_vk_image_atlas_tile * tile;
+    /// need creation function pointer? handle on per theme function to create as necessary as with fonts?
+    uint32_t selection_offset:31;/// in 4x4 u16 tiles of binary data for receiving clicks
+    uint32_t coloured:1;///which image atlas to use...
+}
+cvm_overlay_interactable_element;
+
+
+
+
+void initialise_overlay_render_data(void);
+void terminate_overlay_render_data(void);
+
+void initialise_overlay_swapchain_dependencies(void);
+void terminate_overlay_swapchain_dependencies(void);
+
+cvm_vk_module_work_block * overlay_render_frame(int screen_w,int screen_h);
+
+void overlay_frame_cleanup(uint32_t swapchain_image_index);
+
+void cvm_overlay_create_font(cvm_overlay_font * font,char * filename,int pixel_size);
+void cvm_overlay_destroy_font(cvm_overlay_font * font);
+//void overlay_test(void);
+
+
+
+
+
+
+
+
+
+
 ///@todo check if below defines are necessary
 #define BASE_OVERLAY_SPRITE_SIZE 16
 #define NUM_OVERLAY_SPRITE_LEVELS 11
 /// 0=16 10=16k
-
-
-
-
-
 
 
 
@@ -278,15 +354,7 @@ void render_overlay(gl_functions * glf,overlay_data * od,overlay_theme * theme,i
 
 
 
-void initialise_overlay_render_data(void);
-void terminate_overlay_render_data(void);
 
-void initialise_overlay_swapchain_dependencies(void);
-void terminate_overlay_swapchain_dependencies(void);
-
-cvm_vk_module_graphics_block * overlay_render_frame(int screen_w,int screen_h);
-
-void overlay_frame_cleanup(uint32_t swapchain_image_index);
 
 
 void initialise_overlay_data(overlay_data * od);///make malloced pointer instead

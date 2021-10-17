@@ -402,6 +402,8 @@ void cvm_vk_relinquish_image_atlas_tile(cvm_vk_image_atlas * ia,cvm_vk_image_atl
     cvm_vk_image_atlas_tile ** heap;
     bool finished_h,finished_v;
 
+    if(!base)return;
+
     ///base,partner,test
 
     if(ia->multithreaded)do lock=atomic_load(&ia->spinlock);

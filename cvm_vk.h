@@ -123,13 +123,17 @@ cvm_vk_swapchain_image_present_data;
 
 
 /// this is basically the low priority transfer function, should be used for low priority work (bulk long lived data that isnt needed immediately and for defragging memory/images)
-typedef struct cvm_vk_transfer_chain_data
-{
-    VkFence completion_fence;
-    bool in_flight;///error checking
-}
-cvm_vk_transfer_chain_data;
 
+
+//typedef enum
+//{
+//    CVM_VK_QUEUE_TYPE_TRANSFER,
+//    CVM_VK_QUEUE_TYPE_GRAPHICS,
+//    CVM_VK_QUEUE_TYPE_COMPUTE, /// need to add support for this one
+//    CVM_VK_QUEUE_TYPE_PRESENT, /// not sure this one really necessary tbh
+//    CVM_VK_QUEUE_TYPE_COUNT,
+//}
+//cvm_vk_queue_type;
 
 
 /// panel, slice, block, unit, frame
@@ -141,47 +145,48 @@ typedef struct cvm_vk_module_data cvm_vk_module_data;
 
 ///combine concepts and call them work units?
 ///using same names as vulkan would probably be best, graphics command, transfer command or just cvm_vk_commands
-typedef struct cvm_vk_module_graphics_block
+typedef struct cvm_vk_module_work_block
 {
     /// synchronisation handled by the acquired frame/image
     cvm_vk_module_data * parent_module;
 
-    VkCommandBuffer work;
+    ///make these the same when they actually share a queue family/queue
+    //VkCommandBuffer transfer_work;
+    VkCommandBuffer graphics_work;///for now stack everything on graphics queue, later make a work block support many interdependent command buffers with semaphores as necessary
+
+    /// need intra-frame and inter-frame (the structurally difficult one) semaphores to do ownership transfers, and structure to handle that
+    /// support for multiple command buffers per frame each on different queue when necessary will allow for much more fine grained control and better GPU utilization (structure needs to support this)
+    /// above allows a queue(family) to be working on (have ownership of) resources NOT utilised by by another queue(family) and be doing work in "tandem" with that queue which is using different resources at that time
+    /// a good example of this is performing game transfers during overlay rendering and vice-versa
+
+    /// also keep in mind VK_SHARING_MODE_CONCURRENT where viable and profile it
+    /// also keep in mind transfer on graphics queue is possible and profile that as well
+
+    /// do inter-block semaphores invalidate any benefit for multiple framebuffer images (semaphores in chain do affect only specific stages...)
+    /// ^ will depend on usage patterns but i think in general the answer is yes, is worth looking at example of intended use
+
+    /// break into multiple submits/command_buffers to break up dependencies?? -- THIS
+
+    /// ^ also i have no way to test any of this on my current hardware...
+
+    /// could/should add async compute, but it has same dependency problems as transfer unless using VK_SHARING_MODE_CONCURRENT (as mentioned above)
+
+    /// also probably worth investigating whether per-frame resources are worth transferring to device local (double)buffer before using on the gpu
 
     uint32_t has_work:1;///if this frame doesnt have work then dont issue commands! (mainly for transfer, graphics should ALWAYS have work as its responsible for transitioning images)
     uint32_t in_flight:1;///used for error checking
 }
-cvm_vk_module_graphics_block;
-
-typedef struct cvm_vk_module_transfer_block
-{
-    cvm_vk_module_data * parent_module;
-
-    VkCommandBuffer work;
-
-    uint32_t has_work:1;
-    uint32_t in_flight:1;///used for error checking
-}
-cvm_vk_module_transfer_block;
+cvm_vk_module_work_block;
 
 struct cvm_vk_module_data
 {
     VkCommandPool graphics_pool;
     VkCommandPool transfer_pool;
 
-    ///data passed to rendering engine by each module for rendering as well as getting data back for next render
-    cvm_vk_module_graphics_block * graphics_blocks;
+    cvm_vk_module_work_block * work_blocks;
 
-    /// cannot be recreated! create once at start
-    /// used for staging to device_only transfer, staging to image conversion, defragging of "static" buffers
-    cvm_vk_module_transfer_block * transfer_blocks;
-
-    uint32_t graphics_block_count:8;
-    uint32_t graphics_block_index:8;
-
-    uint32_t transfer_block_count:8;
-    uint32_t transfer_block_index:8;
-
+    uint32_t block_count;
+    uint32_t block_index;
 };
 
 ///gfx_data can ONLY change in main thread and ONLY be changed when not in use by other threads (inside main sync mutexes or before starting other threads that use it)
@@ -241,14 +246,19 @@ uint32_t cvm_vk_get_buffer_alignment_requirements(VkBufferUsageFlags usage);
 
 uint32_t cvm_vk_prepare_for_next_frame(bool rendering_resources_invalid);
 void cvm_vk_transition_frame(void);///must be called in critical section!
-void cvm_vk_present_current_frame(cvm_vk_module_graphics_block ** graphics_blocks, uint32_t graphics_block_count);
+void cvm_vk_present_current_frame(cvm_vk_module_work_block ** work_blocks, uint32_t work_block_count);
 bool cvm_vk_recreate_rendering_resources(void);///this and operations resulting from it returning true, must be called in critical section
 void cvm_vk_wait(void);
+
+
+uint32_t cvm_vk_get_transfer_queue_family(void);
+uint32_t cvm_vk_get_graphics_queue_family(void);
 
 VkRect2D cvm_vk_get_screen_rectangle(void);
 VkFormat cvm_vk_get_screen_format(void);///can remove?
 uint32_t cvm_vk_get_swapchain_image_count(void);
 VkImageView cvm_vk_get_swapchain_image_view(uint32_t index);
+
 
 VkSampler cvm_vk_get_fetch_sampler(void);
 
@@ -259,17 +269,20 @@ VkSampler cvm_vk_get_fetch_sampler(void);
 //void cvm_vk_destroy_command_pool(VkCommandPool * command_pool);
 
 ///must be called after cvm_vk_initialise
-void cvm_vk_create_module_data(cvm_vk_module_data * module_data,bool in_separate_thread);
+void cvm_vk_create_module_data(cvm_vk_module_data * module_data,bool in_separate_thread);///extra_transfer_slots should be equal to number passed in to extra_frame_count elsewhere
 void cvm_vk_resize_module_graphics_data(cvm_vk_module_data * module_data,uint32_t extra_frame_count);///this must be called in critical section
 void cvm_vk_destroy_module_data(cvm_vk_module_data * module_data,bool in_separate_thread);
 
-//VkCommandBuffer cvm_vk_begin_module_frame_transfer(cvm_vk_module_data * module_data,bool has_work);///always valid to call? if not return bool
-
-VkCommandBuffer cvm_vk_begin_module_graphics_block(cvm_vk_module_data * module_data,uint32_t frame_offset,uint32_t * swapchain_image_index);///have this return bool? (VkCommandBuffer through ref.)
-cvm_vk_module_graphics_block * cvm_vk_end_module_graphics_block(cvm_vk_module_data * module_data);
+cvm_vk_module_work_block * cvm_vk_begin_module_work_block(cvm_vk_module_data * module_data,uint32_t frame_offset,uint32_t * swapchain_image_index);///have this return bool? (VkCommandBuffer through ref.)
+cvm_vk_module_work_block * cvm_vk_end_module_work_block(cvm_vk_module_data * module_data);
 
 
 
+/// temporary functions to replave extensions
+
+/// not correct outside single queue per family paradigm, may wish to use module to avoid this problem? no particularly clean way to do this when queue families in barriers are specified externally
+void cvm_vk_module_add_dependency(cvm_vk_module_work_block * work_block,VkDependencyInfoKHR * dependency,VkCommandBuffer from, VkCommandBuffer to);
+void CVM_TMP_vkCmdPipelineBarrier2KHR(VkCommandBuffer commandBuffer,const VkDependencyInfoKHR* pDependencyInfo);
 
 #include "cvm_vk_memory.h"
 #include "cvm_vk_image.h"

@@ -754,20 +754,15 @@ void terminate_test_swapchain_dependencies()
     free(test_ring_buffer_acquisitions);
 }
 
-cvm_vk_module_graphics_block * test_render_frame(camera * c)
+cvm_vk_module_work_block * test_render_frame(camera * c)
 {
-    VkCommandBuffer command_buffer;
+    cvm_vk_module_work_block * work_block;
     uint32_t swapchain_image_index;
 
-//    command_buffer = cvm_vk_begin_module_frame_transfer(&test_module_data,false);
-//    if(command_buffer!=VK_NULL_HANDLE)
-//    {
-//        ///do transfers
-//    }
 
 
     ///perhaps this should return previous image index as well, such that that value can be used in cleanup (e.g. relinquishing ring buffer space)
-    command_buffer = cvm_vk_begin_module_graphics_block(&test_module_data,0,&swapchain_image_index);
+    work_block = cvm_vk_begin_module_work_block(&test_module_data,0,&swapchain_image_index);
 
 
 
@@ -778,7 +773,7 @@ cvm_vk_module_graphics_block * test_render_frame(camera * c)
     /// dont bother storing framebuffer images/data in enumed array, store individually
 
 
-    if(command_buffer!=VK_NULL_HANDLE)
+    if(swapchain_image_index!=CVM_VK_INVALID_IMAGE_INDEX)
     {
         cvm_vk_begin_ring_buffer(&test_uniform_buffer);
 
@@ -801,9 +796,9 @@ cvm_vk_module_graphics_block * test_render_frame(camera * c)
 
 
 
-        vkCmdPushConstants(command_buffer,test_pipeline_layout,VK_SHADER_STAGE_VERTEX_BIT,0,sizeof(matrix4f),get_view_matrix_pointer(c));
+        vkCmdPushConstants(work_block->graphics_work,test_pipeline_layout,VK_SHADER_STAGE_VERTEX_BIT,0,sizeof(matrix4f),get_view_matrix_pointer(c));
 
-        vkCmdBindDescriptorSets(command_buffer,VK_PIPELINE_BIND_POINT_GRAPHICS,test_pipeline_layout,0,1,test_descriptor_sets+swapchain_image_index,0,NULL);
+        vkCmdBindDescriptorSets(work_block->graphics_work,VK_PIPELINE_BIND_POINT_GRAPHICS,test_pipeline_layout,0,1,test_descriptor_sets+swapchain_image_index,0,NULL);
 
         ///do graphics
         VkClearValue clear_values[2];///other clear colours should probably be provided by other chunks of application
@@ -821,21 +816,21 @@ cvm_vk_module_graphics_block * test_render_frame(camera * c)
             .pClearValues=clear_values
         };
 
-        vkCmdBeginRenderPass(command_buffer,&render_pass_begin_info,VK_SUBPASS_CONTENTS_INLINE);///================
+        vkCmdBeginRenderPass(work_block->graphics_work,&render_pass_begin_info,VK_SUBPASS_CONTENTS_INLINE);///================
 
-        vkCmdBindPipeline(command_buffer,VK_PIPELINE_BIND_POINT_GRAPHICS,test_pipeline);
+        vkCmdBindPipeline(work_block->graphics_work,VK_PIPELINE_BIND_POINT_GRAPHICS,test_pipeline);
 
 
         ///put following in a function?
         //VkDeviceSize offset=test_vertex_allocation->offset<<test_buffer.base_dynamic_allocation_size_factor;
-        //vkCmdBindVertexBuffers(command_buffer,0,1,&test_buffer.buffer,&offset);
-        cvm_vk_bind_dymanic_allocation_index(command_buffer,&test_buffer,test_index_allocation,VK_INDEX_TYPE_UINT16);
-        cvm_vk_bind_dymanic_allocation_vertex(command_buffer,&test_buffer,test_vertex_allocation,0);
+        //vkCmdBindVertexBuffers(work_block->graphics_work,0,1,&test_buffer.buffer,&offset);
+        cvm_vk_bind_dymanic_allocation_index(work_block->graphics_work,&test_buffer,test_index_allocation,VK_INDEX_TYPE_UINT16);
+        cvm_vk_bind_dymanic_allocation_vertex(work_block->graphics_work,&test_buffer,test_vertex_allocation,0);
 
         //vkCmdDraw(command_buffer,4,1,0,0);
-        vkCmdDrawIndexed(command_buffer,36,1,0,0,0);
+        vkCmdDrawIndexed(work_block->graphics_work,36,1,0,0,0);
 
-        vkCmdEndRenderPass(command_buffer);///================
+        vkCmdEndRenderPass(work_block->graphics_work);///================
 
 
         test_ring_buffer_acquisitions[swapchain_image_index]=cvm_vk_end_ring_buffer(&test_uniform_buffer);
@@ -843,7 +838,7 @@ cvm_vk_module_graphics_block * test_render_frame(camera * c)
         test_current_framebuffer_index*= ++test_current_framebuffer_index<TEST_FRAMEBUFFER_CYCLES;
     }
 
-    return cvm_vk_end_module_graphics_block(&test_module_data);
+    return cvm_vk_end_module_work_block(&test_module_data);
 }
 
 void test_frame_cleanup(uint32_t swapchain_image_index)
