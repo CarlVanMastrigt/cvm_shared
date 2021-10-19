@@ -211,7 +211,10 @@ instance data is somewhat problematic anyway, as it potentially varies a lot fra
 
     by having error handling (unable to allocate space) and sufficient reserves having just 1 buffer to switch to when deciding to resize should be sufficient
 */
-typedef struct cvm_vk_ring_buffer
+
+
+///want to be able to pack staging and ring buffer int same memory at least (possibly same buffer as well (using offsets) need to adjust this struct to accomodate OR separate buffer/memory from buffer itself
+typedef struct cvm_vk_staging_buffer
 {
     VkBuffer buffer;
     VkDeviceMemory memory;
@@ -229,29 +232,76 @@ typedef struct cvm_vk_ring_buffer
 
     ///instead have desired per frame upload space and per frame uniform space? no, that can be handled user side as desired
 
-    void * mapping;///ring buffer should REQUIRE mapability, use as intermediary when main buffer isn't mapable, should test mapping to determine necessary size based on this (user defined behaviour)
+    void * mapping;///staging buffer should REQUIRE mapability, use as intermediary when main buffer isn't mapable, should test mapping to determine necessary size based on this (user defined behaviour)
 }
-cvm_vk_ring_buffer;
+cvm_vk_staging_buffer;
 
-void cvm_vk_create_ring_buffer(cvm_vk_ring_buffer * rb,VkBufferUsageFlags usage,uint32_t buffer_size);
-void cvm_vk_update_ring_buffer(cvm_vk_ring_buffer * rb,uint32_t buffer_size);
-void cvm_vk_destroy_ring_buffer(cvm_vk_ring_buffer * rb);
+void cvm_vk_create_staging_buffer(cvm_vk_staging_buffer * sb,VkBufferUsageFlags usage,uint32_t buffer_size);
+void cvm_vk_update_staging_buffer(cvm_vk_staging_buffer * sb,uint32_t buffer_size);
+void cvm_vk_destroy_staging_buffer(cvm_vk_staging_buffer * sb);
 
-uint32_t cvm_vk_ring_buffer_get_rounded_allocation_size(cvm_vk_ring_buffer * rb,uint32_t allocation_size);
+uint32_t cvm_vk_staging_buffer_get_rounded_allocation_size(cvm_vk_staging_buffer * sb,uint32_t allocation_size);
 
-/// as size of ring buffer is (or should be) a product of swapchain image count its probably best to also have an upload buffer shared by all submodules used at initialisation time
+void cvm_vk_begin_staging_buffer(cvm_vk_staging_buffer * sb);
+uint32_t cvm_vk_end_staging_buffer(cvm_vk_staging_buffer * sb);
 
-void cvm_vk_begin_ring_buffer(cvm_vk_ring_buffer * rb);
-uint32_t cvm_vk_end_ring_buffer(cvm_vk_ring_buffer * rb);
+void * cvm_vk_get_staging_buffer_allocation(cvm_vk_staging_buffer * sb,uint32_t allocation_size,VkDeviceSize * acquired_offset);
 
-void * cvm_vk_get_ring_buffer_allocation(cvm_vk_ring_buffer * rb,uint32_t allocation_size,VkDeviceSize * acquired_offset);///alignment_factor should be power of 2
+void cvm_vk_relinquish_staging_buffer_space(cvm_vk_staging_buffer * sb,uint32_t * relinquished_space);
 
-void cvm_vk_relinquish_ring_buffer_space(cvm_vk_ring_buffer * rb,uint32_t * relinquished_space);
+/// function to copy from staging buffer to both managed buffer and texture/image here??
 
-/// function to copy from ring buffer to both managed buffer and texture/image here??
+///upload buffer paradigm works well for staging (duh) but not as well for uploading rendering data (instance and uniform) may want separate design with fixed maximum sizes?
 
 
-///ring buffer paradigm works well for upload/staging buffer but not as well for uploading rendering data (instance and uniform) may want separate design with fixed maximum sizes?
+
+
+
+typedef struct cvm_vk_upload_buffer
+{
+    VkBuffer buffer;
+    VkDeviceMemory memory;
+
+    VkBufferUsageFlags usage;
+
+    uint32_t alignment_size_factor;
+
+    void * mapping;
+
+    uint32_t frame_count;///basically just swapchain image count, useful for detecting change here and knowing when to recreate
+    uint32_t current_frame;///unnecessary also but makes code a tad cleaner (dont need to pass it in for every transient acquisition or end frame)
+
+    /// uniform/instance (transient) stuff
+    uint32_t transient_space_per_frame;///used in allocation step, if (0) dont perform setup/ops
+    atomic_uint_fast32_t transient_space_remaining;///this frame
+    uint32_t * transient_offsets;///all go after staging space b/c storing offsets anyway is required
+
+    ///staging stuff
+    uint32_t staging_space_per_frame;///used in allocation step,assert if any attempted staging acquisition is larger than this, if (0) dont perform setup/ops
+    uint32_t staging_space;///not really necessesary b/ have space per frame and frame count but is a convenience
+    uint32_t max_staging_offset;///fence, should be updated before multithreading becomes applicable this frame
+    atomic_uint_fast32_t staging_space_remaining;
+    uint32_t initial_staging_space_remaining;
+    uint32_t * staging_buffer_acquisitions;
+}
+cvm_vk_upload_buffer;
+
+void cvm_vk_create_upload_buffer(cvm_vk_upload_buffer * ub,VkBufferUsageFlags usage);
+void cvm_vk_update_upload_buffer(cvm_vk_upload_buffer * ub,uint32_t staging_space_per_frame,uint32_t transient_space_per_frame,uint32_t frame_count);
+void cvm_vk_destroy_upload_buffer(cvm_vk_upload_buffer * ub);
+///may want to set requisite space in separate functions...
+/// if adding space to requisite would be good to have set rounding ops to use...
+
+uint32_t cvm_vk_upload_buffer_get_rounded_allocation_size(cvm_vk_upload_buffer * ub,uint32_t allocation_size);///absolutely needed for uniform usage
+
+void cvm_vk_begin_upload_buffer_frame(cvm_vk_upload_buffer * ub,uint32_t frame_index);
+void cvm_vk_end_staging_buffer_frame(cvm_vk_upload_buffer * ub);
+
+void cvm_vk_relinquish_upload_buffer_space(cvm_vk_upload_buffer * ub,uint32_t frame_index);
+
+///need to be careful to avoid using a null return in either of these
+void * cvm_vk_get_upload_buffer_staging_allocation(cvm_vk_upload_buffer * ub,uint32_t allocation_size,VkDeviceSize * acquired_offset);
+void * cvm_vk_get_upload_buffer_transient_allocation(cvm_vk_upload_buffer * ub,uint32_t allocation_size,VkDeviceSize * acquired_offset);
 
 
 

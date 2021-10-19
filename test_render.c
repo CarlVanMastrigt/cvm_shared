@@ -58,8 +58,8 @@ static cvm_vk_dynamic_buffer_allocation * test_index_allocation;
 static cvm_vk_dynamic_buffer_allocation * test_vertex_allocation;
 
 /// actually we want a way to handle uploads from here, and as dynamics are the same as instance data its probably worth having a dedicated buffer for them and uniforms AND upload/transfers
-static cvm_vk_ring_buffer test_uniform_buffer;
-static uint32_t * test_ring_buffer_acquisitions;
+static cvm_vk_staging_buffer test_uniform_buffer;
+static uint32_t * test_staging_buffer_acquisitions;
 
 static void create_test_descriptor_set_layouts(void)
 {
@@ -676,7 +676,7 @@ void initialise_test_render_data()
 
     cvm_vk_create_managed_buffer(&test_buffer,65536,10,16,VK_BUFFER_USAGE_VERTEX_BUFFER_BIT|VK_BUFFER_USAGE_INDEX_BUFFER_BIT,false,true);
 
-    cvm_vk_create_ring_buffer(&test_uniform_buffer,VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT,1024);
+    cvm_vk_create_staging_buffer(&test_uniform_buffer,VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT,1024);
 
     create_test_vertex_buffer();
 }
@@ -700,7 +700,7 @@ void terminate_test_render_data()
 
     cvm_vk_destroy_managed_buffer(&test_buffer);
 
-    cvm_vk_destroy_ring_buffer(&test_uniform_buffer);
+    cvm_vk_destroy_staging_buffer(&test_uniform_buffer);
 }
 
 
@@ -719,7 +719,7 @@ void initialise_test_swapchain_dependencies(void)
 
     cvm_vk_resize_module_graphics_data(&test_module_data,0);
 
-    test_ring_buffer_acquisitions=calloc(swapchain_image_count,sizeof(uint32_t));
+    test_staging_buffer_acquisitions=calloc(swapchain_image_count,sizeof(uint32_t));
 }
 
 void terminate_test_swapchain_dependencies()
@@ -733,7 +733,7 @@ void terminate_test_swapchain_dependencies()
     {
         for(j=0;j<TEST_FRAMEBUFFER_CYCLES;j++) cvm_vk_destroy_framebuffer(test_framebuffers[j][i]);
 
-        cvm_vk_relinquish_ring_buffer_space(&test_uniform_buffer,test_ring_buffer_acquisitions+i);
+        cvm_vk_relinquish_staging_buffer_space(&test_uniform_buffer,test_staging_buffer_acquisitions+i);
     }
 
     for(i=0;i<TEST_FRAMEBUFFER_CYCLES;i++)
@@ -751,7 +751,7 @@ void terminate_test_swapchain_dependencies()
 
     free(test_descriptor_sets);
     for(i=0;i<TEST_FRAMEBUFFER_CYCLES;i++)free(test_framebuffers[i]);
-    free(test_ring_buffer_acquisitions);
+    free(test_staging_buffer_acquisitions);
 }
 
 cvm_vk_module_work_block * test_render_frame(camera * c)
@@ -775,10 +775,10 @@ cvm_vk_module_work_block * test_render_frame(camera * c)
 
     if(swapchain_image_index!=CVM_VK_INVALID_IMAGE_INDEX)
     {
-        cvm_vk_begin_ring_buffer(&test_uniform_buffer);
+        cvm_vk_begin_staging_buffer(&test_uniform_buffer);
 
         VkDeviceSize uniforms_offset;
-        float * uniforms = cvm_vk_get_ring_buffer_allocation(&test_uniform_buffer,sizeof(float)*4,&uniforms_offset);
+        float * uniforms = cvm_vk_get_staging_buffer_allocation(&test_uniform_buffer,sizeof(float)*4,&uniforms_offset);
         //printf("C %u\n",atomic_load(&test_uniform_buffer.space_remaining));
         if(uniforms==NULL)puts("FAILED");
 
@@ -833,9 +833,10 @@ cvm_vk_module_work_block * test_render_frame(camera * c)
         vkCmdEndRenderPass(work_block->graphics_work);///================
 
 
-        test_ring_buffer_acquisitions[swapchain_image_index]=cvm_vk_end_ring_buffer(&test_uniform_buffer);
+        test_staging_buffer_acquisitions[swapchain_image_index]=cvm_vk_end_staging_buffer(&test_uniform_buffer);
 
-        test_current_framebuffer_index*= ++test_current_framebuffer_index<TEST_FRAMEBUFFER_CYCLES;
+        test_current_framebuffer_index++;
+        test_current_framebuffer_index*= test_current_framebuffer_index<TEST_FRAMEBUFFER_CYCLES;
     }
 
     return cvm_vk_end_module_work_block(&test_module_data);
@@ -845,7 +846,7 @@ void test_frame_cleanup(uint32_t swapchain_image_index)
 {
     if(swapchain_image_index!=CVM_VK_INVALID_IMAGE_INDEX)
     {
-        cvm_vk_relinquish_ring_buffer_space(&test_uniform_buffer,test_ring_buffer_acquisitions+swapchain_image_index);
+        cvm_vk_relinquish_staging_buffer_space(&test_uniform_buffer,test_staging_buffer_acquisitions+swapchain_image_index);
     }
 }
 
