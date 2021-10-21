@@ -223,8 +223,6 @@ typedef struct cvm_vk_staging_buffer
 
     uint32_t total_space;///round to PO2
     uint32_t max_offset;///fence, should be updated before multithreading becomes applicable this frame
-    //uint32_t required_alignment;///could/should do this per type with offsetting being done to compensate, rounding size allocated to multiple of that base (can assume PO2, or make PO2)
-    //bool multithreaded;//implicitly supports multithreading b/c its easy :D
     uint32_t alignment_size_factor;
     atomic_uint_fast32_t space_remaining;
     uint32_t initial_space_remaining;
@@ -232,22 +230,24 @@ typedef struct cvm_vk_staging_buffer
 
     ///instead have desired per frame upload space and per frame uniform space? no, that can be handled user side as desired
 
-    void * mapping;///staging buffer should REQUIRE mapability, use as intermediary when main buffer isn't mapable, should test mapping to determine necessary size based on this (user defined behaviour)
+    uint32_t * acquisitions;
+
+    void * mapping;
 }
 cvm_vk_staging_buffer;
 
-void cvm_vk_create_staging_buffer(cvm_vk_staging_buffer * sb,VkBufferUsageFlags usage,uint32_t buffer_size);
-void cvm_vk_update_staging_buffer(cvm_vk_staging_buffer * sb,uint32_t buffer_size);
+void cvm_vk_create_staging_buffer(cvm_vk_staging_buffer * sb,VkBufferUsageFlags usage);
+void cvm_vk_update_staging_buffer(cvm_vk_staging_buffer * sb,uint32_t space_per_frame, uint32_t frame_count);
 void cvm_vk_destroy_staging_buffer(cvm_vk_staging_buffer * sb);
 
 uint32_t cvm_vk_staging_buffer_get_rounded_allocation_size(cvm_vk_staging_buffer * sb,uint32_t allocation_size);
 
 void cvm_vk_begin_staging_buffer(cvm_vk_staging_buffer * sb);
-uint32_t cvm_vk_end_staging_buffer(cvm_vk_staging_buffer * sb);
+void cvm_vk_end_staging_buffer(cvm_vk_staging_buffer * sb,uint32_t frame_index);
 
 void * cvm_vk_get_staging_buffer_allocation(cvm_vk_staging_buffer * sb,uint32_t allocation_size,VkDeviceSize * acquired_offset);
 
-void cvm_vk_relinquish_staging_buffer_space(cvm_vk_staging_buffer * sb,uint32_t * relinquished_space);
+void cvm_vk_relinquish_staging_buffer_space(cvm_vk_staging_buffer * sb,uint32_t frame_index);
 
 /// function to copy from staging buffer to both managed buffer and texture/image here??
 
@@ -257,7 +257,66 @@ void cvm_vk_relinquish_staging_buffer_space(cvm_vk_staging_buffer * sb,uint32_t 
 
 
 
-typedef struct cvm_vk_upload_buffer
+typedef struct cvm_vk_transient_buffer
+{
+    VkBuffer buffer;
+    VkDeviceMemory memory;
+
+    VkBufferUsageFlags usage;
+
+    uint32_t total_space;
+    uint32_t space_per_frame;///round to PO2
+    uint32_t max_offset;///fence, should be updated before multithreading becomes applicable this frame
+    uint32_t alignment_size_factor;
+    atomic_uint_fast32_t space_remaining;
+    ///need to test atomic version isn't (significatly) slower than non-atomic
+
+    void * mapping;
+}
+cvm_vk_transient_buffer;
+
+void cvm_vk_create_transient_buffer(cvm_vk_transient_buffer * tb,VkBufferUsageFlags usage);
+void cvm_vk_update_transient_buffer(cvm_vk_transient_buffer * tb,uint32_t space_per_frame, uint32_t frame_count);
+void cvm_vk_destroy_transient_buffer(cvm_vk_transient_buffer * tb);
+
+uint32_t cvm_vk_transient_buffer_get_rounded_allocation_size(cvm_vk_transient_buffer * tb,uint32_t allocation_size);
+
+void cvm_vk_begin_transient_buffer(cvm_vk_transient_buffer * tb,uint32_t frame_index);
+uint32_t cvm_vk_end_transient_buffer(cvm_vk_transient_buffer * tb);
+
+void * cvm_vk_get_transient_buffer_allocation(cvm_vk_transient_buffer * tb,uint32_t allocation_size,VkDeviceSize * acquired_offset);
+
+
+
+/**
+related to section 12.7. "Resource Sharing Mode" of vulkan spec.
+
+not sure if single buffer can be used across queue families (transfer,compute,graphics) like cvm_vk_upload_buffer potentially wants to be
+
+Ranges of buffers and image subresources of image objects created using VK_SHARING_MODE_EXCLUSIVE
+must only be accessed by queues in the queue family that has ownership of the resource.
+Upon creation, such resources are not owned by any queue family; ownership is implicitly acquired upon first use within a queue.
+Once a resource using VK_SHARING_MODE_EXCLUSIVE is owned by some queue family,
+the application must perform a queue family ownership transfer to make the memory contents of a range or image subresource accessible to a different queue
+
+
+this isnt very clear on whether ownersip is acquired per buffer or buffer-range, is a resource a buffer or a buffer range? ownership transfers happen per range,
+but if resource!=range then it appears ownership is first acquired for the whole buffer at once
+
+similarly
+
+A queue family can take ownership of an image subresource or buffer range of a resource created with
+VK_SHARING_MODE_EXCLUSIVE, without an ownership transfer, in the same way as for a resource that was just created;
+however, taking ownership in this way has the effect that the contents of the image subresource or buffer range are undefined.
+
+
+this doesn't specify what happens to data written from mapped regions, ownership is presumably acquired AFTER mapped writes (first use == implicit acquisition -> undefined contents)
+however it isnt specific upon when mapped wries become visible (presumably this is detailed somewhere else in the spec)
+
+either way it doesnt allow variable sized allocations so i will be using buffer per type paradigm
+*/
+
+/*typedef struct cvm_vk_upload_buffer
 {
     VkBuffer buffer;
     VkDeviceMemory memory;
@@ -295,13 +354,13 @@ void cvm_vk_destroy_upload_buffer(cvm_vk_upload_buffer * ub);
 uint32_t cvm_vk_upload_buffer_get_rounded_allocation_size(cvm_vk_upload_buffer * ub,uint32_t allocation_size);///absolutely needed for uniform usage
 
 void cvm_vk_begin_upload_buffer_frame(cvm_vk_upload_buffer * ub,uint32_t frame_index);
-void cvm_vk_end_staging_buffer_frame(cvm_vk_upload_buffer * ub);
+void cvm_vk_end_upload_buffer_frame(cvm_vk_upload_buffer * ub);
 
 void cvm_vk_relinquish_upload_buffer_space(cvm_vk_upload_buffer * ub,uint32_t frame_index);
 
 ///need to be careful to avoid using a null return in either of these
 void * cvm_vk_get_upload_buffer_staging_allocation(cvm_vk_upload_buffer * ub,uint32_t allocation_size,VkDeviceSize * acquired_offset);
-void * cvm_vk_get_upload_buffer_transient_allocation(cvm_vk_upload_buffer * ub,uint32_t allocation_size,VkDeviceSize * acquired_offset);
+void * cvm_vk_get_upload_buffer_transient_allocation(cvm_vk_upload_buffer * ub,uint32_t allocation_size,VkDeviceSize * acquired_offset);*/
 
 
 

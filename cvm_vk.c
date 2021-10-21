@@ -915,23 +915,26 @@ bool cvm_vk_recreate_rendering_resources(void) /// this should be made unnecessa
     return ((cvm_vk_acquired_image_count == 0)&&(!cvm_vk_rendering_resources_valid));
 }
 
-void cvm_vk_wait(void)
+bool cvm_vk_check_for_remaining_frames(uint32_t * completed_frame_index)
 {
     uint32_t i;
 
     ///this will leave some images acquired... (and some command buffers in the pending state)
 
-    for(i=0;i<cvm_vk_swapchain_image_count;i++)
+    if(cvm_vk_acquired_image_count)for(i=0;i<cvm_vk_swapchain_image_count;i++)
     {
         if(cvm_vk_presenting_images[i].in_flight)
         {
             CVM_VK_CHECK(vkWaitForFences(cvm_vk_device,1,&cvm_vk_presenting_images[i].completion_fence,VK_TRUE,1000000000));
             cvm_vk_presenting_images[i].in_flight=false;///has finished
             cvm_vk_acquired_image_count--;
+            *completed_frame_index=i;
+            return true;
         }
     }
-
     #warning do same for submits made to transfer queue
+    *completed_frame_index=CVM_VK_INVALID_IMAGE_INDEX;
+    return false;
 }
 
 

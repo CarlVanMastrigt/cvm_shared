@@ -56,11 +56,13 @@ static VkImageView overlay_colour_image_view;///views of single array slice from
 static cvm_vk_image_atlas overlay_colour_image_atlas;
 
 /// actually we want a way to handle uploads from here, and as dynamics are the same as instance data its probably worth having a dedicated buffer for them and uniforms AND upload/transfers
-static cvm_vk_staging_buffer overlay_uniform_buffer;
-static uint32_t * overlay_uniform_buffer_acquisitions;
+static cvm_vk_transient_buffer overlay_transient_buffer;
+//static uint32_t * overlay_uniform_buffer_acquisitions;
 
 static cvm_vk_staging_buffer overlay_staging_buffer;
-static uint32_t * overlay_staging_buffer_acquisitions;
+//static uint32_t * overlay_staging_buffer_acquisitions;
+
+static uint32_t max_overlay_elements=256;
 
 static VkDependencyInfoKHR overlay_uninitialised_to_transfer_dependencies;
 static VkImageMemoryBarrier2KHR overlay_uninitialised_to_transfer_image_barriers[2];
@@ -244,7 +246,7 @@ static void update_overlay_uniforms(uint32_t swapchain_image,VkDeviceSize offset
             .pBufferInfo=(VkDescriptorBufferInfo[1])
             {
                 {
-                    .buffer=overlay_uniform_buffer.buffer,
+                    .buffer=overlay_transient_buffer.buffer,
                     .offset=offset,
                     .range=colour_count*4*sizeof(float)
                 }
@@ -739,8 +741,8 @@ void initialise_overlay_render_data(void)
 
     cvm_vk_create_module_data(&overlay_module_data,false);
 
-    cvm_vk_create_staging_buffer(&overlay_uniform_buffer,VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT,0);
-    cvm_vk_create_staging_buffer(&overlay_staging_buffer,VK_BUFFER_USAGE_TRANSFER_SRC_BIT,0);
+    cvm_vk_create_transient_buffer(&overlay_transient_buffer,VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT);
+    cvm_vk_create_staging_buffer(&overlay_staging_buffer,VK_BUFFER_USAGE_TRANSFER_SRC_BIT);
 
     create_overlay_images(1024,1024,1024,1024);
     create_overlay_barriers();///must go after creation of all resources these barriers act upon
@@ -779,7 +781,7 @@ void terminate_overlay_render_data(void)
 
     cvm_vk_destroy_module_data(&overlay_module_data,false);
 
-    cvm_vk_destroy_staging_buffer(&overlay_uniform_buffer);
+    cvm_vk_destroy_transient_buffer(&overlay_transient_buffer);
     cvm_vk_destroy_staging_buffer(&overlay_staging_buffer);
 }
 
@@ -798,14 +800,16 @@ void initialise_overlay_swapchain_dependencies(void)
     cvm_vk_resize_module_graphics_data(&overlay_module_data,0);
 
     ///set these properly at some point
-    uint32_t uniform_size=1024;
-    uint32_t staging_size=1024;
+    uint32_t uniform_size=0;
+    uniform_size+=cvm_vk_transient_buffer_get_rounded_allocation_size(&overlay_transient_buffer,sizeof(float)*8);
+    uniform_size+=cvm_vk_transient_buffer_get_rounded_allocation_size(&overlay_transient_buffer,max_overlay_elements*sizeof(cvm_overlay_render_data));
+    uint32_t staging_size=512;
 
-    cvm_vk_update_staging_buffer(&overlay_uniform_buffer,swapchain_image_count*uniform_size);
-    cvm_vk_update_staging_buffer(&overlay_staging_buffer,swapchain_image_count*staging_size);
+    cvm_vk_update_transient_buffer(&overlay_transient_buffer,uniform_size,swapchain_image_count);
+    cvm_vk_update_staging_buffer(&overlay_staging_buffer,staging_size,swapchain_image_count);
 
-    overlay_uniform_buffer_acquisitions=calloc(swapchain_image_count,sizeof(uint32_t));
-    overlay_staging_buffer_acquisitions=calloc(swapchain_image_count,sizeof(uint32_t));
+//    overlay_uniform_buffer_acquisitions=calloc(swapchain_image_count,sizeof(uint32_t));
+//    overlay_staging_buffer_acquisitions=calloc(swapchain_image_count,sizeof(uint32_t));
 }
 
 void terminate_overlay_swapchain_dependencies(void)
@@ -819,16 +823,16 @@ void terminate_overlay_swapchain_dependencies(void)
     {
         cvm_vk_destroy_framebuffer(overlay_framebuffers[i]);
 
-        cvm_vk_relinquish_staging_buffer_space(&overlay_uniform_buffer,overlay_uniform_buffer_acquisitions+i);
-        cvm_vk_relinquish_staging_buffer_space(&overlay_staging_buffer,overlay_staging_buffer_acquisitions+i);
+//        cvm_vk_relinquish_staging_buffer_space(&overlay_uniform_buffer,overlay_uniform_buffer_acquisitions+i);
+//        cvm_vk_relinquish_staging_buffer_space(&overlay_staging_buffer,overlay_staging_buffer_acquisitions+i);
     }
 
     cvm_vk_destroy_descriptor_pool(overlay_descriptor_pool);
 
     free(overlay_descriptor_sets);
     free(overlay_framebuffers);
-    free(overlay_uniform_buffer_acquisitions);
-    free(overlay_staging_buffer_acquisitions);
+//    free(overlay_uniform_buffer_acquisitions);
+//    free(overlay_staging_buffer_acquisitions);
 }
 /*
 static uint32_t calculate_code_point(uint8_t * text)
@@ -1060,10 +1064,10 @@ cvm_vk_module_work_block * overlay_render_frame(int screen_w,int screen_h)
 
 
 
-        cvm_vk_begin_staging_buffer(&overlay_uniform_buffer);
+        cvm_vk_begin_transient_buffer(&overlay_transient_buffer,swapchain_image_index);
 
         VkDeviceSize uniforms_offset;
-        float * uniforms = cvm_vk_get_staging_buffer_allocation(&overlay_uniform_buffer,sizeof(float)*8,&uniforms_offset);
+        float * uniforms = cvm_vk_get_transient_buffer_allocation(&overlay_transient_buffer,sizeof(float)*8,&uniforms_offset);
 
         uniforms[0]=0.7+0.3*cos(SDL_GetTicks()*0.005);
         uniforms[1]=0.7+0.3*cos(SDL_GetTicks()*0.007);
@@ -1104,8 +1108,10 @@ cvm_vk_module_work_block * overlay_render_frame(int screen_w,int screen_h)
         vkCmdEndRenderPass(work_block->graphics_work);///================
 
         ///huh, could store this in buffer maybe as it occurrs once per frame...
-        overlay_uniform_buffer_acquisitions[swapchain_image_index]=cvm_vk_end_staging_buffer(&overlay_uniform_buffer);
-        overlay_staging_buffer_acquisitions[swapchain_image_index]=cvm_vk_end_staging_buffer(&overlay_staging_buffer);
+        cvm_vk_end_transient_buffer(&overlay_transient_buffer);
+        cvm_vk_end_staging_buffer(&overlay_staging_buffer,swapchain_image_index);
+//        overlay_uniform_buffer_acquisitions[swapchain_image_index]=cvm_vk_end_staging_buffer(&overlay_uniform_buffer);
+//        overlay_staging_buffer_acquisitions[swapchain_image_index]=cvm_vk_end_staging_buffer(&overlay_staging_buffer);
     }
 
     return cvm_vk_end_module_work_block(&overlay_module_data);
@@ -1115,8 +1121,8 @@ void overlay_frame_cleanup(uint32_t swapchain_image_index)
 {
     if(swapchain_image_index!=CVM_VK_INVALID_IMAGE_INDEX)
     {
-        cvm_vk_relinquish_staging_buffer_space(&overlay_uniform_buffer,overlay_uniform_buffer_acquisitions+swapchain_image_index);
-        cvm_vk_relinquish_staging_buffer_space(&overlay_staging_buffer,overlay_staging_buffer_acquisitions+swapchain_image_index);
+        //cvm_vk_relinquish_staging_buffer_space(&overlay_uniform_buffer,swapchain_image_index);
+        cvm_vk_relinquish_staging_buffer_space(&overlay_staging_buffer,swapchain_image_index);
     }
 }
 

@@ -248,7 +248,7 @@ uint32_t cvm_vk_prepare_for_next_frame(bool rendering_resources_invalid);
 void cvm_vk_transition_frame(void);///must be called in critical section!
 void cvm_vk_present_current_frame(cvm_vk_module_work_block ** work_blocks, uint32_t work_block_count);
 bool cvm_vk_recreate_rendering_resources(void);///this and operations resulting from it returning true, must be called in critical section
-void cvm_vk_wait(void);
+bool cvm_vk_check_for_remaining_frames(uint32_t * completed_frame_index);
 
 
 uint32_t cvm_vk_get_transfer_queue_family(void);

@@ -18,5 +18,5 @@ layout(location=0) out vec4 c_out;
 
 void main()
 {
-    c_out=c_in*colours[0]*vec4(textureLod(transparent_image,gl_FragCoord.xy,0).rrr,1.0);
+    c_out=c_in*colours[0]*vec4(textureLod(transparent_image,gl_FragCoord.xy,0).rrr*0.5+0.5,1.0);
 }
