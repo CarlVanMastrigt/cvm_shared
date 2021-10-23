@@ -76,6 +76,25 @@ static VkImageMemoryBarrier2KHR overlay_graphics_to_transfer_image_barriers[2];
 //static bool overlay_graphics_transfer_ownership_changes;
 
 
+static FT_Library overlay_freetype_library;
+
+
+void test_timing(bool start,char * name)
+{
+    static struct timespec tso,tsn;
+    uint64_t dt;
+
+    clock_gettime(CLOCK_REALTIME,&tsn);
+
+    dt=(tsn.tv_sec-tso.tv_sec)*1000000000 + tsn.tv_nsec-tso.tv_nsec;
+
+    if(start) tso=tsn;
+
+    if(name)printf("%s = %lu\n",name,dt);
+}
+
+
+
 ///temporary test stuff
 static cvm_overlay_font overlay_test_font;
 
@@ -83,46 +102,49 @@ static void create_overlay_descriptor_set_layouts(void)
 {
     VkSampler fetch_sampler=cvm_vk_get_fetch_sampler();
 
-    VkDescriptorSetLayoutCreateInfo layout_create_info;
-
-    layout_create_info=(VkDescriptorSetLayoutCreateInfo)
+    VkDescriptorSetLayoutCreateInfo layout_create_info=
     {
         .sType=VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO,
         .pNext=NULL,
         .flags=0,
-        .bindingCount=1,
-        .pBindings=(VkDescriptorSetLayoutBinding[1])
+        .bindingCount=0,
+        .pBindings=NULL,
+    };
+
+
+
+    layout_create_info.bindingCount=1;
+    layout_create_info.pBindings=(VkDescriptorSetLayoutBinding[1])
+    {
         {
-            {
-                .binding=0,
-                .descriptorType=VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER,///VK_DESCRIPTOR_TYPE_UNIFORM_TEXEL_BUFFER probably preferable here...
-                .descriptorCount=1,
-                .stageFlags=VK_SHADER_STAGE_FRAGMENT_BIT,
-                .pImmutableSamplers=NULL
-            }
+            .binding=0,
+            .descriptorType=VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER,///VK_DESCRIPTOR_TYPE_UNIFORM_TEXEL_BUFFER probably preferable here...
+            .descriptorCount=1,
+            .stageFlags=VK_SHADER_STAGE_FRAGMENT_BIT,
+            .pImmutableSamplers=NULL
         }
     };
 
     cvm_vk_create_descriptor_set_layout(&overlay_descriptor_set_layout,&layout_create_info);
 
 
-
     ///consistent sets
-    layout_create_info=(VkDescriptorSetLayoutCreateInfo)
+    layout_create_info.bindingCount=2;
+    layout_create_info.pBindings=(VkDescriptorSetLayoutBinding[2])
     {
-        .sType=VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO,
-        .pNext=NULL,
-        .flags=0,
-        .bindingCount=1,
-        .pBindings=(VkDescriptorSetLayoutBinding[1])
         {
-            {
-                .binding=0,
-                .descriptorType=VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER,///VK_DESCRIPTOR_TYPE_UNIFORM_TEXEL_BUFFER probably preferable here...
-                .descriptorCount=1,
-                .stageFlags=VK_SHADER_STAGE_FRAGMENT_BIT,
-                .pImmutableSamplers=&fetch_sampler /// also test w/ null & setting samplers directly
-            }
+            .binding=0,
+            .descriptorType=VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER,///VK_DESCRIPTOR_TYPE_UNIFORM_TEXEL_BUFFER probably preferable here...
+            .descriptorCount=1,
+            .stageFlags=VK_SHADER_STAGE_FRAGMENT_BIT,
+            .pImmutableSamplers=&fetch_sampler /// also test w/ null & setting samplers directly
+        },
+        {
+            .binding=1,
+            .descriptorType=VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER,///VK_DESCRIPTOR_TYPE_UNIFORM_TEXEL_BUFFER probably preferable here...
+            .descriptorCount=1,
+            .stageFlags=VK_SHADER_STAGE_FRAGMENT_BIT,
+            .pImmutableSamplers=&fetch_sampler /// also test w/ null & setting samplers directly
         }
     };
 
@@ -131,7 +153,7 @@ static void create_overlay_descriptor_set_layouts(void)
 
 static void create_overlay_consistent_descriptors(void)
 {
-    VkDescriptorPoolCreateInfo pool_create_info=(VkDescriptorPoolCreateInfo)
+    VkDescriptorPoolCreateInfo pool_create_info=
     {
         .sType=VK_STRUCTURE_TYPE_DESCRIPTOR_POOL_CREATE_INFO,
         .pNext=NULL,
@@ -142,14 +164,14 @@ static void create_overlay_consistent_descriptors(void)
         {
             {
                 .type=VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER,
-                .descriptorCount=1
+                .descriptorCount=2
             }
         }
     };
 
     cvm_vk_create_descriptor_pool(&overlay_consistent_descriptor_pool,&pool_create_info);
 
-    VkDescriptorSetAllocateInfo descriptor_set_allocate_info=(VkDescriptorSetAllocateInfo)
+    VkDescriptorSetAllocateInfo descriptor_set_allocate_info=
     {
         .sType=VK_STRUCTURE_TYPE_DESCRIPTOR_SET_ALLOCATE_INFO,
         .pNext=NULL,
@@ -160,9 +182,8 @@ static void create_overlay_consistent_descriptors(void)
 
     cvm_vk_allocate_descriptor_sets(&overlay_consistent_descriptor_set,&descriptor_set_allocate_info);
 
-    VkWriteDescriptorSet writes[1]=
+    VkWriteDescriptorSet writes[2]=
     {
-        (VkWriteDescriptorSet)
         {
             .sType=VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET,
             .pNext=NULL,
@@ -181,10 +202,29 @@ static void create_overlay_consistent_descriptors(void)
             },
             .pBufferInfo=NULL,
             .pTexelBufferView=NULL
+        },
+        {
+            .sType=VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET,
+            .pNext=NULL,
+            .dstSet=overlay_consistent_descriptor_set,
+            .dstBinding=1,
+            .dstArrayElement=0,
+            .descriptorCount=1,
+            .descriptorType=VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER,
+            .pImageInfo=(VkDescriptorImageInfo[1])
+            {
+                {
+                    .sampler=VK_NULL_HANDLE,///using immutable sampler (for now)
+                    .imageView=overlay_colour_image_view,
+                    .imageLayout=VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL
+                }
+            },
+            .pBufferInfo=NULL,
+            .pTexelBufferView=NULL
         }
     };
 
-    cvm_vk_write_descriptor_sets(writes,1);
+    cvm_vk_write_descriptor_sets(writes,2);
 }
 
 static void create_overlay_descriptor_sets(uint32_t swapchain_image_count)
@@ -196,7 +236,7 @@ static void create_overlay_descriptor_sets(uint32_t swapchain_image_count)
     ///separate pool for image descriptor sets? (so that they dont need to be reallocated/recreated upon swapchain changes)
 
     ///pool size dependent upon swapchain image count so must go here
-    VkDescriptorPoolCreateInfo pool_create_info=(VkDescriptorPoolCreateInfo)
+    VkDescriptorPoolCreateInfo pool_create_info=
     {
         .sType=VK_STRUCTURE_TYPE_DESCRIPTOR_POOL_CREATE_INFO,
         .pNext=NULL,
@@ -214,7 +254,7 @@ static void create_overlay_descriptor_sets(uint32_t swapchain_image_count)
 
     cvm_vk_create_descriptor_pool(&overlay_descriptor_pool,&pool_create_info);
 
-    VkDescriptorSetAllocateInfo descriptor_set_allocate_info=(VkDescriptorSetAllocateInfo)
+    VkDescriptorSetAllocateInfo descriptor_set_allocate_info=
     {
         .sType=VK_STRUCTURE_TYPE_DESCRIPTOR_SET_ALLOCATE_INFO,
         .pNext=NULL,
@@ -233,7 +273,6 @@ static void update_overlay_uniforms(uint32_t swapchain_image,VkDeviceSize offset
     ///investigate whether its necessary to update this every frame if its basically unchanging data and war hazards are a problem. may want to avoid just to stop validation from picking it up.
     VkWriteDescriptorSet writes[1]=
     {
-        (VkWriteDescriptorSet)
         {
             .sType=VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET,
             .pNext=NULL,
@@ -260,7 +299,7 @@ static void update_overlay_uniforms(uint32_t swapchain_image,VkDeviceSize offset
 
 static void create_overlay_pipeline_layouts(void)
 {
-    VkPipelineLayoutCreateInfo pipeline_create_info=(VkPipelineLayoutCreateInfo)
+    VkPipelineLayoutCreateInfo pipeline_create_info=
     {
         .sType=VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO,
         .pNext=NULL,
@@ -287,7 +326,7 @@ static void create_overlay_pipeline_layouts(void)
 
 static void create_overlay_render_pass(VkFormat swapchain_format,VkSampleCountFlagBits sample_count)
 {
-    VkRenderPassCreateInfo create_info=(VkRenderPassCreateInfo)
+    VkRenderPassCreateInfo create_info=
     {
         .sType=VK_STRUCTURE_TYPE_RENDER_PASS_CREATE_INFO,
         .pNext=NULL,
@@ -360,7 +399,7 @@ static void create_overlay_render_pass(VkFormat swapchain_format,VkSampleCountFl
 
 static void create_overlay_pipelines(VkRect2D screen_rectangle)
 {
-    VkGraphicsPipelineCreateInfo create_info=(VkGraphicsPipelineCreateInfo)
+    VkGraphicsPipelineCreateInfo create_info=
     {
         .sType=VK_STRUCTURE_TYPE_GRAPHICS_PIPELINE_CREATE_INFO,
         .pNext=NULL,
@@ -379,33 +418,39 @@ static void create_overlay_pipelines(VkRect2D screen_rectangle)
                 .flags=0,
                 .vertexBindingDescriptionCount=0,
                 .pVertexBindingDescriptions=NULL,
-//                .vertexBindingDescriptionCount=1,
-//                .pVertexBindingDescriptions= (VkVertexInputBindingDescription[1])
-//                {
-//                    {
-//                        .binding=0,
-//                        .stride=sizeof(overlay_render_data),
-//                        .inputRate=VK_VERTEX_INPUT_RATE_VERTEX
-//                    }
-//                },
+                .vertexBindingDescriptionCount=1,
+                .pVertexBindingDescriptions= (VkVertexInputBindingDescription[1])
+                {
+                    {
+                        .binding=0,
+                        .stride=sizeof(cvm_overlay_render_data),
+                        .inputRate=VK_VERTEX_INPUT_RATE_INSTANCE
+                    }
+                },
                 .vertexAttributeDescriptionCount=0,
-                .pVertexAttributeDescriptions=NULL
-//                .vertexAttributeDescriptionCount=2,
-//                .pVertexAttributeDescriptions=(VkVertexInputAttributeDescription[2])
-//                {
-//                    {
-//                        .location=0,
-//                        .binding=0,
-//                        .format=VK_FORMAT_R32G32B32_SFLOAT,
-//                        .offset=offsetof(overlay_render_data,pos)
-//                    },
-//                    {
-//                        .location=1,
-//                        .binding=0,
-//                        .format=VK_FORMAT_R8G8B8A8_UNORM,
-//                        .offset=offsetof(overlay_render_data,col)
-//                    }
-//                }
+                .pVertexAttributeDescriptions=NULL,
+                .vertexAttributeDescriptionCount=3,
+                .pVertexAttributeDescriptions=(VkVertexInputAttributeDescription[3])
+                {
+                    {
+                        .location=0,
+                        .binding=0,
+                        .format=VK_FORMAT_R16G16B16A16_UINT,
+                        .offset=offsetof(cvm_overlay_render_data,data0)
+                    },
+                    {
+                        .location=1,
+                        .binding=0,
+                        .format=VK_FORMAT_R16G16B16A16_UINT,
+                        .offset=offsetof(cvm_overlay_render_data,data1)
+                    },
+                    {
+                        .location=2,
+                        .binding=0,
+                        .format=VK_FORMAT_R16G16B16A16_UINT,
+                        .offset=offsetof(cvm_overlay_render_data,data2)
+                    }
+                }
             }
         },
         .pInputAssemblyState=(VkPipelineInputAssemblyStateCreateInfo[1])
@@ -487,11 +532,11 @@ static void create_overlay_pipelines(VkRect2D screen_rectangle)
                 {
                     {
                         .blendEnable=VK_TRUE,
-                        .srcColorBlendFactor=VK_BLEND_FACTOR_SRC_ALPHA,//VK_BLEND_FACTOR_ONE
-                        .dstColorBlendFactor=VK_BLEND_FACTOR_ONE_MINUS_SRC_ALPHA,//VK_BLEND_FACTOR_ZERO
+                        .srcColorBlendFactor=VK_BLEND_FACTOR_SRC_ALPHA,
+                        .dstColorBlendFactor=VK_BLEND_FACTOR_ONE_MINUS_SRC_ALPHA,
                         .colorBlendOp=VK_BLEND_OP_ADD,
-                        .srcAlphaBlendFactor=VK_BLEND_FACTOR_ZERO,// VK_BLEND_FACTOR_ONE// both ZERO as alpha is ignored?
-                        .dstAlphaBlendFactor=VK_BLEND_FACTOR_ZERO,//VK_BLEND_FACTOR_ONE
+                        .srcAlphaBlendFactor=VK_BLEND_FACTOR_ZERO,
+                        .dstAlphaBlendFactor=VK_BLEND_FACTOR_ZERO,
                         .alphaBlendOp=VK_BLEND_OP_ADD,
                         .colorWriteMask=VK_COLOR_COMPONENT_R_BIT|VK_COLOR_COMPONENT_G_BIT|VK_COLOR_COMPONENT_B_BIT|VK_COLOR_COMPONENT_A_BIT
                     }
@@ -516,7 +561,7 @@ static void create_overlay_framebuffers(VkRect2D screen_rectangle,uint32_t swapc
     uint32_t i;
     VkImageView attachments[1];
 
-    VkFramebufferCreateInfo create_info=(VkFramebufferCreateInfo)
+    VkFramebufferCreateInfo create_info=
     {
         .sType=VK_STRUCTURE_TYPE_FRAMEBUFFER_CREATE_INFO,
         .pNext=NULL,
@@ -541,7 +586,7 @@ static void create_overlay_framebuffers(VkRect2D screen_rectangle,uint32_t swapc
 
 static void create_overlay_images(uint32_t t_w,uint32_t t_h,uint32_t c_w,uint32_t c_h)
 {
-    VkImageCreateInfo image_creation_info=(VkImageCreateInfo)
+    VkImageCreateInfo image_creation_info=
     {
         .sType=VK_STRUCTURE_TYPE_IMAGE_CREATE_INFO,
         .pNext=NULL,
@@ -583,7 +628,7 @@ static void create_overlay_images(uint32_t t_w,uint32_t t_h,uint32_t c_w,uint32_
 
 
 
-    VkImageViewCreateInfo view_creation_info=(VkImageViewCreateInfo)
+    VkImageViewCreateInfo view_creation_info=
     {
         .sType=VK_STRUCTURE_TYPE_IMAGE_VIEW_CREATE_INFO,
         .pNext=NULL,
@@ -741,7 +786,7 @@ void initialise_overlay_render_data(void)
 
     cvm_vk_create_module_data(&overlay_module_data,false);
 
-    cvm_vk_create_transient_buffer(&overlay_transient_buffer,VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT);
+    cvm_vk_create_transient_buffer(&overlay_transient_buffer,VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT | VK_BUFFER_USAGE_VERTEX_BUFFER_BIT);
     cvm_vk_create_staging_buffer(&overlay_staging_buffer,VK_BUFFER_USAGE_TRANSFER_SRC_BIT);
 
     create_overlay_images(1024,1024,1024,1024);
@@ -749,12 +794,27 @@ void initialise_overlay_render_data(void)
 
     create_overlay_consistent_descriptors();
 
-    cvm_overlay_create_font(&overlay_test_font,"cvm_shared/resources/cvm_font_1.ttf",32);
+    if(FT_Init_FreeType(&overlay_freetype_library))
+    {
+        fprintf(stderr,"COULD NOT INITIALISE FREETYPE LIBRARY\n");
+        exit(-1);
+    }
+
+    cvm_overlay_create_font(&overlay_test_font,"cvm_shared/resources/cvm_font_1.ttf",24);
+//    cvm_overlay_create_font(&overlay_test_font,"cvm_shared/resources/OpenSans-Regular.ttf",32);
+//    cvm_overlay_create_font(&overlay_test_font,"cvm_shared/resources/HanaMinA.ttf",24);
+//    cvm_overlay_create_font(&overlay_test_font,"cvm_shared/resources/Symbola_hint.ttf",64);
 }
 
 void terminate_overlay_render_data(void)
 {
     cvm_overlay_destroy_font(&overlay_test_font);
+
+    if(FT_Done_FreeType(overlay_freetype_library))
+    {
+        fprintf(stderr,"COULD NOT DESTROY FREETYPE LIBRARY\n");
+        exit(-1);
+    }
 
     cvm_vk_destroy_image_atlas(&overlay_transparency_image_atlas);
     cvm_vk_destroy_image_atlas(&overlay_colour_image_atlas);
@@ -803,13 +863,10 @@ void initialise_overlay_swapchain_dependencies(void)
     uint32_t uniform_size=0;
     uniform_size+=cvm_vk_transient_buffer_get_rounded_allocation_size(&overlay_transient_buffer,sizeof(float)*8);
     uniform_size+=cvm_vk_transient_buffer_get_rounded_allocation_size(&overlay_transient_buffer,max_overlay_elements*sizeof(cvm_overlay_render_data));
-    uint32_t staging_size=512;
+    uint32_t staging_size=65536;
 
     cvm_vk_update_transient_buffer(&overlay_transient_buffer,uniform_size,swapchain_image_count);
     cvm_vk_update_staging_buffer(&overlay_staging_buffer,staging_size,swapchain_image_count);
-
-//    overlay_uniform_buffer_acquisitions=calloc(swapchain_image_count,sizeof(uint32_t));
-//    overlay_staging_buffer_acquisitions=calloc(swapchain_image_count,sizeof(uint32_t));
 }
 
 void terminate_overlay_swapchain_dependencies(void)
@@ -822,73 +879,56 @@ void terminate_overlay_swapchain_dependencies(void)
     for(i=0;i<swapchain_image_count;i++)
     {
         cvm_vk_destroy_framebuffer(overlay_framebuffers[i]);
-
-//        cvm_vk_relinquish_staging_buffer_space(&overlay_uniform_buffer,overlay_uniform_buffer_acquisitions+i);
-//        cvm_vk_relinquish_staging_buffer_space(&overlay_staging_buffer,overlay_staging_buffer_acquisitions+i);
     }
 
     cvm_vk_destroy_descriptor_pool(overlay_descriptor_pool);
 
     free(overlay_descriptor_sets);
     free(overlay_framebuffers);
-//    free(overlay_uniform_buffer_acquisitions);
-//    free(overlay_staging_buffer_acquisitions);
 }
-/*
-static uint32_t calculate_code_point(uint8_t * text)
+
+
+
+static void overlay_render_text(cvm_overlay_element_render_buffer * element_render_buffer,VkCommandBuffer command_buffer,cvm_overlay_font * font,uint8_t * text,int x,int y)
 {
-    uint32_t id;
-
-    if(*text & 0x80)
-    {
-        id=0;
-        while(*text & (0x80 >> incr))
-        {
-            ///error check, dont put in release version
-            if((text[incr]&0xC0) != 0x80)
-            {
-                fprintf(stderr,"ATTEMPTING TO RENDER AS INVALID UTF-8 STRING (TOP BIT MISMATCH)\n");
-                exit(-1);
-            }
-            id<<=6;
-            printf("=====%x\n",text[incr]&0x3F);
-            id|=text[incr]&0x3F;
-            incr++;
-        }
-        id|=(*text&(1<<(7-incr))-1)   <<(6u*incr-6u);
-        ///error check, dont put in release version
-        if(incr==1)
-        {
-            fprintf(stderr,"ATTEMPTING TO RENDER AS INVALID UTF-8 STRING (INVALID LENGTH SPECIFIED)\n");
-            exit(-1);
-        }
-    }
-    else
-    {
-        id=*text;
-    }
-
-    return id;
-}
-*/
-
-
-static void overlay_render_text(VkCommandBuffer upload_buffer,cvm_overlay_font * font,uint8_t * text,int x,int y)
-{
-    uint32_t id,index,incr,s,e,w;
-    int s_x=x;
+    uint32_t cp,ci,prev_ci,index,incr,s,e,w,h;
+    int s_x;
+    uint8_t * prev_text_pos;
     uint8_t tmp;///extracted value to allow valid string of just this utf8 character (i.e. "current" text variable) to quickly be used by replacing following char w/ null terminator
-    SDL_Surface * text_surface;
     VkDeviceSize upload_offset;
     uint8_t * staging;
-    cvm_vk_image_atlas_tile * tile;
+    //cvm_vk_image_atlas_tile * tile;
+    cvm_overlay_glyph * g;
+
+//    uint32_t xm=element_render_buffer->xm;
+//    uint32_t ym=element_render_buffer->ym;
+    s_x=x;
+    prev_text_pos=text;
+    prev_ci=0;
+
 
     while(*text)
     {
+        if(*text==' ')
+        {
+            x+=font->space_advance;
+            prev_ci=font->space_character_index;
+            text++;
+            continue;
+        }
+        else if(*text=='\n')
+        {
+            x=s_x;
+            y+=font->glyph_size;
+            prev_ci=0;
+            text++;
+            continue;
+        }
+
         incr=1;
         if(*text & 0x80)
         {
-            id=0;
+            cp=0;
             while(*text & (0x80 >> incr))
             {
                 ///error check, dont put in release version
@@ -897,11 +937,11 @@ static void overlay_render_text(VkCommandBuffer upload_buffer,cvm_overlay_font *
                     fprintf(stderr,"ATTEMPTING TO RENDER AS INVALID UTF-8 STRING (TOP BIT MISMATCH)\n");
                     exit(-1);
                 }
-                id<<=8;
-                id|=text[incr];
+                cp<<=6;
+                cp|=text[incr]&0x3F;
                 incr++;
             }
-            id|=*text<<(8*incr-8);
+            cp|=(*text&(1<<(7-incr))-1)<<(6u*incr-6u);
             ///error check, dont put in release version
             if(incr==1)
             {
@@ -909,7 +949,10 @@ static void overlay_render_text(VkCommandBuffer upload_buffer,cvm_overlay_font *
                 exit(-1);
             }
         }
-        else id=*text;
+        else cp=*text;
+
+
+        ci=FT_Get_Char_Index(font->face,cp);
 
         ///special handling for space and other non-glyph characters here???
 
@@ -917,54 +960,62 @@ static void overlay_render_text(VkCommandBuffer upload_buffer,cvm_overlay_font *
         ///search should exclude tested element when promoting middle to start,
         s=0;
         e=font->glyph_count;
-        if(e)while(font->glyphs[(index=(s+e)>>1)].id!=id)
+        while(1)
         {
-            if(index==s)
+            index=(s+e)>>1;
+            if(index!=e && font->glyphs[index].code_point==cp) break;
+            if(e-s<2)
             {
                 ///does not exist, insert at index | index+1
-                index+=(font->glyphs[index].id<id);
+                index+= index<e && font->glyphs[index].code_point<cp;
 
                 if(font->glyph_count==font->glyph_space)font->glyphs=realloc(font->glyphs,sizeof(cvm_overlay_glyph)*(font->glyph_space*=2));
 
                 memmove(font->glyphs+index+1,font->glyphs+index,(font->glyph_count-index)*sizeof(cvm_overlay_glyph));
 
-                font->glyphs[index].tile=NULL;
-                font->glyphs[index].id=id;
+                font->glyphs[index]=(cvm_overlay_glyph)
+                {
+                    .tile=NULL,
+                    .code_point=cp,
+                    .usage_counter=0,
+                    .x1=0,
+                    .x2=0,
+                    .y1=0,
+                    .y2=0
+                };
 
                 font->glyph_count++;
 
                 break;
             }
-            else if(font->glyphs[index].id<id) s=index;
-            else e=index;
-        }
-        else
-        {
-            index=0;
-
-            font->glyphs[0].tile=NULL;
-            font->glyphs[0].id=id;
-            font->glyph_count++;
+            else if(font->glyphs[index].code_point<cp) s=index+1;///already checked s, quicker convergence
+            else e=index;///e is excluded from search
         }
 
-        //printf("%u\n",index);
+        g=font->glyphs+index;
 
-        tile=font->glyphs[index].tile;
-        if(tile==NULL)
+        ///do stuff here to handle space
+
+        tmp=text[incr];
+        text[incr]='\0';
+
+
+        if(g->tile==NULL)
         {
-            tmp=text[incr];
-            text[incr]='\0';
-            if((text_surface=TTF_RenderUTF8_Shaded(font->font,(const char*)text,(SDL_Color){255,255,255,255},(SDL_Color){0,0,0,0})))
+            if(!FT_Load_Glyph(font->face,ci,FT_LOAD_RENDER))
             {
-                w=((text_surface->w-1)&~3)+4;
-                staging = cvm_vk_get_staging_buffer_allocation(&overlay_staging_buffer,sizeof(uint8_t)*w*text_surface->h,&upload_offset);
+                w=font->face->glyph->bitmap.width;
+                h=font->face->glyph->bitmap.rows;
+                staging = cvm_vk_get_staging_buffer_allocation(&overlay_staging_buffer,sizeof(uint8_t)*w*h,&upload_offset);
+
+                if(!w)exit(7);
 
                 if(staging)
                 {
-                    tile=font->glyphs[index].tile=cvm_vk_acquire_image_atlas_tile(&overlay_transparency_image_atlas,w,text_surface->h);
-                    if(tile)
+                    g->tile=cvm_vk_acquire_image_atlas_tile(&overlay_transparency_image_atlas,w,h);
+                    if(g->tile)
                     {
-                        memcpy(staging,text_surface->pixels,sizeof(uint8_t)*w*text_surface->h);
+                        memcpy(staging,font->face->glyph->bitmap.buffer,sizeof(uint8_t)*w*h);
 
                         ///put following in image atlas function? probably requires knowing image atlas type in order to complete transfer/know how many bytes to copy
 
@@ -972,7 +1023,7 @@ static void overlay_render_text(VkCommandBuffer upload_buffer,cvm_overlay_font *
                         {
                             .bufferOffset=upload_offset,
                             .bufferRowLength=w,
-                            .bufferImageHeight=text_surface->h,
+                            .bufferImageHeight=h,
                             .imageSubresource=(VkImageSubresourceLayers)
                             {
                                 .aspectMask=VK_IMAGE_ASPECT_COLOR_BIT,
@@ -982,31 +1033,55 @@ static void overlay_render_text(VkCommandBuffer upload_buffer,cvm_overlay_font *
                             },
                             .imageOffset=(VkOffset3D)
                             {
-                                .x=tile->x_pos<<CVM_VK_BASE_TILE_SIZE_FACTOR,
-                                .y=tile->y_pos<<CVM_VK_BASE_TILE_SIZE_FACTOR,
+                                .x=g->tile->x_pos<<CVM_VK_BASE_TILE_SIZE_FACTOR,
+                                .y=g->tile->y_pos<<CVM_VK_BASE_TILE_SIZE_FACTOR,
                                 .z=0
                             },
                             .imageExtent=(VkExtent3D)
                             {
                                 .width=w,
-                                .height=text_surface->h,
+                                .height=h,
                                 .depth=1,
                             }
                         };
 
-                        vkCmdCopyBufferToImage(upload_buffer,overlay_staging_buffer.buffer,overlay_transparency_image,VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,1,&cpy);
+                        vkCmdCopyBufferToImage(command_buffer,overlay_staging_buffer.buffer,overlay_transparency_image,VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,1,&cpy);
+
+                        g->x2=w+(g->x1=font->face->glyph->bitmap_left);
+                        g->y2=h+(g->y1=font->glyph_size-font->face->glyph->bitmap_top);
+
+                        g->advance=font->face->glyph->advance.x>>6;
                     }
                 }
-
-                SDL_FreeSurface(text_surface);
             }
-            text[incr]=tmp;
         }
-//
-//        if(tile)///need to check again as can return null once again;
-//        {
-//            ///
-//        }
+
+        if(g->tile && element_render_buffer->count != element_render_buffer->space)///need to check again as can return null once again;
+        {
+            FT_Vector kern;
+            if(prev_ci)
+            {
+                if(!FT_Get_Kerning(font->face,prev_ci,ci,0,&kern))
+                {
+                    x+=kern.x>>6;
+                }
+            }
+            else x-=g->x1;
+
+            element_render_buffer->buffer[element_render_buffer->count++]=(cvm_overlay_render_data)
+            {
+                {x+g->x1,y+g->y1,x+g->x2,y+g->y2},
+                {CVM_OVERLAY_ELEMENT_SHADED,g->tile->x_pos<<2,g->tile->y_pos<<2,83},
+                {83,83,83,83},
+            };
+
+            prev_ci=ci;
+        }
+
+        text[incr]=tmp;
+
+        prev_text_pos=text;
+        x+=g->advance;///not right but w/e
 
         text+=incr;
     }
@@ -1019,7 +1094,8 @@ cvm_vk_module_work_block * overlay_render_frame(int screen_w,int screen_h)
 
     static bool first=true;
 
-
+    cvm_overlay_element_render_buffer element_render_buffer;
+    VkDeviceSize uniform_offset,vertex_offset;
 
     ///perhaps this should return previous image index as well, such that that value can be used in cleanup (e.g. relinquishing ring buffer space)
     work_block = cvm_vk_begin_module_work_block(&overlay_module_data,0,&swapchain_image_index);
@@ -1039,6 +1115,8 @@ cvm_vk_module_work_block * overlay_render_frame(int screen_w,int screen_h)
     if(swapchain_image_index!=CVM_VK_INVALID_IMAGE_INDEX)
     {
         cvm_vk_begin_staging_buffer(&overlay_staging_buffer);///build barriers into begin/end paradigm maybe???
+
+        cvm_vk_begin_transient_buffer(&overlay_transient_buffer,swapchain_image_index);
         #warning need to use the appropriate queue for all following transfer ops
         ///     ^ possibly detect when they're different and use gfx directly to avoid double submission?
         ///         ^ have cvm_vk_begin_module_work_block return same command buffer?
@@ -1049,14 +1127,26 @@ cvm_vk_module_work_block * overlay_render_frame(int screen_w,int screen_h)
             CVM_TMP_vkCmdPipelineBarrier2KHR(work_block->graphics_work,&overlay_uninitialised_to_transfer_dependencies);
             first=false;
 
-            str=strdup("Hello\tWorld! ばか");
+//            str=strdup("Hello World! Far リサフランク420 - 現代のコンピュー");
+            str=strdup("Hello World!\tFar リサフランク420 - 現代のコンピュー  Hello World!\nFar ncdjvfng gvbgf bmgnf dvn vgbf  fjdvbfng vngfb,  ffnf\n bmngk,fgfh vfdbfg fd df gtv dfmbd f vfdhfv g dvb fbnb\n\n  f  dfgg dfmv vdv  xmcnbx fd mjdbvm v\
+d cf fn\n vsrs  sdfmmgt dgf thd gmdrg1234567890-=qwertyuiop[]\\asdfgh\njkl;'zxcvbnm,./ZXCVBNM<>?ASDFGHJKL:QWERTYUIOP{}|!#$%^&*()_+");
+//                       str=strdup("Far");
         }
         else
         {
             CVM_TMP_vkCmdPipelineBarrier2KHR(work_block->graphics_work,&overlay_graphics_to_transfer_dependencies);
         }
 
-        overlay_render_text(work_block->graphics_work,&overlay_test_font,(uint8_t*)str,350,200);
+        element_render_buffer.buffer=cvm_vk_get_transient_buffer_allocation(&overlay_transient_buffer,max_overlay_elements*sizeof(cvm_overlay_render_data),&vertex_offset);
+        element_render_buffer.space=max_overlay_elements;
+        element_render_buffer.count=0;
+        ///instead get following from base widget?
+        //VkRect2D r=cvm_vk_get_screen_rectangle();
+        //element_render_buffer.xm=CVM_OVERLAY_SCREEN_MULTIPLIER(r.extent.width);
+        //element_render_buffer.ym=CVM_OVERLAY_SCREEN_MULTIPLIER(r.extent.height);
+        test_timing(true,NULL);
+        overlay_render_text(&element_render_buffer,work_block->graphics_work,&overlay_test_font,(uint8_t*)str,0,0);
+        test_timing(false,"render text");
 
         CVM_TMP_vkCmdPipelineBarrier2KHR(work_block->graphics_work,&overlay_transfer_to_graphics_dependencies);
 
@@ -1064,10 +1154,9 @@ cvm_vk_module_work_block * overlay_render_frame(int screen_w,int screen_h)
 
 
 
-        cvm_vk_begin_transient_buffer(&overlay_transient_buffer,swapchain_image_index);
 
-        VkDeviceSize uniforms_offset;
-        float * uniforms = cvm_vk_get_transient_buffer_allocation(&overlay_transient_buffer,sizeof(float)*8,&uniforms_offset);
+
+        float * uniforms = cvm_vk_get_transient_buffer_allocation(&overlay_transient_buffer,sizeof(float)*8,&uniform_offset);
 
         uniforms[0]=0.7+0.3*cos(SDL_GetTicks()*0.005);
         uniforms[1]=0.7+0.3*cos(SDL_GetTicks()*0.007);
@@ -1078,9 +1167,12 @@ cvm_vk_module_work_block * overlay_render_frame(int screen_w,int screen_h)
         uniforms[6]=0;
         uniforms[7]=1.0;
 
-        update_overlay_uniforms(swapchain_image_index,uniforms_offset,2);///should really build buffer acquisition into update uniforms function
+        update_overlay_uniforms(swapchain_image_index,uniform_offset,2);///should really build buffer acquisition into update uniforms function
 
-        float screen_dimensions[4]={1.0/((float)screen_w),1.0/((float)screen_h),(float)screen_w,(float)screen_h};
+
+
+
+        float screen_dimensions[4]={2.0/((float)screen_w),2.0/((float)screen_h),(float)screen_w,(float)screen_h};
 
         vkCmdPushConstants(work_block->graphics_work,overlay_pipeline_layout,VK_SHADER_STAGE_VERTEX_BIT|VK_SHADER_STAGE_FRAGMENT_BIT,0,4*sizeof(float),screen_dimensions);
 
@@ -1103,15 +1195,16 @@ cvm_vk_module_work_block * overlay_render_frame(int screen_w,int screen_h)
 
         vkCmdBindPipeline(work_block->graphics_work,VK_PIPELINE_BIND_POINT_GRAPHICS,overlay_pipeline);
 
-        vkCmdDraw(work_block->graphics_work,4,1,0,0);
+        vkCmdBindVertexBuffers(work_block->graphics_work,0,1,&overlay_transient_buffer.buffer,&vertex_offset);
+
+        vkCmdDraw(work_block->graphics_work,4,element_render_buffer.count,0,0);
+        //printf("A) %u\n",element_render_buffer.count);
 
         vkCmdEndRenderPass(work_block->graphics_work);///================
 
         ///huh, could store this in buffer maybe as it occurrs once per frame...
         cvm_vk_end_transient_buffer(&overlay_transient_buffer);
         cvm_vk_end_staging_buffer(&overlay_staging_buffer,swapchain_image_index);
-//        overlay_uniform_buffer_acquisitions[swapchain_image_index]=cvm_vk_end_staging_buffer(&overlay_uniform_buffer);
-//        overlay_staging_buffer_acquisitions[swapchain_image_index]=cvm_vk_end_staging_buffer(&overlay_staging_buffer);
     }
 
     return cvm_vk_end_module_work_block(&overlay_module_data);
@@ -1121,7 +1214,6 @@ void overlay_frame_cleanup(uint32_t swapchain_image_index)
 {
     if(swapchain_image_index!=CVM_VK_INVALID_IMAGE_INDEX)
     {
-        //cvm_vk_relinquish_staging_buffer_space(&overlay_uniform_buffer,swapchain_image_index);
         cvm_vk_relinquish_staging_buffer_space(&overlay_staging_buffer,swapchain_image_index);
     }
 }
@@ -1129,13 +1221,29 @@ void overlay_frame_cleanup(uint32_t swapchain_image_index)
 
 void cvm_overlay_create_font(cvm_overlay_font * font,char * filename,int pixel_size)
 {
-    font->font = TTF_OpenFont(filename,pixel_size);
-
-    if(!font->font)
+    if(FT_New_Face(overlay_freetype_library,filename,0,&font->face))
     {
-        fprintf(stderr,"COULD NOT LOAD FONT FILE %s\n",filename);
+        fprintf(stderr,"COULD NOT LOAD FONT FACE FILE %s\n",filename);
         exit(-1);
     }
+
+    if(FT_Set_Pixel_Sizes(font->face,0,pixel_size))
+    {
+        fprintf(stderr,"COULD NOT SET FONT FACE SIZE %s %d\n",filename,pixel_size);
+        exit(-1);
+    }
+
+    font->glyph_size=pixel_size;
+
+    font->space_character_index=FT_Get_Char_Index(font->face,' ');
+
+    if(FT_Load_Glyph(font->face,font->space_character_index,0))
+    {
+        fprintf(stderr,"FONT DOES NOT CONTAIN SPACE CHARACTER %s\n",filename);
+        exit(-1);
+    }
+
+    font->space_advance=font->face->glyph->advance.x>>6;
 
     font->glyphs=malloc(4*sizeof(cvm_overlay_glyph));
     font->glyph_space=4;
@@ -1145,7 +1253,11 @@ void cvm_overlay_create_font(cvm_overlay_font * font,char * filename,int pixel_s
 void cvm_overlay_destroy_font(cvm_overlay_font * font)
 {
     uint32_t i;
-    TTF_CloseFont(font->font);
+    if(FT_Done_Face(font->face))
+    {
+        fprintf(stderr,"COULD NOT DESTROY FONT FACE\n");
+        exit(-1);
+    }
 
     for(i=0;i<font->glyph_count;i++)
     {
@@ -1263,147 +1375,147 @@ void ensure_overlay_data_space(overlay_data * od)
 
 void load_font_to_overlay(gl_functions * glf,overlay_theme * theme,char * ttf_file,int size)
 {
-    int i,j,k,w;
-    SDL_Surface *surf;
-
-    cvm_font * font= &theme->font;
-
-    TTF_Font * this_font = TTF_OpenFont(ttf_file,size);
-
-    font->line_spacing=TTF_FontAscent(this_font)-TTF_FontDescent(this_font)+4;
-    font->font_size=size;
-
-
-
-    TTF_GlyphMetrics(this_font,' ',NULL,NULL,NULL,NULL,&font->space_width);
-
-
-    font->max_glyph_width=font->space_width;
-
-
-
-    font->glyphs[0].offset=0;
-
-    int minx,maxx;
-    for(i=0;i<94;i++)
-    {
-        TTF_GlyphMetrics(this_font,'!'+i,&minx,&maxx,NULL,NULL,&font->glyphs[i].advance );
-
-        font->glyphs[i].width=maxx-minx;
-        font->glyphs[i].bearingX=minx;
-
-        if(i)font->glyphs[i].offset=font->glyphs[i-1].offset+font->glyphs[i-1].width;
-
-        if(font->max_glyph_width<font->glyphs[i].advance)
-        {
-            font->max_glyph_width=font->glyphs[i].advance;
-            //printf("max_char: %c\n",'!'+i);
-        }
-    }
-
-
-    int total_width=((font->glyphs[93].offset+font->glyphs[93].width)/4 + 1)*4;
-
-    uint8_t * pixels=calloc((font->line_spacing)*total_width,sizeof(char));
-
-    char c[3];
-    c[1]=0;
-    SDL_Color col;
-    col.a=0xFF;
-
-
-    for(i=0;i<94;i++)
-    {
-        c[0]='!'+i;
-
-        surf = TTF_RenderText_Blended(this_font, c , col);
-        minx=(font->glyphs[i].bearingX>0)?font->glyphs[i].bearingX:0;
-        w=surf->w;
-
-
-        for(j=0;j<surf->h;j++)
-        {
-            for(k=0;k<font->glyphs[i].width;k++)
-            {
-                pixels[j*total_width+k+font->glyphs[i].offset]=((uint8_t*)surf->pixels)[(j*w+k+minx)*4+3];
-            }
-        }
-
-        SDL_FreeSurface(surf);
-    }
-
-
-    c[2]=0;
-
-    for(i=0;i<94;i++)
-    {
-        c[0]=i+'!';
-        for(j=0;j<94;j++)
-        {
-            c[1]=j+'!';
-
-            int xx,yy;
-
-            TTF_SizeText(this_font,c,&xx,&yy);
-
-
-            minx=(font->glyphs[i].bearingX<0)?-font->glyphs[i].bearingX:0;
-
-            //font->glyphs[i].kerning[j]=TTF_GetFontKerningSize(font->font, i+'!', j+'!');
-            font->glyphs[i].kerning[j]=xx-minx-font->glyphs[i].advance-font->glyphs[j].advance;
-
-//            if(font->glyphs[i].kerning[j]!=0)
-//            {
-//                printf("%d %c %c\n",font->glyphs[i].kerning[j],i+'!', j+'!');
-//            }
-        }
-    }
-
-
-    int miny,maxy;
-    miny=-1;
-    maxy=0;
-    bool line_active;
-    for(i=0;i<font->line_spacing;i++)
-    {
-        line_active=false;
-        for(j=0;j<total_width;j++)
-        {
-            if(pixels[i*total_width+j])
-            {
-                line_active=true;
-            }
-        }
-
-        if(line_active)
-        {
-            if(miny==-1)miny=i;
-            maxy=i;
-        }
-    }
-
-//    for(i=0;i<total_width;i++)
+//    int i,j,k,w;
+//    SDL_Surface *surf;
+//
+//    cvm_font * font= &theme->font;
+//
+//    TTF_Font * this_font = TTF_OpenFont(ttf_file,size);
+//
+//    font->line_spacing=TTF_FontAscent(this_font)-TTF_FontDescent(this_font)+4;
+//    font->font_size=size;
+//
+//
+//
+//    TTF_GlyphMetrics(this_font,' ',NULL,NULL,NULL,NULL,&font->space_width);
+//
+//
+//    font->max_glyph_width=font->space_width;
+//
+//
+//
+//    font->glyphs[0].offset=0;
+//
+//    int minx,maxx;
+//    for(i=0;i<94;i++)
 //    {
-//        pixels[miny*total_width+i]=255;
-//        pixels[maxy*total_width+i]=255;
+//        TTF_GlyphMetrics(this_font,'!'+i,&minx,&maxx,NULL,NULL,&font->glyphs[i].advance );
+//
+//        font->glyphs[i].width=maxx-minx;
+//        font->glyphs[i].bearingX=minx;
+//
+//        if(i)font->glyphs[i].offset=font->glyphs[i-1].offset+font->glyphs[i-1].width;
+//
+//        if(font->max_glyph_width<font->glyphs[i].advance)
+//        {
+//            font->max_glyph_width=font->glyphs[i].advance;
+//            //printf("max_char: %c\n",'!'+i);
+//        }
 //    }
-
-
-    font->font_height=maxy-miny+1;
-    font->line_spacing-=4;
-
-
-
-
-    glf->glBindTexture(GL_TEXTURE_2D,font->text_image);
-    glf->glTexImage2D(GL_TEXTURE_2D,0,GL_RED,total_width,font->font_height,0,GL_RED,GL_UNSIGNED_BYTE,pixels+miny*total_width);
-    glf->glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
-    glf->glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
-    glf->glBindTexture(GL_TEXTURE_2D,0);
-
-    free(pixels);
-
-    TTF_CloseFont(this_font);
+//
+//
+//    int total_width=((font->glyphs[93].offset+font->glyphs[93].width)/4 + 1)*4;
+//
+//    uint8_t * pixels=calloc((font->line_spacing)*total_width,sizeof(char));
+//
+//    char c[3];
+//    c[1]=0;
+//    SDL_Color col;
+//    col.a=0xFF;
+//
+//
+//    for(i=0;i<94;i++)
+//    {
+//        c[0]='!'+i;
+//
+//        surf = TTF_RenderText_Blended(this_font, c , col);
+//        minx=(font->glyphs[i].bearingX>0)?font->glyphs[i].bearingX:0;
+//        w=surf->w;
+//
+//
+//        for(j=0;j<surf->h;j++)
+//        {
+//            for(k=0;k<font->glyphs[i].width;k++)
+//            {
+//                pixels[j*total_width+k+font->glyphs[i].offset]=((uint8_t*)surf->pixels)[(j*w+k+minx)*4+3];
+//            }
+//        }
+//
+//        SDL_FreeSurface(surf);
+//    }
+//
+//
+//    c[2]=0;
+//
+//    for(i=0;i<94;i++)
+//    {
+//        c[0]=i+'!';
+//        for(j=0;j<94;j++)
+//        {
+//            c[1]=j+'!';
+//
+//            int xx,yy;
+//
+//            TTF_SizeText(this_font,c,&xx,&yy);
+//
+//
+//            minx=(font->glyphs[i].bearingX<0)?-font->glyphs[i].bearingX:0;
+//
+//            //font->glyphs[i].kerning[j]=TTF_GetFontKerningSize(font->font, i+'!', j+'!');
+//            font->glyphs[i].kerning[j]=xx-minx-font->glyphs[i].advance-font->glyphs[j].advance;
+//
+////            if(font->glyphs[i].kerning[j]!=0)
+////            {
+////                printf("%d %c %c\n",font->glyphs[i].kerning[j],i+'!', j+'!');
+////            }
+//        }
+//    }
+//
+//
+//    int miny,maxy;
+//    miny=-1;
+//    maxy=0;
+//    bool line_active;
+//    for(i=0;i<font->line_spacing;i++)
+//    {
+//        line_active=false;
+//        for(j=0;j<total_width;j++)
+//        {
+//            if(pixels[i*total_width+j])
+//            {
+//                line_active=true;
+//            }
+//        }
+//
+//        if(line_active)
+//        {
+//            if(miny==-1)miny=i;
+//            maxy=i;
+//        }
+//    }
+//
+////    for(i=0;i<total_width;i++)
+////    {
+////        pixels[miny*total_width+i]=255;
+////        pixels[maxy*total_width+i]=255;
+////    }
+//
+//
+//    font->font_height=maxy-miny+1;
+//    font->line_spacing-=4;
+//
+//
+//
+//
+//    glf->glBindTexture(GL_TEXTURE_2D,font->text_image);
+//    glf->glTexImage2D(GL_TEXTURE_2D,0,GL_RED,total_width,font->font_height,0,GL_RED,GL_UNSIGNED_BYTE,pixels+miny*total_width);
+//    glf->glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
+//    glf->glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
+//    glf->glBindTexture(GL_TEXTURE_2D,0);
+//
+//    free(pixels);
+//
+//    TTF_CloseFont(this_font);
 }
 
 

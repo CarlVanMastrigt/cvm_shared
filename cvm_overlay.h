@@ -28,31 +28,62 @@ along with cvm_shared.  If not, see <https://www.gnu.org/licenses/>.
 
 
 
-
-
+typedef enum
+{
+    CVM_OVERLAY_ELEMENT_SHADED,
+    CVM_OVERLAY_ELEMENT_COLOURED,
+    CVM_OVERLAY_ELEMENT_FILL,
+}
+cvm_overlay_element_type;
 
 typedef struct cvm_overlay_render_data
 {
-    uint16_t data1[4];///position, unorm probably
-    uint16_t data2[4];///int data: type, tex_lookup.xy, ?    alternatively some of these can be type based flags, e.g. which texture to pull from, if any (and with it whether to apply colouring)
-    uint16_t data3[4];/// ? ? ? ?
+    uint16_t data0[4];///position, unorm probably
+    uint16_t data1[4];///int data: type, tex_lookup.xy, ?    alternatively some of these can be type based flags, e.g. which texture to pull from, if any (and with it whether to apply colouring)
+    uint16_t data2[4];/// ? ? ? ?
 }
 cvm_overlay_render_data;
+
+typedef struct cvm_overlay_element_render_buffer
+{
+    ///could fill buffer in reverse to make render order match input order, but not sure how that would affect write combining of data so will avoid for now;
+    cvm_overlay_render_data * buffer;
+    uint32_t count,space;//,xm,ym;
+}
+cvm_overlay_element_render_buffer;
+
+/*
+#define CVM_OVERLAY_SCREEN_COORDINATES(xm,ym,x1,y1,x2,y2){\
+((uint16_t)(((uint32_t)(x1)*xm+((uint32_t)(x1)>>1)+0x00008000)>>16)),\
+((uint16_t)(((uint32_t)(y1)*ym+((uint32_t)(y1)>>1)+0x00008000)>>16)),\
+((uint16_t)(((uint32_t)(x2)*xm+((uint32_t)(x2)>>1)+0x00008000)>>16)),\
+((uint16_t)(((uint32_t)(y2)*ym+((uint32_t)(y2)>>1)+0x00008000)>>16))}
+#define CVM_OVERLAY_SCREEN_MULTIPLIER(s) (0xFFFF0000/(uint32_t)s);
+*/
+
+///might be worth using freetype directly, should compare performance
 
 ///optimised compared to other 2 similar purpose elements b/c glyphs are expected to be such a common element
 typedef struct cvm_overlay_glyph
 {
     cvm_vk_image_atlas_tile * tile;///if null create upon render
 
-    uint32_t id;///"technically" 36 bits is maximum utf-8 range, but apparently only 21 are used...
+    uint32_t code_point;///"technically" 36 bits is maximum utf-8 range, but apparently only 21 are used...
     uint32_t usage_counter;///when hitting 0 it gets deleted? (or scheduled for deletion) is this even necessary?
     ///perhaps need better way to handle unused overlay elements and glyphs (could just agressively delete...)
+    int x1,x2,y1,y2;
+    int advance;
 }
 cvm_overlay_glyph;///hmmm, glyph vs string based rendering... glyph has more potential to be loaded at once and is faster in worst case, but slower in average
 
 typedef struct cvm_overlay_font
 {
-    TTF_Font * font;
+    FT_Face face;
+
+    int glyph_size;
+
+    int space_advance;
+    int space_character_index;
 
     ///not a great solution but bubble sort new glyphs from end?, is rare enough op and gives low enough cache use to justify?
     cvm_overlay_glyph * glyphs;

@@ -34,8 +34,10 @@ along with cvm_shared.  If not, see <https://www.gnu.org/licenses/>.
 
 #include <SDL2/SDL.h>
 #include <SDL2/SDL_image.h>
-#include <SDL2/SDL_ttf.h>
 #include <SDL2/SDL_vulkan.h>
+
+#include <ft2build.h>
+#include FT_FREETYPE_H
 
 #include <dirent.h>
 #include <sys/stat.h>
