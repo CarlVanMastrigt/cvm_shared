@@ -15,7 +15,7 @@ layout(push_constant) uniform screen_dimensions
 
 layout(location=0) flat in uvec4 d0;
 layout(location=1) flat in uvec4 d1;
-layout(location=2) flat in uvec4 d2;
+//layout(location=2) flat in uvec4 d2;
 
 layout(location=3) in vec4 c_in;
 

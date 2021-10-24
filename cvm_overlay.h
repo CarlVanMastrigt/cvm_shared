@@ -38,9 +38,9 @@ cvm_overlay_element_type;
 
 typedef struct cvm_overlay_render_data
 {
-    uint16_t data0[4];///position, unorm probably
-    uint16_t data1[4];///int data: type, tex_lookup.xy, ?    alternatively some of these can be type based flags, e.g. which texture to pull from, if any (and with it whether to apply colouring)
-    uint16_t data2[4];/// ? ? ? ?
+    uint16_t data0[4];///position
+    uint16_t data1[4];///int data: type|colour_id, tex_lookup.xy, fade_offset|fade_speed(for glyphs) can be known based on contents (calculated at sizing step and applied at render based on current x)
+    //uint16_t data2[4];/// ? ? ? ?
 }
 cvm_overlay_render_data;
 
@@ -68,10 +68,10 @@ typedef struct cvm_overlay_glyph
 {
     cvm_vk_image_atlas_tile * tile;///if null create upon render
 
-    uint32_t code_point;///"technically" 36 bits is maximum utf-8 range, but apparently only 21 are used...
+    FT_UInt glyph_index;///because of variant selectors, cannot search by code point, search by glyph index
     uint32_t usage_counter;///when hitting 0 it gets deleted? (or scheduled for deletion) is this even necessary?
     ///perhaps need better way to handle unused overlay elements and glyphs (could just agressively delete...)
-    int x1,x2,y1,y2;
+    rectangle_ pos;
     int advance;
 }
 cvm_overlay_glyph;///hmmm, glyph vs string based rendering... glyph has more potential to be loaded at once and is faster in worst case, but slower in average
@@ -129,7 +129,7 @@ void cvm_overlay_destroy_font(cvm_overlay_font * font);
 //void overlay_test(void);
 
 
-
+void overlay_render_text(cvm_overlay_element_render_buffer * element_render_buffer,VkCommandBuffer command_buffer,cvm_overlay_font * font,uint8_t * text,int x,int y,rectangle_ * bounds,int wrapping_width);
 
 
 

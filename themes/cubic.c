@@ -19,6 +19,9 @@ along with cvm_shared.  If not, see <https://www.gnu.org/licenses/>.
 
 #include "cvm_shared.h"
 
+/// how to handle non font "glyphs"? diy and actually use utf8 glyphs?
+/// need way to render misc shapes (cubic parts here) dynamically, possibly just ensure they exist and create when necessary every frame? (is kind-of expensive, but may be best way)
+
 static overlay_sprite_data foreground_shape_sprite;
 static overlay_sprite_data background_shape_sprite;
 static overlay_sprite_data foreground_border_sprite;
@@ -565,7 +568,7 @@ void initialise_cubic_theme(gl_functions * glf,overlay_theme * theme)
     create_overlay_sprite_from_sdl_surface(theme,"music_file",icons_surface,16,16,16,32,OVERLAY_SHADED_SPRITE);
     create_overlay_sprite_from_sdl_surface(theme,"vector_file",icons_surface,16,16,32,32,OVERLAY_SHADED_SPRITE);
 
-
+/// ⬆ ❌ 🔄 📁 📷 📄 🎵 ➕ ➖ 👻 🖋 🔓 🔗 🖼 ✂ 👁
 
     d=set_cubic_shaded_sprite_data(shaded_sprite_buffer,28,24,32,true);
     osd=create_overlay_sprite(theme,"false",d,d,OVERLAY_SHADED_SPRITE);

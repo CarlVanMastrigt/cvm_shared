@@ -90,6 +90,15 @@ typedef struct rectangle
 }
 rectangle;
 
+typedef struct rectangle_
+{
+    int x1;
+    int y1;
+    int x2;
+    int y2;
+}
+rectangle_;
+
 typedef struct quaternion
 {
     float r;
@@ -448,6 +457,31 @@ static inline vec4f vec4f_blend(vec4f b,vec4f f)
 
 
 
+static inline bool rectangles_overlap_(rectangle_ r1,rectangle_ r2)
+{
+    return ((r1.x2 > r2.x1)&&(r2.x2 > r1.x1)&&(r1.y2 > r2.y1)&&(r2.y2 > r1.y1));
+}
+
+static inline rectangle_ get_rectangle_overlap_(rectangle_ r,rectangle_ b)
+{
+    r.x1+=(b.x1>r.x1)*(b.x1-r.x1);
+    r.y1+=(b.y1>r.y1)*(b.y1-r.y1);
+
+    r.x2+=(b.x2<r.x2)*(b.x2-r.x2);
+    r.y2+=(b.y2<r.y2)*(b.y2-r.y2);
+
+    return r;
+}
+
+static inline bool rectangle_has_positive_area(rectangle_ r)
+{
+    return r.x2 > r.x1 && r.y2 > r.y1;
+}
+
+static inline rectangle_ rectangle_add_offset(rectangle_ r,int x,int y)
+{
+    return (rectangle_){.x1=r.x1+x,.y1=r.y1+y,.x2=r.x2+x,.y2=r.y2+y};
+}
 
 
 
