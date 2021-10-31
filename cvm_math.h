@@ -462,15 +462,15 @@ static inline bool rectangles_overlap_(rectangle_ r1,rectangle_ r2)
     return ((r1.x2 > r2.x1)&&(r2.x2 > r1.x1)&&(r1.y2 > r2.y1)&&(r2.y2 > r1.y1));
 }
 
-static inline rectangle_ get_rectangle_overlap_(rectangle_ r,rectangle_ b)
+static inline rectangle_ get_rectangle_overlap_(rectangle_ r1,rectangle_ r2)
 {
-    r.x1+=(b.x1>r.x1)*(b.x1-r.x1);
-    r.y1+=(b.y1>r.y1)*(b.y1-r.y1);
+    r1.x1+=(r2.x1>r1.x1)*(r2.x1-r1.x1);
+    r1.y1+=(r2.y1>r1.y1)*(r2.y1-r1.y1);
 
-    r.x2+=(b.x2<r.x2)*(b.x2-r.x2);
-    r.y2+=(b.y2<r.y2)*(b.y2-r.y2);
+    r1.x2+=(r2.x2<r1.x2)*(r2.x2-r1.x2);
+    r1.y2+=(r2.y2<r1.y2)*(r2.y2-r1.y2);
 
-    return r;
+    return r1;
 }
 
 static inline bool rectangle_has_positive_area(rectangle_ r)
@@ -484,6 +484,16 @@ static inline rectangle_ rectangle_add_offset(rectangle_ r,int x,int y)
 }
 
 
+///following allows piecewise conversion, delete when finished
+static inline rectangle rectangle_old_conversion(rectangle_ r)
+{
+    return (rectangle){.x=r.x1,.y=r.y1,.w=r.x2-r.x1,.h=r.y2-r.y1};
+}
+
+static inline rectangle_ rectangle_new_conversion(rectangle r)
+{
+    return (rectangle_){.x1=r.x,.y1=r.y,.x2=r.x+r.w,.y2=r.y+r.h};
+}
 
 
 bool get_rectangle_overlap(rectangle * rect,rectangle b);
