@@ -49,6 +49,8 @@ typedef struct cvm_overlay_element_render_buffer
     ///could fill buffer in reverse to make render order match input order, but not sure how that would affect write combining of data so will avoid for now;
     cvm_overlay_render_data * buffer;
     uint32_t count,space;//,xm,ym;
+
+    VkCommandBuffer upload_command_buffer;
 }
 cvm_overlay_element_render_buffer;
 
@@ -61,56 +63,24 @@ cvm_overlay_element_render_buffer;
 #define CVM_OVERLAY_SCREEN_MULTIPLIER(s) (0xFFFF0000/(uint32_t)s);
 */
 
-///might be worth using freetype directly, should compare performance
 
-///optimised compared to other 2 similar purpose elements b/c glyphs are expected to be such a common element
-typedef struct cvm_overlay_glyph
-{
-    cvm_vk_image_atlas_tile * tile;///if null create upon render
-
-    FT_UInt glyph_index;///because of variant selectors, cannot search by code point, search by glyph index
-    uint32_t usage_counter;///when hitting 0 it gets deleted? (or scheduled for deletion) is this even necessary?
-    ///perhaps need better way to handle unused overlay elements and glyphs (could just agressively delete...)
-    rectangle_ pos;
-    int advance;
-}
-cvm_overlay_glyph;///hmmm, glyph vs string based rendering... glyph has more potential to be loaded at once and is faster in worst case, but slower in average
-
-typedef struct cvm_overlay_font
-{
-    FT_Face face;
-
-    int glyph_size;
-
-    int space_advance;
-    int space_character_index;
-
-    ///not a great solution but bubble sort new glyphs from end?, is rare enough op and gives low enough cache use to justify?
-    cvm_overlay_glyph * glyphs;
-    uint32_t glyph_count;
-    uint32_t glyph_space;
-}
-cvm_overlay_font;
-
-///usually these will contain names of sprites common to all themes its possible to use
-typedef struct cvm_overlay_sprite
-{
-    cvm_vk_image_atlas_tile * tile;
-    uint32_t coloured:1;///which image atlas to use...
-    char * name;
-}
-cvm_overlay_sprite;
 
 ///created per theme in numbers dictated by the theme, should be referenced and handled externally
 typedef struct cvm_overlay_interactable_element
 {
     cvm_vk_image_atlas_tile * tile;
-    /// need creation function pointer? handle on per theme function to create as necessary as with fonts?
-    uint32_t selection_offset:31;/// in 4x4 u16 tiles of binary data for receiving clicks
-    uint32_t coloured:1;///which image atlas to use...
+    uint16_t * selection_grid;///4x4 grid of tiles, should probably match tile in size
+    uint32_t w;
+    uint32_t h;
 }
 cvm_overlay_interactable_element;
 
+
+//typedef struct cvm_overlay_theme
+//{
+//    //
+//}
+//cvm_overlay_theme;
 
 
 
@@ -124,15 +94,13 @@ cvm_vk_module_work_block * overlay_render_frame(int screen_w,int screen_h);
 
 void overlay_frame_cleanup(uint32_t swapchain_image_index);
 
-void cvm_overlay_create_font(cvm_overlay_font * font,char * filename,int pixel_size);
-void cvm_overlay_destroy_font(cvm_overlay_font * font);
-//void overlay_test(void);
+cvm_vk_image_atlas_tile * overlay_create_transparent_image_tile_with_staging(void ** staging,uint32_t w, uint32_t h);
+void overlay_destroy_transparent_image_tile(cvm_vk_image_atlas_tile * tile);
 
+cvm_vk_image_atlas_tile * overlay_create_colour_image_tile_with_staging(void ** staging,uint32_t w, uint32_t h);
+void overlay_destroy_colour_image_tile(cvm_vk_image_atlas_tile * tile);
 
-void overlay_render_text(cvm_overlay_element_render_buffer * element_render_buffer,VkCommandBuffer command_buffer,cvm_overlay_font * font,uint8_t * text,int x,int y,rectangle_ * bounds,int wrapping_width);
-
-
-
+bool check_click_on_interactable_element(cvm_overlay_interactable_element * element,int x,int y);
 
 
 
@@ -431,6 +399,9 @@ void set_overlay_sprite_image_data(overlay_theme * theme,overlay_sprite_data osd
 void set_overlay_sprite_image_data_from_sdl_surface(overlay_theme * theme,overlay_sprite_data osd,SDL_Surface * surface,int w,int h,int x,int y);
 
 overlay_sprite_data create_overlay_sprite_from_sdl_surface(overlay_theme * theme,char * name,SDL_Surface * surface,int w,int h,int x,int y,overlay_sprite_type type);
+
+
+#include "cvm_overlay_text.h"
 
 #include "themes/cubic.h"
 

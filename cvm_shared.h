@@ -38,6 +38,7 @@ along with cvm_shared.  If not, see <https://www.gnu.org/licenses/>.
 
 #include <ft2build.h>
 #include FT_FREETYPE_H
+#include FT_ADVANCES_H
 
 #include <dirent.h>
 #include <sys/stat.h>

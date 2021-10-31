@@ -583,3 +583,198 @@ void initialise_cubic_theme(gl_functions * glf,overlay_theme * theme)
     SDL_FreeSurface(icons_surface);
     free(shaded_sprite_buffer);
 }
+
+
+
+
+static cvm_overlay_interactable_element cubic_large_shape;
+static cvm_overlay_interactable_element cubic_medium_shape;
+static cvm_overlay_interactable_element cubic_medium_border_shape;
+static cvm_overlay_interactable_element cubic_small_shape;
+
+
+//static void cubic_create_shape(cvm_overlay_interactable_element * element,uint32_t ri,uint32_t ro)///change ri & r0 as 16ths of a pixel??
+//{
+//    uint32_t i,r,threshold,r4,x,y,xc,yc,xm,ym,t,r_min,r_max,rom,rim;
+//    uint8_t *s;
+//    uint8_t *data;
+//
+//    if(ro>640)
+//    {
+//        fprintf(stderr,"CUBIC OVERLAY ELEMENTS OF THIS SIZE NOT SUPPORTED\n");
+//        exit(-1);
+//    }
+//
+//    r4=(((ro>>4)-1)&~3)+4;///convert outer radius to pixels (not 1/16ths pixels) and round up to multiple of 4
+//
+//    element->tile=overlay_create_transparent_image_tile_with_staging(&s,r4*2,r4*2);
+//
+//    if(element->tile)
+//    {
+//        threshold=64;
+//
+//
+//        data=s;
+//        //data=malloc(sizeof(uint8_t)*r4*r4*4);
+//
+//        ro=ro*ro*ro;
+//        ri=ri*ri*ri;
+//
+//        rom=ro*8;
+//        rim=ri*8;
+//
+//        ro>>=12;
+//        ri>>=12;
+//
+//
+//
+//        element->selection_grid=calloc((r4*r4)/4,sizeof(uint16_t));///r4*2*r4*2/16 == r4*r4/4
+//
+//        element->w=r4*2;
+//        element->h=r4*2;
+//
+////        static struct timespec tso,tsn;
+////        uint64_t dt;
+////
+////        clock_gettime(CLOCK_REALTIME,&tso);
+//
+//
+//        for(x=0;x<r4;x++)
+//        {
+//            for(y=0;y<r4;y++)
+//            {
+//                t=0;
+//                r_min=x*x*x + y*y*y;
+//                r_max=(x+1)*(x+1)*(x+1) + (y+1)*(y+1)*(y+1);
+//                if(r_min>=ro || r_max<=ri)t=0;
+//                else if(r_max<=ro && r_min>=ri)t=255;
+//                else for(xm=1;xm<32;xm+=2)for(ym=1;ym<32;ym+=2)///16 increments at pixel centres
+//                {
+//                    xc=(x<<5)+xm;
+//                    yc=(y<<5)+ym;
+//                    r=xc*xc*xc+yc*yc*yc;
+//                    t+= r>rim && r<rom;
+//                }
+//                t-= t==256;
+//
+//                i=(r4+y)*r4*2+(r4+x);
+//                data[i]=t;
+//                element->selection_grid[i>>4]|=(t>threshold)<<(i&0x0F);
+//
+//                i=(r4+y)*r4*2+(r4-x-1);
+//                data[i]=t;
+//                element->selection_grid[i>>4]|=(t>threshold)<<(i&0x0F);
+//
+//                i=(r4-y-1)*r4*2+(r4+x);
+//                data[i]=t;
+//                element->selection_grid[i>>4]|=(t>threshold)<<(i&0x0F);
+//
+//                i=(r4-y-1)*r4*2+(r4-x-1);
+//                data[i]=t;
+//                element->selection_grid[i>>4]|=(t>threshold)<<(i&0x0F);
+//            }
+//        }
+//
+//        //memcpy(s,data,sizeof(uint8_t)*r4*r4*4);
+//
+////        clock_gettime(CLOCK_REALTIME,&tsn);
+////
+////        dt=(tsn.tv_sec-tso.tv_sec)*1000000000 + tsn.tv_nsec-tso.tv_nsec;
+////
+////        printf("CUBIC TIME = %lu      %u\n",dt,t);
+//    }
+//}
+
+
+static void cubic_create_shape(cvm_overlay_interactable_element * element,uint32_t r)///change ri & r0 as 16ths of a pixel??
+{
+    uint32_t i,threshold,r4,x,y,xc,yc,xm,ym,t,rm;
+    uint8_t *s;
+    uint8_t *data;
+
+    if(r>40)
+    {
+        fprintf(stderr,"CUBIC OVERLAY ELEMENTS OF THIS SIZE NOT SUPPORTED\n");
+        exit(-1);
+    }
+
+    r4=((r-1)&~3)+4;
+
+    element->tile=overlay_create_transparent_image_tile_with_staging((void*)(&s),r4*2,r4*2);
+
+    if(element->tile)
+    {
+        threshold=64;
+
+        data=s;
+
+        r=r*r*r;
+
+        rm=r*32768;///32^3
+
+        element->selection_grid=calloc((r4*r4)/4,sizeof(uint16_t));///r4*2*r4*2/16 == r4*r4/4
+
+        element->w=r4*2;
+        element->h=r4*2;
+
+        for(x=0;x<r4;x++)
+        {
+            for(y=0;y<r4;y++)
+            {
+                t=0;
+                if((x*x*x + y*y*y)>=r)t=0;
+                else if(((x+1)*(x+1)*(x+1) + (y+1)*(y+1)*(y+1))<=r)t=255;
+                else
+                    for(xm=1;xm<32;xm+=2)for(ym=1;ym<32;ym+=2)///16 increments at pixel centres
+                {
+                    xc=(x<<5)+xm;
+                    yc=(y<<5)+ym;
+                    t+= (xc*xc*xc+yc*yc*yc)<rm;
+                }
+                t-= t==256;
+
+                i=(r4+y)*r4*2+(r4+x);
+                data[i]=t;
+                element->selection_grid[i>>4]|=(t>threshold)<<(i&0x0F);
+
+                i=(r4+y)*r4*2+(r4-x-1);
+                data[i]=t;
+                element->selection_grid[i>>4]|=(t>threshold)<<(i&0x0F);
+
+                i=(r4-y-1)*r4*2+(r4+x);
+                data[i]=t;
+                element->selection_grid[i>>4]|=(t>threshold)<<(i&0x0F);
+
+                i=(r4-y-1)*r4*2+(r4-x-1);
+                data[i]=t;
+                element->selection_grid[i>>4]|=(t>threshold)<<(i&0x0F);
+            }
+        }
+    }
+}
+
+void cubic_test(cvm_overlay_element_render_buffer * element_render_buffer,int x,int y,rectangle_ * bounds)
+{
+    rectangle_ rb,rr;
+
+    if(!cubic_large_shape.tile)
+    {
+        cubic_create_shape(&cubic_large_shape,14);
+    }
+
+    if(cubic_large_shape.tile)
+    {
+        rb=rectangle_add_offset((rectangle_){.x1=0,.y1=0,.x2=80,.y2=80},x,y);
+        rr=get_rectangle_overlap_(rb,*bounds);
+
+        if((rectangle_has_positive_area(rr))) element_render_buffer->buffer[element_render_buffer->count++]=(cvm_overlay_render_data)
+        {
+            {rr.x1,rr.y1,rr.x2,rr.y2},
+            {CVM_OVERLAY_ELEMENT_SHADED,(cubic_large_shape.tile->x_pos<<2)+rr.x1-rb.x1,(cubic_large_shape.tile->y_pos<<2)+rr.y1-rb.y1,83},
+        };
+    }
+}
+
+
+
+

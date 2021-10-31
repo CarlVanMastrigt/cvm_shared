@@ -62,6 +62,8 @@ static cvm_vk_transient_buffer overlay_transient_buffer;
 static cvm_vk_staging_buffer overlay_staging_buffer;
 //static uint32_t * overlay_staging_buffer_acquisitions;
 
+static VkCommandBuffer overlay_upload_command_buffer;
+
 static uint32_t max_overlay_elements=4096;
 
 static VkDependencyInfoKHR overlay_uninitialised_to_transfer_dependencies;
@@ -74,9 +76,6 @@ static VkDependencyInfoKHR overlay_graphics_to_transfer_dependencies;
 static VkImageMemoryBarrier2KHR overlay_graphics_to_transfer_image_barriers[2];
 
 //static bool overlay_graphics_transfer_ownership_changes;
-
-
-static FT_Library overlay_freetype_library;
 
 
 void test_timing(bool start,char * name)
@@ -794,12 +793,11 @@ void initialise_overlay_render_data(void)
 
     create_overlay_consistent_descriptors();
 
-    if(FT_Init_FreeType(&overlay_freetype_library))
-    {
-        fprintf(stderr,"COULD NOT INITIALISE FREETYPE LIBRARY\n");
-        exit(-1);
-    }
+    cvm_overlay_open_freetype();
 
+    overlay_upload_command_buffer=VK_NULL_HANDLE;
+
+//    cvm_overlay_create_font(&overlay_test_font,"cvm_shared/resources/cvm_font_1.ttf",32);
     cvm_overlay_create_font(&overlay_test_font,"cvm_shared/resources/cvm_font_1.ttf",24);
 //    cvm_overlay_create_font(&overlay_test_font,"cvm_shared/resources/OpenSans-Regular.ttf",24);
 //    cvm_overlay_create_font(&overlay_test_font,"cvm_shared/resources/HanaMinA.ttf",24);
@@ -811,11 +809,7 @@ void terminate_overlay_render_data(void)
 {
     cvm_overlay_destroy_font(&overlay_test_font);
 
-    if(FT_Done_FreeType(overlay_freetype_library))
-    {
-        fprintf(stderr,"COULD NOT DESTROY FREETYPE LIBRARY\n");
-        exit(-1);
-    }
+    cvm_overlay_close_freetype();
 
     cvm_vk_destroy_image_atlas(&overlay_transparency_image_atlas);
     cvm_vk_destroy_image_atlas(&overlay_colour_image_atlas);
@@ -917,6 +911,8 @@ cvm_vk_module_work_block * overlay_render_frame(int screen_w,int screen_h)
 
     if(swapchain_image_index!=CVM_VK_INVALID_IMAGE_INDEX)
     {
+        overlay_upload_command_buffer=work_block->graphics_work;
+
         cvm_vk_begin_staging_buffer(&overlay_staging_buffer);///build barriers into begin/end paradigm maybe???
 
         cvm_vk_begin_transient_buffer(&overlay_transient_buffer,swapchain_image_index);
@@ -933,8 +929,8 @@ cvm_vk_module_work_block * overlay_render_frame(int screen_w,int screen_h)
 //            str=strdup("Hello World! Far リサフランク420 - 現代のコンピュー");
 //            str=strdup("Hello World!         Far a リサフランク420 - 現代のコンピュー  Hello World!\nFar ncdjvfng gvbgf bmgnf dvn vgbf  fjdvbfng vngfb,  ffnf\n bmngk,fgfh vfdbfg fd df gtv dfmbd f vfdhfv g dvb fbnb\n\n  f  dfgg dfmv vdv  xmcnbx fd mjdbvm v\
 d cf fn\n vsrs  sdfmmgt dgf thd gmdrg1234567890-=qwertyuiop[]\\asdfgh\njkl;'zxcvbnm,./ZXCVBNM<>?ASDFGHJKL:QWERTYUIOP{}|!#$%^&*()_+\n ⬆ ❌ 🔄 📁 📷 📄 🎵 ➕ ➖ 👻 🖋 🔓 🔗 🖼 ✂ 👁");
-            str=strdup("Hello World!\tFar リサフランク420 - 現代のコンピュー  Hello World!Far ncdjvfng gvbgf bmgnf dvn vgbf  fjdvbfng vngfb,  ffnf bmngk,fgfh vfdbfg fd df gtv dfmbd f vfdhfv g dvb fbnb  f  dfgg dfmv vdv\
-  xmcnbx fd mjdbvm vd cf fn vsrs  sdfmmgt dgf thd gmdrg1234567890-=qwertyuiop[]\\asdfgh\njkl;'zxcvbnm,./ZXCVBNM<>?ASDFGHJKL:QWERTYUIOP{}|!#$%^&*()_+ ⬆️⬆ ⬆⬆️  ❌ 🔄 📁 📷 📄 🎵 ➕ ➖ 👻 🖋 🔓 🔗 🖼 ✂ 👁");
+            str="8Hello World!\tFar リサフランク420 - 現代のコンピュー  Hello World!Far ncdjvfng gvbgf bmgnf dvn vgbf  fjdvbfng vngfb,  ffnf bmngk,fgfh vfdbfg fd df gtv dfmbd f vfdhfv g dvb fbnb  f  dfgg dfmv vdv\
+  xmcnbx fd mjdbvm vd cf fn vsrs  sdfmmgt dgf thd gmdrg1234567890-=qwertyuiop[]\\asdfgh\njkl;'zxcvbnm,./ZXCVBNM<>?ASDFGHJKL:QWERTYUIOP{}|!#$%^&*(_+ ↑←↓→🗙 ❌ 🔄 💾 📁 📷 📄 🎵 ➕ ➖ 👻 🖋 🔓 🔗 🖼 ✂ 👁";
 //                       str=strdup("Far");
 //            str=strdup("Helloasa sas");
         }
@@ -947,11 +943,15 @@ d cf fn\n vsrs  sdfmmgt dgf thd gmdrg1234567890-=qwertyuiop[]\\asdfgh\njkl;'zxcv
         element_render_buffer.space=max_overlay_elements;
         element_render_buffer.count=0;
 
-//        test_timing(true,NULL);
+        //str="The attempt to impose upon man, a creature of growth and capable of sweetness, to ooze juicily at the last round the bearded lips of God, to attempt to impose, I say, laws and conditions appropriate to a mechanical creation, against this I raise my sword-pen.";
+        //str="This planet has - or rather had - a problem, which was this: most of the people living on it were unhappy for pretty much of the time. Many solutions were suggested for this problem, but most of these were largely concerned with the movement of small green pieces of paper, which was odd because on the whole it wasn't the small green pieces of paper that were unhappy.";
+
+        test_timing(true,NULL);
         //rectangle_ r={.x1=30+(int)(25.0*cos(SDL_GetTicks()*0.002)),.y1=20+(int)(15.0*cos(SDL_GetTicks()*0.0044)),.x2=300+(int)(50.0*cos(SDL_GetTicks()*0.0033)),.y2=160+(int)(40.0*cos(SDL_GetTicks()*0.007))};
         rectangle_ r={.x1=-1000,.y1=-1000,.x2=3000,.y2=3000};
-        overlay_render_text(&element_render_buffer,work_block->graphics_work,&overlay_test_font,(uint8_t*)str,0,0,&r,650);
-//        test_timing(false,"render text");
+        overlay_render_text_complex(&element_render_buffer,&overlay_test_font,(uint8_t*)str,0,0,&r,650);
+        cubic_test(&element_render_buffer,0,0,&r);
+        test_timing(false,"render text");
 
         CVM_TMP_vkCmdPipelineBarrier2KHR(work_block->graphics_work,&overlay_transfer_to_graphics_dependencies);
 
@@ -1009,6 +1009,8 @@ d cf fn\n vsrs  sdfmmgt dgf thd gmdrg1234567890-=qwertyuiop[]\\asdfgh\njkl;'zxcv
         ///huh, could store this in buffer maybe as it occurrs once per frame...
         cvm_vk_end_transient_buffer(&overlay_transient_buffer);
         cvm_vk_end_staging_buffer(&overlay_staging_buffer,swapchain_image_index);
+
+        overlay_upload_command_buffer=VK_NULL_HANDLE;
     }
 
     return cvm_vk_end_module_work_block(&overlay_module_data);
@@ -1023,299 +1025,83 @@ void overlay_frame_cleanup(uint32_t swapchain_image_index)
 }
 
 
-void cvm_overlay_create_font(cvm_overlay_font * font,char * filename,int pixel_size)
+
+cvm_vk_image_atlas_tile * overlay_create_transparent_image_tile_with_staging(void ** staging,uint32_t w, uint32_t h)
 {
-    if(FT_New_Face(overlay_freetype_library,filename,0,&font->face))
-    {
-        fprintf(stderr,"COULD NOT LOAD FONT FACE FILE %s\n",filename);
-        exit(-1);
-    }
-
-    if(FT_Set_Pixel_Sizes(font->face,0,pixel_size))
-    {
-        fprintf(stderr,"COULD NOT SET FONT FACE SIZE %s %d\n",filename,pixel_size);
-        exit(-1);
-    }
-
-    font->glyph_size=pixel_size;
-
-    font->space_character_index=FT_Get_Char_Index(font->face,' ');
-
-    if(FT_Load_Glyph(font->face,font->space_character_index,0))
-    {
-        fprintf(stderr,"FONT DOES NOT CONTAIN SPACE CHARACTER %s\n",filename);
-        exit(-1);
-    }
-
-    font->space_advance=font->face->glyph->advance.x>>6;
-
-    font->glyphs=malloc(4*sizeof(cvm_overlay_glyph));
-    font->glyph_space=4;
-    font->glyph_count=0;
-}
-
-void cvm_overlay_destroy_font(cvm_overlay_font * font)
-{
-    uint32_t i;
-    if(FT_Done_Face(font->face))
-    {
-        fprintf(stderr,"COULD NOT DESTROY FONT FACE\n");
-        exit(-1);
-    }
-
-    for(i=0;i<font->glyph_count;i++)
-    {
-        cvm_vk_relinquish_image_atlas_tile(&overlay_transparency_image_atlas,font->glyphs[i].tile);
-    }
-
-    free(font->glyphs);
-}
-
-
-
-
-
-
-//is there base advance value for fints? (use space?)
-///simple and complex versions for both performance and functionality?
-/// complex allows variant word wrapping/ compression with front to back or back to front ellipses, as well as colour changing text, up to 10 variant colours (0-9)
-void overlay_render_text(cvm_overlay_element_render_buffer * element_render_buffer,VkCommandBuffer command_buffer,cvm_overlay_font * font,uint8_t * text,int x,int y,rectangle_ * bounds,int wrapping_width)
-{
-    uint32_t cp,gi,vs,prev_gi,advance,index,incr,s,e,w,h;
-    int s_x;
-    uint8_t * word_start;
-    uint32_t word_start_element_count;
     VkDeviceSize upload_offset;
-    uint8_t * staging;
-    rectangle r;
-    cvm_overlay_glyph * g;
-    FT_GlyphSlot gs;
-    bool line_start=true;
-    bool rendered_this_glyph;
+    cvm_vk_image_atlas_tile * tile;
 
-    s_x=x;
+    tile=NULL;
+    *staging = cvm_vk_get_staging_buffer_allocation(&overlay_staging_buffer,sizeof(uint8_t)*w*h,&upload_offset);
 
-    ///used for wrapping
-    word_start=text;
-    prev_gi=0;
-    rectangle_ rb,rr;
-    vs=0;
-
-
-    while(*text)
+    if(*staging)
     {
-        if(*text==' ')
-        {
-            x+=font->space_advance;
-            prev_gi=font->space_character_index;
-            word_start_element_count=element_render_buffer->count;
-            word_start= ++text;
-            line_start=false;
-            continue;
-        }
-        else if(*text=='\n')
-        {
-            x=s_x;
-            y+=font->glyph_size;
-            prev_gi=0;
-            word_start_element_count=element_render_buffer->count;
-            word_start= ++text;
-            line_start=true;
-            continue;
-        }
+        tile=cvm_vk_acquire_image_atlas_tile(&overlay_transparency_image_atlas,w,h);
 
-        incr=1;
-        if(*text & 0x80)
+        if(tile)
         {
-            cp=0;
-            while(*text & (0x80 >> incr))
+            VkBufferImageCopy copy_info=
             {
-                ///error check, dont put in release version
-                if((text[incr]&0xC0) != 0x80)
+                .bufferOffset=upload_offset,
+                .bufferRowLength=w,
+                .bufferImageHeight=h,
+                .imageSubresource=(VkImageSubresourceLayers)
                 {
-                    fprintf(stderr,"ATTEMPTING TO RENDER AN INVALID UTF-8 STRING (TOP BIT MISMATCH)\n");
-                    exit(-1);
+                    .aspectMask=VK_IMAGE_ASPECT_COLOR_BIT,
+                    .mipLevel=0,
+                    .baseArrayLayer=0,
+                    .layerCount=1
+                },
+                .imageOffset=(VkOffset3D)
+                {
+                    .x=tile->x_pos<<CVM_VK_BASE_TILE_SIZE_FACTOR,
+                    .y=tile->y_pos<<CVM_VK_BASE_TILE_SIZE_FACTOR,
+                    .z=0
+                },
+                .imageExtent=(VkExtent3D)
+                {
+                    .width=w,
+                    .height=h,
+                    .depth=1,
                 }
-                cp<<=6;
-                cp|=text[incr]&0x3F;
-                incr++;
-            }
-            cp|=(*text&((1<<(7-incr))-1))<<(6u*incr-6u);
-            ///error check, dont put in release version
-            if(incr==1)
-            {
-                fprintf(stderr,"ATTEMPTING TO RENDER AN INVALID UTF-8 STRING (INVALID LENGTH SPECIFIED)\n");
-                exit(-1);
-            }
-
-            /// check for variation sequence
-            if(text[incr]==0xEF && text[incr+1]==0xB8 && (text[incr+2]&0xF0)==0x80)
-            {
-                ///possibly convert colour to monochrome? alternatively could support colour emoji by allowing writing to/ use of colour image atlas
-                vs=0xFE00 | text[incr+2]&0x0F;
-                incr+=3;
-            }
-        }
-        else cp=*text;
-
-        if(vs)
-        {
-            ///bacause of variant selectors, need to search by glyph index rather than code point
-            gi=FT_Face_GetCharVariantIndex(font->face,cp,vs);
-            vs=0;
-        }
-        else gi=FT_Get_Char_Index(font->face,cp);
-
-        s=0;
-        e=font->glyph_count;
-        while(1)
-        {
-            index=(s+e)>>1;
-            if(index!=e && font->glyphs[index].glyph_index==gi) break;
-            if(e-s<2)
-            {
-                ///does not exist, insert at index | index+1
-                index+= index<e && font->glyphs[index].glyph_index<gi;
-
-                if(font->glyph_count==font->glyph_space)font->glyphs=realloc(font->glyphs,sizeof(cvm_overlay_glyph)*(font->glyph_space*=2));
-
-                memmove(font->glyphs+index+1,font->glyphs+index,(font->glyph_count-index)*sizeof(cvm_overlay_glyph));
-
-                font->glyphs[index]=(cvm_overlay_glyph)
-                {
-                    .tile=NULL,
-                    .glyph_index=gi,
-                    .usage_counter=0,
-                    .pos={0,0,0,0}
-                };
-
-                font->glyph_count++;
-
-                break;
-            }
-            else if(font->glyphs[index].glyph_index<gi) s=index+1;///already checked s, quicker convergence
-            else e=index;///e is excluded from search
-        }
-
-        g=font->glyphs+index;
-
-
-        if(g->tile==NULL)
-        {
-            if(!FT_Load_Glyph(font->face,gi,FT_LOAD_RENDER))
-            {
-                gs=font->face->glyph;
-                w=gs->bitmap.width;
-                h=gs->bitmap.rows;
-                staging = cvm_vk_get_staging_buffer_allocation(&overlay_staging_buffer,sizeof(uint8_t)*w*h,&upload_offset);
-
-                if(staging)
-                {
-                    g->tile=cvm_vk_acquire_image_atlas_tile(&overlay_transparency_image_atlas,w,h);
-                    if(g->tile)
-                    {
-                        memcpy(staging,gs->bitmap.buffer,sizeof(uint8_t)*w*h);
-
-                        ///put following in image atlas function? probably requires knowing image atlas type in order to complete transfer/know how many bytes to copy
-
-                        VkBufferImageCopy cpy=(VkBufferImageCopy)
-                        {
-                            .bufferOffset=upload_offset,
-                            .bufferRowLength=w,
-                            .bufferImageHeight=h,
-                            .imageSubresource=(VkImageSubresourceLayers)
-                            {
-                                .aspectMask=VK_IMAGE_ASPECT_COLOR_BIT,
-                                .mipLevel=0,
-                                .baseArrayLayer=0,
-                                .layerCount=1
-                            },
-                            .imageOffset=(VkOffset3D)
-                            {
-                                .x=g->tile->x_pos<<CVM_VK_BASE_TILE_SIZE_FACTOR,
-                                .y=g->tile->y_pos<<CVM_VK_BASE_TILE_SIZE_FACTOR,
-                                .z=0
-                            },
-                            .imageExtent=(VkExtent3D)
-                            {
-                                .width=w,
-                                .height=h,
-                                .depth=1,
-                            }
-                        };
-
-                        vkCmdCopyBufferToImage(command_buffer,overlay_staging_buffer.buffer,overlay_transparency_image,VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,1,&cpy);
-
-                        g->pos.x2=w+(g->pos.x1=gs->bitmap_left);
-                        g->pos.y2=h+(g->pos.y1=font->glyph_size - gs->bitmap_top);
-
-                        g->advance=font->face->glyph->advance.x>>6;
-                    }
-                }
-            }
-        }
-
-        #warning FT_Get_Advance
-
-        FT_Vector kern;
-        if(prev_gi)
-        {
-            if(!FT_Get_Kerning(font->face,prev_gi,gi,0,&kern)) x+=kern.x>>6;
-        }
-        else x-=g->pos.x1;
-
-        rendered_this_glyph=false;
-        if(g->tile && element_render_buffer->count != element_render_buffer->space)///need to check again as can return null once again;
-        {
-            rb=rectangle_add_offset(g->pos,x,y);
-            rr=get_rectangle_overlap_(rb,*bounds);
-
-            if((rendered_this_glyph=rectangle_has_positive_area(rr))) element_render_buffer->buffer[element_render_buffer->count++]=(cvm_overlay_render_data)
-            {
-                {rr.x1,rr.y1,rr.x2,rr.y2},
-                {CVM_OVERLAY_ELEMENT_SHADED,(g->tile->x_pos<<2)+rr.x1-rb.x1,(g->tile->y_pos<<2)+rr.y1-rb.y1,83},
-                //{83,83,83,83},
             };
 
-            prev_gi=gi;
-        }
-
-        if(!FT_Get_Advance(font->face,gi,0,&advance))x+=advance>>16;
-
-        if(wrapping_width && x-s_x > wrapping_width)
-        {
-            if(line_start)
-            {
-                if(text==word_start) word_start=(text+=incr);///force render if character takes up more than whole line
-                else if(rendered_this_glyph)element_render_buffer->count--;
-                x=s_x;
-                y+=font->glyph_size;
-                word_start=text;
-                prev_gi=0;
-                line_start=true;/// need to "while" out any spaces here, or come up with smarter solution to wrapping on space...
-            }
-            else ///restart rendering this word on a new line, is a little awkward with overwriting elements in gpu memory though...
-            {
-                text=word_start;
-                element_render_buffer->count=word_start_element_count;
-                x=s_x;
-                y+=font->glyph_size;
-                prev_gi=font->space_character_index;
-                line_start=true;
-            }
-        }
-        else
-        {
-            text+=incr;
+            vkCmdCopyBufferToImage(overlay_upload_command_buffer,overlay_staging_buffer.buffer,overlay_transparency_image,VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,1,&copy_info);
         }
     }
+
+    return tile;
 }
 
+void overlay_destroy_transparent_image_tile(cvm_vk_image_atlas_tile * tile)
+{
+    cvm_vk_relinquish_image_atlas_tile(&overlay_transparency_image_atlas,tile);
+}
 
+cvm_vk_image_atlas_tile * overlay_create_colour_image_tile_with_staging(void ** staging,uint32_t w, uint32_t h)
+{
+    //
+}
 
+void overlay_destroy_colour_image_tile(cvm_vk_image_atlas_tile * tile)
+{
+    //
+}
 
+bool check_click_on_interactable_element(cvm_overlay_interactable_element * element,int x,int y)
+{
+    uint32_t i;
+    if((x>=0)&&(y>=0)&&(x<element->w)&&(y<element->h))
+    {
+        uint32_t i=y*element->w+x;
+		if(element->selection_grid[i>>4] & (1<<(i&0x0F)))
+        {
+            return true;
+        }
+    }
 
-
+    return false;
+}
 
 
 
@@ -1984,7 +1770,7 @@ bool check_click_on_coloured_sprite(overlay_theme * theme,rectangle r,int sprite
 
 
 
-#warning is bool return of below ever properly used ???
+#warning is bool return of below ever properly used?
 bool process_regular_text_character(cvm_font * cf,char prev,char current,int * offset)
 {
     if((current>='!')&&(current<='~'))
@@ -2013,7 +1799,7 @@ int get_new_text_offset(cvm_font * cf,char prev,char current,int current_offset)
     if(current=='\t') return ((current_offset/(cf->space_width*4))+1)*cf->space_width*4;
     if(current==' ') return current_offset+cf->space_width;
 
-    #warning wtf is below, when would it ever be used
+    #warning wtf is below, when would it ever be used?
     if(current=='\n') return current_offset+cf->space_width;
 
     process_regular_text_character(cf,prev,current,&current_offset);
@@ -2021,7 +1807,7 @@ int get_new_text_offset(cvm_font * cf,char prev,char current,int current_offset)
     return current_offset;
 }
 
-int process_simple_text_character(cvm_font * cf,char prev,char current)///doesn't allow spaces or tabs, returns extra with necessary for character
+int process_simple_text_character(cvm_font * cf,char prev,char current)///doesnt allow spaces or tabs, returns extra with necessary for character
 {
     int extra_width=0;
     if((current>='!')&&(current<='~'))
