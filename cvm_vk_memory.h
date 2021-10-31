@@ -282,7 +282,7 @@ void cvm_vk_destroy_transient_buffer(cvm_vk_transient_buffer * tb);
 uint32_t cvm_vk_transient_buffer_get_rounded_allocation_size(cvm_vk_transient_buffer * tb,uint32_t allocation_size);
 
 void cvm_vk_begin_transient_buffer(cvm_vk_transient_buffer * tb,uint32_t frame_index);
-uint32_t cvm_vk_end_transient_buffer(cvm_vk_transient_buffer * tb);
+void cvm_vk_end_transient_buffer(cvm_vk_transient_buffer * tb);
 
 void * cvm_vk_get_transient_buffer_allocation(cvm_vk_transient_buffer * tb,uint32_t allocation_size,VkDeviceSize * acquired_offset);
 

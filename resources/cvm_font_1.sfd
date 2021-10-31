@@ -1,0 +1,3222 @@
+SplineFontDB: 3.2
+FontName: cvm_font_1
+FullName: cvm_font
+FamilyName: cvm_font
+Weight: Medium
+Copyright: Copyright 2018,2019,2021 Carl van Mastrigt\n\nThis file is part of cvm_shared.\n\ncvm_shared is free software: you can redistribute it and/or modify\nit under the terms of the GNU Affero General Public License as published by\nthe Free Software Foundation, either version 3 of the License, or\n(at your option) any later version.\n\ncvm_shared is distributed in the hope that it will be useful,\nbut WITHOUT ANY WARRANTY; without even the implied warranty of\nMERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the\nGNU Affero General Public License for more details.\n\nYou should have received a copy of the GNU Affero General Public License\nalong with cvm_shared.  If not, see <https://www.gnu.org/licenses/>.\n\nCreated bt Carl Van Mastrigt with FontForge 2.0 (http://fontforge.sf.net)
+Version: 001.000
+ItalicAngle: 0
+UnderlinePosition: -4
+UnderlineWidth: 0
+Ascent: 52
+Descent: 12
+InvalidEm: 0
+sfntRevision: 0x00010000
+LayerCount: 2
+Layer: 0 1 "Back" 1
+Layer: 1 1 "Fore" 0
+XUID: [1021 637 -164581377 2563875]
+StyleMap: 0x0040
+FSType: 0
+OS2Version: 4
+OS2_WeightWidthSlopeOnly: 0
+OS2_UseTypoMetrics: 1
+CreationTime: 1451130132
+ModificationTime: 1635599225
+PfmFamily: 17
+TTFWeight: 500
+TTFWidth: 5
+LineGap: 6
+VLineGap: 0
+Panose: 2 0 6 3 0 0 0 0 0 0
+OS2TypoAscent: 52
+OS2TypoAOffset: 0
+OS2TypoDescent: -12
+OS2TypoDOffset: 0
+OS2TypoLinegap: 6
+OS2WinAscent: 52
+OS2WinAOffset: 0
+OS2WinDescent: 12
+OS2WinDOffset: 0
+HheadAscent: 52
+HheadAOffset: 0
+HheadDescent: -12
+HheadDOffset: 0
+OS2SubXSize: 41
+OS2SubYSize: 44
+OS2SubXOff: 0
+OS2SubYOff: 8
+OS2SupXSize: 41
+OS2SupYSize: 44
+OS2SupXOff: 0
+OS2SupYOff: 30
+OS2StrikeYSize: 3
+OS2StrikeYPos: 16
+OS2CapHeight: 44
+OS2XHeight: 28
+OS2Vendor: 'PfEd'
+OS2CodePages: 00000001.00000000
+OS2UnicodeRanges: 00000001.00000000.00000000.00000000
+Lookup: 258 0 0 "'kern' Horizontal Kerning in Latin lookup 0" { "'kern' Horizontal Kerning in Latin lookup 0 subtable"  } ['kern' ('DFLT' <'dflt' > 'latn' <'dflt' > ) ]
+MarkAttachClasses: 1
+DEI: 91125
+ShortTable: cvt  2
+  2
+  40
+EndShort
+ShortTable: maxp 16
+  1
+  0
+  97
+  64
+  5
+  0
+  0
+  2
+  0
+  1
+  1
+  0
+  64
+  46
+  0
+  0
+EndShort
+LangName: 1033 "" "" "" "cvm_font_1"
+GaspTable: 1 65535 2 0
+Encoding: UnicodeFull
+UnicodeInterp: none
+NameList: AGL For New Fonts
+DisplaySize: -48
+AntiAlias: 1
+FitToEm: 0
+WinInfo: 127794 38 14
+BeginPrivate: 0
+EndPrivate
+BeginChars: 1114115 107
+
+StartChar: .notdef
+Encoding: 1114112 -1 0
+Width: 22
+Flags: W
+TtInstrs:
+PUSHB_2
+ 1
+ 0
+MDAP[rnd]
+ALIGNRP
+PUSHB_3
+ 7
+ 4
+ 0
+MIRP[min,rnd,black]
+SHP[rp2]
+PUSHB_2
+ 6
+ 5
+MDRP[rp0,min,rnd,grey]
+ALIGNRP
+PUSHB_3
+ 3
+ 2
+ 0
+MIRP[min,rnd,black]
+SHP[rp2]
+SVTCA[y-axis]
+PUSHB_2
+ 3
+ 0
+MDAP[rnd]
+ALIGNRP
+PUSHB_3
+ 5
+ 4
+ 0
+MIRP[min,rnd,black]
+SHP[rp2]
+PUSHB_3
+ 7
+ 6
+ 1
+MIRP[rp0,min,rnd,grey]
+ALIGNRP
+PUSHB_3
+ 1
+ 2
+ 0
+MIRP[min,rnd,black]
+SHP[rp2]
+EndTTInstrs
+LayerCount: 2
+Fore
+SplineSet
+2 0 m 1,0,-1
+ 2 42 l 1,1,-1
+ 18 42 l 1,2,-1
+ 18 0 l 1,3,-1
+ 2 0 l 1,0,-1
+4 2 m 1,4,-1
+ 16 2 l 1,5,-1
+ 16 40 l 1,6,-1
+ 4 40 l 1,7,-1
+ 4 2 l 1,4,-1
+EndSplineSet
+Validated: 1
+EndChar
+
+StartChar: .null
+Encoding: 1114113 -1 1
+Width: 0
+Flags: W
+LayerCount: 2
+Fore
+Validated: 1
+EndChar
+
+StartChar: nonmarkingreturn
+Encoding: 1114114 -1 2
+Width: 21
+Flags: W
+LayerCount: 2
+Fore
+Validated: 1
+EndChar
+
+StartChar: exclam
+Encoding: 33 33 3
+Width: 12
+GlyphClass: 2
+Flags: W
+LayerCount: 2
+Fore
+SplineSet
+4 11 m 1,0,-1
+ 4 40 l 1,1,-1
+ 8 44 l 1,2,-1
+ 8 15 l 1,3,-1
+ 4 11 l 1,0,-1
+4 0 m 1,4,-1
+ 4 7 l 1,5,-1
+ 8 11 l 1,6,-1
+ 8 4 l 1,7,-1
+ 4 0 l 1,4,-1
+EndSplineSet
+Validated: 1
+EndChar
+
+StartChar: quotedbl
+Encoding: 34 34 4
+Width: 20
+GlyphClass: 2
+Flags: W
+LayerCount: 2
+Fore
+SplineSet
+12 44 m 1,0,-1
+ 16 48 l 1,1,-1
+ 16 40 l 1,2,-1
+ 12 36 l 1,3,-1
+ 12 44 l 1,0,-1
+4 44 m 1,4,-1
+ 8 48 l 1,5,-1
+ 8 40 l 1,6,-1
+ 4 36 l 1,7,-1
+ 4 44 l 1,4,-1
+EndSplineSet
+Validated: 1
+Kerns2: 19 -12 "'kern' Horizontal Kerning in Latin lookup 0 subtable"
+EndChar
+
+StartChar: numbersign
+Encoding: 35 35 5
+Width: 52
+GlyphClass: 2
+Flags: W
+LayerCount: 2
+Fore
+SplineSet
+20 28 m 1,0,-1
+ 20 16 l 1,1,-1
+ 32 16 l 1,2,-1
+ 32 28 l 1,3,-1
+ 20 28 l 1,0,-1
+16 40 m 1,4,-1
+ 20 44 l 1,5,-1
+ 20 32 l 1,6,-1
+ 32 32 l 1,7,-1
+ 32 40 l 1,8,-1
+ 36 44 l 1,9,-1
+ 36 32 l 1,10,-1
+ 48 32 l 1,11,-1
+ 44 28 l 1,12,-1
+ 36 28 l 1,13,-1
+ 36 16 l 1,14,-1
+ 48 16 l 1,15,-1
+ 44 12 l 1,16,-1
+ 36 12 l 1,17,-1
+ 36 4 l 1,18,-1
+ 32 0 l 1,19,-1
+ 32 12 l 1,20,-1
+ 20 12 l 1,21,-1
+ 20 4 l 1,22,-1
+ 16 0 l 1,23,-1
+ 16 12 l 1,24,-1
+ 4 12 l 1,25,-1
+ 8 16 l 1,26,-1
+ 16 16 l 1,27,-1
+ 16 28 l 1,28,-1
+ 4 28 l 1,29,-1
+ 8 32 l 1,30,-1
+ 16 32 l 1,31,-1
+ 16 40 l 1,4,-1
+EndSplineSet
+Validated: 1
+EndChar
+
+StartChar: dollar
+Encoding: 36 36 6
+Width: 52
+GlyphClass: 2
+Flags: W
+LayerCount: 2
+Fore
+SplineSet
+24 46 m 1,0,-1
+ 24 48 l 1,1,-1
+ 28 52 l 1,2,-1
+ 28 46 l 1,3,-1
+ 24 46 l 1,0,-1
+24 -2 m 1,4,-1
+ 28 -2 l 1,5,-1
+ 28 -4 l 1,6,-1
+ 24 -8 l 1,7,-1
+ 24 -2 l 1,4,-1
+40 0 m 2,8,-1
+ 4 0 l 1,9,-1
+ 8 4 l 1,10,-1
+ 40 4 l 2,11,12
+ 44 4 44 4 44 8 c 2,13,14
+ 44 8 44 8 44 16 c 0,15,16
+ 44 20 44 20 40 20 c 2,17,18
+ 40 20 40 20 12 20 c 0,19,20
+ 4 20 4 20 4 28 c 2,21,22
+ 4 28 4 28 4 36 c 256,23,24
+ 4 44 4 44 12 44 c 2,25,26
+ 12 44 12 44 48 44 c 1,27,-1
+ 44 40 l 1,28,29
+ 44 40 44 40 12 40 c 0,30,31
+ 8 40 8 40 8 36 c 2,32,33
+ 8 36 8 36 8 28 c 0,34,35
+ 8 24 8 24 12 24 c 2,36,37
+ 12 24 12 24 40 24 c 0,38,39
+ 48 24 48 24 48 16 c 2,40,41
+ 48 16 48 16 48 8 c 256,42,43
+ 48 0 48 0 40 0 c 2,8,-1
+EndSplineSet
+Validated: 1
+EndChar
+
+StartChar: percent
+Encoding: 37 37 7
+Width: 52
+GlyphClass: 2
+Flags: W
+LayerCount: 2
+Fore
+SplineSet
+32 12 m 2,0,1
+ 32 12 32 12 32 8 c 256,2,3
+ 32 4 32 4 36 4 c 2,4,5
+ 36 4 36 4 40 4 c 256,6,7
+ 44 4 44 4 44 8 c 2,8,9
+ 44 8 44 8 44 12 c 256,10,11
+ 44 16 44 16 40 16 c 2,12,13
+ 40 16 40 16 36 16 c 256,14,15
+ 32 16 32 16 32 12 c 2,0,1
+28 12 m 0,16,17
+ 28 20 28 20 36 20 c 2,18,19
+ 36 20 36 20 40 20 c 0,20,21
+ 48 20 48 20 48 12 c 2,22,23
+ 48 12 48 12 48 8 c 0,24,25
+ 48 0 48 0 40 0 c 2,26,27
+ 40 0 40 0 36 0 c 0,28,29
+ 28 0 28 0 28 8 c 2,30,31
+ 28 8 28 8 28 12 c 0,16,17
+8 36 m 2,32,-1
+ 8 32 l 2,33,34
+ 8 28 8 28 12 28 c 2,35,-1
+ 16 28 l 2,36,37
+ 20 28 20 28 20 32 c 2,38,39
+ 20 32 20 32 20 36 c 256,40,41
+ 20 40 20 40 16 40 c 2,42,43
+ 16 40 16 40 12 40 c 256,44,45
+ 8 40 8 40 8 36 c 2,32,-1
+4 36 m 0,46,47
+ 4 44 4 44 12 44 c 2,48,49
+ 12 44 12 44 16 44 c 0,50,51
+ 24 44 24 44 24 36 c 2,52,-1
+ 24 32 l 2,53,54
+ 24 24 24 24 16 24 c 2,55,-1
+ 12 24 l 2,56,57
+ 4 24 4 24 4 32 c 2,58,59
+ 4 32 4 32 4 36 c 0,46,47
+5 12 m 1,60,-1
+ 43 34 l 1,61,-1
+ 48 32 l 1,62,-1
+ 10 10 l 1,63,-1
+ 5 12 l 1,60,-1
+EndSplineSet
+Validated: 1
+EndChar
+
+StartChar: ampersand
+Encoding: 38 38 8
+Width: 52
+GlyphClass: 2
+Flags: W
+LayerCount: 2
+Fore
+SplineSet
+15 28 m 1,0,-1
+ 19 32 l 1,1,-1
+ 25 32 l 1,2,-1
+ 18 25 l 1,3,-1
+ 15 28 l 1,0,-1
+29 14 m 1,4,-1
+ 36 21 l 1,5,-1
+ 36 15 l 1,6,-1
+ 32 11 l 1,7,-1
+ 29 14 l 1,4,-1
+40 0 m 2,8,-1
+ 38 0 l 2,9,10
+ 34 0 34 0 31 3 c 2,11,12
+ 7 27 l 2,13,14
+ 4 30 4 30 4 34 c 2,15,-1
+ 4 36 l 2,16,17
+ 4 44 4 44 12 44 c 2,18,-1
+ 36 44 l 2,19,20
+ 44 44 44 44 44 36 c 2,21,-1
+ 44 34 l 1,22,-1
+ 40 30 l 1,23,-1
+ 40 36 l 2,24,25
+ 40 40 40 40 36 40 c 2,26,-1
+ 12 40 l 2,27,28
+ 8 40 8 40 8 36 c 2,29,-1
+ 8 34 l 2,30,31
+ 8 32 8 32 10 30 c 2,32,33
+ 34 6 l 2,34,35
+ 36 4 36 4 38 4 c 2,36,-1
+ 40 4 l 2,37,38
+ 44 4 44 4 44 8 c 2,39,-1
+ 44 10 l 1,40,-1
+ 48 14 l 1,41,-1
+ 48 8 l 2,42,43
+ 48 0 48 0 40 0 c 2,8,-1
+16 5 m 2,44,45
+ 17 4 17 4 18 4 c 128,-1,46
+ 19 4 19 4 20 5 c 2,47,-1
+ 23 8 l 1,48,-1
+ 26 5 l 1,49,-1
+ 23 2 l 2,50,51
+ 21 0 21 0 18 0 c 128,-1,52
+ 15 0 15 0 13 2 c 2,53,-1
+ 6 9 l 2,54,55
+ 4 11 4 11 4 14 c 128,-1,56
+ 4 17 4 17 6 19 c 2,57,-1
+ 9 22 l 1,58,-1
+ 12 19 l 1,59,-1
+ 9 16 l 2,60,61
+ 8 15 8 15 8 14 c 128,-1,62
+ 8 13 8 13 9 12 c 2,63,-1
+ 16 5 l 2,44,45
+EndSplineSet
+Validated: 1
+EndChar
+
+StartChar: quotesingle
+Encoding: 39 39 9
+Width: 12
+GlyphClass: 2
+Flags: W
+LayerCount: 2
+Fore
+SplineSet
+4 44 m 1,0,-1
+ 8 48 l 1,1,-1
+ 8 40 l 1,2,-1
+ 4 36 l 1,3,-1
+ 4 44 l 1,0,-1
+EndSplineSet
+Validated: 1
+Kerns2: 19 -12 "'kern' Horizontal Kerning in Latin lookup 0 subtable"
+EndChar
+
+StartChar: parenleft
+Encoding: 40 40 10
+Width: 24
+GlyphClass: 2
+Flags: W
+LayerCount: 2
+Fore
+SplineSet
+12 0 m 2,0,1
+ 4 0 4 0 4 8 c 2,2,3
+ 4 8 4 8 4 36 c 0,4,5
+ 4 44 4 44 12 44 c 2,6,-1
+ 18 44 l 1,7,-1
+ 14 40 l 1,8,-1
+ 12 40 l 2,9,10
+ 8 40 8 40 8 36 c 2,11,12
+ 8 36 8 36 8 8 c 0,13,14
+ 8 4 8 4 12 4 c 2,15,-1
+ 18 4 l 1,16,-1
+ 14 0 l 1,17,-1
+ 12 0 l 2,0,1
+EndSplineSet
+Validated: 1
+EndChar
+
+StartChar: parenright
+Encoding: 41 41 11
+Width: 24
+GlyphClass: 2
+Flags: W
+LayerCount: 2
+Fore
+SplineSet
+12 0 m 2,0,-1
+ 6 0 l 1,1,-1
+ 10 4 l 1,2,-1
+ 12 4 l 2,3,4
+ 16 4 16 4 16 8 c 2,5,6
+ 16 8 16 8 16 36 c 0,7,8
+ 16 40 16 40 12 40 c 2,9,-1
+ 6 40 l 1,10,-1
+ 10 44 l 1,11,-1
+ 12 44 l 2,12,13
+ 20 44 20 44 20 36 c 2,14,15
+ 20 36 20 36 20 8 c 0,16,17
+ 20 0 20 0 12 0 c 2,0,-1
+EndSplineSet
+Validated: 1
+EndChar
+
+StartChar: asterisk
+Encoding: 42 42 12
+Width: 20
+GlyphClass: 2
+Flags: W
+LayerCount: 2
+Fore
+SplineSet
+5 36 m 1,0,-1
+ 8 42 l 1,1,-1
+ 2 44 l 1,2,-1
+ 3 46 l 1,3,-1
+ 9 44 l 1,4,-1
+ 9 50 l 1,5,-1
+ 11 50 l 1,6,-1
+ 11 44 l 1,7,-1
+ 17 46 l 1,8,-1
+ 18 44 l 1,9,-1
+ 12 42 l 1,10,-1
+ 15 36 l 1,11,-1
+ 13 35 l 1,12,-1
+ 10 41 l 1,13,-1
+ 7 35 l 1,14,-1
+ 5 36 l 1,0,-1
+EndSplineSet
+Validated: 1
+Kerns2: 19 -12 "'kern' Horizontal Kerning in Latin lookup 0 subtable"
+EndChar
+
+StartChar: plus
+Encoding: 43 43 13
+Width: 36
+GlyphClass: 2
+Flags: W
+LayerCount: 2
+Fore
+SplineSet
+16 8 m 1,0,-1
+ 16 20 l 1,1,-1
+ 4 20 l 1,2,-1
+ 8 24 l 1,3,-1
+ 16 24 l 1,4,-1
+ 16 32 l 1,5,-1
+ 20 36 l 1,6,-1
+ 20 24 l 1,7,-1
+ 32 24 l 1,8,-1
+ 28 20 l 1,9,-1
+ 20 20 l 1,10,-1
+ 20 12 l 1,11,-1
+ 16 8 l 1,0,-1
+EndSplineSet
+Validated: 1
+Kerns2: 19 -12 "'kern' Horizontal Kerning in Latin lookup 0 subtable"
+EndChar
+
+StartChar: comma
+Encoding: 44 44 14
+Width: 12
+GlyphClass: 2
+Flags: W
+LayerCount: 2
+Fore
+SplineSet
+4 0 m 1,0,-1
+ 4 7 l 1,1,-1
+ 8 11 l 1,2,-1
+ 8 -3 l 1,3,-1
+ 4 -7 l 1,4,-1
+ 4 -5 l 1,5,-1
+ 7 -2 l 1,6,-1
+ 7 3 l 1,7,-1
+ 4 0 l 1,0,-1
+EndSplineSet
+Validated: 1
+EndChar
+
+StartChar: hyphen
+Encoding: 45 45 15
+Width: 40
+GlyphClass: 2
+Flags: W
+LayerCount: 2
+Fore
+SplineSet
+4 16 m 5,0,-1
+ 8 20 l 5,1,-1
+ 36 20 l 5,2,-1
+ 32 16 l 5,3,-1
+ 4 16 l 5,0,-1
+EndSplineSet
+Validated: 1
+Kerns2: 19 -12 "'kern' Horizontal Kerning in Latin lookup 0 subtable"
+EndChar
+
+StartChar: period
+Encoding: 46 46 16
+Width: 12
+GlyphClass: 2
+Flags: W
+LayerCount: 2
+Fore
+SplineSet
+4 0 m 1,0,-1
+ 4 7 l 1,1,-1
+ 8 11 l 1,2,-1
+ 8 4 l 1,3,-1
+ 4 0 l 1,0,-1
+EndSplineSet
+Validated: 1
+EndChar
+
+StartChar: slash
+Encoding: 47 47 17
+Width: 40
+GlyphClass: 2
+Flags: W
+LayerCount: 2
+Fore
+SplineSet
+4 0 m 1,0,-1
+ 31 44 l 1,1,-1
+ 36 44 l 1,2,-1
+ 9 0 l 1,3,-1
+ 4 0 l 1,0,-1
+EndSplineSet
+Validated: 1
+EndChar
+
+StartChar: zero
+Encoding: 48 48 18
+Width: 52
+GlyphClass: 2
+Flags: W
+LayerCount: 2
+Fore
+SplineSet
+24 26 m 1,0,-1
+ 28 30 l 1,1,-1
+ 28 18 l 1,2,-1
+ 24 14 l 1,3,-1
+ 24 26 l 1,0,-1
+4 36 m 0,4,5
+ 4 44 4 44 12 44 c 2,6,7
+ 12 44 12 44 40 44 c 0,8,9
+ 48 44 48 44 48 36 c 2,10,11
+ 48 36 48 36 48 8 c 0,12,13
+ 48 0 48 0 40 0 c 2,14,-1
+ 12 0 l 2,15,16
+ 4 0 4 0 4 8 c 2,17,18
+ 4 8 4 8 4 36 c 0,4,5
+44 8 m 2,19,20
+ 44 8 44 8 44 36 c 0,21,22
+ 44 40 44 40 40 40 c 2,23,24
+ 40 40 40 40 12 40 c 0,25,26
+ 8 40 8 40 8 36 c 2,27,28
+ 8 36 8 36 8 8 c 0,29,30
+ 8 4 8 4 12 4 c 2,31,32
+ 12 4 12 4 40 4 c 0,33,34
+ 44 4 44 4 44 8 c 2,19,20
+EndSplineSet
+Validated: 1
+EndChar
+
+StartChar: one
+Encoding: 49 49 19
+Width: 52
+GlyphClass: 2
+Flags: W
+LayerCount: 2
+Fore
+SplineSet
+28 4 m 1,0,-1
+ 48 4 l 1,1,-1
+ 44 0 l 1,2,-1
+ 4 0 l 1,3,-1
+ 8 4 l 1,4,-1
+ 24 4 l 1,5,-1
+ 24 40 l 1,6,-1
+ 16 40 l 1,7,-1
+ 20 44 l 1,8,-1
+ 28 44 l 1,9,-1
+ 28 4 l 1,0,-1
+EndSplineSet
+Validated: 1
+Kerns2: 96 -12 "'kern' Horizontal Kerning in Latin lookup 0 subtable" 66 -12 "'kern' Horizontal Kerning in Latin lookup 0 subtable" 64 -12 "'kern' Horizontal Kerning in Latin lookup 0 subtable" 15 -12 "'kern' Horizontal Kerning in Latin lookup 0 subtable" 13 -12 "'kern' Horizontal Kerning in Latin lookup 0 subtable" 12 -12 "'kern' Horizontal Kerning in Latin lookup 0 subtable" 9 -12 "'kern' Horizontal Kerning in Latin lookup 0 subtable" 4 -12 "'kern' Horizontal Kerning in Latin lookup 0 subtable"
+EndChar
+
+StartChar: two
+Encoding: 50 50 20
+Width: 52
+GlyphClass: 2
+Flags: W
+LayerCount: 2
+Fore
+SplineSet
+8 36 m 2,0,-1
+ 8 34 l 1,1,-1
+ 4 30 l 1,2,-1
+ 4 36 l 2,3,4
+ 4 44 4 44 12 44 c 2,5,6
+ 12 44 12 44 40 44 c 0,7,8
+ 48 44 48 44 48 36 c 2,9,10
+ 48 36 48 36 48 28 c 256,11,12
+ 48 20 48 20 40 20 c 2,13,14
+ 40 20 40 20 12 20 c 0,15,16
+ 8 20 8 20 8 16 c 2,17,-1
+ 8 4 l 1,18,-1
+ 48 4 l 1,19,-1
+ 44 0 l 1,20,-1
+ 4 0 l 1,21,-1
+ 4 16 l 2,22,23
+ 4 24 4 24 12 24 c 2,24,25
+ 12 24 12 24 40 24 c 0,26,27
+ 44 24 44 24 44 28 c 2,28,29
+ 44 28 44 28 44 36 c 0,30,31
+ 44 40 44 40 40 40 c 2,32,33
+ 40 40 40 40 12 40 c 0,34,35
+ 8 40 8 40 8 36 c 2,0,-1
+EndSplineSet
+Validated: 1
+EndChar
+
+StartChar: three
+Encoding: 51 51 21
+Width: 52
+GlyphClass: 2
+Flags: W
+LayerCount: 2
+Fore
+SplineSet
+12 0 m 2,0,1
+ 4 0 4 0 4 8 c 2,2,-1
+ 4 10 l 1,3,-1
+ 8 14 l 1,4,-1
+ 8 8 l 2,5,6
+ 8 4 8 4 12 4 c 2,7,8
+ 12 4 12 4 40 4 c 0,9,10
+ 44 4 44 4 44 8 c 2,11,12
+ 44 8 44 8 44 15 c 0,13,14
+ 44 17 44 17 42 19 c 2,15,-1
+ 45 22 l 1,16,17
+ 48 19 48 19 48 15 c 2,18,19
+ 48 15 48 15 48 8 c 0,20,21
+ 48 0 48 0 40 0 c 2,22,-1
+ 12 0 l 2,0,1
+10 36 m 2,23,-1
+ 10 34 l 1,24,-1
+ 6 30 l 1,25,26
+ 6 30 6 30 6 36 c 0,27,28
+ 6 44 6 44 14 44 c 2,29,-1
+ 36 44 l 2,30,31
+ 44 44 44 44 44 36 c 2,32,-1
+ 44 28 l 2,33,34
+ 44 20 44 20 36 20 c 2,35,-1
+ 14 20 l 1,36,-1
+ 18 24 l 1,37,-1
+ 36 24 l 2,38,39
+ 40 24 40 24 40 28 c 2,40,-1
+ 40 36 l 2,41,42
+ 40 40 40 40 36 40 c 2,43,44
+ 36 40 36 40 14 40 c 0,45,46
+ 10 40 10 40 10 36 c 2,23,-1
+EndSplineSet
+Validated: 1
+EndChar
+
+StartChar: four
+Encoding: 52 52 22
+Width: 52
+GlyphClass: 2
+Flags: W
+LayerCount: 2
+Fore
+SplineSet
+8 16 m 1,0,-1
+ 36 16 l 1,1,-1
+ 36 40 l 1,2,-1
+ 34 40 l 1,3,-1
+ 8 18 l 1,4,-1
+ 8 16 l 1,0,-1
+36 0 m 1,5,-1
+ 36 12 l 1,6,-1
+ 4 12 l 1,7,-1
+ 4 20 l 1,8,-1
+ 32 44 l 1,9,-1
+ 40 44 l 1,10,-1
+ 40 16 l 1,11,-1
+ 48 16 l 1,12,-1
+ 44 12 l 1,13,-1
+ 40 12 l 1,14,-1
+ 40 4 l 1,15,-1
+ 36 0 l 1,5,-1
+EndSplineSet
+Validated: 1
+EndChar
+
+StartChar: five
+Encoding: 53 53 23
+Width: 52
+GlyphClass: 2
+Flags: W
+LayerCount: 2
+Fore
+SplineSet
+8 8 m 2,0,1
+ 8 4 8 4 12 4 c 2,2,3
+ 12 4 12 4 40 4 c 0,4,5
+ 44 4 44 4 44 8 c 2,6,7
+ 44 8 44 8 44 16 c 0,8,9
+ 44 20 44 20 40 20 c 2,10,-1
+ 4 20 l 1,11,-1
+ 4 44 l 1,12,-1
+ 48 44 l 1,13,-1
+ 44 40 l 1,14,-1
+ 8 40 l 1,15,-1
+ 8 24 l 1,16,17
+ 8 24 8 24 40 24 c 0,18,19
+ 48 24 48 24 48 16 c 2,20,21
+ 48 16 48 16 48 8 c 256,22,23
+ 48 0 48 0 40 0 c 2,24,25
+ 40 0 40 0 12 0 c 0,26,27
+ 4 0 4 0 4 8 c 2,28,-1
+ 4 10 l 1,29,-1
+ 8 14 l 1,30,-1
+ 8 8 l 2,0,1
+EndSplineSet
+Validated: 1
+EndChar
+
+StartChar: six
+Encoding: 54 54 24
+Width: 52
+GlyphClass: 2
+Flags: W
+LayerCount: 2
+Fore
+SplineSet
+42 36 m 2,0,1
+ 42 40 42 40 38 40 c 2,2,3
+ 38 40 38 40 12 40 c 0,4,5
+ 8 40 8 40 8 36 c 2,6,7
+ 8 36 8 36 8 8 c 0,8,9
+ 8 4 8 4 12 4 c 2,10,11
+ 12 4 12 4 40 4 c 0,12,13
+ 44 4 44 4 44 8 c 2,14,15
+ 44 8 44 8 44 16 c 0,16,17
+ 44 20 44 20 40 20 c 2,18,-1
+ 10 20 l 1,19,-1
+ 14 24 l 1,20,21
+ 14 24 14 24 40 24 c 0,22,23
+ 48 24 48 24 48 16 c 2,24,25
+ 48 16 48 16 48 8 c 256,26,27
+ 48 0 48 0 40 0 c 2,28,29
+ 40 0 40 0 12 0 c 0,30,31
+ 4 0 4 0 4 8 c 2,32,33
+ 4 8 4 8 4 36 c 0,34,35
+ 4 44 4 44 12 44 c 2,36,37
+ 12 44 12 44 38 44 c 0,38,39
+ 46 44 46 44 46 36 c 2,40,-1
+ 46 34 l 1,41,-1
+ 42 30 l 1,42,-1
+ 42 36 l 2,0,1
+EndSplineSet
+Validated: 1
+EndChar
+
+StartChar: seven
+Encoding: 55 55 25
+Width: 48
+GlyphClass: 2
+Flags: W
+LayerCount: 2
+Fore
+SplineSet
+8 44 m 1,0,1
+ 8 44 8 44 36 44 c 0,2,3
+ 44 44 44 44 44 36 c 2,4,5
+ 44 36 44 36 44 4 c 1,6,-1
+ 40 0 l 1,7,8
+ 40 0 40 0 40 36 c 0,9,10
+ 40 40 40 40 36 40 c 2,11,-1
+ 4 40 l 1,12,-1
+ 8 44 l 1,0,1
+EndSplineSet
+Validated: 1
+EndChar
+
+StartChar: eight
+Encoding: 56 56 26
+Width: 52
+GlyphClass: 2
+Flags: W
+LayerCount: 2
+Fore
+SplineSet
+4 36 m 0,0,1
+ 4 44 4 44 12 44 c 2,2,3
+ 12 44 12 44 40 44 c 0,4,5
+ 48 44 48 44 48 36 c 2,6,7
+ 48 36 48 36 48 28 c 256,8,9
+ 48 20 48 20 40 20 c 2,10,-1
+ 12 20 l 2,11,12
+ 8 20 8 20 8 16 c 2,13,14
+ 8 16 8 16 8 8 c 0,15,16
+ 8 4 8 4 12 4 c 2,17,18
+ 12 4 12 4 40 4 c 0,19,20
+ 44 4 44 4 44 8 c 2,21,22
+ 44 8 44 8 44 18 c 1,23,-1
+ 48 22 l 1,24,-1
+ 48 8 l 2,25,26
+ 48 0 48 0 40 0 c 2,27,-1
+ 12 0 l 2,28,29
+ 4 0 4 0 4 8 c 2,30,31
+ 4 8 4 8 4 16 c 256,32,33
+ 4 24 4 24 12 24 c 2,34,35
+ 12 24 12 24 40 24 c 0,36,37
+ 44 24 44 24 44 28 c 2,38,39
+ 44 28 44 28 44 36 c 0,40,41
+ 44 40 44 40 40 40 c 2,42,43
+ 40 40 40 40 12 40 c 0,44,45
+ 8 40 8 40 8 36 c 2,46,47
+ 8 36 8 36 8 26 c 1,48,-1
+ 4 22 l 1,49,50
+ 4 22 4 22 4 36 c 0,0,1
+EndSplineSet
+Validated: 1
+EndChar
+
+StartChar: nine
+Encoding: 57 57 27
+Width: 52
+GlyphClass: 2
+Flags: W
+LayerCount: 2
+Fore
+SplineSet
+12 20 m 2,0,1
+ 4 20 4 20 4 28 c 2,2,3
+ 4 28 4 28 4 36 c 256,4,5
+ 4 44 4 44 12 44 c 2,6,7
+ 12 44 12 44 40 44 c 0,8,9
+ 48 44 48 44 48 36 c 2,10,11
+ 48 36 48 36 48 8 c 0,12,13
+ 48 0 48 0 40 0 c 2,14,15
+ 40 0 40 0 8 0 c 1,16,-1
+ 12 4 l 1,17,18
+ 12 4 12 4 40 4 c 0,19,20
+ 44 4 44 4 44 8 c 2,21,22
+ 44 8 44 8 44 36 c 0,23,24
+ 44 40 44 40 40 40 c 2,25,26
+ 40 40 40 40 12 40 c 0,27,28
+ 8 40 8 40 8 36 c 2,29,30
+ 8 36 8 36 8 28 c 0,31,32
+ 8 24 8 24 12 24 c 2,33,-1
+ 42 24 l 1,34,-1
+ 38 20 l 1,35,-1
+ 12 20 l 2,0,1
+EndSplineSet
+Validated: 1
+EndChar
+
+StartChar: colon
+Encoding: 58 58 28
+Width: 12
+GlyphClass: 2
+Flags: W
+LayerCount: 2
+Fore
+SplineSet
+4 0 m 1,0,-1
+ 4 7 l 1,1,-1
+ 8 11 l 1,2,-1
+ 8 4 l 1,3,-1
+ 4 0 l 1,0,-1
+4 17 m 1,4,-1
+ 4 24 l 1,5,-1
+ 8 28 l 1,6,-1
+ 8 21 l 1,7,-1
+ 4 17 l 1,4,-1
+EndSplineSet
+Validated: 1
+EndChar
+
+StartChar: semicolon
+Encoding: 59 59 29
+Width: 12
+GlyphClass: 2
+Flags: W
+LayerCount: 2
+Fore
+SplineSet
+4 0 m 1,0,-1
+ 4 7 l 1,1,-1
+ 8 11 l 1,2,-1
+ 8 -3 l 1,3,-1
+ 4 -7 l 1,4,-1
+ 4 -5 l 1,5,-1
+ 7 -2 l 1,6,-1
+ 7 3 l 1,7,-1
+ 4 0 l 1,0,-1
+4 17 m 1,8,-1
+ 4 24 l 1,9,-1
+ 8 28 l 1,10,-1
+ 8 21 l 1,11,-1
+ 4 17 l 1,8,-1
+EndSplineSet
+Validated: 1
+EndChar
+
+StartChar: less
+Encoding: 60 60 30
+Width: 28
+GlyphClass: 2
+Flags: W
+LayerCount: 2
+Fore
+SplineSet
+4 17 m 1,0,-1
+ 4 19 l 1,1,-1
+ 10 25 l 2,2,3
+ 13 28 13 28 17 28 c 2,4,-1
+ 24 28 l 1,5,-1
+ 20 24 l 1,6,-1
+ 17 24 l 2,7,8
+ 15 24 15 24 13 22 c 2,9,-1
+ 9 18 l 1,10,-1
+ 13 14 l 2,11,12
+ 15 12 15 12 17 12 c 2,13,-1
+ 24 12 l 1,14,-1
+ 20 8 l 1,15,-1
+ 17 8 l 2,16,17
+ 13 8 13 8 10 11 c 2,18,-1
+ 4 17 l 1,0,-1
+EndSplineSet
+Validated: 1
+EndChar
+
+StartChar: equal
+Encoding: 61 61 31
+Width: 32
+GlyphClass: 2
+Flags: W
+LayerCount: 2
+Fore
+SplineSet
+4 8 m 1,0,-1
+ 8 12 l 1,1,-1
+ 28 12 l 1,2,-1
+ 24 8 l 1,3,-1
+ 4 8 l 1,0,-1
+4 20 m 1,4,-1
+ 8 24 l 1,5,-1
+ 28 24 l 1,6,-1
+ 24 20 l 1,7,-1
+ 4 20 l 1,4,-1
+EndSplineSet
+Validated: 1
+EndChar
+
+StartChar: greater
+Encoding: 62 62 32
+Width: 28
+GlyphClass: 2
+Flags: W
+LayerCount: 2
+Fore
+SplineSet
+24 17 m 1,0,-1
+ 18 11 l 2,1,2
+ 15 8 15 8 11 8 c 2,3,-1
+ 4 8 l 1,4,-1
+ 8 12 l 1,5,-1
+ 11 12 l 2,6,7
+ 13 12 13 12 15 14 c 2,8,-1
+ 19 18 l 1,9,-1
+ 15 22 l 2,10,11
+ 13 24 13 24 11 24 c 2,12,-1
+ 4 24 l 1,13,-1
+ 8 28 l 1,14,-1
+ 11 28 l 6,15,16
+ 15 28 15 28 18 25 c 2,17,-1
+ 24 19 l 1,18,-1
+ 24 17 l 1,0,-1
+EndSplineSet
+Validated: 1
+EndChar
+
+StartChar: question
+Encoding: 63 63 33
+Width: 52
+GlyphClass: 2
+Flags: W
+LayerCount: 2
+Fore
+SplineSet
+22 0 m 1,0,-1
+ 22 7 l 1,1,-1
+ 26 11 l 1,2,-1
+ 26 4 l 1,3,-1
+ 22 0 l 1,0,-1
+26 16 m 2,4,-1
+ 26 15 l 1,5,-1
+ 22 11 l 1,6,7
+ 22 11 22 11 22 16 c 0,8,9
+ 22 24 22 24 30 24 c 2,10,11
+ 30 24 30 24 40 24 c 0,12,13
+ 44 24 44 24 44 28 c 2,14,-1
+ 44 36 l 2,15,16
+ 44 40 44 40 40 40 c 2,17,-1
+ 12 40 l 2,18,19
+ 8 40 8 40 8 36 c 2,20,-1
+ 8 34 l 1,21,-1
+ 4 30 l 1,22,-1
+ 4 36 l 2,23,24
+ 4 44 4 44 12 44 c 2,25,-1
+ 40 44 l 2,26,27
+ 48 44 48 44 48 36 c 2,28,-1
+ 48 28 l 2,29,30
+ 48 20 48 20 40 20 c 2,31,-1
+ 30 20 l 2,32,33
+ 26 20 26 20 26 16 c 2,4,-1
+EndSplineSet
+Validated: 1
+EndChar
+
+StartChar: at
+Encoding: 64 64 34
+Width: 52
+GlyphClass: 2
+Flags: W
+LayerCount: 2
+Fore
+SplineSet
+20 4 m 2,0,-1
+ 48 4 l 1,1,-1
+ 44 0 l 1,2,-1
+ 20 0 l 2,3,4
+ 14 0 14 0 9 5 c 128,-1,5
+ 4 10 4 10 4 16 c 2,6,-1
+ 4 28 l 2,7,8
+ 4 34 4 34 9 39 c 128,-1,9
+ 14 44 14 44 20 44 c 2,10,-1
+ 32 44 l 2,11,12
+ 38 44 38 44 43 39 c 128,-1,13
+ 48 34 48 34 48 28 c 2,14,-1
+ 48 20 l 2,15,16
+ 48 12 48 12 40 12 c 128,-1,17
+ 32 12 32 12 32 20 c 2,18,-1
+ 32 24 l 2,19,20
+ 32 28 32 28 28 28 c 2,21,-1
+ 24 28 l 2,22,23
+ 20 28 20 28 20 24 c 2,24,-1
+ 20 20 l 2,25,26
+ 20 16 20 16 24 16 c 2,27,-1
+ 31 16 l 1,28,-1
+ 27 12 l 1,29,-1
+ 24 12 l 2,30,31
+ 16 12 16 12 16 20 c 2,32,-1
+ 16 24 l 2,33,34
+ 16 32 16 32 24 32 c 2,35,-1
+ 28 32 l 2,36,37
+ 36 32 36 32 36 24 c 2,38,-1
+ 36 20 l 2,39,40
+ 36 16 36 16 40 16 c 128,-1,41
+ 44 16 44 16 44 20 c 2,42,-1
+ 44 28 l 2,43,44
+ 44 32 44 32 40 36 c 128,-1,45
+ 36 40 36 40 32 40 c 2,46,-1
+ 20 40 l 2,47,48
+ 16 40 16 40 12 36 c 128,-1,49
+ 8 32 8 32 8 28 c 2,50,-1
+ 8 16 l 2,51,52
+ 8 12 8 12 12 8 c 128,-1,53
+ 16 4 16 4 20 4 c 2,0,-1
+EndSplineSet
+Validated: 1
+EndChar
+
+StartChar: A
+Encoding: 65 65 35
+Width: 52
+GlyphClass: 2
+Flags: W
+LayerCount: 2
+Fore
+SplineSet
+10 20 m 1,0,-1
+ 14 24 l 1,1,-1
+ 42 24 l 1,2,-1
+ 38 20 l 1,3,-1
+ 10 20 l 1,0,-1
+8 36 m 2,4,-1
+ 8 4 l 1,5,-1
+ 4 0 l 1,6,-1
+ 4 36 l 2,7,8
+ 4 44 4 44 12 44 c 2,9,10
+ 12 44 12 44 40 44 c 0,11,12
+ 48 44 48 44 48 36 c 2,13,14
+ 48 36 48 36 48 4 c 1,15,-1
+ 44 0 l 1,16,17
+ 44 0 44 0 44 36 c 0,18,19
+ 44 40 44 40 40 40 c 2,20,21
+ 40 40 40 40 12 40 c 0,22,23
+ 8 40 8 40 8 36 c 2,4,-1
+EndSplineSet
+Validated: 1
+EndChar
+
+StartChar: B
+Encoding: 66 66 36
+Width: 52
+GlyphClass: 2
+Flags: W
+LayerCount: 2
+Fore
+SplineSet
+40 0 m 2,0,-1
+ 4 0 l 1,1,-1
+ 4 44 l 1,2,-1
+ 36 44 l 2,3,4
+ 44 44 44 44 44 36 c 2,5,-1
+ 44 28 l 2,6,7
+ 44 20 44 20 36 20 c 2,8,-1
+ 10 20 l 1,9,-1
+ 14 24 l 1,10,-1
+ 36 24 l 2,11,12
+ 40 24 40 24 40 28 c 2,13,-1
+ 40 36 l 2,14,15
+ 40 40 40 40 36 40 c 2,16,-1
+ 8 40 l 1,17,-1
+ 8 4 l 1,18,-1
+ 40 4 l 2,19,20
+ 44 4 44 4 44 8 c 2,21,22
+ 44 8 44 8 44 15 c 0,23,24
+ 44 17 44 17 42 19 c 2,25,-1
+ 45 22 l 1,26,27
+ 48 19 48 19 48 15 c 2,28,29
+ 48 15 48 15 48 8 c 0,30,31
+ 48 0 48 0 40 0 c 2,0,-1
+EndSplineSet
+Validated: 1
+EndChar
+
+StartChar: C
+Encoding: 67 67 37
+Width: 52
+GlyphClass: 2
+Flags: W
+LayerCount: 2
+Fore
+SplineSet
+12 44 m 2,0,1
+ 12 44 12 44 48 44 c 1,2,-1
+ 44 40 l 1,3,4
+ 44 40 44 40 12 40 c 0,5,6
+ 8 40 8 40 8 36 c 2,7,8
+ 8 36 8 36 8 8 c 0,9,10
+ 8 4 8 4 12 4 c 2,11,-1
+ 44 4 l 1,12,-1
+ 40 0 l 1,13,14
+ 40 0 40 0 12 0 c 0,15,16
+ 4 0 4 0 4 8 c 2,17,18
+ 4 8 4 8 4 36 c 0,19,20
+ 4 44 4 44 12 44 c 2,0,1
+EndSplineSet
+Validated: 1
+EndChar
+
+StartChar: D
+Encoding: 68 68 38
+Width: 52
+GlyphClass: 2
+Flags: W
+LayerCount: 2
+Fore
+SplineSet
+40 4 m 2,0,1
+ 44 4 44 4 44 8 c 2,2,3
+ 44 8 44 8 44 36 c 0,4,5
+ 44 40 44 40 40 40 c 2,6,7
+ 40 40 40 40 8 40 c 1,8,-1
+ 8 4 l 1,9,-1
+ 40 4 l 2,0,1
+4 44 m 1,10,11
+ 4 44 4 44 40 44 c 0,12,13
+ 48 44 48 44 48 36 c 2,14,15
+ 48 36 48 36 48 8 c 0,16,17
+ 48 0 48 0 40 0 c 2,18,19
+ 40 0 40 0 4 0 c 1,20,-1
+ 4 44 l 1,10,11
+EndSplineSet
+Validated: 1
+EndChar
+
+StartChar: E
+Encoding: 69 69 39
+Width: 52
+GlyphClass: 2
+Flags: W
+LayerCount: 2
+Fore
+SplineSet
+24 20 m 1,0,-1
+ 10 20 l 1,1,-1
+ 14 24 l 1,2,-1
+ 28 24 l 1,3,-1
+ 24 20 l 1,0,-1
+8 4 m 1,4,-1
+ 48 4 l 1,5,-1
+ 44 0 l 1,6,-1
+ 4 0 l 1,7,-1
+ 4 44 l 1,8,-1
+ 48 44 l 1,9,-1
+ 44 40 l 1,10,-1
+ 8 40 l 1,11,-1
+ 8 4 l 1,4,-1
+EndSplineSet
+Validated: 1
+EndChar
+
+StartChar: F
+Encoding: 70 70 40
+Width: 52
+GlyphClass: 2
+Flags: W
+LayerCount: 2
+Fore
+SplineSet
+24 20 m 1,0,-1
+ 10 20 l 1,1,-1
+ 14 24 l 1,2,-1
+ 28 24 l 1,3,-1
+ 24 20 l 1,0,-1
+8 4 m 1,4,-1
+ 4 0 l 1,5,-1
+ 4 44 l 1,6,-1
+ 48 44 l 1,7,-1
+ 44 40 l 1,8,-1
+ 8 40 l 1,9,-1
+ 8 4 l 1,4,-1
+EndSplineSet
+Validated: 1
+Kerns2: 92 -16 "'kern' Horizontal Kerning in Latin lookup 0 subtable" 91 -16 "'kern' Horizontal Kerning in Latin lookup 0 subtable" 90 -16 "'kern' Horizontal Kerning in Latin lookup 0 subtable" 89 -16 "'kern' Horizontal Kerning in Latin lookup 0 subtable" 88 -16 "'kern' Horizontal Kerning in Latin lookup 0 subtable" 87 -16 "'kern' Horizontal Kerning in Latin lookup 0 subtable" 85 -16 "'kern' Horizontal Kerning in Latin lookup 0 subtable" 84 -16 "'kern' Horizontal Kerning in Latin lookup 0 subtable" 83 -16 "'kern' Horizontal Kerning in Latin lookup 0 subtable" 82 -16 "'kern' Horizontal Kerning in Latin lookup 0 subtable" 81 -16 "'kern' Horizontal Kerning in Latin lookup 0 subtable" 80 -16 "'kern' Horizontal Kerning in Latin lookup 0 subtable" 79 -16 "'kern' Horizontal Kerning in Latin lookup 0 subtable" 73 -16 "'kern' Horizontal Kerning in Latin lookup 0 subtable" 71 -16 "'kern' Horizontal Kerning in Latin lookup 0 subtable" 69 -16 "'kern' Horizontal Kerning in Latin lookup 0 subtable" 67 -16 "'kern' Horizontal Kerning in Latin lookup 0 subtable" 65 -16 "'kern' Horizontal Kerning in Latin lookup 0 subtable" 29 -8 "'kern' Horizontal Kerning in Latin lookup 0 subtable" 16 -12 "'kern' Horizontal Kerning in Latin lookup 0 subtable" 15 -12 "'kern' Horizontal Kerning in Latin lookup 0 subtable" 14 -12 "'kern' Horizontal Kerning in Latin lookup 0 subtable" 13 -12 "'kern' Horizontal Kerning in Latin lookup 0 subtable"
+EndChar
+
+StartChar: G
+Encoding: 71 71 41
+Width: 52
+GlyphClass: 2
+Flags: W
+LayerCount: 2
+Fore
+SplineSet
+48 8 m 0,0,1
+ 48 0 48 0 40 0 c 2,2,3
+ 40 0 40 0 12 0 c 0,4,5
+ 4 0 4 0 4 8 c 2,6,7
+ 4 8 4 8 4 36 c 0,8,9
+ 4 44 4 44 12 44 c 2,10,11
+ 12 44 12 44 40 44 c 0,12,13
+ 48 44 48 44 48 36 c 2,14,-1
+ 48 35 l 1,15,-1
+ 44 31 l 1,16,-1
+ 44 36 l 2,17,18
+ 44 40 44 40 40 40 c 2,19,20
+ 40 40 40 40 12 40 c 0,21,22
+ 8 40 8 40 8 36 c 2,23,24
+ 8 36 8 36 8 8 c 0,25,26
+ 8 4 8 4 12 4 c 2,27,28
+ 12 4 12 4 40 4 c 0,29,30
+ 44 4 44 4 44 8 c 2,31,32
+ 44 8 44 8 44 20 c 1,33,34
+ 44 20 44 20 32 20 c 1,35,-1
+ 37 24 l 1,36,-1
+ 48 24 l 1,37,38
+ 48 24 48 24 48 8 c 0,0,1
+EndSplineSet
+Validated: 1
+EndChar
+
+StartChar: H
+Encoding: 72 72 42
+Width: 52
+GlyphClass: 2
+Flags: W
+LayerCount: 2
+Fore
+SplineSet
+14 24 m 1,0,-1
+ 42 24 l 1,1,-1
+ 38 20 l 1,2,-1
+ 10 20 l 1,3,-1
+ 14 24 l 1,0,-1
+44 0 m 1,4,-1
+ 44 40 l 1,5,-1
+ 48 44 l 1,6,-1
+ 48 4 l 1,7,-1
+ 44 0 l 1,4,-1
+8 4 m 1,8,-1
+ 4 0 l 1,9,-1
+ 4 40 l 1,10,-1
+ 8 44 l 1,11,-1
+ 8 4 l 1,8,-1
+EndSplineSet
+Validated: 1
+EndChar
+
+StartChar: I
+Encoding: 73 73 43
+Width: 12
+GlyphClass: 2
+Flags: W
+LayerCount: 2
+Fore
+SplineSet
+8 4 m 1,0,-1
+ 4 0 l 1,1,-1
+ 4 40 l 1,2,-1
+ 8 44 l 1,3,-1
+ 8 4 l 1,0,-1
+EndSplineSet
+Validated: 1
+EndChar
+
+StartChar: J
+Encoding: 74 74 44
+Width: 52
+GlyphClass: 2
+Flags: W
+LayerCount: 2
+Fore
+SplineSet
+44 8 m 2,0,-1
+ 44 40 l 1,1,-1
+ 36 40 l 1,2,-1
+ 40 44 l 1,3,-1
+ 48 44 l 1,4,5
+ 48 44 48 44 48 8 c 0,6,7
+ 48 0 48 0 40 0 c 2,8,-1
+ 12 0 l 2,9,10
+ 4 0 4 0 4 8 c 2,11,-1
+ 4 10 l 1,12,-1
+ 8 14 l 1,13,-1
+ 8 8 l 2,14,15
+ 8 4 8 4 12 4 c 2,16,17
+ 12 4 12 4 40 4 c 0,18,19
+ 44 4 44 4 44 8 c 2,0,-1
+EndSplineSet
+Validated: 1
+EndChar
+
+StartChar: K
+Encoding: 75 75 45
+Width: 52
+GlyphClass: 2
+Flags: W
+LayerCount: 2
+Fore
+SplineSet
+47 42 m 1,0,1
+ 47 42 47 42 28 23 c 0,2,3
+ 25 20 25 20 21 20 c 2,4,5
+ 21 20 21 20 10 20 c 1,6,-1
+ 14 24 l 1,7,8
+ 14 24 14 24 21 24 c 0,9,10
+ 23 24 23 24 25 26 c 2,11,12
+ 25 26 25 26 41 42 c 1,13,-1
+ 47 42 l 1,0,1
+48 3 m 1,14,-1
+ 45 0 l 1,15,-1
+ 27 18 l 1,16,-1
+ 30 21 l 1,17,-1
+ 48 3 l 1,14,-1
+8 4 m 1,18,-1
+ 4 0 l 1,19,-1
+ 4 40 l 1,20,-1
+ 8 44 l 1,21,-1
+ 8 4 l 1,18,-1
+EndSplineSet
+Validated: 1
+EndChar
+
+StartChar: L
+Encoding: 76 76 46
+Width: 52
+GlyphClass: 2
+Flags: W
+LayerCount: 2
+Fore
+SplineSet
+48 4 m 1,0,-1
+ 44 0 l 1,1,-1
+ 4 0 l 1,2,-1
+ 4 40 l 1,3,-1
+ 8 44 l 1,4,-1
+ 8 4 l 1,5,-1
+ 48 4 l 1,0,-1
+EndSplineSet
+Validated: 1
+EndChar
+
+StartChar: M
+Encoding: 77 77 47
+Width: 52
+GlyphClass: 2
+Flags: W
+LayerCount: 2
+Fore
+SplineSet
+24 28 m 5,0,-1
+ 21 25 l 5,1,-1
+ 8 38 l 1,2,-1
+ 8 4 l 1,3,-1
+ 4 0 l 1,4,-1
+ 4 40 l 1,5,-1
+ 8 44 l 1,6,-1
+ 24 28 l 5,0,-1
+44 38 m 1,7,-1
+ 29 23 l 1,8,-1
+ 23 23 l 1,9,-1
+ 44 44 l 1,10,-1
+ 48 40 l 1,11,-1
+ 48 4 l 1,12,-1
+ 44 0 l 1,13,-1
+ 44 38 l 1,7,-1
+EndSplineSet
+Validated: 1
+EndChar
+
+StartChar: N
+Encoding: 78 78 48
+Width: 52
+GlyphClass: 2
+Flags: W
+LayerCount: 2
+Fore
+SplineSet
+48 44 m 1,0,-1
+ 48 4 l 1,1,-1
+ 44 0 l 1,2,-1
+ 8 38 l 1,3,-1
+ 8 4 l 1,4,-1
+ 4 0 l 1,5,-1
+ 4 40 l 1,6,-1
+ 8 44 l 1,7,-1
+ 44 6 l 1,8,-1
+ 44 40 l 1,9,-1
+ 48 44 l 1,0,-1
+EndSplineSet
+Validated: 1
+EndChar
+
+StartChar: O
+Encoding: 79 79 49
+Width: 52
+GlyphClass: 2
+Flags: W
+LayerCount: 2
+Fore
+SplineSet
+4 36 m 0,0,1
+ 4 44 4 44 12 44 c 2,2,3
+ 12 44 12 44 40 44 c 0,4,5
+ 48 44 48 44 48 36 c 2,6,7
+ 48 36 48 36 48 8 c 0,8,9
+ 48 0 48 0 40 0 c 2,10,-1
+ 12 0 l 2,11,12
+ 4 0 4 0 4 8 c 2,13,14
+ 4 8 4 8 4 36 c 0,0,1
+44 8 m 2,15,16
+ 44 8 44 8 44 36 c 0,17,18
+ 44 40 44 40 40 40 c 2,19,20
+ 40 40 40 40 12 40 c 0,21,22
+ 8 40 8 40 8 36 c 2,23,24
+ 8 36 8 36 8 8 c 0,25,26
+ 8 4 8 4 12 4 c 2,27,28
+ 12 4 12 4 40 4 c 0,29,30
+ 44 4 44 4 44 8 c 2,15,16
+EndSplineSet
+Validated: 1
+EndChar
+
+StartChar: P
+Encoding: 80 80 50
+Width: 52
+GlyphClass: 2
+Flags: W
+LayerCount: 2
+Fore
+SplineSet
+8 36 m 2,0,1
+ 8 36 8 36 8 4 c 1,2,-1
+ 4 0 l 1,3,-1
+ 4 36 l 2,4,5
+ 4 44 4 44 12 44 c 2,6,7
+ 12 44 12 44 40 44 c 0,8,9
+ 48 44 48 44 48 36 c 2,10,11
+ 48 36 48 36 48 28 c 256,12,13
+ 48 20 48 20 40 20 c 2,14,-1
+ 10 20 l 1,15,-1
+ 14 24 l 1,16,-1
+ 40 24 l 2,17,18
+ 44 24 44 24 44 28 c 2,19,20
+ 44 28 44 28 44 36 c 0,21,22
+ 44 40 44 40 40 40 c 2,23,24
+ 40 40 40 40 12 40 c 0,25,26
+ 8 40 8 40 8 36 c 2,0,1
+EndSplineSet
+Validated: 1
+EndChar
+
+StartChar: Q
+Encoding: 81 81 51
+Width: 52
+GlyphClass: 2
+Flags: W
+LayerCount: 2
+Fore
+SplineSet
+42 9 m 2,0,1
+ 42 6 42 6 39 6 c 2,2,3
+ 39 6 39 6 36 9 c 0,4,5
+ 34 11 34 11 32 11 c 2,6,7
+ 32 11 32 11 24 11 c 1,8,-1
+ 28 15 l 1,9,10
+ 28 15 28 15 32 15 c 256,11,12
+ 36 15 36 15 39 12 c 2,13,-1
+ 42 9 l 2,0,1
+4 36 m 0,14,15
+ 4 44 4 44 12 44 c 2,16,17
+ 12 44 12 44 40 44 c 0,18,19
+ 48 44 48 44 48 36 c 2,20,21
+ 48 36 48 36 48 8 c 0,22,23
+ 48 0 48 0 40 0 c 2,24,-1
+ 12 0 l 2,25,26
+ 4 0 4 0 4 8 c 2,27,28
+ 4 8 4 8 4 36 c 0,14,15
+44 8 m 2,29,30
+ 44 8 44 8 44 36 c 0,31,32
+ 44 40 44 40 40 40 c 2,33,34
+ 40 40 40 40 12 40 c 0,35,36
+ 8 40 8 40 8 36 c 2,37,38
+ 8 36 8 36 8 8 c 0,39,40
+ 8 4 8 4 12 4 c 2,41,42
+ 12 4 12 4 40 4 c 0,43,44
+ 44 4 44 4 44 8 c 2,29,30
+EndSplineSet
+Validated: 1
+EndChar
+
+StartChar: R
+Encoding: 82 82 52
+Width: 52
+GlyphClass: 2
+Flags: W
+LayerCount: 2
+Fore
+SplineSet
+48 0 m 1,0,-1
+ 42 0 l 1,1,-1
+ 25 17 l 1,2,-1
+ 31 17 l 1,3,-1
+ 48 0 l 1,0,-1
+8 36 m 2,4,5
+ 8 36 8 36 8 4 c 1,6,-1
+ 4 0 l 1,7,-1
+ 4 36 l 2,8,9
+ 4 44 4 44 12 44 c 2,10,11
+ 12 44 12 44 40 44 c 0,12,13
+ 48 44 48 44 48 36 c 2,14,15
+ 48 36 48 36 48 28 c 256,16,17
+ 48 20 48 20 40 20 c 2,18,-1
+ 10 20 l 1,19,-1
+ 14 24 l 1,20,-1
+ 40 24 l 2,21,22
+ 44 24 44 24 44 28 c 2,23,24
+ 44 28 44 28 44 36 c 0,25,26
+ 44 40 44 40 40 40 c 2,27,28
+ 40 40 40 40 12 40 c 0,29,30
+ 8 40 8 40 8 36 c 2,4,5
+EndSplineSet
+Validated: 1
+EndChar
+
+StartChar: S
+Encoding: 83 83 53
+Width: 52
+GlyphClass: 2
+Flags: W
+LayerCount: 2
+Fore
+SplineSet
+40 0 m 2,0,-1
+ 4 0 l 1,1,-1
+ 8 4 l 1,2,-1
+ 40 4 l 2,3,4
+ 44 4 44 4 44 8 c 2,5,6
+ 44 8 44 8 44 16 c 0,7,8
+ 44 20 44 20 40 20 c 2,9,10
+ 40 20 40 20 12 20 c 0,11,12
+ 4 20 4 20 4 28 c 2,13,14
+ 4 28 4 28 4 36 c 256,15,16
+ 4 44 4 44 12 44 c 2,17,18
+ 12 44 12 44 48 44 c 1,19,-1
+ 44 40 l 1,20,21
+ 44 40 44 40 12 40 c 0,22,23
+ 8 40 8 40 8 36 c 2,24,25
+ 8 36 8 36 8 28 c 0,26,27
+ 8 24 8 24 12 24 c 2,28,29
+ 12 24 12 24 40 24 c 0,30,31
+ 48 24 48 24 48 16 c 2,32,33
+ 48 16 48 16 48 8 c 256,34,35
+ 48 0 48 0 40 0 c 2,0,-1
+EndSplineSet
+Validated: 1
+EndChar
+
+StartChar: T
+Encoding: 84 84 54
+Width: 52
+GlyphClass: 2
+Flags: W
+LayerCount: 2
+Fore
+SplineSet
+24 34 m 1,0,-1
+ 28 38 l 1,1,-1
+ 28 4 l 1,2,-1
+ 24 0 l 1,3,-1
+ 24 34 l 1,0,-1
+4 40 m 1,4,-1
+ 8 44 l 1,5,-1
+ 48 44 l 1,6,-1
+ 44 40 l 1,7,-1
+ 4 40 l 1,4,-1
+EndSplineSet
+Validated: 1
+EndChar
+
+StartChar: U
+Encoding: 85 85 55
+Width: 52
+GlyphClass: 2
+Flags: W
+LayerCount: 2
+Fore
+SplineSet
+48 8 m 2,0,1
+ 48 0 48 0 40 0 c 2,2,-1
+ 12 0 l 2,3,4
+ 4 0 4 0 4 8 c 2,5,6
+ 4 8 4 8 4 40 c 1,7,-1
+ 8 44 l 1,8,9
+ 8 44 8 44 8 8 c 0,10,11
+ 8 4 8 4 12 4 c 2,12,13
+ 12 4 12 4 40 4 c 0,14,15
+ 44 4 44 4 44 8 c 2,16,17
+ 44 8 44 8 44 40 c 1,18,-1
+ 48 44 l 1,19,-1
+ 48 8 l 2,0,1
+EndSplineSet
+Validated: 1
+EndChar
+
+StartChar: V
+Encoding: 86 86 56
+Width: 52
+GlyphClass: 2
+Flags: W
+LayerCount: 2
+Fore
+SplineSet
+27 0 m 1,0,-1
+ 25 0 l 1,1,-1
+ 7 18 l 2,2,3
+ 4 21 4 21 4 25 c 2,4,-1
+ 4 40 l 1,5,-1
+ 8 44 l 1,6,-1
+ 8 25 l 2,7,8
+ 8 23 8 23 10 21 c 2,9,-1
+ 26 5 l 1,10,-1
+ 42 21 l 2,11,12
+ 44 23 44 23 44 25 c 2,13,-1
+ 44 40 l 1,14,-1
+ 48 44 l 1,15,-1
+ 48 25 l 2,16,17
+ 48 21 48 21 45 18 c 2,18,-1
+ 27 0 l 1,0,-1
+EndSplineSet
+Validated: 1
+EndChar
+
+StartChar: W
+Encoding: 87 87 57
+Width: 52
+GlyphClass: 2
+Flags: W
+LayerCount: 2
+Fore
+SplineSet
+48 8 m 2,0,1
+ 48 0 48 0 40 0 c 2,2,3
+ 40 0 40 0 26 0 c 1,4,-1
+ 30 4 l 1,5,-1
+ 40 4 l 2,6,7
+ 44 4 44 4 44 8 c 2,8,-1
+ 44 40 l 1,9,-1
+ 48 44 l 1,10,-1
+ 48 8 l 2,0,1
+20 0 m 2,11,-1
+ 12 0 l 2,12,13
+ 4 0 4 0 4 8 c 2,14,15
+ 4 8 4 8 4 40 c 1,16,-1
+ 8 44 l 1,17,18
+ 8 44 8 44 8 8 c 0,19,20
+ 8 4 8 4 12 4 c 2,21,22
+ 12 4 12 4 20 4 c 0,23,24
+ 24 4 24 4 24 8 c 2,25,26
+ 24 8 24 8 24 22 c 1,27,-1
+ 28 26 l 1,28,-1
+ 28 8 l 2,29,30
+ 28 0 28 0 20 0 c 2,11,-1
+EndSplineSet
+Validated: 1
+EndChar
+
+StartChar: X
+Encoding: 88 88 58
+Width: 52
+GlyphClass: 2
+Flags: W
+LayerCount: 2
+Fore
+SplineSet
+33 26 m 2,0,-1
+ 42 35 l 2,1,2
+ 44 37 44 37 44 39 c 2,3,-1
+ 44 40 l 1,4,-1
+ 48 44 l 1,5,-1
+ 48 39 l 2,6,7
+ 48 35 48 35 45 32 c 2,8,9
+ 45 32 45 32 36 23 c 0,10,11
+ 33 20 33 20 29 20 c 2,12,13
+ 29 20 29 20 23 20 c 0,14,15
+ 21 20 21 20 19 18 c 2,16,-1
+ 10 9 l 2,17,18
+ 8 7 8 7 8 5 c 2,19,-1
+ 8 4 l 1,20,-1
+ 4 0 l 1,21,-1
+ 4 5 l 2,22,23
+ 4 9 4 9 7 12 c 2,24,25
+ 7 12 7 12 16 21 c 0,26,27
+ 19 24 19 24 23 24 c 2,28,-1
+ 29 24 l 2,29,30
+ 31 24 31 24 33 26 c 2,0,-1
+42 9 m 2,31,32
+ 42 9 42 9 34 17 c 1,33,-1
+ 37 20 l 1,34,35
+ 37 20 37 20 45 12 c 0,36,37
+ 48 9 48 9 48 5 c 2,38,-1
+ 48 4 l 1,39,-1
+ 44 0 l 1,40,-1
+ 44 5 l 2,41,42
+ 44 7 44 7 42 9 c 2,31,32
+7 32 m 2,43,44
+ 4 35 4 35 4 39 c 2,45,-1
+ 4 40 l 1,46,-1
+ 8 44 l 1,47,-1
+ 8 39 l 2,48,49
+ 8 37 8 37 10 35 c 2,50,51
+ 18 27 l 1,52,-1
+ 15 24 l 1,53,-1
+ 7 32 l 2,43,44
+EndSplineSet
+Validated: 1
+EndChar
+
+StartChar: Y
+Encoding: 89 89 59
+Width: 52
+GlyphClass: 2
+Flags: W
+LayerCount: 2
+Fore
+SplineSet
+44 38 m 2,0,-1
+ 44 40 l 1,1,-1
+ 48 44 l 1,2,-1
+ 48 38 l 2,3,4
+ 48 34 48 34 45 31 c 2,5,6
+ 45 31 45 31 30 16 c 0,7,8
+ 28 14 28 14 28 12 c 2,9,-1
+ 28 4 l 1,10,-1
+ 24 0 l 1,11,12
+ 24 0 24 0 24 12 c 0,13,14
+ 24 16 24 16 27 19 c 2,15,16
+ 27 19 27 19 42 34 c 0,17,18
+ 44 36 44 36 44 38 c 2,0,-1
+7 33 m 0,19,20
+ 4 36 4 36 4 40 c 2,21,-1
+ 8 44 l 1,22,23
+ 8 44 8 44 8 40 c 0,24,25
+ 8 38 8 38 10 36 c 2,26,27
+ 10 36 10 36 26 20 c 1,28,-1
+ 23 17 l 1,29,30
+ 23 17 23 17 7 33 c 0,19,20
+EndSplineSet
+Validated: 1
+Kerns2: 92 -4 "'kern' Horizontal Kerning in Latin lookup 0 subtable" 91 -4 "'kern' Horizontal Kerning in Latin lookup 0 subtable" 90 -4 "'kern' Horizontal Kerning in Latin lookup 0 subtable" 89 -4 "'kern' Horizontal Kerning in Latin lookup 0 subtable" 88 -4 "'kern' Horizontal Kerning in Latin lookup 0 subtable" 87 -4 "'kern' Horizontal Kerning in Latin lookup 0 subtable" 85 -4 "'kern' Horizontal Kerning in Latin lookup 0 subtable" 84 -4 "'kern' Horizontal Kerning in Latin lookup 0 subtable" 83 -4 "'kern' Horizontal Kerning in Latin lookup 0 subtable" 82 -4 "'kern' Horizontal Kerning in Latin lookup 0 subtable" 81 -4 "'kern' Horizontal Kerning in Latin lookup 0 subtable" 80 -4 "'kern' Horizontal Kerning in Latin lookup 0 subtable" 79 -4 "'kern' Horizontal Kerning in Latin lookup 0 subtable" 73 -4 "'kern' Horizontal Kerning in Latin lookup 0 subtable" 71 -4 "'kern' Horizontal Kerning in Latin lookup 0 subtable" 70 -4 "'kern' Horizontal Kerning in Latin lookup 0 subtable" 69 -4 "'kern' Horizontal Kerning in Latin lookup 0 subtable" 67 -4 "'kern' Horizontal Kerning in Latin lookup 0 subtable" 65 -8 "'kern' Horizontal Kerning in Latin lookup 0 subtable" 16 -8 "'kern' Horizontal Kerning in Latin lookup 0 subtable" 14 -8 "'kern' Horizontal Kerning in Latin lookup 0 subtable"
+EndChar
+
+StartChar: Z
+Encoding: 90 90 60
+Width: 52
+GlyphClass: 2
+Flags: W
+LayerCount: 2
+Fore
+SplineSet
+4 40 m 1,0,-1
+ 8 44 l 1,1,-1
+ 48 44 l 1,2,-1
+ 48 36 l 1,3,-1
+ 8 6 l 1,4,-1
+ 8 4 l 1,5,-1
+ 48 4 l 1,6,-1
+ 44 0 l 1,7,-1
+ 4 0 l 1,8,-1
+ 4 8 l 1,9,-1
+ 44 38 l 1,10,-1
+ 44 40 l 1,11,-1
+ 4 40 l 1,0,-1
+EndSplineSet
+Validated: 1
+EndChar
+
+StartChar: bracketleft
+Encoding: 91 91 61
+Width: 24
+GlyphClass: 2
+Flags: W
+LayerCount: 2
+Fore
+SplineSet
+4 0 m 1,0,-1
+ 4 44 l 1,1,-1
+ 18 44 l 1,2,-1
+ 14 40 l 1,3,-1
+ 8 40 l 1,4,-1
+ 8 4 l 1,5,-1
+ 18 4 l 1,6,-1
+ 14 0 l 1,7,-1
+ 4 0 l 1,0,-1
+EndSplineSet
+Validated: 1
+EndChar
+
+StartChar: backslash
+Encoding: 92 92 62
+Width: 40
+GlyphClass: 2
+Flags: W
+LayerCount: 2
+Fore
+SplineSet
+36 0 m 1,0,-1
+ 31 0 l 1,1,-1
+ 4 44 l 1,2,-1
+ 9 44 l 1,3,-1
+ 36 0 l 1,0,-1
+EndSplineSet
+Validated: 1
+EndChar
+
+StartChar: bracketright
+Encoding: 93 93 63
+Width: 24
+GlyphClass: 2
+Flags: W
+LayerCount: 2
+Fore
+SplineSet
+20 0 m 1,0,-1
+ 6 0 l 1,1,-1
+ 10 4 l 1,2,-1
+ 16 4 l 1,3,-1
+ 16 40 l 1,4,-1
+ 6 40 l 1,5,-1
+ 10 44 l 1,6,-1
+ 20 44 l 1,7,-1
+ 20 0 l 1,0,-1
+EndSplineSet
+Validated: 1
+EndChar
+
+StartChar: asciicircum
+Encoding: 94 94 64
+Width: 26
+GlyphClass: 2
+Flags: W
+LayerCount: 2
+Fore
+SplineSet
+4 42 m 1,0,-1
+ 11 49 l 1,1,-1
+ 15 49 l 1,2,-1
+ 22 42 l 1,3,-1
+ 16 42 l 1,4,-1
+ 13 45 l 1,5,-1
+ 10 42 l 1,6,-1
+ 4 42 l 1,0,-1
+EndSplineSet
+Validated: 1
+Kerns2: 19 -12 "'kern' Horizontal Kerning in Latin lookup 0 subtable"
+EndChar
+
+StartChar: underscore
+Encoding: 95 95 65
+Width: 40
+GlyphClass: 2
+Flags: W
+LayerCount: 2
+Fore
+SplineSet
+0 -3 m 1,0,-1
+ 3 0 l 1,1,-1
+ 40 0 l 1,2,-1
+ 37 -3 l 1,3,-1
+ 0 -3 l 1,0,-1
+EndSplineSet
+Validated: 1
+EndChar
+
+StartChar: grave
+Encoding: 96 96 66
+Width: 15
+GlyphClass: 2
+Flags: W
+LayerCount: 2
+Fore
+SplineSet
+4 52 m 1,0,-1
+ 8 52 l 1,1,-1
+ 12 46 l 1,2,-1
+ 8 46 l 1,3,-1
+ 4 52 l 1,0,-1
+EndSplineSet
+Validated: 1
+Kerns2: 19 -12 "'kern' Horizontal Kerning in Latin lookup 0 subtable"
+EndChar
+
+StartChar: a
+Encoding: 97 97 67
+Width: 36
+GlyphClass: 2
+Flags: W
+LayerCount: 2
+Fore
+SplineSet
+28 20 m 2,0,1
+ 28 24 28 24 24 24 c 2,2,3
+ 24 24 24 24 6 24 c 1,4,-1
+ 10 28 l 1,5,6
+ 10 28 10 28 24 28 c 0,7,8
+ 32 28 32 28 32 20 c 2,9,10
+ 32 20 32 20 32 0 c 1,11,-1
+ 12 0 l 2,12,13
+ 4 0 4 0 4 8 c 128,-1,14
+ 4 16 4 16 12 16 c 2,15,-1
+ 26 16 l 1,16,-1
+ 22 12 l 1,17,-1
+ 12 12 l 2,18,19
+ 8 12 8 12 8 8 c 128,-1,20
+ 8 4 8 4 12 4 c 2,21,-1
+ 28 4 l 1,22,-1
+ 28 20 l 2,0,1
+EndSplineSet
+Validated: 1
+EndChar
+
+StartChar: b
+Encoding: 98 98 68
+Width: 36
+GlyphClass: 2
+Flags: W
+LayerCount: 2
+Fore
+SplineSet
+8 8 m 0,0,1
+ 8 4 8 4 12 4 c 2,2,3
+ 12 4 12 4 24 4 c 0,4,5
+ 28 4 28 4 28 8 c 2,6,7
+ 28 8 28 8 28 20 c 0,8,9
+ 28 24 28 24 24 24 c 2,10,11
+ 24 24 24 24 10 24 c 1,12,-1
+ 14 28 l 1,13,14
+ 14 28 14 28 24 28 c 0,15,16
+ 32 28 32 28 32 20 c 2,17,18
+ 32 20 32 20 32 8 c 0,19,20
+ 32 0 32 0 24 0 c 2,21,-1
+ 12 0 l 2,22,23
+ 4 0 4 0 4 8 c 2,24,25
+ 4 8 4 8 4 40 c 1,26,-1
+ 8 44 l 1,27,28
+ 8 44 8 44 8 8 c 0,0,1
+EndSplineSet
+Validated: 1
+EndChar
+
+StartChar: c
+Encoding: 99 99 69
+Width: 36
+GlyphClass: 2
+Flags: W
+LayerCount: 2
+Fore
+SplineSet
+12 28 m 2,0,-1
+ 32 28 l 1,1,-1
+ 28 24 l 1,2,3
+ 28 24 28 24 12 24 c 0,4,5
+ 8 24 8 24 8 20 c 2,6,7
+ 8 20 8 20 8 8 c 0,8,9
+ 8 4 8 4 12 4 c 2,10,11
+ 12 4 12 4 28 4 c 1,12,-1
+ 24 0 l 1,13,14
+ 24 0 24 0 12 0 c 0,15,16
+ 4 0 4 0 4 8 c 2,17,18
+ 4 8 4 8 4 20 c 0,19,20
+ 4 28 4 28 12 28 c 2,0,-1
+EndSplineSet
+Validated: 1
+EndChar
+
+StartChar: d
+Encoding: 100 100 70
+Width: 36
+GlyphClass: 2
+Flags: W
+LayerCount: 2
+Fore
+SplineSet
+32 44 m 1,0,-1
+ 32 0 l 1,1,-1
+ 12 0 l 2,2,3
+ 4 0 4 0 4 8 c 2,4,5
+ 4 8 4 8 4 20 c 0,6,7
+ 4 28 4 28 12 28 c 2,8,9
+ 12 28 12 28 26 28 c 1,10,-1
+ 22 24 l 1,11,12
+ 22 24 22 24 12 24 c 0,13,14
+ 8 24 8 24 8 20 c 2,15,16
+ 8 20 8 20 8 8 c 0,17,18
+ 8 4 8 4 12 4 c 2,19,20
+ 12 4 12 4 28 4 c 1,21,-1
+ 28 40 l 1,22,-1
+ 32 44 l 1,0,-1
+EndSplineSet
+Validated: 1
+EndChar
+
+StartChar: e
+Encoding: 101 101 71
+Width: 36
+GlyphClass: 2
+Flags: W
+LayerCount: 2
+Fore
+SplineSet
+24 28 m 2,0,1
+ 32 28 32 28 32 20 c 128,-1,2
+ 32 12 32 12 24 12 c 2,3,-1
+ 10 12 l 1,4,-1
+ 13 16 l 1,5,-1
+ 24 16 l 2,6,7
+ 28 16 28 16 28 20 c 128,-1,8
+ 28 24 28 24 24 24 c 2,9,-1
+ 12 24 l 2,10,11
+ 8 24 8 24 8 20 c 2,12,-1
+ 8 8 l 2,13,14
+ 8 4 8 4 12 4 c 2,15,-1
+ 28 4 l 1,16,-1
+ 24 0 l 1,17,-1
+ 12 0 l 2,18,19
+ 4 0 4 0 4 8 c 2,20,-1
+ 4 20 l 2,21,22
+ 4 28 4 28 12 28 c 2,23,-1
+ 24 28 l 2,0,1
+EndSplineSet
+Validated: 1
+EndChar
+
+StartChar: f
+Encoding: 102 102 72
+Width: 22
+GlyphClass: 2
+Flags: W
+LayerCount: 2
+Fore
+SplineSet
+10 12 m 1,0,-1
+ 13 16 l 1,1,-1
+ 18 16 l 1,2,-1
+ 15 12 l 1,3,-1
+ 10 12 l 1,0,-1
+12 44 m 2,4,-1
+ 18 44 l 1,5,-1
+ 14 40 l 1,6,-1
+ 12 40 l 2,7,8
+ 8 40 8 40 8 36 c 2,9,-1
+ 8 4 l 1,10,-1
+ 4 0 l 1,11,-1
+ 4 36 l 2,12,13
+ 4 44 4 44 12 44 c 2,4,-1
+EndSplineSet
+Validated: 1
+EndChar
+
+StartChar: g
+Encoding: 103 103 73
+Width: 36
+GlyphClass: 2
+Flags: W
+LayerCount: 2
+Fore
+SplineSet
+24 -12 m 2,0,-1
+ 8 -12 l 1,1,-1
+ 12 -8 l 1,2,3
+ 12 -8 12 -8 24 -8 c 0,4,5
+ 28 -8 28 -8 28 -4 c 2,6,7
+ 28 -4 28 -4 28 20 c 0,8,9
+ 28 24 28 24 24 24 c 2,10,11
+ 24 24 24 24 12 24 c 0,12,13
+ 8 24 8 24 8 20 c 2,14,15
+ 8 20 8 20 8 8 c 0,16,17
+ 8 4 8 4 12 4 c 2,18,19
+ 12 4 12 4 26 4 c 1,20,-1
+ 22 0 l 1,21,22
+ 22 0 22 0 12 0 c 0,23,24
+ 4 0 4 0 4 8 c 2,25,26
+ 4 8 4 8 4 20 c 0,27,28
+ 4 28 4 28 12 28 c 2,29,-1
+ 24 28 l 2,30,31
+ 32 28 32 28 32 20 c 2,32,33
+ 32 20 32 20 32 -4 c 0,34,35
+ 32 -12 32 -12 24 -12 c 2,0,-1
+EndSplineSet
+Validated: 1
+Kerns2: 76 8 "'kern' Horizontal Kerning in Latin lookup 0 subtable"
+EndChar
+
+StartChar: h
+Encoding: 104 104 74
+Width: 36
+GlyphClass: 2
+Flags: W
+LayerCount: 2
+Fore
+SplineSet
+32 20 m 2,0,1
+ 32 20 32 20 32 4 c 1,2,-1
+ 28 0 l 1,3,4
+ 28 0 28 0 28 20 c 0,5,6
+ 28 24 28 24 24 24 c 2,7,8
+ 24 24 24 24 10 24 c 1,9,-1
+ 14 28 l 1,10,11
+ 14 28 14 28 24 28 c 0,12,13
+ 32 28 32 28 32 20 c 2,0,1
+8 44 m 1,14,-1
+ 8 4 l 1,15,-1
+ 4 0 l 1,16,-1
+ 4 40 l 1,17,-1
+ 8 44 l 1,14,-1
+EndSplineSet
+Validated: 1
+EndChar
+
+StartChar: i
+Encoding: 105 105 75
+Width: 12
+GlyphClass: 2
+Flags: W
+LayerCount: 2
+Fore
+SplineSet
+4 30 m 1,0,-1
+ 4 36 l 1,1,-1
+ 8 40 l 1,2,-1
+ 8 34 l 1,3,-1
+ 4 30 l 1,0,-1
+4 0 m 1,4,-1
+ 4 24 l 1,5,-1
+ 8 28 l 1,6,-1
+ 8 4 l 1,7,-1
+ 4 0 l 1,4,-1
+EndSplineSet
+Validated: 1
+EndChar
+
+StartChar: j
+Encoding: 106 106 76
+Width: 12
+GlyphClass: 2
+Flags: W
+LayerCount: 2
+Fore
+SplineSet
+0 -8 m 2,0,1
+ 4 -8 4 -8 4 -4 c 2,2,-1
+ 4 24 l 1,3,-1
+ 8 28 l 1,4,-1
+ 8 -4 l 2,5,6
+ 8 -12 8 -12 0 -12 c 2,7,-1
+ -6 -12 l 1,8,-1
+ -2 -8 l 1,9,-1
+ 0 -8 l 2,0,1
+4 30 m 1,10,-1
+ 4 36 l 1,11,-1
+ 8 40 l 1,12,-1
+ 8 34 l 1,13,-1
+ 4 30 l 1,10,-1
+EndSplineSet
+Validated: 1
+Kerns2: 76 8 "'kern' Horizontal Kerning in Latin lookup 0 subtable"
+EndChar
+
+StartChar: k
+Encoding: 107 107 77
+Width: 36
+GlyphClass: 2
+Flags: W
+LayerCount: 2
+Fore
+SplineSet
+28 22 m 2,0,1
+ 28 18 28 18 25 15 c 128,-1,2
+ 22 12 22 12 18 12 c 2,3,-1
+ 9 12 l 1,4,-1
+ 13 16 l 1,5,-1
+ 18 16 l 2,6,7
+ 20 16 20 16 22 18 c 128,-1,8
+ 24 20 24 20 24 22 c 2,9,-1
+ 24 24 l 1,10,-1
+ 28 28 l 1,11,-1
+ 28 22 l 2,0,1
+29 11 m 2,12,13
+ 32 8 32 8 32 4 c 2,14,-1
+ 28 0 l 1,15,-1
+ 28 4 l 2,16,17
+ 28 6 28 6 26 8 c 2,18,-1
+ 24 10 l 1,19,-1
+ 27 13 l 1,20,-1
+ 29 11 l 2,12,13
+8 4 m 1,21,-1
+ 4 0 l 1,22,-1
+ 4 40 l 1,23,-1
+ 8 44 l 1,24,-1
+ 8 4 l 1,21,-1
+EndSplineSet
+Validated: 1
+EndChar
+
+StartChar: l
+Encoding: 108 108 78
+Width: 16
+GlyphClass: 2
+Flags: W
+LayerCount: 2
+Fore
+SplineSet
+16 4 m 1,0,-1
+ 12 0 l 1,1,2
+ 4 0 4 0 4 8 c 2,3,4
+ 4 8 4 8 4 40 c 1,5,-1
+ 8 44 l 1,6,7
+ 8 44 8 44 8 8 c 0,8,9
+ 8 4 8 4 12 4 c 2,10,-1
+ 16 4 l 1,0,-1
+EndSplineSet
+Validated: 1
+EndChar
+
+StartChar: m
+Encoding: 109 109 79
+Width: 36
+GlyphClass: 2
+Flags: W
+LayerCount: 2
+Fore
+SplineSet
+32 20 m 2,0,1
+ 32 20 32 20 32 4 c 1,2,-1
+ 28 0 l 1,3,4
+ 28 0 28 0 28 20 c 0,5,6
+ 28 24 28 24 24 24 c 128,-1,7
+ 20 24 20 24 20 20 c 2,8,-1
+ 20 12 l 1,9,-1
+ 16 8 l 1,10,-1
+ 16 20 l 2,11,12
+ 16 28 16 28 24 28 c 128,-1,13
+ 32 28 32 28 32 20 c 2,0,1
+12 24 m 2,14,15
+ 8 24 8 24 8 20 c 2,16,-1
+ 8 4 l 1,17,-1
+ 4 0 l 1,18,-1
+ 4 20 l 2,19,20
+ 4 28 4 28 12 28 c 2,21,-1
+ 17 28 l 1,22,-1
+ 13 24 l 1,23,-1
+ 12 24 l 2,14,15
+EndSplineSet
+Validated: 1
+EndChar
+
+StartChar: n
+Encoding: 110 110 80
+Width: 36
+GlyphClass: 2
+Flags: W
+LayerCount: 2
+Fore
+SplineSet
+24 24 m 2,0,-1
+ 8 24 l 1,1,-1
+ 8 4 l 1,2,-1
+ 4 0 l 1,3,-1
+ 4 28 l 1,4,5
+ 4 28 4 28 24 28 c 0,6,7
+ 32 28 32 28 32 20 c 2,8,9
+ 32 20 32 20 32 4 c 1,10,-1
+ 28 0 l 1,11,12
+ 28 0 28 0 28 20 c 0,13,14
+ 28 24 28 24 24 24 c 2,0,-1
+EndSplineSet
+Validated: 1
+EndChar
+
+StartChar: o
+Encoding: 111 111 81
+Width: 36
+GlyphClass: 2
+Flags: W
+LayerCount: 2
+Fore
+SplineSet
+24 4 m 0,0,1
+ 28 4 28 4 28 8 c 2,2,3
+ 28 8 28 8 28 20 c 0,4,5
+ 28 24 28 24 24 24 c 2,6,7
+ 24 24 24 24 12 24 c 0,8,9
+ 8 24 8 24 8 20 c 2,10,11
+ 8 20 8 20 8 8 c 0,12,13
+ 8 4 8 4 12 4 c 2,14,15
+ 12 4 12 4 24 4 c 0,0,1
+24 0 m 2,16,17
+ 24 0 24 0 12 0 c 0,18,19
+ 4 0 4 0 4 8 c 2,20,21
+ 4 8 4 8 4 20 c 0,22,23
+ 4 28 4 28 12 28 c 2,24,-1
+ 24 28 l 2,25,26
+ 32 28 32 28 32 20 c 2,27,28
+ 32 20 32 20 32 8 c 0,29,30
+ 32 0 32 0 24 0 c 2,16,17
+EndSplineSet
+Validated: 1
+EndChar
+
+StartChar: p
+Encoding: 112 112 82
+Width: 36
+GlyphClass: 2
+Flags: W
+LayerCount: 2
+Fore
+SplineSet
+4 -12 m 1,0,-1
+ 4 28 l 1,1,-1
+ 24 28 l 2,2,3
+ 32 28 32 28 32 20 c 2,4,5
+ 32 20 32 20 32 8 c 0,6,7
+ 32 0 32 0 24 0 c 2,8,9
+ 24 0 24 0 10 0 c 1,10,-1
+ 14 4 l 1,11,12
+ 14 4 14 4 24 4 c 0,13,14
+ 28 4 28 4 28 8 c 2,15,16
+ 28 8 28 8 28 20 c 0,17,18
+ 28 24 28 24 24 24 c 2,19,20
+ 24 24 24 24 8 24 c 1,21,-1
+ 8 -8 l 1,22,-1
+ 4 -12 l 1,0,-1
+EndSplineSet
+Validated: 1
+EndChar
+
+StartChar: q
+Encoding: 113 113 83
+Width: 36
+GlyphClass: 2
+Flags: W
+LayerCount: 2
+Fore
+SplineSet
+32 20 m 2,0,1
+ 32 20 32 20 32 -8 c 1,2,-1
+ 28 -12 l 1,3,4
+ 28 -12 28 -12 28 20 c 0,5,6
+ 28 24 28 24 24 24 c 2,7,8
+ 24 24 24 24 12 24 c 0,9,10
+ 8 24 8 24 8 20 c 2,11,12
+ 8 20 8 20 8 8 c 0,13,14
+ 8 4 8 4 12 4 c 2,15,16
+ 12 4 12 4 26 4 c 1,17,-1
+ 22 0 l 1,18,19
+ 22 0 22 0 12 0 c 0,20,21
+ 4 0 4 0 4 8 c 2,22,23
+ 4 8 4 8 4 20 c 0,24,25
+ 4 28 4 28 12 28 c 2,26,-1
+ 24 28 l 2,27,28
+ 32 28 32 28 32 20 c 2,0,1
+EndSplineSet
+Validated: 1
+Kerns2: 76 8 "'kern' Horizontal Kerning in Latin lookup 0 subtable"
+EndChar
+
+StartChar: r
+Encoding: 114 114 84
+Width: 36
+GlyphClass: 2
+Flags: W
+LayerCount: 2
+Fore
+SplineSet
+32 20 m 1,0,-1
+ 28 16 l 1,1,-1
+ 28 20 l 2,2,3
+ 28 24 28 24 24 24 c 2,4,5
+ 24 24 24 24 8 24 c 1,6,-1
+ 8 4 l 1,7,-1
+ 4 0 l 1,8,-1
+ 4 28 l 1,9,-1
+ 24 28 l 2,10,11
+ 32 28 32 28 32 20 c 1,0,-1
+EndSplineSet
+Validated: 1
+EndChar
+
+StartChar: s
+Encoding: 115 115 85
+Width: 36
+GlyphClass: 2
+Flags: W
+LayerCount: 2
+Fore
+SplineSet
+4 20 m 128,-1,1
+ 4 28 4 28 12 28 c 2,2,3
+ 12 28 12 28 32 28 c 1,4,-1
+ 28 24 l 1,5,6
+ 28 24 28 24 12 24 c 0,7,8
+ 8 24 8 24 8 20 c 128,-1,9
+ 8 16 8 16 12 16 c 2,10,-1
+ 24 16 l 2,11,12
+ 32 16 32 16 32 8 c 128,-1,13
+ 32 0 32 0 24 0 c 2,14,-1
+ 4 0 l 1,15,-1
+ 8 4 l 1,16,-1
+ 24 4 l 2,17,18
+ 28 4 28 4 28 8 c 128,-1,19
+ 28 12 28 12 24 12 c 2,20,-1
+ 12 12 l 2,21,0
+ 4 12 4 12 4 20 c 128,-1,1
+EndSplineSet
+Validated: 1
+EndChar
+
+StartChar: t
+Encoding: 116 116 86
+Width: 24
+GlyphClass: 2
+Flags: W
+LayerCount: 2
+Fore
+SplineSet
+10 28 m 1,0,-1
+ 13 32 l 1,1,-1
+ 20 32 l 1,2,-1
+ 17 28 l 1,3,-1
+ 10 28 l 1,0,-1
+16 4 m 1,4,-1
+ 12 0 l 1,5,6
+ 4 0 4 0 4 8 c 2,7,8
+ 4 8 4 8 4 36 c 1,9,-1
+ 8 40 l 1,10,11
+ 8 40 8 40 8 8 c 0,12,13
+ 8 4 8 4 12 4 c 2,14,-1
+ 16 4 l 1,4,-1
+EndSplineSet
+Validated: 1
+EndChar
+
+StartChar: u
+Encoding: 117 117 87
+Width: 36
+GlyphClass: 2
+Flags: W
+LayerCount: 2
+Fore
+SplineSet
+32 8 m 2,0,1
+ 32 0 32 0 24 0 c 2,2,-1
+ 12 0 l 2,3,4
+ 4 0 4 0 4 8 c 2,5,6
+ 4 8 4 8 4 24 c 1,7,-1
+ 8 28 l 1,8,9
+ 8 28 8 28 8 8 c 0,10,11
+ 8 4 8 4 12 4 c 2,12,13
+ 12 4 12 4 24 4 c 0,14,15
+ 28 4 28 4 28 8 c 2,16,17
+ 28 8 28 8 28 24 c 1,18,-1
+ 32 28 l 1,19,-1
+ 32 8 l 2,0,1
+EndSplineSet
+Validated: 1
+EndChar
+
+StartChar: v
+Encoding: 118 118 88
+Width: 36
+GlyphClass: 2
+Flags: W
+LayerCount: 2
+Fore
+SplineSet
+19 0 m 1,0,-1
+ 17 0 l 1,1,2
+ 17 0 17 0 7 10 c 0,3,4
+ 4 13 4 13 4 17 c 2,5,6
+ 4 17 4 17 4 24 c 1,7,-1
+ 8 28 l 1,8,9
+ 8 28 8 28 8 17 c 0,10,11
+ 8 15 8 15 10 13 c 2,12,13
+ 10 13 10 13 18 5 c 1,14,15
+ 18 5 18 5 26 13 c 0,16,17
+ 28 15 28 15 28 17 c 2,18,19
+ 28 17 28 17 28 24 c 1,20,-1
+ 32 28 l 1,21,22
+ 32 28 32 28 32 17 c 0,23,24
+ 32 13 32 13 29 10 c 2,25,26
+ 29 10 29 10 19 0 c 1,0,-1
+EndSplineSet
+Validated: 1
+EndChar
+
+StartChar: w
+Encoding: 119 119 89
+Width: 36
+GlyphClass: 2
+Flags: W
+LayerCount: 2
+Fore
+SplineSet
+4 8 m 2,0,1
+ 4 8 4 8 4 24 c 1,2,-1
+ 8 28 l 1,3,4
+ 8 28 8 28 8 8 c 0,5,6
+ 8 4 8 4 12 4 c 128,-1,7
+ 16 4 16 4 16 8 c 2,8,-1
+ 16 16 l 1,9,-1
+ 20 20 l 1,10,-1
+ 20 8 l 2,11,12
+ 20 0 20 0 12 0 c 128,-1,13
+ 4 0 4 0 4 8 c 2,0,1
+24 4 m 2,14,15
+ 28 4 28 4 28 8 c 2,16,-1
+ 28 24 l 1,17,-1
+ 32 28 l 1,18,-1
+ 32 8 l 2,19,20
+ 32 0 32 0 24 0 c 2,21,-1
+ 19 0 l 1,22,-1
+ 23 4 l 1,23,-1
+ 24 4 l 2,14,15
+EndSplineSet
+Validated: 1
+EndChar
+
+StartChar: x
+Encoding: 120 120 90
+Width: 36
+GlyphClass: 2
+Flags: W
+LayerCount: 2
+Fore
+SplineSet
+16 16 m 1024,0,-1
+10 8 m 1024,1,-1
+28 24 m 2,2,-1
+ 32 28 l 1,3,-1
+ 32 24 l 2,4,5
+ 32 20 32 20 29 17 c 2,6,-1
+ 27 15 l 2,7,8
+ 24 12 24 12 20 12 c 2,9,-1
+ 16 12 l 2,10,11
+ 14 12 14 12 12 10 c 2,12,-1
+ 10 8 l 2,13,14
+ 8 6 8 6 8 4 c 2,15,-1
+ 4 0 l 1,16,-1
+ 4 4 l 2,17,18
+ 4 8 4 8 7 11 c 2,19,-1
+ 9 13 l 2,20,21
+ 12 16 12 16 16 16 c 2,22,-1
+ 20 16 l 2,23,24
+ 22 16 22 16 24 18 c 2,25,-1
+ 26 20 l 2,26,27
+ 28 22 28 22 28 24 c 2,2,-1
+7 17 m 2,28,29
+ 4 20 4 20 4 24 c 2,30,-1
+ 8 28 l 1,31,-1
+ 8 24 l 2,32,33
+ 8 22 8 22 10 20 c 2,34,-1
+ 11 19 l 1,35,-1
+ 8 16 l 1,36,-1
+ 7 17 l 2,28,29
+26 8 m 2,37,-1
+ 25 9 l 1,38,-1
+ 28 12 l 1,39,-1
+ 29 11 l 2,40,41
+ 32 8 32 8 32 4 c 2,42,-1
+ 28 0 l 1,43,-1
+ 28 4 l 2,44,45
+ 28 6 28 6 26 8 c 2,37,-1
+EndSplineSet
+Validated: 1
+EndChar
+
+StartChar: y
+Encoding: 121 121 91
+Width: 36
+GlyphClass: 2
+Flags: W
+LayerCount: 2
+Fore
+SplineSet
+4 8 m 2,0,1
+ 4 8 4 8 4 24 c 1,2,-1
+ 8 28 l 1,3,4
+ 8 28 8 28 8 8 c 0,5,6
+ 8 4 8 4 12 4 c 2,7,8
+ 12 4 12 4 26 4 c 1,9,-1
+ 22 0 l 1,10,11
+ 22 0 22 0 12 0 c 0,12,13
+ 4 0 4 0 4 8 c 2,0,1
+32 -4 m 2,14,15
+ 32 -12 32 -12 24 -12 c 2,16,-1
+ 8 -12 l 1,17,-1
+ 12 -8 l 1,18,19
+ 12 -8 12 -8 24 -8 c 0,20,21
+ 28 -8 28 -8 28 -4 c 2,22,23
+ 28 -4 28 -4 28 24 c 1,24,-1
+ 32 28 l 1,25,-1
+ 32 -4 l 2,14,15
+EndSplineSet
+Validated: 1
+Kerns2: 76 8 "'kern' Horizontal Kerning in Latin lookup 0 subtable"
+EndChar
+
+StartChar: z
+Encoding: 122 122 92
+Width: 36
+GlyphClass: 2
+Flags: W
+LayerCount: 2
+Fore
+SplineSet
+4 24 m 1,0,-1
+ 8 28 l 1,1,-1
+ 32 28 l 1,2,-1
+ 32 21 l 1,3,-1
+ 8 5 l 1,4,-1
+ 8 4 l 1,5,-1
+ 32 4 l 1,6,-1
+ 28 0 l 1,7,-1
+ 4 0 l 1,8,-1
+ 4 7 l 1,9,-1
+ 28 23 l 1,10,-1
+ 28 24 l 1,11,-1
+ 4 24 l 1,0,-1
+EndSplineSet
+Validated: 1
+EndChar
+
+StartChar: braceleft
+Encoding: 123 123 93
+Width: 28
+GlyphClass: 2
+Flags: W
+LayerCount: 2
+Fore
+SplineSet
+20 0 m 2,0,1
+ 12 0 12 0 12 8 c 2,2,-1
+ 12 16 l 1,3,-1
+ 16 20 l 1,4,-1
+ 16 8 l 2,5,6
+ 16 4 16 4 20 4 c 2,7,-1
+ 26 4 l 1,8,-1
+ 22 0 l 1,9,-1
+ 20 0 l 2,0,1
+4 20 m 1,10,11
+ 4 20 4 20 8 24 c 0,12,13
+ 12 24 12 24 12 28 c 2,14,-1
+ 12 36 l 2,15,16
+ 12 44 12 44 20 44 c 2,17,-1
+ 26 44 l 1,18,-1
+ 22 40 l 1,19,-1
+ 20 40 l 2,20,21
+ 16 40 16 40 16 36 c 2,22,-1
+ 16 28 l 2,23,24
+ 16 20 16 20 8 20 c 2,25,-1
+ 4 20 l 1,10,11
+EndSplineSet
+Validated: 1
+EndChar
+
+StartChar: bar
+Encoding: 124 124 94
+Width: 12
+GlyphClass: 2
+Flags: W
+LayerCount: 2
+Fore
+SplineSet
+4 -12 m 1,0,-1
+ 4 48 l 1,1,-1
+ 8 52 l 1,2,-1
+ 8 -8 l 1,3,-1
+ 4 -12 l 1,0,-1
+EndSplineSet
+Validated: 1
+EndChar
+
+StartChar: braceright
+Encoding: 125 125 95
+Width: 28
+GlyphClass: 2
+Flags: W
+LayerCount: 2
+Fore
+SplineSet
+8 44 m 2,0,1
+ 16 44 16 44 16 36 c 2,2,-1
+ 16 28 l 1,3,-1
+ 12 24 l 1,4,-1
+ 12 36 l 2,5,6
+ 12 40 12 40 8 40 c 2,7,-1
+ 2 40 l 1,8,-1
+ 6 44 l 1,9,-1
+ 8 44 l 2,0,1
+24 24 m 1,10,-1
+ 20 20 l 2,11,12
+ 16 20 16 20 16 16 c 2,13,-1
+ 16 8 l 2,14,15
+ 16 0 16 0 8 0 c 2,16,-1
+ 2 0 l 1,17,-1
+ 6 4 l 1,18,-1
+ 8 4 l 2,19,20
+ 12 4 12 4 12 8 c 2,21,-1
+ 12 16 l 2,22,23
+ 12 24 12 24 20 24 c 2,24,-1
+ 24 24 l 1,10,-1
+EndSplineSet
+Validated: 1
+EndChar
+
+StartChar: asciitilde
+Encoding: 126 126 96
+Width: 52
+GlyphClass: 2
+Flags: W
+LayerCount: 2
+Fore
+SplineSet
+28 16 m 2,0,-1
+ 22 21 l 2,1,2
+ 21 22 21 22 19 22 c 128,-1,3
+ 17 22 17 22 16 21 c 0,4,5
+ 13 18 13 18 9 18 c 2,6,-1
+ 4 18 l 1,7,-1
+ 6 20 l 1,8,-1
+ 9 20 l 2,9,10
+ 12 20 12 20 14 22 c 128,-1,11
+ 16 24 16 24 19 24 c 128,-1,12
+ 22 24 22 24 24 22 c 2,13,-1
+ 30 17 l 2,14,15
+ 31 16 31 16 33 16 c 128,-1,16
+ 35 16 35 16 36 17 c 0,17,18
+ 39 20 39 20 43 20 c 2,19,-1
+ 48 20 l 1,20,-1
+ 46 18 l 1,21,-1
+ 43 18 l 2,22,23
+ 40 18 40 18 38 16 c 128,-1,24
+ 36 14 36 14 33 14 c 128,-1,25
+ 30 14 30 14 28 16 c 2,0,-1
+EndSplineSet
+Validated: 1
+Kerns2: 19 -12 "'kern' Horizontal Kerning in Latin lookup 0 subtable"
+EndChar
+
+StartChar: space
+Encoding: 32 32 97
+Width: 24
+VWidth: 0
+Flags: W
+LayerCount: 2
+Fore
+Validated: 1
+EndChar
+
+StartChar: uni00A0
+Encoding: 160 160 98
+Width: 24
+VWidth: 0
+Flags: W
+LayerCount: 2
+Fore
+Validated: 1
+EndChar
+
+StartChar: arrowright
+Encoding: 8594 8594 99
+Width: 52
+VWidth: 0
+Flags: W
+LayerCount: 2
+Fore
+SplineSet
+50 22 m 1,0,-1
+ 26 -2 l 1,1,-1
+ 22 2 l 1,2,-1
+ 22 8 l 2,3,4
+ 22 12 22 12 18 12 c 2,5,-1
+ 7 12 l 1,6,-1
+ 11 16 l 1,7,-1
+ 18 16 l 2,8,9
+ 26 16 26 16 26 8 c 2,10,-1
+ 26 4 l 1,11,-1
+ 44 22 l 1,12,-1
+ 26 40 l 1,13,-1
+ 26 36 l 2,14,15
+ 26 28 26 28 18 28 c 2,16,-1
+ 8 28 l 1,17,-1
+ 8 19 l 5,18,-1
+ 4 15 l 1,19,-1
+ 4 32 l 1,20,-1
+ 18 32 l 2,21,22
+ 22 32 22 32 22 36 c 2,23,-1
+ 22 42 l 1,24,-1
+ 26 46 l 1,25,-1
+ 50 22 l 1,0,-1
+EndSplineSet
+Validated: 1
+EndChar
+
+StartChar: arrowup
+Encoding: 8593 8593 100
+Width: 52
+VWidth: 0
+Flags: W
+LayerCount: 2
+Fore
+SplineSet
+26 40 m 1,0,-1
+ 7 22 l 1,1,-1
+ 12 22 l 2,2,3
+ 20 22 20 22 20 14 c 2,4,-1
+ 20 7 l 1,5,-1
+ 16 3 l 1,6,-1
+ 16 14 l 2,7,8
+ 16 18 16 18 12 18 c 2,9,-1
+ 6 18 l 1,10,-1
+ 2 22 l 1,11,-1
+ 26 46 l 1,12,-1
+ 50 22 l 1,13,-1
+ 46 18 l 1,14,-1
+ 40 18 l 2,15,16
+ 36 18 36 18 36 14 c 2,17,-1
+ 36 0 l 1,18,-1
+ 19 0 l 1,19,-1
+ 23 4 l 1,20,-1
+ 32 4 l 1,21,-1
+ 32 14 l 2,22,23
+ 32 22 32 22 40 22 c 2,24,-1
+ 44 22 l 1,25,-1
+ 26 40 l 1,0,-1
+EndSplineSet
+Validated: 1
+EndChar
+
+StartChar: arrowleft
+Encoding: 8592 8592 101
+Width: 52
+VWidth: 0
+Flags: W
+LayerCount: 2
+Fore
+SplineSet
+2 22 m 1,0,-1
+ 26 46 l 1,1,-1
+ 30 42 l 1,2,-1
+ 30 36 l 2,3,4
+ 30 32 30 32 34 32 c 2,5,-1
+ 45 32 l 1,6,-1
+ 41 28 l 1,7,-1
+ 34 28 l 2,8,9
+ 26 28 26 28 26 36 c 2,10,-1
+ 26 40 l 1,11,-1
+ 8 22 l 1,12,-1
+ 26 4 l 1,13,-1
+ 26 8 l 2,14,15
+ 26 16 26 16 34 16 c 2,16,-1
+ 44 16 l 1,17,-1
+ 44 25 l 1,18,-1
+ 48 29 l 1,19,-1
+ 48 12 l 1,20,-1
+ 34 12 l 2,21,22
+ 30 12 30 12 30 8 c 2,23,-1
+ 30 2 l 1,24,-1
+ 26 -2 l 1,25,-1
+ 2 22 l 1,0,-1
+EndSplineSet
+Validated: 1
+EndChar
+
+StartChar: arrowdown
+Encoding: 8595 8595 102
+Width: 52
+VWidth: 0
+Flags: W
+LayerCount: 2
+Fore
+SplineSet
+26 4 m 5,0,-1
+ 44 22 l 5,1,-1
+ 40 22 l 6,2,3
+ 32 22 32 22 32 30 c 6,4,-1
+ 32 37 l 5,5,-1
+ 36 41 l 5,6,-1
+ 36 30 l 6,7,8
+ 36 26 36 26 40 26 c 6,9,-1
+ 46 26 l 5,10,-1
+ 50 22 l 5,11,-1
+ 26 -2 l 5,12,-1
+ 2 22 l 5,13,-1
+ 6 26 l 5,14,-1
+ 12 26 l 6,15,16
+ 16 26 16 26 16 30 c 6,17,-1
+ 16 44 l 5,18,-1
+ 33 44 l 5,19,-1
+ 29 40 l 5,20,-1
+ 20 40 l 5,21,-1
+ 20 30 l 6,22,23
+ 20 22 20 22 12 22 c 6,24,-1
+ 8 22 l 5,25,-1
+ 26 4 l 5,0,-1
+EndSplineSet
+Validated: 1
+EndChar
+
+StartChar: u1F5D9
+Encoding: 128473 128473 103
+Width: 44
+VWidth: 0
+Flags: W
+LayerCount: 2
+Fore
+SplineSet
+24 16 m 1,0,-1
+ 28 20 l 1,1,-1
+ 40 8 l 1,2,-1
+ 40 4 l 1,3,-1
+ 36 4 l 1,4,-1
+ 24 16 l 1,0,-1
+4 4 m 1,5,-1
+ 4 8 l 1,6,-1
+ 36 40 l 1,7,-1
+ 40 40 l 1,8,-1
+ 40 36 l 1,9,-1
+ 8 4 l 1,10,-1
+ 4 4 l 1,5,-1
+20 28 m 1,11,-1
+ 16 24 l 1,12,-1
+ 4 36 l 1,13,-1
+ 4 40 l 1,14,-1
+ 8 40 l 1,15,-1
+ 20 28 l 1,11,-1
+EndSplineSet
+Validated: 1
+EndChar
+
+StartChar: u1F4C1
+Encoding: 128193 128193 104
+Width: 56
+VWidth: 0
+Flags: W
+LayerCount: 2
+Fore
+SplineSet
+11 28 m 9,0,-1
+ 24 28 l 2,1,2
+ 27 28 27 28 29 31 c 0,3,4
+ 32 36 32 36 37 36 c 2,5,-1
+ 44 36 l 2,6,7
+ 52 36 52 36 52 28 c 2,8,-1
+ 52 8 l 2,9,10
+ 52 0 52 0 44 0 c 2,11,-1
+ 12 0 l 2,12,13
+ 4 0 4 0 4 8 c 2,14,-1
+ 4 32 l 2,15,16
+ 4 40 4 40 12 40 c 2,17,-1
+ 23 40 l 2,18,19
+ 27 40 27 40 30 37 c 9,20,-1
+ 27 34 l 1,21,22
+ 25 36 25 36 23 36 c 2,23,-1
+ 12 36 l 2,24,25
+ 8 36 8 36 8 32 c 2,26,-1
+ 8 8 l 2,27,28
+ 8 4 8 4 12 4 c 2,29,-1
+ 44 4 l 2,30,31
+ 48 4 48 4 48 8 c 2,32,-1
+ 48 28 l 2,33,34
+ 48 32 48 32 44 32 c 2,35,-1
+ 36 32 l 2,36,37
+ 34 32 34 32 32 29 c 0,38,39
+ 29 24 29 24 24 24 c 2,40,-1
+ 11 24 l 17,41,-1
+ 11 28 l 9,0,-1
+EndSplineSet
+Validated: 1
+EndChar
+
+StartChar: u1F441
+Encoding: 128065 128065 105
+Width: 52
+VWidth: 0
+Flags: W
+LayerCount: 2
+Fore
+SplineSet
+20 20 m 1,0,-1
+ 24 24 l 1,1,-1
+ 32 24 l 1,2,-1
+ 28 20 l 1,3,-1
+ 20 20 l 1,0,-1
+10 20 m 1,4,-1
+ 13 17 l 2,5,6
+ 18 12 18 12 24 12 c 2,7,-1
+ 28 12 l 2,8,9
+ 34 12 34 12 39 17 c 2,10,-1
+ 47 25 l 1,11,-1
+ 50 22 l 1,12,-1
+ 42 14 l 2,13,14
+ 36 8 36 8 28 8 c 2,15,-1
+ 24 8 l 2,16,17
+ 16 8 16 8 10 14 c 2,18,-1
+ 7 17 l 1,19,-1
+ 10 20 l 1,4,-1
+42 24 m 1,20,-1
+ 39 27 l 2,21,22
+ 34 32 34 32 28 32 c 2,23,-1
+ 24 32 l 2,24,25
+ 18 32 18 32 13 27 c 2,26,-1
+ 5 19 l 1,27,-1
+ 2 22 l 1,28,-1
+ 10 30 l 2,29,30
+ 16 36 16 36 24 36 c 2,31,-1
+ 28 36 l 2,32,33
+ 36 36 36 36 42 30 c 2,34,-1
+ 45 27 l 1,35,-1
+ 42 24 l 1,20,-1
+EndSplineSet
+Validated: 1
+EndChar
+
+StartChar: u1F4C4
+Encoding: 128196 128196 106
+Width: 44
+VWidth: 0
+Flags: WO
+LayerCount: 2
+Fore
+SplineSet
+20 38 m 1,0,-1
+ 24 34 l 1,1,-1
+ 24 28 l 1,2,-1
+ 30 28 l 1,3,-1
+ 34 24 l 1,4,-1
+ 20 24 l 1,5,-1
+ 20 38 l 1,0,-1
+36 26 m 2,6,7
+ 36 28 36 28 34 30 c 2,8,-1
+ 26 38 l 2,9,10
+ 24 40 24 40 22 40 c 2,11,-1
+ 8 40 l 1,12,-1
+ 8 7 l 1,13,-1
+ 4 3 l 1,14,-1
+ 4 44 l 1,15,-1
+ 22 44 l 2,16,17
+ 26 44 26 44 29 41 c 2,18,-1
+ 37 33 l 2,19,20
+ 40 30 40 30 40 26 c 2,21,-1
+ 40 0 l 1,22,-1
+ 7 0 l 1,23,-1
+ 11 4 l 1,24,-1
+ 36 4 l 1,25,-1
+ 36 26 l 2,6,7
+EndSplineSet
+EndChar
+EndChars
+EndSplineFont

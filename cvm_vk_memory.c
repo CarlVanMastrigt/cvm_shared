@@ -754,7 +754,7 @@ void cvm_vk_begin_transient_buffer(cvm_vk_transient_buffer * tb,uint32_t frame_i
     atomic_store(&tb->space_remaining,tb->space_per_frame);
 }
 
-uint32_t cvm_vk_end_transient_buffer(cvm_vk_transient_buffer * tb)
+void cvm_vk_end_transient_buffer(cvm_vk_transient_buffer * tb)
 {
     uint32_t acquired_space=tb->space_per_frame-atomic_load(&tb->space_remaining);
     if(acquired_space)
