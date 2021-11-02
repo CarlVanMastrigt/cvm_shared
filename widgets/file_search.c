@@ -448,7 +448,7 @@ static void file_search_button_func(widget * w)
 
 static int file_search_button_widget_w(overlay_theme * theme)
 {
-    return 16*theme->font.max_glyph_width+2*theme->h_bar_text_offset+theme->icon_bar_extra_w;
+//    return 16*theme->font.max_glyph_width+2*theme->h_bar_text_offset+theme->icon_bar_extra_w;
 }
 
 static int file_search_button_widget_h(overlay_theme * theme)
@@ -1208,7 +1208,7 @@ static widget * file_search_filter_type_button_widget_select(overlay_theme * the
 static void file_search_filter_type_button_widget_min_w(overlay_theme * theme,widget * w)
 {
     file_search_instance * fsi=w->button.data;
-    if(fsi->show_misc_files) w->base.min_w=calculate_text_length(theme,"All Files",0);
+    if(fsi->show_misc_files) w->base.min_w=overlay_size_text_simple(&theme->font_,"All Files");//calculate_text_length(theme,"All Files",0);
     else w->base.min_w=0;
     int width;
 
@@ -1217,7 +1217,7 @@ static void file_search_filter_type_button_widget_min_w(overlay_theme * theme,wi
 
     if((types)&&(filter))while(*filter >= 0)
     {
-        width=calculate_text_length(theme,types[*filter].name,0);
+        width=overlay_size_text_simple(&theme->font_,types[*filter].name);//calculate_text_length(theme,types[*filter].name,0);
 
         if(width>w->base.min_w)w->base.min_w=width;
 
@@ -1338,7 +1338,7 @@ static void file_search_export_type_button_widget_min_w(overlay_theme * theme,wi
 
     if(formats)while(*formats)
     {
-        width=calculate_text_length(theme,*formats,0);
+        width=overlay_size_text_simple(&theme->font_,*formats);//calculate_text_length(theme,*formats,0);
 
         if(width>w->base.min_w)w->base.min_w=width;
 

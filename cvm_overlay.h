@@ -36,6 +36,39 @@ typedef enum
 }
 cvm_overlay_element_type;
 
+typedef enum
+{
+    OVERLAY_BACKGROUND_COLOUR_,
+    OVERLAY_MAIN_COLOUR_,
+    //OVERLAY_ALTERNATE_MAIN_COLOUR,
+//    OVERLAY_HIGHLIGHTING_COLOUR,
+//    OVERLAY_MAIN_HIGHLIGHTED_COLOUR,
+//    OVERLAY_MAIN_ACTIVE_COLOUR,
+//    OVERLAY_MAIN_INACTIVE_COLOUR,
+//    OVERLAY_MAIN_PROMINENT_COLOUR,
+//    OVERLAY_BORDER_COLOUR,
+
+
+//    OVERLAY_TEXT_HIGHLIGHT_COLOUR,
+    OVERLAY_TEXT_COLOUR_0_,
+//    OVERLAY_TEXT_COLOUR_1,
+//    OVERLAY_TEXT_COLOUR_2,
+//    OVERLAY_TEXT_COLOUR_3,
+//    OVERLAY_TEXT_COLOUR_4,
+//    OVERLAY_TEXT_COLOUR_5,
+//    OVERLAY_TEXT_COLOUR_6,
+//    OVERLAY_TEXT_COLOUR_7,
+
+//    OVERLAY_MISC_COLOUR_0,
+//    OVERLAY_MISC_COLOUR_1,
+//    OVERLAY_MISC_COLOUR_2,
+//    OVERLAY_MISC_COLOUR_3,
+
+    OVERLAY_NUM_COLOURS_
+}
+overlay_colour_;
+
+
 typedef struct cvm_overlay_render_data
 {
     uint16_t data0[4];///position
@@ -90,7 +123,7 @@ void terminate_overlay_render_data(void);
 void initialise_overlay_swapchain_dependencies(void);
 void terminate_overlay_swapchain_dependencies(void);
 
-cvm_vk_module_work_block * overlay_render_frame(int screen_w,int screen_h);
+cvm_vk_module_work_block * overlay_render_frame(int screen_w,int screen_h,widget * menu_widget);
 
 void overlay_frame_cleanup(uint32_t swapchain_image_index);
 
@@ -100,7 +133,8 @@ void overlay_destroy_transparent_image_tile(cvm_vk_image_atlas_tile * tile);
 cvm_vk_image_atlas_tile * overlay_create_colour_image_tile_with_staging(void ** staging,uint32_t w, uint32_t h);
 void overlay_destroy_colour_image_tile(cvm_vk_image_atlas_tile * tile);
 
-bool check_click_on_interactable_element(cvm_overlay_interactable_element * element,int x,int y);
+//bool check_click_on_interactable_element(cvm_overlay_interactable_element * element,int x,int y);
+#include "cvm_overlay_text.h"
 
 
 
@@ -243,31 +277,31 @@ typedef struct overlay_theme overlay_theme;
 
 struct overlay_theme
 {
-    char * name;
+//    char * name;
 
-    cvm_font font;
+//    cvm_font font;
 
-    overlay_sprite_data * sprite_data;
-    uint32_t sprite_count;
-    uint32_t sprite_space;
+//    overlay_sprite_data * sprite_data;
+//    uint32_t sprite_count;
+//    uint32_t sprite_space;
+//
+//    sprite_heirarchy_level shaded_sprite_levels[NUM_OVERLAY_SPRITE_LEVELS];
+//    sprite_heirarchy_level coloured_sprite_levels[NUM_OVERLAY_SPRITE_LEVELS];
 
-    sprite_heirarchy_level shaded_sprite_levels[NUM_OVERLAY_SPRITE_LEVELS];
-    sprite_heirarchy_level coloured_sprite_levels[NUM_OVERLAY_SPRITE_LEVELS];
+//    bool shaded_texture_updated;
+//    GLuint shaded_texture;
+//    uint8_t * shaded_texture_data;
+//    uint32_t shaded_texture_size;
+//    uint32_t shaded_texture_tier;
 
-    bool shaded_texture_updated;
-    GLuint shaded_texture;
-    uint8_t * shaded_texture_data;
-    uint32_t shaded_texture_size;
-    uint32_t shaded_texture_tier;
-
-    bool coloured_texture_updated;
-    GLuint coloured_texture;
-    uint8_t * coloured_texture_data;
-    uint32_t coloured_texture_size;
-    uint32_t coloured_texture_tier;
+//    bool coloured_texture_updated;
+//    GLuint coloured_texture;
+//    uint8_t * coloured_texture_data;
+//    uint32_t coloured_texture_size;
+//    uint32_t coloured_texture_tier;
 
 
-
+    cvm_overlay_font font_;
 
     int base_unit_w;
     int base_unit_h;
@@ -326,11 +360,11 @@ char * shorten_text_to_fit_width_end_ellipses(overlay_theme * theme,int width,ch
 
 
 
-overlay_theme create_overlay_theme(gl_functions * glf,uint32_t shaded_texture_size,uint32_t coloured_texture_size);///make malloced pointer
-void delete_overlay_theme(overlay_theme * theme);
-void load_font_to_overlay(gl_functions * glf,overlay_theme * theme,char * ttf_file,int size);
+//overlay_theme create_overlay_theme(gl_functions * glf,uint32_t shaded_texture_size,uint32_t coloured_texture_size);///make malloced pointer
+//void delete_overlay_theme(overlay_theme * theme);
+//void load_font_to_overlay(gl_functions * glf,overlay_theme * theme,char * ttf_file,int size);
 
-void update_theme_textures_on_videocard(gl_functions * glf,overlay_theme * theme);
+//void update_theme_textures_on_videocard(gl_functions * glf,overlay_theme * theme);
 
 
 
@@ -392,16 +426,15 @@ void render_overlay_text(overlay_data * od,overlay_theme * theme,char * text,int
 
 
 
-overlay_sprite_data create_overlay_sprite(overlay_theme * theme,char * name,int max_w,int max_h,overlay_sprite_type type);
-overlay_sprite_data get_overlay_sprite_data(overlay_theme * theme,char * name);
+//overlay_sprite_data create_overlay_sprite(overlay_theme * theme,char * name,int max_w,int max_h,overlay_sprite_type type);
+//overlay_sprite_data get_overlay_sprite_data(overlay_theme * theme,char * name);
+//
+//void set_overlay_sprite_image_data(overlay_theme * theme,overlay_sprite_data osd,uint8_t * source_data,int source_w,int w,int h,int x,int y);
+//void set_overlay_sprite_image_data_from_sdl_surface(overlay_theme * theme,overlay_sprite_data osd,SDL_Surface * surface,int w,int h,int x,int y);
+//
+//overlay_sprite_data create_overlay_sprite_from_sdl_surface(overlay_theme * theme,char * name,SDL_Surface * surface,int w,int h,int x,int y,overlay_sprite_type type);
 
-void set_overlay_sprite_image_data(overlay_theme * theme,overlay_sprite_data osd,uint8_t * source_data,int source_w,int w,int h,int x,int y);
-void set_overlay_sprite_image_data_from_sdl_surface(overlay_theme * theme,overlay_sprite_data osd,SDL_Surface * surface,int w,int h,int x,int y);
 
-overlay_sprite_data create_overlay_sprite_from_sdl_surface(overlay_theme * theme,char * name,SDL_Surface * surface,int w,int h,int x,int y,overlay_sprite_type type);
-
-
-#include "cvm_overlay_text.h"
 
 #include "themes/cubic.h"
 

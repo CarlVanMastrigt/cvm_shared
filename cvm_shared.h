@@ -48,6 +48,7 @@ along with cvm_shared.  If not, see <https://www.gnu.org/licenses/>.
 
 
 ///own headers
+typedef union widget widget;
 
 #include "cvm_math.h"
 #include "cvm_data_structures.h"

@@ -48,40 +48,40 @@ static widget_behaviour_function_set text_bar_behaviour_functions=
 
 static void text_bar_widget_render(overlay_data * od,overlay_theme * theme,widget * w,int x_off,int y_off,rectangle bounds)
 {
-    int sub_x_off=0;;
-
-    char text_buffer[256];
-    char * text_ptr=w->text_bar.text;
-    //size_t length;
-
-    if(w->text_bar.min_glyph_render_count)
-    {
-        if(w->text_bar.set_text)w->text_bar.set_text(w);
-
-        if(w->text_bar.text_alignment==WIDGET_TEXT_RIGHT_ALIGNED)
-        {
-            theme->h_text_bar_render(w->base.r,x_off,y_off,w->base.status,theme,od,bounds,OVERLAY_MAIN_COLOUR,NULL);
-
-            text_ptr=shorten_text_to_fit_width_start_ellipses(theme,w->base.r.w - 2*theme->h_bar_text_offset,w->text_bar.text,0,text_buffer,256,&sub_x_off);
-
-            render_overlay_text(od,theme,text_ptr,x_off+w->base.r.x+theme->h_bar_text_offset+sub_x_off,y_off+w->base.r.y+(w->base.r.h-theme->font.font_height)/2,bounds,0,0);
-
-            return;
-        }
-        else text_ptr=shorten_text_to_fit_width_end_ellipses(theme,w->base.r.w - 2*theme->h_bar_text_offset,w->text_bar.text,0,text_buffer,256);
-    }
-
-    theme->h_text_bar_render(w->base.r,x_off,y_off,w->base.status,theme,od,bounds,OVERLAY_MAIN_COLOUR,text_ptr);
+//    int sub_x_off=0;;
+//
+//    char text_buffer[256];
+//    char * text_ptr=w->text_bar.text;
+//    //size_t length;
+//
+//    if(w->text_bar.min_glyph_render_count)
+//    {
+//        if(w->text_bar.set_text)w->text_bar.set_text(w);
+//
+//        if(w->text_bar.text_alignment==WIDGET_TEXT_RIGHT_ALIGNED)
+//        {
+//            theme->h_text_bar_render(w->base.r,x_off,y_off,w->base.status,theme,od,bounds,OVERLAY_MAIN_COLOUR,NULL);
+//
+//            text_ptr=shorten_text_to_fit_width_start_ellipses(theme,w->base.r.w - 2*theme->h_bar_text_offset,w->text_bar.text,0,text_buffer,256,&sub_x_off);
+//
+//            render_overlay_text(od,theme,text_ptr,x_off+w->base.r.x+theme->h_bar_text_offset+sub_x_off,y_off+w->base.r.y+(w->base.r.h-theme->font.font_height)/2,bounds,0,0);
+//
+//            return;
+//        }
+//        else text_ptr=shorten_text_to_fit_width_end_ellipses(theme,w->base.r.w - 2*theme->h_bar_text_offset,w->text_bar.text,0,text_buffer,256);
+//    }
+//
+//    theme->h_text_bar_render(w->base.r,x_off,y_off,w->base.status,theme,od,bounds,OVERLAY_MAIN_COLOUR,text_ptr);
 }
 
 static void text_bar_widget_min_w(overlay_theme * theme,widget * w)
 {
-    if(w->text_bar.min_glyph_render_count) w->base.min_w = 2*theme->h_bar_text_offset + w->text_bar.min_glyph_render_count * theme->font.max_glyph_width;
-    else
-    {
-        if(w->text_bar.set_text)w->text_bar.set_text(w);
-        w->base.min_w = 2*theme->h_bar_text_offset + calculate_text_length(theme,w->text_bar.text,0);
-    }
+//    if(w->text_bar.min_glyph_render_count) w->base.min_w = 2*theme->h_bar_text_offset + w->text_bar.min_glyph_render_count * theme->font.max_glyph_width;
+//    else
+//    {
+//        if(w->text_bar.set_text)w->text_bar.set_text(w);
+//        w->base.min_w = 2*theme->h_bar_text_offset + calculate_text_length(theme,w->text_bar.text,0);
+//    }
 }
 
 static void text_bar_widget_min_h(overlay_theme * theme,widget * w)

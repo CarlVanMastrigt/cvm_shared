@@ -457,6 +457,7 @@ static inline vec4f vec4f_blend(vec4f b,vec4f f)
 
 
 
+
 static inline bool rectangles_overlap_(rectangle_ r1,rectangle_ r2)
 {
     return ((r1.x2 > r2.x1)&&(r2.x2 > r1.x1)&&(r1.y2 > r2.y1)&&(r2.y2 > r1.y1));
@@ -482,6 +483,17 @@ static inline rectangle_ rectangle_add_offset(rectangle_ r,int x,int y)
 {
     return (rectangle_){.x1=r.x1+x,.y1=r.y1+y,.x2=r.x2+x,.y2=r.y2+y};
 }
+
+static inline bool rectangle_surrounds_point_(rectangle_ r,vec2i p)
+{
+    return ((r.x1 <= p.x)&&(r.y1 <= p.y)&&(r.x2 > p.x)&&(r.y2> p.y));
+}
+
+static inline bool rectangle_surrounds_origin_(rectangle_ r)
+{
+    return ((r.x1 <= 0)&&(r.y1 <= 0)&&(r.x2 > 0)&&(r.y2> 0));
+}
+
 
 
 ///following allows piecewise conversion, delete when finished

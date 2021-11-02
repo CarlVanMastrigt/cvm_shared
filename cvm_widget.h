@@ -46,7 +46,7 @@ along with cvm_shared.  If not, see <https://www.gnu.org/licenses/>.
 #define WIDGET_POS_FLAGS        0xF0000000
 
 
-typedef union widget widget;
+//typedef union widget widget;
 
 typedef void(*widget_function)(widget*);
 

@@ -47,7 +47,7 @@ static widget * tab_button_widget_select(overlay_theme * theme,widget * w,int x_
 
 static void tab_button_widget_min_w(overlay_theme * theme,widget * w)
 {
-    if(widget_active(w->button.data))w->base.min_w = calculate_text_length(theme,w->button.text,0)+2*theme->h_bar_text_offset;
+    if(widget_active(w->button.data))w->base.min_w = overlay_size_text_simple(&theme->font_,w->button.text)+2*theme->h_bar_text_offset;//calculate_text_length(theme,w->button.text,0)+2*theme->h_bar_text_offset;
     else w->base.min_w = 0;
 }
 

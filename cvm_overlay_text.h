@@ -65,14 +65,14 @@ void cvm_overlay_destroy_font(cvm_overlay_font * font);
 
 
 ///returns the required width of a string
-int overlay_get_text_string_length(cvm_overlay_font * font,uint8_t * text);
-void overlay_render_text_simple(cvm_overlay_element_render_buffer * element_render_buffer,cvm_overlay_font * font,uint8_t * text,int x,int y,rectangle_ * bounds);
+int overlay_size_text_simple(cvm_overlay_font * font,char * text);
+void overlay_render_text_simple(cvm_overlay_element_render_buffer * element_render_buffer,cvm_overlay_font * font,char * text,int x,int y,rectangle_ * bounds);
 
 ///returns the height (in pixels) to accomodate the given string with the given wrapping width
-int overlay_get_text_box_height(cvm_overlay_font * font,uint8_t * text,int wrapping_width);
+int overlay_get_text_box_height(cvm_overlay_font * font,char * text,int wrapping_width);
 ///render complex is somewhat detached from the required height above, as complex render can handle more situations than just text boxes
 ///perhaps want to revisit this design though
-void overlay_render_text_complex(cvm_overlay_element_render_buffer * element_render_buffer,cvm_overlay_font * font,uint8_t * text,int x,int y,rectangle_ * bounds,int wrapping_width);
+void overlay_render_text_complex(cvm_overlay_element_render_buffer * element_render_buffer,cvm_overlay_font * font,char * text,int x,int y,rectangle_ * bounds,int wrapping_width);
 
 
 

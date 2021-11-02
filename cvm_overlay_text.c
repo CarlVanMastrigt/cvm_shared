@@ -226,7 +226,7 @@ static inline int cvm_overlay_get_glyph_advance(cvm_overlay_font * font,cvm_over
 
 
 
-int overlay_size_text_simple(cvm_overlay_font * font,uint8_t * text)
+int overlay_size_text_simple(cvm_overlay_font * font,char * text)
 {
     uint32_t gi,prev_gi,incr;
     FT_Vector kern;
@@ -246,7 +246,7 @@ int overlay_size_text_simple(cvm_overlay_font * font,uint8_t * text)
             continue;
         }
 
-        gi=cvm_overlay_get_utf8_glyph_index(font->face,text,&incr);
+        gi=cvm_overlay_get_utf8_glyph_index(font->face,(uint8_t*)text,&incr);
 
         g=cvm_overlay_find_glpyh(font,gi);
 
@@ -266,7 +266,7 @@ int overlay_size_text_simple(cvm_overlay_font * font,uint8_t * text)
     return w;
 }
 
-void overlay_render_text_simple(cvm_overlay_element_render_buffer * element_render_buffer,cvm_overlay_font * font,uint8_t * text,int x,int y,rectangle_ * bounds)
+void overlay_render_text_simple(cvm_overlay_element_render_buffer * element_render_buffer,cvm_overlay_font * font,char * text,int x,int y,rectangle_ * bounds)
 {
     uint32_t gi,prev_gi,incr;
     FT_Vector kern;
@@ -285,7 +285,7 @@ void overlay_render_text_simple(cvm_overlay_element_render_buffer * element_rend
             continue;
         }
 
-        gi=cvm_overlay_get_utf8_glyph_index(font->face,text,&incr);
+        gi=cvm_overlay_get_utf8_glyph_index(font->face,(uint8_t*)text,&incr);
 
         g=cvm_overlay_find_glpyh(font,gi);
 
@@ -307,7 +307,7 @@ void overlay_render_text_simple(cvm_overlay_element_render_buffer * element_rend
             if((rectangle_has_positive_area(rr))) element_render_buffer->buffer[element_render_buffer->count++]=(cvm_overlay_render_data)
             {
                 {rr.x1,rr.y1,rr.x2,rr.y2},
-                {CVM_OVERLAY_ELEMENT_SHADED,(g->tile->x_pos<<2)+rr.x1-rb.x1,(g->tile->y_pos<<2)+rr.y1-rb.y1,83},
+                {CVM_OVERLAY_ELEMENT_SHADED<<12|OVERLAY_TEXT_COLOUR_0_&0x0FFF,(g->tile->x_pos<<2)+rr.x1-rb.x1,(g->tile->y_pos<<2)+rr.y1-rb.y1,83},
             };
         }
 
@@ -318,11 +318,11 @@ void overlay_render_text_simple(cvm_overlay_element_render_buffer * element_rend
 }
 
 
-int overlay_get_text_box_height(cvm_overlay_font * font,uint8_t * text,int wrapping_width)
+int overlay_get_text_box_height(cvm_overlay_font * font,char * text,int wrapping_width)
 {
     uint32_t gi,prev_gi,incr;
     int w,h;
-    uint8_t * word_start;
+    char * word_start;
     bool line_start=true;
     FT_Vector kern;
 
@@ -357,7 +357,7 @@ int overlay_get_text_box_height(cvm_overlay_font * font,uint8_t * text,int wrapp
             continue;
         }
 
-        gi=cvm_overlay_get_utf8_glyph_index(font->face,text,&incr);
+        gi=cvm_overlay_get_utf8_glyph_index(font->face,(uint8_t*)text,&incr);
 
         g=cvm_overlay_find_glpyh(font,gi);
 
@@ -400,11 +400,11 @@ int overlay_get_text_box_height(cvm_overlay_font * font,uint8_t * text,int wrapp
     return h;
 }
 /// complex allows variant word wrapping/ compression with front to back or back to front ellipses, as well as colour changing text, up to 10 variant colours (0-9)
-void overlay_render_text_complex(cvm_overlay_element_render_buffer * element_render_buffer,cvm_overlay_font * font,uint8_t * text,int x,int y,rectangle_ * bounds,int wrapping_width)
+void overlay_render_text_complex(cvm_overlay_element_render_buffer * element_render_buffer,cvm_overlay_font * font,char * text,int x,int y,rectangle_ * bounds,int wrapping_width)
 {
     uint32_t gi,prev_gi,incr;
     int s_x;
-    uint8_t * word_start;
+    char * word_start;
     uint32_t word_start_element_count;
     bool line_start=true;
     bool rendered_this_glyph;
@@ -443,7 +443,7 @@ void overlay_render_text_complex(cvm_overlay_element_render_buffer * element_ren
             continue;
         }
 
-        gi=cvm_overlay_get_utf8_glyph_index(font->face,text,&incr);
+        gi=cvm_overlay_get_utf8_glyph_index(font->face,(uint8_t*)text,&incr);
 
         g=cvm_overlay_find_glpyh(font,gi);
 
@@ -466,7 +466,7 @@ void overlay_render_text_complex(cvm_overlay_element_render_buffer * element_ren
             if((rendered_this_glyph=rectangle_has_positive_area(rr))) element_render_buffer->buffer[element_render_buffer->count++]=(cvm_overlay_render_data)
             {
                 {rr.x1,rr.y1,rr.x2,rr.y2},
-                {CVM_OVERLAY_ELEMENT_SHADED,(g->tile->x_pos<<2)+rr.x1-rb.x1,(g->tile->y_pos<<2)+rr.y1-rb.y1,83},
+                {CVM_OVERLAY_ELEMENT_SHADED<<12|OVERLAY_TEXT_COLOUR_0_&0x0FFF,(g->tile->x_pos<<2)+rr.x1-rb.x1,(g->tile->y_pos<<2)+rr.y1-rb.y1,83},
             };
         }
 

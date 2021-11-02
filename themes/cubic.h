@@ -24,7 +24,7 @@ along with cvm_shared.  If not, see <https://www.gnu.org/licenses/>.
 #ifndef CUBIC_THEME_H
 #define CUBIC_THEME_H
 
-void initialise_cubic_theme(gl_functions * glf,overlay_theme * theme);
+void initialise_cubic_theme(overlay_theme * theme);
 void destroy_cubic_theme(overlay_theme * theme);
 
 #endif

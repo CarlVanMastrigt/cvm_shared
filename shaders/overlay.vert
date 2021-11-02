@@ -9,7 +9,7 @@ layout(location=0) flat out uvec4 d0;
 layout(location=1) flat out uvec4 d1;
 //layout(location=2) flat out uvec4 d2;
 
-layout(location=3) out vec4 c_out;
+//layout(location=3) out vec4 c_out;
 
 layout (push_constant) uniform screen_dimensions
 {
@@ -33,5 +33,5 @@ void main()
     d1=data1;
     //d2=data2;
 
-    c_out=vec4(0.2,0.3,0.7,0.8);
+    //c_out=vec4(0.2,0.3,0.7,0.8);
 }

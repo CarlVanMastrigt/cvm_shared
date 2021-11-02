@@ -166,7 +166,7 @@ static widget * text_button_widget_select(overlay_theme * theme,widget * w,int x
 
 static void text_button_widget_min_w(overlay_theme * theme,widget * w)
 {
-    w->base.min_w = calculate_text_length(theme,w->button.text,0);
+    w->base.min_w = overlay_size_text_simple(&theme->font_,w->button.text);//calculate_text_length(theme,w->button.text,0);
 
 	if((w->button.variant_text)&&(w->button.toggle_status))
     {
@@ -174,7 +174,7 @@ static void text_button_widget_min_w(overlay_theme * theme,widget * w)
         while(*t)t++;
         t++;
 
-        int min_w=calculate_text_length(theme,t,0);
+        int min_w=overlay_size_text_simple(&theme->font_,t);//calculate_text_length(theme,t,0);
         if(min_w>w->base.min_w)w->base.min_w=min_w;
     }
 

@@ -131,76 +131,76 @@ static void enterbox_input_text(widget * w,char * in)
 
 static void enterbox_check_visible_offset(widget * w,overlay_theme * theme)
 {
-    int i,text_length,caret_offset=0,e=w->enterbox.selection_end;
-    char prev=0;
-
-    cvm_font * font= &theme->font;
-    char * text=w->enterbox.text;
-
-    int side_space=2*theme->h_bar_text_offset;
-
-    text_length=calculate_text_length(theme,text,0);
-    if((text_length+1)<(w->base.r.w-side_space))///+1 for caret
-    {
-        w->enterbox.visible_offset=0;
-        return;
-    }
-
-    if((text_length-w->enterbox.visible_offset)<(w->base.r.w-side_space-1))///1 extra for caret
-    {
-        w->enterbox.visible_offset=text_length-w->base.r.w+side_space+1;///1 extra for caret
-    }
-
-    for(i=0;text[i];i++)
-    {
-        if(i==e)
-        {
-            break;
-        }
-        caret_offset=get_new_text_offset(font,prev,text[i],caret_offset);
-        prev=text[i];
-        ///combine calculate text  length with this
-    }
-
-    if(caret_offset<w->enterbox.visible_offset)
-    {
-        w->enterbox.visible_offset=caret_offset;
-    }
-
-    if(caret_offset>=(w->enterbox.visible_offset+w->base.r.w-side_space))
-    {
-        w->enterbox.visible_offset=caret_offset-w->base.r.w+side_space+1;///caret is 1 wide ergo 1 extra space
-    }
-
-    if(w->enterbox.visible_offset<0)
-    {
-        w->enterbox.visible_offset=0;
-    }
+//    int i,text_length,caret_offset=0,e=w->enterbox.selection_end;
+//    char prev=0;
+//
+//    cvm_font * font= &theme->font;
+//    char * text=w->enterbox.text;
+//
+//    int side_space=2*theme->h_bar_text_offset;
+//
+//    text_length=calculate_text_length(theme,text,0);
+//    if((text_length+1)<(w->base.r.w-side_space))///+1 for caret
+//    {
+//        w->enterbox.visible_offset=0;
+//        return;
+//    }
+//
+//    if((text_length-w->enterbox.visible_offset)<(w->base.r.w-side_space-1))///1 extra for caret
+//    {
+//        w->enterbox.visible_offset=text_length-w->base.r.w+side_space+1;///1 extra for caret
+//    }
+//
+//    for(i=0;text[i];i++)
+//    {
+//        if(i==e)
+//        {
+//            break;
+//        }
+//        caret_offset=get_new_text_offset(font,prev,text[i],caret_offset);
+//        prev=text[i];
+//        ///combine calculate text  length with this
+//    }
+//
+//    if(caret_offset<w->enterbox.visible_offset)
+//    {
+//        w->enterbox.visible_offset=caret_offset;
+//    }
+//
+//    if(caret_offset>=(w->enterbox.visible_offset+w->base.r.w-side_space))
+//    {
+//        w->enterbox.visible_offset=caret_offset-w->base.r.w+side_space+1;///caret is 1 wide ergo 1 extra space
+//    }
+//
+//    if(w->enterbox.visible_offset<0)
+//    {
+//        w->enterbox.visible_offset=0;
+//    }
 }
 
 static int find_enterbox_character_index_from_position(overlay_theme * theme,widget * w,int mouse_x,int mouse_y)
 {
-    adjust_coordinates_to_widget_local(w,&mouse_x,&mouse_y);
-
-    int i,x=theme->h_bar_text_offset-w->enterbox.visible_offset;
-    //mouse_x-= //w->enterbox.text_x_offset;
-    char prev=0;
-
-    cvm_font * font= &theme->font;
-    char * text=w->enterbox.text;
-
-    for(i=0;text[i];i++)
-    {
-        x=get_new_text_offset(font,prev,text[i],x);
-        prev=text[i];
-
-        if(x>=mouse_x)
-        {
-            break;
-        }
-    }
-
-    return i;
+//    adjust_coordinates_to_widget_local(w,&mouse_x,&mouse_y);
+//
+//    int i,x=theme->h_bar_text_offset-w->enterbox.visible_offset;
+//    //mouse_x-= //w->enterbox.text_x_offset;
+//    char prev=0;
+//
+//    cvm_font * font= &theme->font;
+//    char * text=w->enterbox.text;
+//
+//    for(i=0;text[i];i++)
+//    {
+//        x=get_new_text_offset(font,prev,text[i],x);
+//        prev=text[i];
+//
+//        if(x>=mouse_x)
+//        {
+//            break;
+//        }
+//    }
+//
+//    return i;
 }
 
 static bool enterbox_key_actions(overlay_theme * theme,widget * w,SDL_Keycode keycode)
@@ -454,66 +454,66 @@ static widget_behaviour_function_set enterbox_behaviour_functions=
 
 static void render_enterbox_text_highlighting(overlay_data * od,overlay_theme * theme,widget * w,int x_off,int y_off,rectangle bounds,int font_index)
 {
-    if(!is_currently_active_widget(w))return;
-
-    int i;
-
-    cvm_font * font= &theme->font;
-    char * text=w->enterbox.text;
-
-    int x1,x2;
-    bool highlighting=false;
-
-    int sb=w->enterbox.selection_begin;
-    int se=w->enterbox.selection_end;
-
-    int x=0;
-    char prev=0;
-
-    x1=x2=0;
-
-
-    if(sb==se)
-    {
-        for(i=0;text[i];i++)
-        {
-            if((i==sb))
-            {
-                break;
-            }
-
-            x=get_new_text_offset(font,prev,text[i],x);
-            prev=text[i];
-        }
-
-        render_rectangle(od,(rectangle){.x=x+x_off,.y=y_off,.w=1,.h=theme->font.font_height},bounds,OVERLAY_TEXT_COLOUR_0);
-    }
-    else
-    {
-        for(i=0;text[i];i++)
-        {
-            if((i==sb)||(i==se))
-            {
-                if(highlighting)
-                {
-                    x2=x;
-                    highlighting=false;
-                }
-                else
-                {
-                    x1=x;
-                    highlighting=true;
-                }
-            }
-
-            x=get_new_text_offset(font,prev,text[i],x);
-            prev=text[i];
-        }
-
-        if(highlighting)x2=x;
-
-        render_rectangle(od,(rectangle){.x=x1+x_off,.y=y_off,.w=x2-x1,.h=theme->font.font_height},bounds,OVERLAY_TEXT_HIGHLIGHT_COLOUR);
-    }
+//    if(!is_currently_active_widget(w))return;
+//
+//    int i;
+//
+//    cvm_font * font= &theme->font;
+//    char * text=w->enterbox.text;
+//
+//    int x1,x2;
+//    bool highlighting=false;
+//
+//    int sb=w->enterbox.selection_begin;
+//    int se=w->enterbox.selection_end;
+//
+//    int x=0;
+//    char prev=0;
+//
+//    x1=x2=0;
+//
+//
+//    if(sb==se)
+//    {
+//        for(i=0;text[i];i++)
+//        {
+//            if((i==sb))
+//            {
+//                break;
+//            }
+//
+//            x=get_new_text_offset(font,prev,text[i],x);
+//            prev=text[i];
+//        }
+//
+//        render_rectangle(od,(rectangle){.x=x+x_off,.y=y_off,.w=1,.h=theme->font.font_height},bounds,OVERLAY_TEXT_COLOUR_0);
+//    }
+//    else
+//    {
+//        for(i=0;text[i];i++)
+//        {
+//            if((i==sb)||(i==se))
+//            {
+//                if(highlighting)
+//                {
+//                    x2=x;
+//                    highlighting=false;
+//                }
+//                else
+//                {
+//                    x1=x;
+//                    highlighting=true;
+//                }
+//            }
+//
+//            x=get_new_text_offset(font,prev,text[i],x);
+//            prev=text[i];
+//        }
+//
+//        if(highlighting)x2=x;
+//
+//        render_rectangle(od,(rectangle){.x=x1+x_off,.y=y_off,.w=x2-x1,.h=theme->font.font_height},bounds,OVERLAY_TEXT_HIGHLIGHT_COLOUR);
+//    }
 }
 
 
@@ -529,33 +529,33 @@ static void render_enterbox_text_highlighting(overlay_data * od,overlay_theme * 
 
 static void enterbox_widget_render(overlay_data * od,overlay_theme * theme,widget * w,int x_off,int y_off,rectangle bounds)
 {
-	theme->h_text_bar_render(w->base.r,x_off,y_off,w->base.status,theme,od,bounds,OVERLAY_MAIN_COLOUR,NULL);
-
-    y_off+=w->base.r.y+(w->base.r.h-theme->font.font_height)/2;
-    x_off+=w->base.r.x+theme->h_bar_text_offset;
-    get_rectangle_overlap(&bounds,(rectangle){.x=x_off,.y=y_off,.w=w->base.r.w-2*theme->h_bar_text_offset,.h=theme->font.font_height});
-
-    x_off-=w->enterbox.visible_offset;
-
-    render_overlay_text(od,theme,w->enterbox.text,x_off,y_off,bounds,0,0);
-	render_enterbox_text_highlighting(od,theme,w,x_off,y_off,bounds,0);
+//	theme->h_text_bar_render(w->base.r,x_off,y_off,w->base.status,theme,od,bounds,OVERLAY_MAIN_COLOUR,NULL);
+//
+//    y_off+=w->base.r.y+(w->base.r.h-theme->font.font_height)/2;
+//    x_off+=w->base.r.x+theme->h_bar_text_offset;
+//    get_rectangle_overlap(&bounds,(rectangle){.x=x_off,.y=y_off,.w=w->base.r.w-2*theme->h_bar_text_offset,.h=theme->font.font_height});
+//
+//    x_off-=w->enterbox.visible_offset;
+//
+//    render_overlay_text(od,theme,w->enterbox.text,x_off,y_off,bounds,0,0);
+//	render_enterbox_text_highlighting(od,theme,w,x_off,y_off,bounds,0);
 }
 
 static widget * enterbox_widget_select(overlay_theme * theme,widget * w,int x_in,int y_in)
 {
-    if(theme->h_bar_select(w->base.r,x_in,y_in,w->base.status,theme))return w;
+//    if(theme->h_bar_select(w->base.r,x_in,y_in,w->base.status,theme))return w;
 
     return NULL;
 }
 
 static void enterbox_widget_min_w(overlay_theme * theme,widget * w)
 {
-    w->base.min_w = 2*theme->h_bar_text_offset+theme->font.max_glyph_width*w->enterbox.text_min_visible+1;///+1 for caret, only necessary when bearingX is 0
+//    w->base.min_w = 2*theme->h_bar_text_offset+theme->font.max_glyph_width*w->enterbox.text_min_visible+1;///+1 for caret, only necessary when bearingX is 0
 }
 
 static void enterbox_widget_min_h(overlay_theme * theme,widget * w)
 {
-    w->base.min_h = theme->base_unit_h;
+//    w->base.min_h = theme->base_unit_h;
 }
 
 
@@ -577,26 +577,26 @@ widget * create_enterbox(int text_max_length,int text_min_visible,char * initial
 {
 	widget * w=create_widget(ENTERBOX_WIDGET);
 
-	w->enterbox.data=data;
-	w->enterbox.func=func;
-
-	w->enterbox.text_max_length=text_max_length;
-	w->enterbox.text_min_visible=text_min_visible;
-
-	w->enterbox.text=malloc(text_max_length+1);
-	w->enterbox.upon_input=NULL;
-
-    w->enterbox.activate_upon_deselect=activate_upon_deselect;
-	w->enterbox.free_data=free_data;
-
-	#warning remove next lines
-	int i;
-	for(i=0;i<text_max_length;i++)w->enterbox.text[i]='x';
-
-	set_enterbox_text(w,initial_text);
-
-	w->base.appearence_functions=&enterbox_appearence_functions;
-	w->base.behaviour_functions=&enterbox_behaviour_functions;
+//	w->enterbox.data=data;
+//	w->enterbox.func=func;
+//
+//	w->enterbox.text_max_length=text_max_length;
+//	w->enterbox.text_min_visible=text_min_visible;
+//
+//	w->enterbox.text=malloc(text_max_length+1);
+//	w->enterbox.upon_input=NULL;
+//
+//    w->enterbox.activate_upon_deselect=activate_upon_deselect;
+//	w->enterbox.free_data=free_data;
+//
+//	#warning remove next lines
+//	int i;
+//	for(i=0;i<text_max_length;i++)w->enterbox.text[i]='x';
+//
+//	set_enterbox_text(w,initial_text);
+//
+//	w->base.appearence_functions=&enterbox_appearence_functions;
+//	w->base.behaviour_functions=&enterbox_behaviour_functions;
 
 	return w;
 }
@@ -606,29 +606,29 @@ widget * create_enterbox(int text_max_length,int text_min_visible,char * initial
 
 void set_enterbox_text(widget * w,char * text)
 {
-    if(text==NULL) w->enterbox.text[0]='\0';
-    else strncpy(w->enterbox.text,text,w->enterbox.text_max_length);
-    w->enterbox.text[w->enterbox.text_max_length]='\0';
-    w->enterbox.visible_offset=0;
-    w->enterbox.selection_begin=0;
-    w->enterbox.selection_end=0;
+//    if(text==NULL) w->enterbox.text[0]='\0';
+//    else strncpy(w->enterbox.text,text,w->enterbox.text_max_length);
+//    w->enterbox.text[w->enterbox.text_max_length]='\0';
+//    w->enterbox.visible_offset=0;
+//    w->enterbox.selection_begin=0;
+//    w->enterbox.selection_end=0;
 }
 
 void set_enterbox_text_using_int(widget * w,int v)
 {
-    char buffer[16];
-    snprintf(buffer,16,"%d",v);
-    set_enterbox_text(w,buffer);
+//    char buffer[16];
+//    snprintf(buffer,16,"%d",v);
+//    set_enterbox_text(w,buffer);
 }
 
 int get_int_from_enterbox_text(widget * w)
 {
-    int r;
-    sscanf(w->enterbox.text,"%d",&r);
-    return r;
+//    int r;
+//    sscanf(w->enterbox.text,"%d",&r);
+//    return r;
 }
 
 void set_enterbox_action_upon_input(widget * w,widget_function func)
 {
-    w->enterbox.upon_input=func;
+//    w->enterbox.upon_input=func;
 }
