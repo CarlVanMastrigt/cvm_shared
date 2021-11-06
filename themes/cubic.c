@@ -22,71 +22,9 @@ along with cvm_shared.  If not, see <https://www.gnu.org/licenses/>.
 /// how to handle non font "glyphs"? diy and actually use utf8 glyphs?
 /// need way to render misc shapes (cubic parts here) dynamically, possibly just ensure they exist and create when necessary every frame? (is kind-of expensive, but may be best way)
 
-//static overlay_sprite_data foreground_shape_sprite;
-//static overlay_sprite_data background_shape_sprite;
-//static overlay_sprite_data foreground_border_sprite;
-//static overlay_sprite_data small_foreground_shape_sprite;
-//
-//static const int cubic_sprite_buffer_size=256;
-//
-//static int set_cubic_shaded_sprite_data(uint8_t * buffer,int outer_r_x4,int inner_r_x4,int offset_x4,bool clear)
-//{
-//    int i,j,k,x,y,d,r,ri,ro;///
-//
-//    d=((offset_x4+3)/4)*2;///diameter in pixels
-//    ri=inner_r_x4*inner_r_x4*inner_r_x4*8;///adjusted diameters for comparison (double to allow mid pixel testing)
-//    ro=outer_r_x4*outer_r_x4*outer_r_x4*8;
-//
-//    if(clear) for(i=0;i<d;i++) memset(buffer+i*cubic_sprite_buffer_size,0,d*sizeof(uint8_t));
-//
-//    for(i=-outer_r_x4;i<outer_r_x4;i++)
-//    {
-//        x=2*i+1;
-//        for(j=-outer_r_x4;j<outer_r_x4;j++)
-//        {
-//            y=2*j+1;
-//            r=abs(x*x*x)+abs(y*y*y);
-//            if((r<ro)&&(r>=ri))
-//            {
-//                ///each pixel is a 4x4 grid of tests,16 samples ergo 16 should be added to reach 256, with first addition being 15 to reach 255
-//                k=(i+offset_x4)/4 + cubic_sprite_buffer_size*((j+offset_x4)/4);
-//                if(buffer[k]) buffer[k]+=16;
-//                else buffer[k]+=15;
-//            }
-//        }
-//    }
-//
-//    return d;
-//}
-//
-//static overlay_sprite_data create_cubic_shaded_sprite(overlay_theme * theme,uint8_t * buffer,char * name,int outer_r_x4,int inner_r_x4)
-//{
-//    overlay_sprite_data osd;
-//    int d;
-//
-//    d=set_cubic_shaded_sprite_data(buffer,outer_r_x4,inner_r_x4,outer_r_x4,true);
-//
-//    osd=create_overlay_sprite(theme,name,d,d,OVERLAY_SHADED_SPRITE);
-//    set_overlay_sprite_image_data(theme,osd,buffer,cubic_sprite_buffer_size,d,d,0,0);
-//
-//    return osd;
-//}
 
 
-
-
-
-
-#warning move these into theme as misc. theme dependent data???
-static cvm_overlay_interactable_element cubic_large_shape;
-static cvm_overlay_interactable_element cubic_medium_shape;
-static int cubic_medium_offset_x=2;
-static int cubic_medium_offset_y=1;
-static int cubic_medium_w=20;
-static int cubic_medium_h=20;
-//static cvm_overlay_interactable_element cubic_small_shape;
-
-
+/// "ring" (internal and external limit) variant
 //static void cubic_create_shape(cvm_overlay_interactable_element * element,uint32_t ri,uint32_t ro)///change ri & r0 as 16ths of a pixel??
 //{
 //    uint32_t i,r,threshold,r4,x,y,xc,yc,xm,ym,t,r_min,r_max,rom,rim;
@@ -180,11 +118,11 @@ static int cubic_medium_h=20;
 //}
 
 
-static void cubic_create_shape(cvm_overlay_interactable_element * element,uint32_t r)///change ri & r0 as 16ths of a pixel??
+static void cubic_create_shape(cvm_vk_image_atlas_tile ** tile,uint16_t ** selection_grid,uint32_t r)///change ri & r0 as 16ths of a pixel??
 {
     uint32_t i,rt,threshold,x,y,xc,yc,xm,ym,t,rm;
-    uint8_t *data;
-    int fff=0;
+    uint8_t * data;
+    uint16_t * grid;
 
     if(r>40)
     {
@@ -192,9 +130,9 @@ static void cubic_create_shape(cvm_overlay_interactable_element * element,uint32
         exit(-1);
     }
 
-    element->tile=overlay_create_transparent_image_tile_with_staging((void*)(&data),r*2,r*2);
+    *tile=overlay_create_transparent_image_tile_with_staging((void*)(&data),r*2,r*2);
 
-    if(element->tile)
+    if(*tile)
     {
         threshold=64;
 
@@ -202,10 +140,7 @@ static void cubic_create_shape(cvm_overlay_interactable_element * element,uint32
 
         rm=rt*32768;///32^3
 
-        element->selection_grid=calloc((r*r+3)>>2,sizeof(uint16_t));///r*2*r*2/16 == r*r/4 == r*r>>2, but round up
-
-        element->w=r*2;
-        element->h=r*2;
+        *selection_grid=grid=calloc((r*r+3)>>2,sizeof(uint16_t));///r*2*r*2/16 == r*r/4 == r*r>>2, but round up
 
         for(x=0;x<r;x++)
         {
@@ -225,87 +160,89 @@ static void cubic_create_shape(cvm_overlay_interactable_element * element,uint32
 
                 i=(r+y)*r*2+(r+x);
                 data[i]=t;
-                element->selection_grid[i>>4]|=(t>threshold)<<(i&0x0F);
+                grid[i>>4]|=(t>threshold)<<(i&0x0F);
 
                 i=(r+y)*r*2+(r-x-1);
                 data[i]=t;
-                element->selection_grid[i>>4]|=(t>threshold)<<(i&0x0F);
+                grid[i>>4]|=(t>threshold)<<(i&0x0F);
 
                 i=(r-y-1)*r*2+(r+x);
                 data[i]=t;
-                element->selection_grid[i>>4]|=(t>threshold)<<(i&0x0F);
+                grid[i>>4]|=(t>threshold)<<(i&0x0F);
 
                 i=(r-y-1)*r*2+(r-x-1);
                 data[i]=t;
-                element->selection_grid[i>>4]|=(t>threshold)<<(i&0x0F);
+                grid[i>>4]|=(t>threshold)<<(i&0x0F);
             }
         }
     }
 }
 
-bool cubic_square_select(rectangle r,int x_in,int y_in,uint32_t status,overlay_theme * theme)
+bool cubic_square_select(rectangle_ r,uint32_t status,overlay_theme * theme)
 {
-    //if(!cubic_medium_shape.selection_grid)return false;
+    int i,x,y;
+    cubic_theme_data * cubic;
 
-    rectangle_ r_=rectangle_new_conversion(r);
-    uint32_t i;
+    cubic=theme->other_data;
 
-    x_in-=(r_.x1+r_.x2-cubic_medium_w)>>1;
-    y_in-=(r_.y1+r_.y2-cubic_medium_h)>>1;
-
-    if((x_in>=0)&&(y_in>=0)&&(x_in<cubic_medium_w)&&(y_in<cubic_medium_h))
+    if(cubic->foreground_selection_grid)
     {
-        i=y_in*cubic_medium_w+x_in;
-		if(cubic_medium_shape.selection_grid[i>>4] & (1<<(i&0x0F))) return true;
+        x= (cubic->foreground_d-r.x1-r.x2)>>1;
+        y= (cubic->foreground_d-r.y1-r.y2)>>1;
+
+        if((x>=0)&&(y>=0)&&(x<cubic->foreground_d)&&(y<cubic->foreground_d))
+        {
+            i=y*cubic->foreground_d+x;
+            if(cubic->foreground_selection_grid[i>>4] & (1<<(i&0x0F))) return true;
+        }
     }
 
     return false;
 }
 
-bool cubic_h_bar_select(rectangle r,int x_in,int y_in,uint32_t status,overlay_theme * theme)
+bool cubic_h_bar_select(rectangle_ r,uint32_t status,overlay_theme * theme)
 {
-    //if(!cubic_medium_shape.selection_grid)return false;
+    int i,y,x;
+    cubic_theme_data * cubic;
 
-    uint32_t i;
-    rectangle_ r_=rectangle_new_conversion(r);
+    cubic=theme->other_data;
 
-    y_in-=(r_.y1+r_.y2-cubic_medium_h)>>1;
+    if(!cubic->foreground_selection_grid)return false;
 
-    if(y_in<0 || y_in>=cubic_medium_h)return false;
+    y=(cubic->foreground_d-r.y1-r.y2)>>1;
 
-    r_.x1-=x_in;
-    r_.x2-=x_in;
+    if(y<0 || y>=cubic->foreground_d)return false;
 
     if(!(status&WIDGET_H_FIRST))///not the first
     {
-        x_in= -r_.x1-cubic_medium_offset_x;
+        x= -r.x1-cubic->foreground_offset_x;
 
-        if(x_in>=0 && x_in<cubic_medium_w>>1)
+        if(x>=0 && x<cubic->foreground_r)
         {
-            i=y_in*cubic_medium_w+x_in;
-            if(cubic_medium_shape.selection_grid[i>>4] & (1<<(i&0x0F))) return true;
+            i=y*cubic->foreground_d+x;
+            if(cubic->foreground_selection_grid[i>>4] & (1<<(i&0x0F))) return true;
         }
 
-        r_.x1+=cubic_medium_offset_x+(cubic_medium_w>>1);
+        r.x1+=cubic->foreground_offset_x+cubic->foreground_r;
     }
 
     if(!(status&WIDGET_H_LAST))///not the last
     {
-        x_in= cubic_medium_w+cubic_medium_offset_x-r_.x2;
+        x= cubic->foreground_d+cubic->foreground_offset_x-r.x2;
 
-        if(x_in>=cubic_medium_w>>1 && x_in<cubic_medium_w)
+        if(x>=cubic->foreground_r && x<cubic->foreground_d)
         {
-            i=y_in*cubic_medium_w+x_in;
-            if(cubic_medium_shape.selection_grid[i>>4] & (1<<(i&0x0F))) return true;
+            i=y*cubic->foreground_d+x;
+            if(cubic->foreground_selection_grid[i>>4] & (1<<(i&0x0F))) return true;
         }
 
-        r_.x2-=cubic_medium_offset_x+(cubic_medium_w>>1);
+        r.x2-=cubic->foreground_offset_x+cubic->foreground_r;
     }
 
-    return r_.x1<=0 && r_.x2>0;
+    return r.x1<=0 && r.x2>0;
 }
 
-bool cubic_v_bar_select(rectangle r,int x_in,int y_in,uint32_t status,overlay_theme * theme)
+bool cubic_v_bar_select(rectangle_ r,uint32_t status,overlay_theme * theme)
 {
 //    r.x+=(r.w-20)/2-x_in;
 //    r.y+=12-y_in;
@@ -317,7 +254,7 @@ bool cubic_v_bar_select(rectangle r,int x_in,int y_in,uint32_t status,overlay_th
 //    return rectangle_surrounds_origin(r);
 }
 
-bool cubic_box_select(rectangle r,int x_in,int y_in,uint32_t status,overlay_theme * theme)
+bool cubic_box_select(rectangle_ r,uint32_t status,overlay_theme * theme)
 {
 //    r.x-=x_in;
 //    r.y+=1-y_in;
@@ -345,209 +282,225 @@ bool cubic_box_select(rectangle r,int x_in,int y_in,uint32_t status,overlay_them
 //    return rectangle_surrounds_origin(r);
 }
 
-bool cubic_panel_select(rectangle r,int x_in,int y_in,uint32_t status,overlay_theme * theme)
+bool cubic_panel_select(rectangle_ r,uint32_t status,overlay_theme * theme)
 {
-//    rectangle r2;
-//    r.x-=x_in;
-//    r.y-=y_in;
-//
-//    if(!(status&WIDGET_H_FIRST))
-//    {
-//        r2=r;
-//        r2.w=14;
-//
-//        r.x+=14;
-//        r.w-=14;
-//
-//        if(!(status&WIDGET_V_FIRST))
-//        {
-//            if(check_click_on_shaded_sprite(theme,(rectangle){.x=r2.x,.y=r2.y,.w=14,.h=14},background_shape_sprite.x_pos,background_shape_sprite.y_pos))return true;
-//            r2.y+=14;
-//            r2.h-=14;
-//        }
-//        if(!(status&WIDGET_V_LAST))
-//        {
-//            if(check_click_on_shaded_sprite(theme,(rectangle){.x=r2.x,.y=r2.y+r2.h-14,.w=14,.h=14},background_shape_sprite.x_pos,background_shape_sprite.y_pos+14))return true;
-//            r2.h-=14;
-//        }
-//
-//        if(rectangle_surrounds_origin(r2))return true;
-//    }
-//
-//    if(!(status&WIDGET_H_LAST))
-//    {
-//        r2=r;
-//        r2.w=14;
-//        r2.x+=r.w-14;
-//
-//        r.w-=14;
-//
-//        if(!(status&WIDGET_V_FIRST))
-//        {
-//            if(check_click_on_shaded_sprite(theme,(rectangle){.x=r2.x,.y=r2.y,.w=14,.h=14},background_shape_sprite.x_pos+14,background_shape_sprite.y_pos))return true;
-//            r2.y+=14;
-//            r2.h-=14;
-//        }
-//        if(!(status&WIDGET_V_LAST))
-//        {
-//            if(check_click_on_shaded_sprite(theme,(rectangle){.x=r2.x,.y=r2.y+r2.h-14,.w=14,.h=14},background_shape_sprite.x_pos+14,background_shape_sprite.y_pos+14))return true;
-//            r2.h-=14;
-//        }
-//
-//        if(rectangle_surrounds_origin(r2))return true;
-//    }
-//
-//    return rectangle_surrounds_origin(r);
+    int i,y,x,y1,y2;
+    cubic_theme_data * cubic;
+
+    cubic=theme->other_data;
+
+    if(!cubic->background_selection_grid)return false;
+
+    ///panel has no internal offsets
+
+    if(!(status&WIDGET_H_FIRST))
+    {
+        x= -r.x1;
+        y1=r.y1;
+        y2=r.y2;
+        r.x1+=cubic->background_r;
+
+        if(x>=0 && x<cubic->background_r)
+        {
+            if(!(status&WIDGET_V_FIRST))
+            {
+                y= -y1;
+
+                if(y>=0 && y<cubic->background_r)
+                {
+                    i=y*cubic->background_d+x;
+                    if(cubic->background_selection_grid[i>>4] & (1<<(i&0x0F))) return true;
+                }
+
+                y1+=cubic->background_r;
+            }
+
+            if(!(status&WIDGET_V_LAST))
+            {
+                y= cubic->background_d-y2;
+
+                if(y>=cubic->background_r && y<cubic->background_d)
+                {
+                    i=y*cubic->background_d+x;
+                    if(cubic->background_selection_grid[i>>4] & (1<<(i&0x0F))) return true;
+                }
+
+                y2-=cubic->background_r;
+            }
+
+            return y1<=0 && y2>0;
+        }
+    }
+
+    if(!(status&WIDGET_H_LAST))
+    {
+        x= cubic->background_d-r.x2;
+        y1=r.y1;
+        y2=r.y2;
+        r.x2-=cubic->background_r;
+
+        if(x>=cubic->background_r && x<cubic->background_d)
+        {
+            if(!(status&WIDGET_V_FIRST))
+            {
+                y= -y1;
+
+                if(y>=0 && y<cubic->background_r)
+                {
+                    i=y*cubic->background_d+x;
+                    if(cubic->background_selection_grid[i>>4] & (1<<(i&0x0F))) return true;
+                }
+
+                y1+=cubic->background_r;
+            }
+
+            if(!(status&WIDGET_V_LAST))
+            {
+                y= cubic->background_d-y2;
+
+                if(y>=cubic->background_r && y<cubic->background_d)
+                {
+                    i=y*cubic->background_d+x;
+                    if(cubic->background_selection_grid[i>>4] & (1<<(i&0x0F))) return true;
+                }
+
+                y2-=cubic->background_r;
+            }
+
+            return y1<=0 && y2>0;
+        }
+    }
+
+    return rectangle_surrounds_origin_(r);
 }
 
-void cubic_square_icon_render(rectangle r,int x_off,int y_off,uint32_t status,overlay_theme * theme,overlay_data * od,rectangle bounds,overlay_colour colour,char * icon_name,overlay_colour icon_colour)
+void cubic_square_icon_render(rectangle_ r,uint32_t status,overlay_theme * theme,overlay_data * od,rectangle_ bounds,overlay_colour_ colour,char * icon_glyph,overlay_colour_ icon_colour)
 {
-//    r.x+=x_off;
-//    r.y+=y_off+(r.h-20)/2;
-//    r.h=20;
-//
-//    int half_w=r.w/2;
-//
-//    if(status&WIDGET_H_FIRST) render_rectangle(od,(rectangle){.x=r.x,.y=r.y,.w=half_w,.h=20},bounds,colour);
-//    else render_overlay_shade(od,(rectangle){.x=r.x+half_w-10,.y=r.y,.w=10,.h=20},bounds,foreground_shape_sprite.x_pos,foreground_shape_sprite.y_pos,colour);
-//
-//    r.x+=half_w;
-//    r.w-=half_w;
-//
-//    if(status&WIDGET_H_LAST) render_rectangle(od,r,bounds,colour);
-//    else render_overlay_shade(od,(rectangle){.x=r.x,.y=r.y,.w=10,.h=20},bounds,foreground_shape_sprite.x_pos+10,foreground_shape_sprite.y_pos,colour);
-//
-//    if(icon_name)
-//    {
-//        r.x-=8;
-//        r.y+=2;
-//        r.w=r.h=16;///icon_size=16
-//
-//        overlay_sprite_data icon=get_overlay_sprite_data(theme,icon_name);
-//        render_overlay_shade(od,r,bounds,icon.x_pos,icon.y_pos,icon_colour);
-//    }
+    rectangle_ rg,rr;
+    cubic_theme_data * cubic;
+    cvm_overlay_glyph * g;
+
+    cubic=theme->other_data;
+
+    g=overlay_get_glyph(&theme->font_,icon_glyph);
+
+    if(!cubic->foreground_image_tile)cubic_create_shape(&cubic->foreground_image_tile,&cubic->foreground_selection_grid,cubic->foreground_r);
+    if(!cubic->foreground_image_tile || !g->tile)return;
+
+    cvm_overlay_element_render_buffer * element_render_buffer=od;///HACK, temporary measure before switching types
+
+    rg=r;
+
+    r.y1=(r.y1+r.y2-cubic->foreground_d)>>1;
+    r.y2=r.y1+cubic->foreground_d;
+    r.x1=(r.x1+r.x2-cubic->foreground_d)>>1;
+    r.x2=r.x1+cubic->foreground_d;
+
+    rg.y1=(rg.y1+rg.y2 - g->pos.y2+g->pos.y1)>>1;
+    rg.y2=rg.y1+g->pos.y2-g->pos.y1;
+    rg.x1=(rg.x1+rg.x2 - g->pos.x2+g->pos.x1)>>1;
+    rg.x2=rg.x1+g->pos.x2-g->pos.x1;
+
+    if(element_render_buffer->count != element_render_buffer->space)///need to check again as can return null once again;
+    {
+        rr=get_rectangle_overlap_(r,bounds);
+
+        if((rectangle_has_positive_area(rr))) element_render_buffer->buffer[element_render_buffer->count++]=(cvm_overlay_render_data)
+        {
+            {rr.x1,rr.y1,rr.x2,rr.y2},
+            {(CVM_OVERLAY_ELEMENT_SHADED<<12)|(OVERLAY_MAIN_COLOUR_&0x0FFF),(cubic->foreground_image_tile->x_pos<<2)+rr.x1-r.x1,(cubic->foreground_image_tile->y_pos<<2)+rr.y1-r.y1,83},
+        };
+    }
+
+    if(element_render_buffer->count != element_render_buffer->space)///need to check again as can return null once again;
+    {
+        rr=get_rectangle_overlap_(rg,bounds);
+
+        if((rectangle_has_positive_area(rr))) element_render_buffer->buffer[element_render_buffer->count++]=(cvm_overlay_render_data)
+        {
+            {rr.x1,rr.y1,rr.x2,rr.y2},
+            {(CVM_OVERLAY_ELEMENT_SHADED<<12)|(OVERLAY_TEXT_COLOUR_0_&0x0FFF),(g->tile->x_pos<<2)+rr.x1-rg.x1,(g->tile->y_pos<<2)+rr.y1-rg.y1,83},
+        };
+    }
 }
 
-void cubic_h_text_bar_render(rectangle r,int x_off,int y_off,uint32_t status,overlay_theme * theme,overlay_data * od,rectangle bounds,overlay_colour colour,char * text)
+void cubic_h_text_bar_render(rectangle_ r,uint32_t status,overlay_theme * theme,overlay_data * od,rectangle_ bounds,overlay_colour_ colour,char * text,overlay_colour_ text_colour)
 {
-    if(!cubic_medium_shape.tile)cubic_create_shape(&cubic_medium_shape,cubic_medium_w>>1);
+    rectangle_ rb,rt,rr;
+    cubic_theme_data * cubic;
 
-    rectangle_ r_=rectangle_new_conversion(r);
-    rectangle_ rb,rr,rt;
+    cubic=theme->other_data;
 
-    rt=r_=rectangle_add_offset(r_,x_off,y_off);
+    if(!cubic->foreground_image_tile)cubic_create_shape(&cubic->foreground_image_tile,&cubic->foreground_selection_grid,cubic->foreground_r);
+    if(!cubic->foreground_image_tile)return;
+
+    cvm_overlay_element_render_buffer * element_render_buffer=od;///HACK, temporary measure before switching types
+
+    rt=r;
 
     rt.y1=(rt.y1+rt.y2-theme->font_.glyph_size)>>1;
     rt.y2=rt.y1+theme->font_.glyph_size;
     rt.x1+=theme->h_bar_text_offset;
     rt.x2-=theme->h_bar_text_offset;
 
-    r_.y1+=(r_.y1+r_.y2-cubic_medium_h)>>1;
-    r_.y2=r_.y1+cubic_medium_h;
-
-    cvm_overlay_element_render_buffer * element_render_buffer=od;///HACK, temporary measure before switching types
-
-//    if(g->tile && element_render_buffer->count != element_render_buffer->space)///need to check again as can return null once again;
-//        {
-//            rb=rectangle_add_offset(g->pos,x,y);
-//            rr=get_rectangle_overlap_(rb,*bounds);
-//
-//            if((rectangle_has_positive_area(rr))) element_render_buffer->buffer[element_render_buffer->count++]=(cvm_overlay_render_data)
-//            {
-//                {rr.x1,rr.y1,rr.x2,rr.y2},
-//                {CVM_OVERLAY_ELEMENT_SHADED,(g->tile->x_pos<<2)+rr.x1-rb.x1,(g->tile->y_pos<<2)+rr.y1-rb.y1,83},
-//            };
-//        }
+    r.y1=(r.y1+r.y2-cubic->foreground_d)>>1;
+    r.y2=r.y1+cubic->foreground_d;
 
 
     if(!(status&WIDGET_H_FIRST))///not the first
     {
-        r_.x1+= cubic_medium_offset_x;
+        r.x1+= cubic->foreground_offset_x;
 
-        if(cubic_medium_shape.tile && element_render_buffer->count != element_render_buffer->space)///need to check again as can return null once again;
+        if(element_render_buffer->count != element_render_buffer->space)///need to check again as can return null once again;
         {
-            rb=r_;
-            rb.x2=rb.x1+(cubic_medium_w>>1);
-            rr=get_rectangle_overlap_(rb,rectangle_new_conversion(bounds));
+            rb=r;
+            rb.x2=rb.x1+cubic->foreground_r;
+            rr=get_rectangle_overlap_(rb,bounds);
 
             if((rectangle_has_positive_area(rr))) element_render_buffer->buffer[element_render_buffer->count++]=(cvm_overlay_render_data)
             {
                 {rr.x1,rr.y1,rr.x2,rr.y2},
-                {CVM_OVERLAY_ELEMENT_SHADED<<12|OVERLAY_MAIN_COLOUR_&0x0FFF,(cubic_medium_shape.tile->x_pos<<2)+rr.x1-rb.x1,(cubic_medium_shape.tile->y_pos<<2)+rr.y1-rb.y1,83},
+                {(CVM_OVERLAY_ELEMENT_SHADED<<12)|(OVERLAY_MAIN_COLOUR_&0x0FFF),(cubic->foreground_image_tile->x_pos<<2)+rr.x1-rb.x1,(cubic->foreground_image_tile->y_pos<<2)+rr.y1-rb.y1,83},
             };
         }
 
-        r_.x1+=(cubic_medium_w>>1);
+        r.x1+=cubic->foreground_r;
     }
 
     if(!(status&WIDGET_H_LAST))///not the last
     {
-        r_.x2-= cubic_medium_offset_x;
+        r.x2-= cubic->foreground_offset_x;
 
-        if(cubic_medium_shape.tile && element_render_buffer->count != element_render_buffer->space)///need to check again as can return null once again;
+        if(element_render_buffer->count != element_render_buffer->space)///need to check again as can return null once again;
         {
-            rb=r_;
-            rb.x1=rb.x2-(cubic_medium_w>>1);
-            rr=get_rectangle_overlap_(rb,rectangle_new_conversion(bounds));
+            rb=r;
+            rb.x1=rb.x2-cubic->foreground_r;
+            rr=get_rectangle_overlap_(rb,bounds);
 
             if((rectangle_has_positive_area(rr))) element_render_buffer->buffer[element_render_buffer->count++]=(cvm_overlay_render_data)
             {
                 {rr.x1,rr.y1,rr.x2,rr.y2},
-                {CVM_OVERLAY_ELEMENT_SHADED<<12|OVERLAY_MAIN_COLOUR_&0x0FFF,(cubic_medium_shape.tile->x_pos<<2)+rr.x1-rb.x1+(cubic_medium_w>>1),(cubic_medium_shape.tile->y_pos<<2)+rr.y1-rb.y1,83},
+                {(CVM_OVERLAY_ELEMENT_SHADED<<12)|(OVERLAY_MAIN_COLOUR_&0x0FFF),(cubic->foreground_image_tile->x_pos<<2)+rr.x1-rb.x1+cubic->foreground_r,(cubic->foreground_image_tile->y_pos<<2)+rr.y1-rb.y1,83},
             };
         }
 
-        r_.x2-=(cubic_medium_w>>1);
+        r.x2-=cubic->foreground_r;
     }
 
-    ///return r_.x1<=0 && r_.x2>0;
-
-    if(cubic_medium_shape.tile && element_render_buffer->count != element_render_buffer->space)///need to check again as can return null once again;
+    if(element_render_buffer->count != element_render_buffer->space)///need to check again as can return null once again;
     {
-        rb=r_;
-        rr=get_rectangle_overlap_(rb,rectangle_new_conversion(bounds));
+        rr=get_rectangle_overlap_(r,bounds);
 
         if((rectangle_has_positive_area(rr))) element_render_buffer->buffer[element_render_buffer->count++]=(cvm_overlay_render_data)
         {
             {rr.x1,rr.y1,rr.x2,rr.y2},
-            {CVM_OVERLAY_ELEMENT_FILL<<12|OVERLAY_MAIN_COLOUR_&0x0FFF,0,0,83},
+            {(CVM_OVERLAY_ELEMENT_FILL<<12)|(OVERLAY_MAIN_COLOUR_&0x0FFF),0,0,83},
         };
     }
 
-    //get_rectangle_overlap(&bounds,(rectangle){.x=x_off,.y=y_off,.w=text_w,.h=theme->font.font_height}))
-
-    rb=get_rectangle_overlap_(rt,rectangle_new_conversion(bounds));
+    rb=get_rectangle_overlap_(rt,bounds);
 
     if(text && rectangle_has_positive_area(rb))overlay_render_text_simple(element_render_buffer,&theme->font_,text,rt.x1,rt.y1,&rb);
-
-
-    //printf("RENDER CUBIC TEXT BAR %s\n",text);
-//    r.x+=x_off;
-//    r.y+=y_off+(r.h-20)/2;
-//    r.h=20;
-//
-//    /// use x_off and y_off here for cleanlyness/legibility purposes ??? also for text placement when on border
-//
-//    x_off=r.x+theme->h_bar_text_offset;
-//    y_off=r.y+(r.h-theme->font.font_height)/2;
-//    int text_w=r.w-2*theme->h_bar_text_offset;
-//
-//    if(!(status&WIDGET_H_FIRST))///not the first
-//    {
-//        render_overlay_shade(od,(rectangle){.x=r.x+2,.y=r.y,.w=10,.h=20},bounds,foreground_shape_sprite.x_pos,foreground_shape_sprite.y_pos,colour);
-//        r.x+=12;
-//        r.w-=12;
-//    }
-//
-//    if(!(status&WIDGET_H_LAST))///not the last
-//    {
-//        render_overlay_shade(od,(rectangle){.x=r.x+r.w-12,.y=r.y,.w=10,.h=20},bounds,foreground_shape_sprite.x_pos+10,foreground_shape_sprite.y_pos,colour);
-//        r.w-=12;
-//    }
-//
-//    render_rectangle(od,r,bounds,colour);
-//
-//    if((text)&&(get_rectangle_overlap(&bounds,(rectangle){.x=x_off,.y=y_off,.w=text_w,.h=theme->font.font_height})))render_overlay_text(od,theme,text,x_off,y_off,bounds,0,0);
 }
 
 void cubic_h_icon_text_bar_render(rectangle r,int x_off,int y_off,uint32_t status,overlay_theme * theme,overlay_data * od,rectangle bounds,overlay_colour colour,char * text,char * icon_name,overlay_colour icon_colour)
@@ -780,7 +733,7 @@ void cubic_panel_render(rectangle r,int x_off,int y_off,uint32_t status,overlay_
 //    render_rectangle(od,r,bounds,colour);
 }
 
-void initialise_cubic_theme(overlay_theme * theme)
+overlay_theme * create_cubic_theme(void)
 {
 //    uint8_t * shaded_sprite_buffer=malloc(sizeof(uint8_t)*cubic_sprite_buffer_size*cubic_sprite_buffer_size);
 //    overlay_sprite_data osd;
@@ -796,6 +749,13 @@ void initialise_cubic_theme(overlay_theme * theme)
 //    }
 //
 //
+    overlay_theme * theme;
+    cubic_theme_data * cubic;
+
+
+    theme=malloc(sizeof(overlay_theme));
+    theme->other_data=cubic=malloc(sizeof(cubic_theme_data));
+
     theme->base_unit_w=24;
     theme->base_unit_h=22;
 
@@ -844,9 +804,17 @@ void initialise_cubic_theme(overlay_theme * theme)
     theme->box_select=cubic_box_select;
     theme->panel_select=cubic_panel_select;
 
+    cubic->foreground_image_tile=NULL;
+    cubic->foreground_selection_grid=NULL;
+    cubic->foreground_offset_x=2;
+    cubic->foreground_r=10;
+    cubic->foreground_d=20;
 
-    cubic_medium_shape.tile=NULL;
-    cubic_medium_shape.selection_grid=NULL;
+    cubic->background_image_tile=NULL;
+    cubic->background_selection_grid=NULL;
+    cubic->background_r=14;
+    cubic->background_d=28;
+
 
     cvm_overlay_create_font(&theme->font_,"cvm_shared/resources/cvm_font_1.ttf",16);
 //
@@ -868,7 +836,7 @@ void initialise_cubic_theme(overlay_theme * theme)
 //    create_overlay_sprite_from_sdl_surface(theme,"music_file",icons_surface,16,16,16,32,OVERLAY_SHADED_SPRITE);
 //    create_overlay_sprite_from_sdl_surface(theme,"vector_file",icons_surface,16,16,32,32,OVERLAY_SHADED_SPRITE);
 //
-///// ⬆ ❌ 🔄 📁 📷 📄 🎵 ➕ ➖ 👻 🖋 🔓 🔗 🖼 ✂ 👁
+///// ⬆ ❌ 🔄 📁 📷 📄 🎵 ➕ ➖ 🖋 🔓 🔗 🖼 ✂ 👁 ⚙
 //
 //    d=set_cubic_shaded_sprite_data(shaded_sprite_buffer,28,24,32,true);
 //    osd=create_overlay_sprite(theme,"false",d,d,OVERLAY_SHADED_SPRITE);
@@ -886,11 +854,19 @@ void initialise_cubic_theme(overlay_theme * theme)
 
 void destroy_cubic_theme(overlay_theme * theme)
 {
-    if(cubic_medium_shape.tile)overlay_destroy_transparent_image_tile(cubic_medium_shape.tile);
-    if(cubic_medium_shape.selection_grid)free(cubic_medium_shape.selection_grid);
+    cubic_theme_data * cubic;
+    cubic=theme->other_data;
+
+    if(cubic->foreground_image_tile)overlay_destroy_transparent_image_tile(cubic->foreground_image_tile);
+    if(cubic->foreground_selection_grid)free(cubic->foreground_selection_grid);
     cvm_overlay_destroy_font(&theme->font_);
+
+    free(theme->other_data);
+
+    free(theme);
 }
 
+///make themes union/punned type, relying on base theme but extending as onther type of struct with extra needed data
 
 
 

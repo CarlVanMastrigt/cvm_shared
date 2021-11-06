@@ -154,12 +154,12 @@ static void text_button_widget_render(overlay_data * od,overlay_theme * theme,wi
         }
     }
 
-    theme->h_text_bar_render(w->base.r,x_off,y_off,w->base.status,theme,od,bounds,c,t);
+    theme->h_text_bar_render(rectangle_add_offset(rectangle_new_conversion(w->base.r),x_off,y_off),w->base.status,theme,od,rectangle_new_conversion(bounds),c,t,OVERLAY_TEXT_COLOUR_0_);
 }
 
 static widget * text_button_widget_select(overlay_theme * theme,widget * w,int x_in,int y_in)
 {
-    if(theme->h_bar_select(w->base.r,x_in,y_in,w->base.status,theme))return w;
+    if(theme->h_bar_select(rectangle_subtract_offset(rectangle_new_conversion(w->base.r),x_in,y_in),w->base.status,theme))return w;
 
     return NULL;
 }
@@ -269,7 +269,7 @@ static void contiguous_text_button_widget_render(overlay_data * od,overlay_theme
         }
     }
 
-    theme->h_text_bar_render(w->base.r,x_off,y_off,w->base.status,theme,od,bounds,c,t);
+    theme->h_text_bar_render(rectangle_add_offset(rectangle_new_conversion(w->base.r),x_off,y_off),w->base.status,theme,od,rectangle_new_conversion(bounds),c,t,OVERLAY_TEXT_COLOUR_0_);
 }
 
 static void contiguous_text_button_widget_min_h(overlay_theme * theme,widget * w)
@@ -333,12 +333,12 @@ static void icon_button_widget_render(overlay_data * od,overlay_theme * theme,wi
         t++;
     }
 
-    theme->square_icon_render(w->base.r,x_off,y_off,w->base.status,theme,od,bounds,OVERLAY_MAIN_COLOUR,t,OVERLAY_TEXT_COLOUR_0);
+    theme->square_icon_render(rectangle_add_offset(rectangle_new_conversion(w->base.r),x_off,y_off),w->base.status,theme,od,rectangle_new_conversion(bounds),OVERLAY_MAIN_COLOUR_,t,OVERLAY_TEXT_COLOUR_0_);
 }
 
 static widget * icon_button_widget_select(overlay_theme * theme,widget * w,int x_in,int y_in)
 {
-	if(theme->square_select(w->base.r,x_in,y_in,w->base.status,theme)) return w;
+	if(theme->square_select(rectangle_subtract_offset(rectangle_new_conversion(w->base.r),x_in,y_in),w->base.status,theme)) return w;
 
     return NULL;
 }

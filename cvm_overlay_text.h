@@ -74,6 +74,8 @@ int overlay_get_text_box_height(cvm_overlay_font * font,char * text,int wrapping
 ///perhaps want to revisit this design though
 void overlay_render_text_complex(cvm_overlay_element_render_buffer * element_render_buffer,cvm_overlay_font * font,char * text,int x,int y,rectangle_ * bounds,int wrapping_width);
 
+cvm_overlay_glyph * overlay_get_glyph(cvm_overlay_font * font,char * text);///assumes a single glyph in text
+
 
 
 

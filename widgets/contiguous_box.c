@@ -108,7 +108,7 @@ widget * contiguous_box_widget_select(overlay_theme * theme,widget * w,int x_in,
 {
     widget * tmp;
 
-    if(theme->box_select(w->base.r,x_in,y_in,w->base.status,theme))
+    if(theme->box_select(rectangle_subtract_offset(rectangle_new_conversion(w->base.r),x_in,y_in),w->base.status,theme))
     {
         x_in-=w->base.r.x;
         y_in-=w->base.r.y;

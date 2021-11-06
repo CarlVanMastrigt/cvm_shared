@@ -24,7 +24,23 @@ along with cvm_shared.  If not, see <https://www.gnu.org/licenses/>.
 #ifndef CUBIC_THEME_H
 #define CUBIC_THEME_H
 
-void initialise_cubic_theme(overlay_theme * theme);
+typedef struct cubic_theme_data
+{
+    cvm_vk_image_atlas_tile * foreground_image_tile;
+    uint16_t * foreground_selection_grid;
+    int foreground_offset_x;
+    //int foreground_offset_y;
+    int foreground_r;
+    int foreground_d;
+
+    cvm_vk_image_atlas_tile * background_image_tile;
+    uint16_t * background_selection_grid;
+    int background_r;
+    int background_d;
+}
+cubic_theme_data;
+
+overlay_theme * create_cubic_theme(void);
 void destroy_cubic_theme(overlay_theme * theme);
 
 #endif

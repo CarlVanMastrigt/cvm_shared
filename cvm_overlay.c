@@ -884,6 +884,7 @@ void terminate_overlay_swapchain_dependencies(void)
 
 float overlay_colours[OVERLAY_NUM_COLOURS_*4]=
 {
+    1.0,0.1,0.1,1.0,///OVERLAY_NO_COLOUR (error)
     0.24,0.24,0.6,0.9,///OVERLAY_BACKGROUND_COLOUR
     0.12,0.12,0.3,0.85,///OVERLAY_MAIN_COLOUR
     0.4,0.6,0.9,0.8,///OVERLAY_TEXT_COLOUR_0

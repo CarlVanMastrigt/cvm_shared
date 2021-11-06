@@ -74,7 +74,7 @@ widget * panel_widget_select(overlay_theme * theme,widget * w,int x_in,int y_in)
     widget * tmp=select_widget(w->panel.contents,x_in-w->base.r.x,y_in-w->base.r.y);
 	if(tmp)return tmp;
 
-	if(theme->panel_select(w->base.r,x_in,y_in,w->base.status,theme))return w;
+	if(theme->panel_select(rectangle_subtract_offset(rectangle_new_conversion(w->base.r),x_in,y_in),w->base.status,theme))return w;
     return NULL;
 }
 

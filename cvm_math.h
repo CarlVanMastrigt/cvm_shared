@@ -484,6 +484,11 @@ static inline rectangle_ rectangle_add_offset(rectangle_ r,int x,int y)
     return (rectangle_){.x1=r.x1+x,.y1=r.y1+y,.x2=r.x2+x,.y2=r.y2+y};
 }
 
+static inline rectangle_ rectangle_subtract_offset(rectangle_ r,int x,int y)
+{
+    return (rectangle_){.x1=r.x1-x,.y1=r.y1-y,.x2=r.x2-x,.y2=r.y2-y};
+}
+
 static inline bool rectangle_surrounds_point_(rectangle_ r,vec2i p)
 {
     return ((r.x1 <= p.x)&&(r.y1 <= p.y)&&(r.x2 > p.x)&&(r.y2> p.y));

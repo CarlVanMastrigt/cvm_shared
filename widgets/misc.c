@@ -415,7 +415,7 @@ widget * create_popup_panel_button(widget * popup_container,widget * panel_conte
 
 
 
-
+#warning probably want following as a single button, have special variant of text_icon h_bar button
 
 widget * create_checkbox_button_pair(char* text, void* data, widget_function func, widget_button_toggle_status_func toggle_status,bool free_data)
 {

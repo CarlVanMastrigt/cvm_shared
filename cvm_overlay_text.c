@@ -307,7 +307,7 @@ void overlay_render_text_simple(cvm_overlay_element_render_buffer * element_rend
             if((rectangle_has_positive_area(rr))) element_render_buffer->buffer[element_render_buffer->count++]=(cvm_overlay_render_data)
             {
                 {rr.x1,rr.y1,rr.x2,rr.y2},
-                {CVM_OVERLAY_ELEMENT_SHADED<<12|OVERLAY_TEXT_COLOUR_0_&0x0FFF,(g->tile->x_pos<<2)+rr.x1-rb.x1,(g->tile->y_pos<<2)+rr.y1-rb.y1,83},
+                {(CVM_OVERLAY_ELEMENT_SHADED<<12)|(OVERLAY_TEXT_COLOUR_0_&0x0FFF),(g->tile->x_pos<<2)+rr.x1-rb.x1,(g->tile->y_pos<<2)+rr.y1-rb.y1,83},
             };
         }
 
@@ -327,7 +327,6 @@ int overlay_get_text_box_height(cvm_overlay_font * font,char * text,int wrapping
     FT_Vector kern;
 
     cvm_overlay_glyph * g;
-    rectangle_ rb,rr;
 
     w=0;
     h=font->glyph_size;
@@ -499,4 +498,28 @@ void overlay_render_text_complex(cvm_overlay_element_render_buffer * element_ren
             text+=incr;
         }
     }
+}
+
+cvm_overlay_glyph * overlay_get_glyph(cvm_overlay_font * font,char * text)
+{
+    uint32_t gi,incr;
+    cvm_overlay_glyph * g;
+
+    g=NULL;
+
+    if(*text && *text!=' ')
+    {
+        gi=cvm_overlay_get_utf8_glyph_index(font->face,(uint8_t*)text,&incr);
+
+        g=cvm_overlay_find_glpyh(font,gi);
+
+        cvm_overlay_prepare_glyph_render_data(font,g);
+
+        if(text[incr])
+        {
+            fprintf(stderr,"TRYING TO GET SINGLE GLYPH FOR STRING WITH MORE THAN ONE: %s\n",text);
+        }
+    }
+
+    return g;
 }

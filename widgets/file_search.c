@@ -478,7 +478,7 @@ static void file_search_button_widget_render(overlay_data * od,overlay_theme * t
 
 static widget * file_search_button_widget_select(overlay_theme * theme,widget * w,int x_in,int y_in)
 {
-    if(theme->h_bar_select(w->base.r,x_in,y_in,w->base.status,theme))return w;
+    if(theme->h_bar_select(rectangle_subtract_offset(rectangle_new_conversion(w->base.r),x_in,y_in),w->base.status,theme))return w;
     return NULL;
 }
 
@@ -1196,12 +1196,12 @@ static void file_search_filter_type_button_widget_render(overlay_data * od,overl
     if(fsi->active_type_filter>=0) text=fsi->sfsd->types[fsi->active_type_filter].name;
     if(widget_active(fsi->type_filter_popup))text=NULL;
 
-    theme->h_text_bar_render(w->base.r,x_off,y_off,w->base.status,theme,od,bounds,OVERLAY_MAIN_COLOUR,text);
+    theme->h_text_bar_render(rectangle_add_offset(rectangle_new_conversion(w->base.r),x_off,y_off),w->base.status,theme,od,rectangle_new_conversion(bounds),OVERLAY_MAIN_COLOUR_,text,OVERLAY_TEXT_COLOUR_0_);
 }
 
 static widget * file_search_filter_type_button_widget_select(overlay_theme * theme,widget * w,int x_in,int y_in)
 {
-    if(theme->h_bar_select(w->base.r,x_in,y_in,w->base.status,theme))return w;
+    if(theme->h_bar_select(rectangle_subtract_offset(rectangle_new_conversion(w->base.r),x_in,y_in),w->base.status,theme))return w;
     return NULL;
 }
 
@@ -1319,12 +1319,12 @@ static void file_search_export_type_button_widget_render(overlay_data * od,overl
 
     if(fsi->export_formats) text=fsi->export_formats[fsi->active_export_format];
 
-    theme->h_text_bar_render(w->base.r,x_off,y_off,w->base.status,theme,od,bounds,OVERLAY_MAIN_COLOUR,text);
+    theme->h_text_bar_render(rectangle_add_offset(rectangle_new_conversion(w->base.r),x_off,y_off),w->base.status,theme,od,rectangle_new_conversion(bounds),OVERLAY_MAIN_COLOUR,text,OVERLAY_TEXT_COLOUR_0_);
 }
 
 static widget * file_search_export_type_button_widget_select(overlay_theme * theme,widget * w,int x_in,int y_in)
 {
-    if(theme->h_bar_select(w->base.r,x_in,y_in,w->base.status,theme))return w;
+    if(theme->h_bar_select(rectangle_subtract_offset(rectangle_new_conversion(w->base.r),x_in,y_in),w->base.status,theme))return w;
     return NULL;
 }
 

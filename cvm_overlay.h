@@ -24,10 +24,6 @@ along with cvm_shared.  If not, see <https://www.gnu.org/licenses/>.
 #ifndef CVM_OVERLAY_H
 #define CVM_OVERLAY_H
 
-
-
-
-
 typedef enum
 {
     CVM_OVERLAY_ELEMENT_SHADED,
@@ -38,6 +34,7 @@ cvm_overlay_element_type;
 
 typedef enum
 {
+    OVERLAY_NO_COLOUR_=0,
     OVERLAY_BACKGROUND_COLOUR_,
     OVERLAY_MAIN_COLOUR_,
     //OVERLAY_ALTERNATE_MAIN_COLOUR,
@@ -95,18 +92,6 @@ cvm_overlay_element_render_buffer;
 ((uint16_t)(((uint32_t)(y2)*ym+((uint32_t)(y2)>>1)+0x00008000)>>16))}
 #define CVM_OVERLAY_SCREEN_MULTIPLIER(s) (0xFFFF0000/(uint32_t)s);
 */
-
-
-
-///created per theme in numbers dictated by the theme, should be referenced and handled externally
-typedef struct cvm_overlay_interactable_element
-{
-    cvm_vk_image_atlas_tile * tile;
-    uint16_t * selection_grid;///4x4 grid of tiles, should probably match tile in size
-    uint32_t w;
-    uint32_t h;
-}
-cvm_overlay_interactable_element;
 
 
 //typedef struct cvm_overlay_theme
@@ -334,20 +319,26 @@ struct overlay_theme
     int contiguous_some_box_y_offset;
     int contiguous_horizintal_bar_h;
 
-    void    (*square_icon_render)       (rectangle r,int x_off,int y_off,uint32_t status,overlay_theme * theme,overlay_data * od,rectangle bounds,overlay_colour colour,char * icon_name,overlay_colour icon_colour);
-    void    (*h_text_bar_render)        (rectangle r,int x_off,int y_off,uint32_t status,overlay_theme * theme,overlay_data * od,rectangle bounds,overlay_colour colour,char * text);
-    void    (*h_text_icon_bar_render)   (rectangle r,int x_off,int y_off,uint32_t status,overlay_theme * theme,overlay_data * od,rectangle bounds,overlay_colour colour,char * text,char * icon_name,overlay_colour icon_colour);
-    void    (*h_icon_text_bar_render)   (rectangle r,int x_off,int y_off,uint32_t status,overlay_theme * theme,overlay_data * od,rectangle bounds,overlay_colour colour,char * text,char * icon_name,overlay_colour icon_colour);
+    void * other_data;
+
+    ///remove x_off, y_off, x_in and y_in below by instead just modifying the input rectangles
+    ///replace rectangles with new rectangles
+    /// replace overlay data with new paradigm (element buffer)
+
+    void    (*square_icon_render)       (rectangle_ r,uint32_t status,overlay_theme * theme,overlay_data * od,rectangle_ bounds,overlay_colour_ colour,char * icon_glyph,overlay_colour_ icon_colour);
+    void    (*h_text_bar_render)        (rectangle_ r,uint32_t status,overlay_theme * theme,overlay_data * od,rectangle_ bounds,overlay_colour_ colour,char * text,overlay_colour_ text_colour);
+    void    (*h_text_icon_bar_render)   (rectangle r,int x_off,int y_off,uint32_t status,overlay_theme * theme,overlay_data * od,rectangle bounds,overlay_colour colour,char * text,char * icon_glyph,overlay_colour icon_colour);
+    void    (*h_icon_text_bar_render)   (rectangle r,int x_off,int y_off,uint32_t status,overlay_theme * theme,overlay_data * od,rectangle bounds,overlay_colour colour,char * text,char * icon_glyph,overlay_colour icon_colour);
     void    (*h_slider_bar_render)      (rectangle r,int x_off,int y_off,uint32_t status,overlay_theme * theme,overlay_data * od,rectangle bounds,overlay_colour colour,int range,int value,int bar);
     void    (*v_slider_bar_render)      (rectangle r,int x_off,int y_off,uint32_t status,overlay_theme * theme,overlay_data * od,rectangle bounds,overlay_colour colour,int range,int value,int bar);
     void    (*box_render)               (rectangle r,int x_off,int y_off,uint32_t status,overlay_theme * theme,overlay_data * od,rectangle bounds,overlay_colour colour);
     void    (*panel_render)             (rectangle r,int x_off,int y_off,uint32_t status,overlay_theme * theme,overlay_data * od,rectangle bounds,overlay_colour colour);
 
-    bool    (*square_select)            (rectangle r,int x_in,int y_in,uint32_t status,overlay_theme * theme);
-    bool    (*h_bar_select)             (rectangle r,int x_in,int y_in,uint32_t status,overlay_theme * theme);
-    bool    (*v_bar_select)             (rectangle r,int x_in,int y_in,uint32_t status,overlay_theme * theme);
-    bool    (*box_select)               (rectangle r,int x_in,int y_in,uint32_t status,overlay_theme * theme);
-    bool    (*panel_select)             (rectangle r,int x_in,int y_in,uint32_t status,overlay_theme * theme);
+    bool    (*square_select)            (rectangle_ r,uint32_t status,overlay_theme * theme);
+    bool    (*h_bar_select)             (rectangle_ r,uint32_t status,overlay_theme * theme);
+    bool    (*v_bar_select)             (rectangle_ r,uint32_t status,overlay_theme * theme);
+    bool    (*box_select)               (rectangle_ r,uint32_t status,overlay_theme * theme);
+    bool    (*panel_select)             (rectangle_ r,uint32_t status,overlay_theme * theme);
 };
 
 void h_bar_text_render(rectangle r,int x_off,int y_off,overlay_theme * theme,overlay_data * od,rectangle bounds,char * text,int colour_index,int font_index);

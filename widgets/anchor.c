@@ -94,12 +94,12 @@ static widget_behaviour_function_set anchor_behaviour_functions=
 
 static void text_anchor_widget_render(overlay_data * od,overlay_theme * theme,widget * w,int x_off,int y_off,rectangle bounds)
 {
-	theme->h_text_bar_render(w->base.r,x_off,y_off,w->base.status,theme,od,bounds,OVERLAY_MAIN_PROMINENT_COLOUR,w->anchor.text);
+	theme->h_text_bar_render(rectangle_add_offset(rectangle_new_conversion(w->base.r),x_off,y_off),w->base.status,theme,od,rectangle_new_conversion(bounds),OVERLAY_MAIN_PROMINENT_COLOUR,w->anchor.text,OVERLAY_TEXT_COLOUR_0_);
 }
 
 static widget * text_anchor_widget_select(overlay_theme * theme,widget * w,int x_in,int y_in)
 {
-    if(theme->h_bar_select(w->base.r,x_in,y_in,w->base.status,theme))return w;
+    if(theme->h_bar_select(rectangle_subtract_offset(rectangle_new_conversion(w->base.r),x_in,y_in),w->base.status,theme))return w;
 
     return NULL;
 }

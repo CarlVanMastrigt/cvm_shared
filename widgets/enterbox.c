@@ -543,7 +543,7 @@ static void enterbox_widget_render(overlay_data * od,overlay_theme * theme,widge
 
 static widget * enterbox_widget_select(overlay_theme * theme,widget * w,int x_in,int y_in)
 {
-//    if(theme->h_bar_select(w->base.r,x_in,y_in,w->base.status,theme))return w;
+    if(theme->h_bar_select(rectangle_subtract_offset(rectangle_new_conversion(w->base.r),x_in,y_in),w->base.status,theme))return w;
 
     return NULL;
 }

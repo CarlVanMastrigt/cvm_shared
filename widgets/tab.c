@@ -35,13 +35,13 @@ static void tab_button_widget_render(overlay_data * od,overlay_theme * theme,wid
 {
     widget * page=w->button.data;
 
-    if(widget_active(page)) theme->h_text_bar_render(w->base.r,x_off,y_off,w->base.status,theme,od,bounds,
-        (page->base.parent->tab_folder.current_tab_page==page)?OVERLAY_HIGHLIGHTING_COLOUR:OVERLAY_NO_COLOUR,w->button.text);
+    if(widget_active(page)) theme->h_text_bar_render(rectangle_add_offset(rectangle_new_conversion(w->base.r),x_off,y_off),w->base.status,theme,od,rectangle_new_conversion(bounds),
+        (page->base.parent->tab_folder.current_tab_page==page)?OVERLAY_HIGHLIGHTING_COLOUR:OVERLAY_NO_COLOUR,w->button.text,OVERLAY_TEXT_COLOUR_0_);
 }
 
 static widget * tab_button_widget_select(overlay_theme * theme,widget * w,int x_in,int y_in)
 {
-    if((widget_active(w->button.data))&&(theme->h_bar_select(w->base.r,x_in,y_in,w->base.status,theme)))return w;
+    if((widget_active(w->button.data))&&(theme->h_bar_select(rectangle_subtract_offset(rectangle_new_conversion(w->base.r),x_in,y_in),w->base.status,theme)))return w;
     return NULL;
 }
 
