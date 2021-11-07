@@ -238,8 +238,8 @@ widget * create_window_widget(widget ** box,char * title,bool resizable,widget_f
     add_child_to_parent(sub_box,create_anchor(w,title));
     add_child_to_parent(sub_box,create_separator_widget());
     //add_child_to_parent(sub_box,create_unit_separator_widget());
-    if(custom_exit_function) add_child_to_parent(sub_box,create_icon_button("exit",custom_exit_data,free_custom_exit_data,custom_exit_function));
-    else add_child_to_parent(sub_box,create_icon_button("exit",w,false,window_toggle_button_func));
+    if(custom_exit_function) add_child_to_parent(sub_box,create_icon_button("🗙",custom_exit_data,free_custom_exit_data,custom_exit_function));
+    else add_child_to_parent(sub_box,create_icon_button("🗙",w,false,window_toggle_button_func));
 
     add_child_to_parent(*box,create_separator_widget());
 

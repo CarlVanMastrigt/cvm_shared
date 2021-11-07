@@ -64,7 +64,7 @@ static widget_behaviour_function_set panel_behaviour_functions=
 
 void panel_widget_render(overlay_data * od,overlay_theme * theme,widget * w,int x_off,int y_off,rectangle bounds)
 {
-    theme->panel_render(w->base.r,x_off,y_off,w->base.status,theme,od,bounds,OVERLAY_BACKGROUND_COLOUR);
+    theme->panel_render(rectangle_add_offset(rectangle_new_conversion(w->base.r),x_off,y_off),w->base.status,theme,od,rectangle_new_conversion(bounds),OVERLAY_BACKGROUND_COLOUR_);
 
     render_widget(od,w->panel.contents,x_off+w->base.r.x,y_off+w->base.r.y,bounds);
 }

@@ -944,7 +944,7 @@ cvm_vk_module_work_block * overlay_render_frame(int screen_w,int screen_h,widget
 //            str=strdup("Hello World!         Far a リサフランク420 - 現代のコンピュー  Hello World!\nFar ncdjvfng gvbgf bmgnf dvn vgbf  fjdvbfng vngfb,  ffnf\n bmngk,fgfh vfdbfg fd df gtv dfmbd f vfdhfv g dvb fbnb\n\n  f  dfgg dfmv vdv  xmcnbx fd mjdbvm v\
 d cf fn\n vsrs  sdfmmgt dgf thd gmdrg1234567890-=qwertyuiop[]\\asdfgh\njkl;'zxcvbnm,./ZXCVBNM<>?ASDFGHJKL:QWERTYUIOP{}|!#$%^&*()_+\n ⬆ ❌ 🔄 📁 📷 📄 🎵 ➕ ➖ 👻 🖋 🔓 🔗 🖼 ✂ 👁");
             str="8Hello World!\tFar リサフランク420 - 現代のコンピュー  Hello World!Far ncdjvfng gvbgf bmgnf dvn vgbf  fjdvbfng vngfb,  ffnf bmngk,fgfh vfdbfg fd df gtv dfmbd f vfdhfv g dvb fbnb  f  dfgg dfmv vdv\
-  xmcnbx fd mjdbvm vd cf fn vsrs  sdfmmgt dgf thd gmdrg1234567890-=qwertyuiop[]\\asdfgh\njkl;'zxcvbnm,./ZXCVBNM<>?ASDFGHJKL:QWERTYUIOP{}|!#$%^&*(_+ ↑←↓→🗙 ❌ 🔄 💾 📁 📷 📄 🎵 ➕ ➖ 👻 🖋 🔓 🔗 🖼 ✂ 👁";
+  xmcnbx fd mjdbvm vd cf fn vsrs  sdfmmgt dgf thd gmdrg1234567890-=qwertyuiop[]\\asdfgh\njkl;'zxcvbnm,./ZXCVBNM<>?ASDFGHJKL:QWERTYUIOP{}|!#$%^&*(_+ ↑←↓→🗙 ❌ 🔄 💾 📁 📷 📄 🎵 ➕ ➖ 👻 🖋 🔓 🔗 🖼 ✂ 👁 ⚙";
 //                       str=strdup("Far");
 //            str=strdup("Helloasa sas");
         }

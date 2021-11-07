@@ -332,7 +332,7 @@ struct overlay_theme
     void    (*h_slider_bar_render)      (rectangle r,int x_off,int y_off,uint32_t status,overlay_theme * theme,overlay_data * od,rectangle bounds,overlay_colour colour,int range,int value,int bar);
     void    (*v_slider_bar_render)      (rectangle r,int x_off,int y_off,uint32_t status,overlay_theme * theme,overlay_data * od,rectangle bounds,overlay_colour colour,int range,int value,int bar);
     void    (*box_render)               (rectangle r,int x_off,int y_off,uint32_t status,overlay_theme * theme,overlay_data * od,rectangle bounds,overlay_colour colour);
-    void    (*panel_render)             (rectangle r,int x_off,int y_off,uint32_t status,overlay_theme * theme,overlay_data * od,rectangle bounds,overlay_colour colour);
+    void    (*panel_render)             (rectangle_ r,uint32_t status,overlay_theme * theme,overlay_data * od,rectangle_ bounds,overlay_colour_ colour);
 
     bool    (*square_select)            (rectangle_ r,uint32_t status,overlay_theme * theme);
     bool    (*h_bar_select)             (rectangle_ r,uint32_t status,overlay_theme * theme);

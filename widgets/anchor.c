@@ -106,7 +106,7 @@ static widget * text_anchor_widget_select(overlay_theme * theme,widget * w,int x
 
 static void text_anchor_widget_min_w(overlay_theme * theme,widget * w)
 {
-//	w->base.min_w = calculate_text_length(theme,w->anchor.text,0)+2*theme->h_bar_text_offset;
+	w->base.min_w = overlay_size_text_simple(&theme->font_,w->anchor.text)+2*theme->h_bar_text_offset;
 }
 
 static void text_anchor_widget_min_h(overlay_theme * theme,widget * w)
