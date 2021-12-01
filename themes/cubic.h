@@ -37,6 +37,11 @@ typedef struct cubic_theme_data
     uint16_t * background_selection_grid;
     int background_r;
     int background_d;
+
+    cvm_vk_image_atlas_tile * internal_image_tile;
+    //uint16_t * internal_selection_grid;//probably not needed
+    int internal_r;
+    int internal_d;
 }
 cubic_theme_data;
 

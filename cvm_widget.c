@@ -116,6 +116,18 @@ static bool base_widget_key_down(overlay_theme * theme,widget * w,SDL_Keycode ke
     return false;
 }
 
+static bool base_widget_text_input(overlay_theme * theme,widget * w,char * text)
+{
+    puts("error calling base: text_input");
+    return false;
+}
+
+static bool base_widget_text_edit(overlay_theme * theme,widget * w,char * text,int start,int length)
+{
+    puts("error calling base: text_edit");
+    return false;
+}
+
 static void base_widget_click_away(overlay_theme * theme,widget * w)
 {
     puts("error calling base: click_away");
@@ -147,6 +159,8 @@ static widget_behaviour_function_set base_behaviour_functions =
     .m_move         =   base_widget_mouse_movement,
     .scroll         =   base_widget_scroll,
     .key_down       =   base_widget_key_down,
+    .text_input     =   base_widget_text_input,
+    .text_edit      =   base_widget_text_edit,
     .click_away     =   base_widget_click_away,
     .add_child      =   base_widget_add_child,
     .remove_child   =   base_widget_remove_child,
@@ -392,6 +406,16 @@ bool blank_widget_scroll(overlay_theme * theme,widget * w,int delta)
 }
 
 bool blank_widget_key_down(overlay_theme * theme,widget * w,SDL_Keycode keycode)
+{
+    return false;
+}
+
+bool blank_widget_text_input(overlay_theme * theme,widget * w,char * text)
+{
+    return false;
+}
+
+bool blank_widget_text_edit(overlay_theme * theme,widget * w,char * text,int start,int length)
 {
     return false;
 }
@@ -646,7 +670,25 @@ bool handle_widget_overlay_keyboard(widget * menu_widget,SDL_Keycode keycode)
     return false;
 }
 
+bool handle_widget_overlay_text_input(widget * menu_widget,char * text)
+{
+    if(currently_active_widget)
+    {
+        return currently_active_widget->base.behaviour_functions->text_input(current_theme,currently_active_widget,text);
+    }
 
+    return false;
+}
+
+bool handle_widget_overlay_text_edit(widget * menu_widget,char * text,int start,int length)
+{
+    if(currently_active_widget)
+    {
+        return currently_active_widget->base.behaviour_functions->text_edit(current_theme,currently_active_widget,text,start,length);
+    }
+
+    return false;
+}
 
 
 

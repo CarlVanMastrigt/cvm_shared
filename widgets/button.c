@@ -94,6 +94,8 @@ static widget_behaviour_function_set button_behaviour_functions=
     .m_move         =   blank_widget_mouse_movement,
     .scroll         =   blank_widget_scroll,
     .key_down       =   blank_widget_key_down,
+    .text_input     =   blank_widget_text_input,
+    .text_edit      =   blank_widget_text_edit,
     .click_away     =   blank_widget_click_away,
     .add_child      =   blank_widget_add_child,
     .remove_child   =   blank_widget_remove_child,
@@ -269,7 +271,7 @@ static void contiguous_text_button_widget_render(overlay_data * od,overlay_theme
         }
     }
 
-    theme->h_text_bar_render(rectangle_add_offset(rectangle_new_conversion(w->base.r),x_off,y_off),w->base.status,theme,od,rectangle_new_conversion(bounds),c,t,OVERLAY_TEXT_COLOUR_0_);
+    theme->h_text_bar_render(rectangle_add_offset(rectangle_new_conversion(w->base.r),x_off,y_off),w->base.status,theme,od,rectangle_new_conversion(bounds),c,t,OVERLAY_TEXT_COLOUR_0_);///use case for no colour??
 }
 
 static void contiguous_text_button_widget_min_h(overlay_theme * theme,widget * w)

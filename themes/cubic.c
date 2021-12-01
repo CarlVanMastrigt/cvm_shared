@@ -140,7 +140,7 @@ static void cubic_create_shape(cvm_vk_image_atlas_tile ** tile,uint16_t ** selec
 
         rm=rt*32768;///32^3
 
-        *selection_grid=grid=calloc((r*r+3)>>2,sizeof(uint16_t));///r*2*r*2/16 == r*r/4 == r*r>>2, but round up
+        if(selection_grid)*selection_grid=grid=calloc((r*r+3)>>2,sizeof(uint16_t));///r*2*r*2/16 == r*r/4 == r*r>>2, but round up
 
         for(x=0;x<r;x++)
         {
@@ -160,19 +160,19 @@ static void cubic_create_shape(cvm_vk_image_atlas_tile ** tile,uint16_t ** selec
 
                 i=(r+y)*r*2+(r+x);
                 data[i]=t;
-                grid[i>>4]|=(t>threshold)<<(i&0x0F);
+                if(selection_grid)grid[i>>4]|=(t>threshold)<<(i&0x0F);
 
                 i=(r+y)*r*2+(r-x-1);
                 data[i]=t;
-                grid[i>>4]|=(t>threshold)<<(i&0x0F);
+                if(selection_grid)grid[i>>4]|=(t>threshold)<<(i&0x0F);
 
                 i=(r-y-1)*r*2+(r+x);
                 data[i]=t;
-                grid[i>>4]|=(t>threshold)<<(i&0x0F);
+                if(selection_grid)grid[i>>4]|=(t>threshold)<<(i&0x0F);
 
                 i=(r-y-1)*r*2+(r-x-1);
                 data[i]=t;
-                grid[i>>4]|=(t>threshold)<<(i&0x0F);
+                if(selection_grid)grid[i>>4]|=(t>threshold)<<(i&0x0F);
             }
         }
     }
@@ -517,7 +517,7 @@ void cubic_h_text_bar_render(rectangle_ r,uint32_t status,overlay_theme * theme,
             if((rectangle_has_positive_area(rr))) element_render_buffer->buffer[element_render_buffer->count++]=(cvm_overlay_render_data)
             {
                 {rr.x1,rr.y1,rr.x2,rr.y2},
-                {(CVM_OVERLAY_ELEMENT_SHADED<<12)|(OVERLAY_MAIN_COLOUR_&0x0FFF),(cubic->foreground_image_tile->x_pos<<2)+rr.x1-rb.x1,(cubic->foreground_image_tile->y_pos<<2)+rr.y1-rb.y1,83},
+                {(CVM_OVERLAY_ELEMENT_SHADED<<12)|(colour&0x0FFF),(cubic->foreground_image_tile->x_pos<<2)+rr.x1-rb.x1,(cubic->foreground_image_tile->y_pos<<2)+rr.y1-rb.y1,83},
             };
         }
 
@@ -537,7 +537,7 @@ void cubic_h_text_bar_render(rectangle_ r,uint32_t status,overlay_theme * theme,
             if((rectangle_has_positive_area(rr))) element_render_buffer->buffer[element_render_buffer->count++]=(cvm_overlay_render_data)
             {
                 {rr.x1,rr.y1,rr.x2,rr.y2},
-                {(CVM_OVERLAY_ELEMENT_SHADED<<12)|(OVERLAY_MAIN_COLOUR_&0x0FFF),(cubic->foreground_image_tile->x_pos<<2)+rr.x1-rb.x1+cubic->foreground_r,(cubic->foreground_image_tile->y_pos<<2)+rr.y1-rb.y1,83},
+                {(CVM_OVERLAY_ELEMENT_SHADED<<12)|(colour&0x0FFF),(cubic->foreground_image_tile->x_pos<<2)+rr.x1-rb.x1+cubic->foreground_r,(cubic->foreground_image_tile->y_pos<<2)+rr.y1-rb.y1,83},
             };
         }
 
@@ -551,18 +551,21 @@ void cubic_h_text_bar_render(rectangle_ r,uint32_t status,overlay_theme * theme,
         if((rectangle_has_positive_area(rr))) element_render_buffer->buffer[element_render_buffer->count++]=(cvm_overlay_render_data)
         {
             {rr.x1,rr.y1,rr.x2,rr.y2},
-            {(CVM_OVERLAY_ELEMENT_FILL<<12)|(OVERLAY_MAIN_COLOUR_&0x0FFF),0,0,83},
+            {(CVM_OVERLAY_ELEMENT_FILL<<12)|(colour&0x0FFF),0,0,83},
         };
     }
 
-    rt.y1=(rt.y1+rt.y2-theme->font_.glyph_size)>>1;
-    rt.y2=rt.y1+theme->font_.glyph_size;
-    rt.x1+=theme->h_bar_text_offset;
-    rt.x2-=theme->h_bar_text_offset;
+    if(text)
+    {
+        rt.y1=(rt.y1+rt.y2-theme->font_.glyph_size)>>1;
+        rt.y2=rt.y1+theme->font_.glyph_size;
+        rt.x1+=theme->h_bar_text_offset;
+        rt.x2-=theme->h_bar_text_offset;
 
-    rb=get_rectangle_overlap_(rt,bounds);
+        rb=get_rectangle_overlap_(rt,bounds);
 
-    if(text && rectangle_has_positive_area(rb))overlay_render_text_simple(element_render_buffer,&theme->font_,text,rt.x1,rt.y1,&rb);
+        if(rectangle_has_positive_area(rb))overlay_render_text_simple(element_render_buffer,&theme->font_,text,rt.x1,rt.y1,&rb,text_colour);
+    }
 }
 
 void cubic_h_icon_text_bar_render(rectangle r,int x_off,int y_off,uint32_t status,overlay_theme * theme,overlay_data * od,rectangle bounds,overlay_colour colour,char * text,char * icon_name,overlay_colour icon_colour)
@@ -651,8 +654,142 @@ void cubic_h_text_icon_bar_render(rectangle r,int x_off,int y_off,uint32_t statu
 //    }
 }
 
-void cubic_h_slider_bar_render(rectangle r,int x_off,int y_off,uint32_t status,overlay_theme * theme,overlay_data * od,rectangle bounds,overlay_colour colour,int range,int value,int bar)
+void cubic_h_slider_bar_render(rectangle_ r,uint32_t status,overlay_theme * theme,overlay_data * od,rectangle_ bounds,overlay_colour_ colour,int range,int value,int bar,overlay_colour_ bar_colour)
 {
+    //puts("cubic slider render");
+
+    //int
+    rectangle_ rb,rr,rs;
+    cubic_theme_data * cubic;
+
+    cubic=theme->other_data;
+
+    if(!cubic->foreground_image_tile)cubic_create_shape(&cubic->foreground_image_tile,&cubic->foreground_selection_grid,cubic->foreground_r);
+    if(!cubic->foreground_image_tile)return;
+
+    if(!cubic->internal_image_tile)cubic_create_shape(&cubic->internal_image_tile,NULL,cubic->internal_r);
+    if(!cubic->internal_image_tile)return;
+
+    cvm_overlay_element_render_buffer * element_render_buffer=od;///HACK, temporary measure before switching types
+
+    rs=r;
+
+    r.y1=(r.y1+r.y2-cubic->foreground_d)>>1;
+    r.y2=r.y1+cubic->foreground_d;
+
+
+    if(!(status&WIDGET_H_FIRST))
+    {
+        r.x1+= cubic->foreground_offset_x;
+        rs.x1+= cubic->foreground_offset_x;
+
+        if(element_render_buffer->count != element_render_buffer->space)
+        {
+            rb=r;
+            rb.x2=rb.x1+cubic->foreground_r;
+            rr=get_rectangle_overlap_(rb,bounds);
+
+            if((rectangle_has_positive_area(rr))) element_render_buffer->buffer[element_render_buffer->count++]=(cvm_overlay_render_data)
+            {
+                {rr.x1,rr.y1,rr.x2,rr.y2},
+                {(CVM_OVERLAY_ELEMENT_SHADED<<12)|(colour&0x0FFF),(cubic->foreground_image_tile->x_pos<<2)+rr.x1-rb.x1,(cubic->foreground_image_tile->y_pos<<2)+rr.y1-rb.y1,83},
+            };
+        }
+
+        r.x1+=cubic->foreground_r;
+    }
+
+    if(!(status&WIDGET_H_LAST))
+    {
+        r.x2-= cubic->foreground_offset_x;
+        rs.x2-= cubic->foreground_offset_x;
+
+        if(element_render_buffer->count != element_render_buffer->space)
+        {
+            rb=r;
+            rb.x1=rb.x2-cubic->foreground_r;
+            rr=get_rectangle_overlap_(rb,bounds);
+
+            if((rectangle_has_positive_area(rr))) element_render_buffer->buffer[element_render_buffer->count++]=(cvm_overlay_render_data)
+            {
+                {rr.x1,rr.y1,rr.x2,rr.y2},
+                {(CVM_OVERLAY_ELEMENT_SHADED<<12)|(colour&0x0FFF),(cubic->foreground_image_tile->x_pos<<2)+rr.x1-rb.x1+cubic->foreground_r,(cubic->foreground_image_tile->y_pos<<2)+rr.y1-rb.y1,83},
+            };
+        }
+
+        r.x2-=cubic->foreground_r;
+    }
+
+    if(element_render_buffer->count != element_render_buffer->space)
+    {
+        rr=get_rectangle_overlap_(r,bounds);
+
+        if((rectangle_has_positive_area(rr))) element_render_buffer->buffer[element_render_buffer->count++]=(cvm_overlay_render_data)
+        {
+            {rr.x1,rr.y1,rr.x2,rr.y2},
+            {(CVM_OVERLAY_ELEMENT_FILL<<12)|(colour&0x0FFF),0,0,83},
+        };
+    }
+
+    rs.y1=(rs.y1+rs.y2-cubic->internal_d)>>1;
+    rs.y2=rs.y1+cubic->internal_d;
+
+    rs.x1+=cubic->foreground_r;
+    rs.x2-=cubic->foreground_r;
+
+    if(bar<0)///works like a flag, perhaps better to put in reserved status bit?
+    {
+        bar=(rs.x2-rs.x1)/ -bar;
+        rs.x1+=((rs.x2-rs.x1-bar)*value)/range;
+        rs.x2=rs.x1+bar;
+    }
+    else
+    {
+        rs.x1+=((rs.x2-rs.x1)*value)/(range+bar);
+        rs.x2-=((rs.x2-rs.x1)*(range-value))/(range+bar);
+    }
+
+    if(element_render_buffer->count != element_render_buffer->space)
+    {
+        rb=rs;
+        rb.x2=rb.x1;
+        rb.x1-=cubic->internal_r;
+        rr=get_rectangle_overlap_(rb,bounds);
+
+        if((rectangle_has_positive_area(rr))) element_render_buffer->buffer[element_render_buffer->count++]=(cvm_overlay_render_data)
+        {
+            {rr.x1,rr.y1,rr.x2,rr.y2},
+            {(CVM_OVERLAY_ELEMENT_SHADED<<12)|(bar_colour&0x0FFF),(cubic->internal_image_tile->x_pos<<2)+rr.x1-rb.x1,(cubic->internal_image_tile->y_pos<<2)+rr.y1-rb.y1,83},
+        };
+    }
+
+    if(element_render_buffer->count != element_render_buffer->space)
+    {
+        rb=rs;
+        rb.x1=rb.x2;
+        rb.x2+=cubic->internal_r;
+        rr=get_rectangle_overlap_(rb,bounds);
+
+        if((rectangle_has_positive_area(rr))) element_render_buffer->buffer[element_render_buffer->count++]=(cvm_overlay_render_data)
+        {
+            {rr.x1,rr.y1,rr.x2,rr.y2},
+            {(CVM_OVERLAY_ELEMENT_SHADED<<12)|(bar_colour&0x0FFF),(cubic->internal_image_tile->x_pos<<2)+rr.x1-rb.x1+cubic->internal_r,(cubic->internal_image_tile->y_pos<<2)+rr.y1-rb.y1,83},
+        };
+    }
+
+    if(element_render_buffer->count != element_render_buffer->space)
+    {
+        rr=get_rectangle_overlap_(rs,bounds);
+
+        if((rectangle_has_positive_area(rr))) element_render_buffer->buffer[element_render_buffer->count++]=(cvm_overlay_render_data)
+        {
+            {rr.x1,rr.y1,rr.x2,rr.y2},
+            {(CVM_OVERLAY_ELEMENT_FILL<<12)|(bar_colour&0x0FFF),0,0,83},
+        };
+    }
+
+    ///perhaps slightly smaller and disregard edge when not first??
+
 //    r.x+=x_off+12;
 //    r.y+=y_off+(r.h-20)/2;
 //    r.w-=theme->h_sliderbar_lost_w;
@@ -951,6 +1088,10 @@ overlay_theme * create_cubic_theme(void)
     cubic->background_r=14;
     cubic->background_d=28;
 
+    cubic->internal_image_tile=NULL;
+    //cubic->internal_selection_grid=NULL;
+    cubic->internal_r=8;
+    cubic->internal_d=16;
 
     cvm_overlay_create_font(&theme->font_,"cvm_shared/resources/cvm_font_1.ttf",16);
 //
@@ -998,6 +1139,8 @@ void destroy_cubic_theme(overlay_theme * theme)
 
     if(cubic->background_image_tile)overlay_destroy_transparent_image_tile(cubic->background_image_tile);
     if(cubic->background_selection_grid)free(cubic->background_selection_grid);
+
+    if(cubic->internal_image_tile)overlay_destroy_transparent_image_tile(cubic->internal_image_tile);
 
     cvm_overlay_destroy_font(&theme->font_);
 

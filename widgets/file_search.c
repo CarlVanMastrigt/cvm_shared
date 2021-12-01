@@ -1005,7 +1005,7 @@ static void file_search_enterbox_input_func(widget * w)
 
 widget * create_file_search_enterbox(file_search_instance * fsi)
 {
-    widget * w=create_enterbox(127,16,NULL,file_search_enterbox_func,fsi,false,false);
+    widget * w=create_enterbox(255,255,16,NULL,file_search_enterbox_func,fsi,NULL,false,false);
 
     set_enterbox_action_upon_input(w,file_search_enterbox_input_func);
 

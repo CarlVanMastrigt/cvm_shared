@@ -69,6 +69,8 @@ typedef struct widget_behaviour_function_set
     void    (*m_move)       (overlay_theme*,widget*,int,int);
     bool    (*scroll)       (overlay_theme*,widget*,int);
     bool    (*key_down)     (overlay_theme*,widget*,SDL_Keycode);
+    bool    (*text_input)   (overlay_theme*,widget*,char*);
+    bool    (*text_edit)    (overlay_theme*,widget*,char*,int,int);
     void    (*click_away)   (overlay_theme*,widget*);
 
     void    (*add_child)    (widget*,widget*);
@@ -282,6 +284,8 @@ void        blank_widget_right_click    (overlay_theme * theme,widget * w,int x,
 void        blank_widget_mouse_movement (overlay_theme * theme,widget * w,int x,int y);
 bool        blank_widget_scroll         (overlay_theme * theme,widget * w,int delta);
 bool        blank_widget_key_down       (overlay_theme * theme,widget * w,SDL_Keycode keycode);
+bool        blank_widget_text_input     (overlay_theme * theme,widget * w,char * text);
+bool        blank_widget_text_edit      (overlay_theme * theme,widget * w,char * text,int start,int length);
 void        blank_widget_click_away     (overlay_theme * theme,widget * w);
 void        blank_widget_add_child      (widget * parent,widget * child);
 void        blank_widget_remove_child   (widget * parent,widget * child);
@@ -314,6 +318,8 @@ bool handle_widget_overlay_left_release(widget * menu_widget,int x_in,int y_in);
 bool handle_widget_overlay_movement(widget * menu_widget,int x_in,int y_in);
 bool handle_widget_overlay_wheel(widget * menu_widget,int x_in,int y_in,int delta);
 bool handle_widget_overlay_keyboard(widget * menu_widget,SDL_Keycode keycode);
+bool handle_widget_overlay_text_input(widget * menu_widget,char * text);
+bool handle_widget_overlay_text_edit(widget * menu_widget,char * text,int start,int length);
 
 widget * add_child_to_parent(widget * parent,widget * child);
 void remove_child_from_parent(widget * child);

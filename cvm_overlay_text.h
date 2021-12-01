@@ -24,7 +24,10 @@ along with cvm_shared.  If not, see <https://www.gnu.org/licenses/>.
 #ifndef CVM_OVERLAY_TEXT_H
 #define CVM_OVERLAY_TEXT_H
 
-
+//#define CVM_OVERLAY_MAX_UNICODE_BYTES 7 /* use this if including variation sequences as part of a "single glyph" */
+#define CVM_OVERLAY_MAX_UNICODE_BYTES 4
+#define CVM_OVERLAY_MAX_COMPOSITION_BYTES 32
+/// above is to include variation sequences as part of a "single character"
 
 typedef struct cvm_overlay_glyph
 {
@@ -64,17 +67,34 @@ void cvm_overlay_create_font(cvm_overlay_font * font,char * filename,int pixel_s
 void cvm_overlay_destroy_font(cvm_overlay_font * font);
 
 
+///some generic
+bool cvm_overlay_utf8_validate_string(char * text);
+int cvm_overlay_utf8_count_glyphs(char * text);
+int cvm_overlay_utf8_count_glyphs_outside_range(char * text,int begin,int end);///end is uninclusive offset, start is inclusive offset
+bool cvm_overlay_utf8_validate_string_and_count_glyphs(char * text,int * c);
+///following also check for variation sequences, assumes string is valid utf8 already
+int cvm_overlay_utf8_get_previous(char * text,int offset);
+int cvm_overlay_utf8_get_next(char * text,int offset);
+
+
+
 ///returns the required width of a string
 int overlay_size_text_simple(cvm_overlay_font * font,char * text);
-void overlay_render_text_simple(cvm_overlay_element_render_buffer * element_render_buffer,cvm_overlay_font * font,char * text,int x,int y,rectangle_ * bounds);
+void overlay_render_text_simple(cvm_overlay_element_render_buffer * element_render_buffer,cvm_overlay_font * font,char * text,int x,int y,rectangle_ * bounds,overlay_colour_ colour);
 
 ///returns the height (in pixels) to accomodate the given string with the given wrapping width
 int overlay_get_text_box_height(cvm_overlay_font * font,char * text,int wrapping_width);
 ///render complex is somewhat detached from the required height above, as complex render can handle more situations than just text boxes
 ///perhaps want to revisit this design though
-void overlay_render_text_complex(cvm_overlay_element_render_buffer * element_render_buffer,cvm_overlay_font * font,char * text,int x,int y,rectangle_ * bounds,int wrapping_width);
+void overlay_render_text_complex(cvm_overlay_element_render_buffer * element_render_buffer,cvm_overlay_font * font,char * text,int x,int y,rectangle_ * bounds,overlay_colour_ colour,int wrapping_width);
 
 cvm_overlay_glyph * overlay_get_glyph(cvm_overlay_font * font,char * text);///assumes a single glyph in text
+
+int overlay_text_find_offset_simple(cvm_overlay_font * font,char * text,int relative_x);
+//int overlay_text_find_offset_simple(cvm_overlay_font * font,char * text,int relative_x,int relative_y,int wrapping_width);
+
+void overlay_render_text_selection_simple(cvm_overlay_element_render_buffer * element_render_buffer,cvm_overlay_font * font,char * text,int x,int y,rectangle_ * bounds,int selection_start,int selection_end);
+//void overlay_render_text_complex_selection_box(cvm_overlay_element_render_buffer * element_render_buffer,cvm_overlay_font * font,char * text,int x,int y,rectangle_ * bounds,int wrapping_width,int selection_start,int selection_end);
 
 
 

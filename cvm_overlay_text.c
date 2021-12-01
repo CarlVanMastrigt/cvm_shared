@@ -131,6 +131,153 @@ static inline uint32_t cvm_overlay_get_utf8_glyph_index(FT_Face face,uint8_t * t
     else return FT_Get_Char_Index(face,*text);
 }
 
+bool cvm_overlay_utf8_validate_string(char * text)
+{
+    int i;
+    while(*text)
+    {
+        if(*text & 0x80)
+        {
+            for(i=1;*text & (0x80 >> i);i++)
+            {
+                if(i>4 || (text[i]&0xC0) != 0x80) return false;
+            }
+            text+=i;
+        }
+        else text++;
+    }
+    return true;
+}
+
+int cvm_overlay_utf8_count_glyphs(char * text)
+{
+    int i,c;
+    c=0;
+    while(*text)
+    {
+        if(*text & 0x80)
+        {
+            for(i=1;*text & (0x80 >> i);i++);
+            text+=i;
+
+            //text+=3*(text[0]==0xEF && text[1]==0xB8 && (text[2]&0xF0)==0x80);///variation sequences dont count as a glyph
+        }
+        else text++;
+
+        c++;
+    }
+    return c;
+}
+
+int cvm_overlay_utf8_count_glyphs_outside_range(char * text,int begin,int end)
+{
+    int i,c,o;
+    o=0;
+    c=0;
+    while(text[o])
+    {
+        if(text[o] & 0x80)
+        {
+            for(i=1;text[o] & (0x80 >> i);i++);
+
+            //i+=3*(text[o]==0xEF && text[o+1]==0xB8 && (text[o+2]&0xF0)==0x80);///variation sequences dont count as a glyph
+        }
+        else i=1;
+
+        c+= o<begin || o>=end;
+
+        o+=i;
+    }
+    return c;
+}
+
+bool cvm_overlay_utf8_validate_string_and_count_glyphs(char * text,int * c)
+{
+    int i;
+    *c=0;
+    while(*text)
+    {
+        if(*text & 0x80)
+        {
+            for(i=1;*text & (0x80 >> i);i++)
+            {
+                if(i>4 || (text[i]&0xC0) != 0x80) return false;
+            }
+            text+=i;
+
+            //text+=3*(text[0]==0xEF && text[1]==0xB8 && (text[2]&0xF0)==0x80);///variation sequences dont count as a glyph
+        }
+        else text++;
+
+        (*c)++;
+    }
+    return true;
+}
+
+int cvm_overlay_utf8_get_previous(char * text,int offset)
+{
+    //offset-= 3* (offset>2 && text[offset-3]==0xEF && text[offset-2]==0xB8 && (text[offset-1]&0xF0)==0x80);///skip over variation sequence
+
+    if(offset==0)return 0;
+
+    int i,o=offset;///error checking, exclude from final build
+
+    do offset--;
+    while(offset && (text[offset]&0xC0) == 0x80);
+
+    if(text[offset] & 0x80)///error checking, exclude from final build
+    {
+        o-=offset;
+        for(i=1;i<o;i++)///0 implicitly checked above
+        {
+            if(!(((uint8_t*)text)[offset]<<i & 0x80))
+            {
+                fprintf(stderr,"GET PREVIOUS DETECTED INVALID UTF-8 CHAR IN STRING (INVALID LENGTH SPECIFIED)\n");
+                exit(-1);
+            }
+        }
+    }
+    else if(text[o] & 0x80)
+    {
+        fprintf(stderr,"GET PREVIOUS DETECTED INVALID UTF-8 CHAR IN STRING (LEAD CHARACTER NOT FOUND)\n");
+        exit(-1);
+    }
+
+    return offset;
+}
+
+int cvm_overlay_utf8_get_next(char * text,int offset)
+{
+    if(text[offset]=='\0')return offset;
+
+    if(text[offset] & 0x80)
+    {
+        int i;
+        for(i=1;text[offset] & (0x80 >> i);i++)
+        {
+            ///error check, dont put in release version
+            if((text[offset+i]&0xC0) != 0x80)
+            {
+                fprintf(stderr,"GET NEXT DETECTED INVALID UTF-8 CHAR IN STRING (TOP BIT MISMATCH)\n");
+                exit(-1);
+            }
+        }
+        ///error check, dont put in release version
+        if(i==1)
+        {
+            fprintf(stderr,"GET NEXT DETECTED INVALID UTF-8 CHAR IN STRING (INVALID LENGTH SPECIFIED)\n");
+            exit(-1);
+        }
+
+        offset+=i;
+
+        //offset+=3*(text[offset]==0xEF && text[offset+1]==0xB8 && (text[offset+2]&0xF0)==0x80);///skip over variation sequence
+    }
+    else offset++;
+
+    return offset;
+}
+
 static inline cvm_overlay_glyph * cvm_overlay_find_glpyh(cvm_overlay_font * font,uint32_t gi)
 {
     uint32_t s,e,i;
@@ -173,7 +320,6 @@ static inline cvm_overlay_glyph * cvm_overlay_find_glpyh(cvm_overlay_font * font
 static inline void cvm_overlay_prepare_glyph_render_data(cvm_overlay_font * font,cvm_overlay_glyph * g)
 {
     uint32_t w,h;
-    VkDeviceSize upload_offset;
     FT_GlyphSlot gs;
     void * staging;
 
@@ -254,7 +400,7 @@ int overlay_size_text_simple(cvm_overlay_font * font,char * text)
         {
             if(!FT_Get_Kerning(font->face,prev_gi,gi,0,&kern)) w+=kern.x>>6;
         }
-        else w-=g->pos.x1;
+        //else w-=g->pos.x1;
 
         prev_gi=gi;
 
@@ -266,7 +412,7 @@ int overlay_size_text_simple(cvm_overlay_font * font,char * text)
     return w;
 }
 
-void overlay_render_text_simple(cvm_overlay_element_render_buffer * element_render_buffer,cvm_overlay_font * font,char * text,int x,int y,rectangle_ * bounds)
+void overlay_render_text_simple(cvm_overlay_element_render_buffer * element_render_buffer,cvm_overlay_font * font,char * text,int x,int y,rectangle_ * bounds,overlay_colour_ colour)
 {
     uint32_t gi,prev_gi,incr;
     FT_Vector kern;
@@ -295,7 +441,7 @@ void overlay_render_text_simple(cvm_overlay_element_render_buffer * element_rend
         {
             if(!FT_Get_Kerning(font->face,prev_gi,gi,0,&kern)) x+=kern.x>>6;
         }
-        else x-=g->pos.x1;
+        //else x-=g->pos.x1;
 
         prev_gi=gi;
 
@@ -307,7 +453,7 @@ void overlay_render_text_simple(cvm_overlay_element_render_buffer * element_rend
             if((rectangle_has_positive_area(rr))) element_render_buffer->buffer[element_render_buffer->count++]=(cvm_overlay_render_data)
             {
                 {rr.x1,rr.y1,rr.x2,rr.y2},
-                {(CVM_OVERLAY_ELEMENT_SHADED<<12)|(OVERLAY_TEXT_COLOUR_0_&0x0FFF),(g->tile->x_pos<<2)+rr.x1-rb.x1,(g->tile->y_pos<<2)+rr.y1-rb.y1,83},
+                {(CVM_OVERLAY_ELEMENT_SHADED<<12)|(colour&0x0FFF),(g->tile->x_pos<<2)+rr.x1-rb.x1,(g->tile->y_pos<<2)+rr.y1-rb.y1,83},
             };
         }
 
@@ -317,6 +463,50 @@ void overlay_render_text_simple(cvm_overlay_element_render_buffer * element_rend
     }
 }
 
+int overlay_text_find_offset_simple(cvm_overlay_font * font,char * text,int relative_x)
+{
+    uint32_t gi,prev_gi,incr;
+    FT_Vector kern;
+    cvm_overlay_glyph * g;
+    char * text_start;
+    int w;
+
+    prev_gi=0;
+    w=0;
+
+    text_start=text;
+
+    while(*text)
+    {
+        if(*text==' ')
+        {
+            w+=font->space_advance;
+            prev_gi=font->space_character_index;
+            text++;
+            continue;
+        }
+
+        gi=cvm_overlay_get_utf8_glyph_index(font->face,(uint8_t*)text,&incr);
+
+        g=cvm_overlay_find_glpyh(font,gi);
+
+        if(prev_gi)
+        {
+            if(!FT_Get_Kerning(font->face,prev_gi,gi,0,&kern)) w+=kern.x>>6;
+        }
+        //else w-=g->pos.x1;
+
+        prev_gi=gi;
+
+        w+=cvm_overlay_get_glyph_advance(font,g);
+
+        if(w>relative_x)break;
+
+        text+=incr;
+    }
+
+    return text-text_start;
+}
 
 int overlay_get_text_box_height(cvm_overlay_font * font,char * text,int wrapping_width)
 {
@@ -364,7 +554,7 @@ int overlay_get_text_box_height(cvm_overlay_font * font,char * text,int wrapping
         {
             if(!FT_Get_Kerning(font->face,prev_gi,gi,0,&kern)) w+=kern.x>>6;
         }
-        else w-=g->pos.x1;
+        //else w-=g->pos.x1;
 
         prev_gi=gi;
 
@@ -399,7 +589,7 @@ int overlay_get_text_box_height(cvm_overlay_font * font,char * text,int wrapping
     return h;
 }
 /// complex allows variant word wrapping/ compression with front to back or back to front ellipses, as well as colour changing text, up to 10 variant colours (0-9)
-void overlay_render_text_complex(cvm_overlay_element_render_buffer * element_render_buffer,cvm_overlay_font * font,char * text,int x,int y,rectangle_ * bounds,int wrapping_width)
+void overlay_render_text_complex(cvm_overlay_element_render_buffer * element_render_buffer,cvm_overlay_font * font,char * text,int x,int y,rectangle_ * bounds,overlay_colour_ colour,int wrapping_width)
 {
     uint32_t gi,prev_gi,incr;
     int s_x;
@@ -452,7 +642,7 @@ void overlay_render_text_complex(cvm_overlay_element_render_buffer * element_ren
         {
             if(!FT_Get_Kerning(font->face,prev_gi,gi,0,&kern)) x+=kern.x>>6;
         }
-        else x-=g->pos.x1;
+        //else x-=g->pos.x1;
 
         prev_gi=gi;
 
@@ -465,7 +655,7 @@ void overlay_render_text_complex(cvm_overlay_element_render_buffer * element_ren
             if((rendered_this_glyph=rectangle_has_positive_area(rr))) element_render_buffer->buffer[element_render_buffer->count++]=(cvm_overlay_render_data)
             {
                 {rr.x1,rr.y1,rr.x2,rr.y2},
-                {CVM_OVERLAY_ELEMENT_SHADED<<12|OVERLAY_TEXT_COLOUR_0_&0x0FFF,(g->tile->x_pos<<2)+rr.x1-rb.x1,(g->tile->y_pos<<2)+rr.y1-rb.y1,83},
+                {CVM_OVERLAY_ELEMENT_SHADED<<12|(colour&0x0FFF),(g->tile->x_pos<<2)+rr.x1-rb.x1,(g->tile->y_pos<<2)+rr.y1-rb.y1,83},
             };
         }
 

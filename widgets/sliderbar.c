@@ -122,6 +122,8 @@ static widget_behaviour_function_set horizontal_sliderbar_behaviour_functions=
     .m_move         =   horizontal_sliderbar_widget_mouse_movement,
     .scroll         =   sliderbar_widget_scroll,
     .key_down       =   blank_widget_key_down,
+    .text_input     =   blank_widget_text_input,
+    .text_edit      =   blank_widget_text_edit,
     .click_away     =   blank_widget_click_away,
     .add_child      =   blank_widget_add_child,
     .remove_child   =   blank_widget_remove_child,
@@ -172,6 +174,8 @@ static widget_behaviour_function_set vertical_sliderbar_behaviour_functions=
     .m_move         =   vertical_sliderbar_widget_mouse_movement,
     .scroll         =   sliderbar_widget_scroll,
     .key_down       =   blank_widget_key_down,
+    .text_input     =   blank_widget_text_input,
+    .text_edit      =   blank_widget_text_edit,
     .click_away     =   blank_widget_click_away,
     .add_child      =   blank_widget_add_child,
     .remove_child   =   blank_widget_remove_child,
@@ -193,7 +197,8 @@ static void horizontal_sliderbar_widget_render(overlay_data * od,overlay_theme *
     int bar=(w->sliderbar.bar_size_ptr) ? *w->sliderbar.bar_size_ptr : -w->sliderbar.bar_fraction;
     if(bar==0)bar=1;
 
-	theme->h_slider_bar_render(w->base.r,x_off,y_off,w->base.status,theme,od,bounds,OVERLAY_MAIN_COLOUR,abs(w->sliderbar.max_value-w->sliderbar.min_value),abs(*w->sliderbar.value_ptr-w->sliderbar.min_value),bar);
+	theme->h_slider_bar_render(rectangle_add_offset(rectangle_new_conversion(w->base.r),x_off,y_off),w->base.status,theme,od,rectangle_new_conversion(bounds),
+                            OVERLAY_MAIN_COLOUR_,abs(w->sliderbar.max_value-w->sliderbar.min_value),abs(*w->sliderbar.value_ptr-w->sliderbar.min_value),bar,OVERLAY_TEXT_COLOUR_0_);
 }
 
 static widget * horizontal_sliderbar_widget_select(overlay_theme * theme,widget * w,int x_in,int y_in)

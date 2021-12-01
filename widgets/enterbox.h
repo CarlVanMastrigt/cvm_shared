@@ -24,22 +24,24 @@ along with cvm_shared.  If not, see <https://www.gnu.org/licenses/>.
 #ifndef WIDGET_ENTERBOX_H
 #define WIDGET_ENTERBOX_H
 
-
 typedef struct widget_enterbox
 {
     widget_base base;
 
     char * text;
-    int text_max_length;
-    int text_min_visible;
+    int max_strlen;
+    int max_glyphs;
+    int min_glyphs_visible;
     int visible_offset;
-    widget_function func;
-    void * data;
-
+    widget_function activation_func;
+    widget_function update_contents_func;
     widget_function upon_input;
+    void * data;
 
     int selection_begin;
     int selection_end;
+
+    char composition_text[CVM_OVERLAY_MAX_COMPOSITION_BYTES];
 
     //int font_index;
 
@@ -48,18 +50,20 @@ typedef struct widget_enterbox
 
     uint32_t delete_all_when_first_selected:1;
     uint32_t activate_upon_deselect:1;
+    //uint32_t update_contents:1;
     uint32_t free_data:1;
 }
 widget_enterbox;
 
-widget * create_enterbox(int text_max_length,int text_min_visible,char * initial_text,widget_function func,void * data,bool activate_upon_deselect,bool free_data);
+//widget * create_enterbox(int text_max_length,int text_min_visible,char * initial_text,widget_function activation_func,void * data,widget_function update_contents_func,bool activate_upon_deselect,bool free_data);
+
+widget * create_enterbox(int max_strlen,int max_glyphs,int min_glyphs_visible,char * initial_text,widget_function activation_func,void * data,widget_function update_contents_func,bool activate_upon_deselect,bool free_data);
+#define create_enterbox_simple(glyph_count,initial_text,activation_func,data,update_contents_func,activate_upon_deselect,free_data)\
+create_enterbox(glyph_count * CVM_OVERLAY_MAX_UNICODE_BYTES,glyph_count,glyph_count,initial_text,activation_func,data,update_contents_func,activate_upon_deselect,free_data)
 
 void blank_enterbox_function(widget * w);
 
 void set_enterbox_text(widget * w,char * text);
-
-void set_enterbox_text_using_int(widget * w,int v);
-int get_int_from_enterbox_text(widget * w);
 
 void set_enterbox_action_upon_input(widget * w,widget_function func);
 

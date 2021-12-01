@@ -37,12 +37,27 @@ widget_adjuster_pair_data;
 
 void adjuster_pair_sliderbar_function(widget * w)
 {
-    set_enterbox_text_using_int(w->sliderbar.data,*w->sliderbar.value_ptr);
+    #warning perhaps instead allow enterbox to read/set its contents in render step when not active? (allows multiple enterboxes to represent same piece of data simultaneously)
+    //set_enterbox_text_using_int(w->sliderbar.data,*w->sliderbar.value_ptr);
 }
 
 void adjuster_pair_enterbox_function(widget * w)
 {
-    set_sliderbar_value(w->enterbox.data,get_int_from_enterbox_text(w));
+    /// could put contained data in some external structure, e.g. one to handle ints, one to handle floats?
+    int r;
+    if(sscanf(w->enterbox.text,"%d",&r))
+    {
+        set_sliderbar_value(w->enterbox.data,r);
+    }
+}
+
+void adjuster_pair_enterbox_update_contents_function(widget * w)
+{
+    widget * sliderbar=w->enterbox.data;
+
+    char buffer[16];
+    snprintf(buffer,16,"%d",*sliderbar->sliderbar.value_ptr);
+    set_enterbox_text(w,buffer);
 }
 
 widget * create_adjuster_pair(int * value_ptr,int min_value,int max_value,int text_space,int bar_fraction)
@@ -53,10 +68,12 @@ widget * create_adjuster_pair(int * value_ptr,int min_value,int max_value,int te
     char text[16];
     sprintf(text,"%d",*value_ptr);
     #warning revise adjuster_pair, does it have any real practical use, will probably always need extended functionality to what is provided, instead package above to be called by propper function
+    /// specifically doesnt allow some specialised operation to be called upon update of value, may be useful in most cases though, just reading value externally whenever its needed/used
 
     widget * sliderbar=add_child_to_parent(box,create_sliderbar(value_ptr,min_value,max_value,adjuster_pair_sliderbar_function,NULL,false,WIDGET_HORIZONTAL,bar_fraction));
 
-	sliderbar->sliderbar.data=add_child_to_parent(box,create_enterbox(text_space,text_space,text,adjuster_pair_enterbox_function,sliderbar,true,false));
+	//sliderbar->sliderbar.data=add_child_to_parent(box,create_enterbox(text_space,text_space,text_space,text,adjuster_pair_enterbox_function,sliderbar,adjuster_pair_enterbox_update_contents_function,true,false));
+	sliderbar->sliderbar.data=add_child_to_parent(box,create_enterbox_simple(text_space,text,adjuster_pair_enterbox_function,sliderbar,adjuster_pair_enterbox_update_contents_function,true,false));
 
     return box;
 }

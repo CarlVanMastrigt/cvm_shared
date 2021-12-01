@@ -82,6 +82,8 @@ static widget_behaviour_function_set anchor_behaviour_functions=
     .m_move         =   anchor_widget_mouse_movement,
     .scroll         =   blank_widget_scroll,
     .key_down       =   blank_widget_key_down,
+    .text_input     =   blank_widget_text_input,
+    .text_edit      =   blank_widget_text_edit,
     .click_away     =   blank_widget_click_away,
     .add_child      =   blank_widget_add_child,
     .remove_child   =   blank_widget_remove_child,
@@ -94,7 +96,8 @@ static widget_behaviour_function_set anchor_behaviour_functions=
 
 static void text_anchor_widget_render(overlay_data * od,overlay_theme * theme,widget * w,int x_off,int y_off,rectangle bounds)
 {
-	theme->h_text_bar_render(rectangle_add_offset(rectangle_new_conversion(w->base.r),x_off,y_off),w->base.status,theme,od,rectangle_new_conversion(bounds),OVERLAY_MAIN_PROMINENT_COLOUR,w->anchor.text,OVERLAY_TEXT_COLOUR_0_);
+	//theme->h_text_bar_render(rectangle_add_offset(rectangle_new_conversion(w->base.r),x_off,y_off),w->base.status,theme,od,rectangle_new_conversion(bounds),OVERLAY_MAIN_PROMINENT_COLOUR,w->anchor.text,OVERLAY_TEXT_COLOUR_0_);
+	theme->h_text_bar_render(rectangle_add_offset(rectangle_new_conversion(w->base.r),x_off,y_off),w->base.status,theme,od,rectangle_new_conversion(bounds),OVERLAY_MAIN_COLOUR_,w->anchor.text,OVERLAY_TEXT_COLOUR_0_);
 }
 
 static widget * text_anchor_widget_select(overlay_theme * theme,widget * w,int x_in,int y_in)
