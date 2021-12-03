@@ -139,15 +139,15 @@ widget * create_button(void * data,widget_function func,bool free_data)
 
 static void text_button_widget_render(overlay_data * od,overlay_theme * theme,widget * w,int x_off,int y_off,rectangle bounds)
 {
-    char * t=w->button.text;
+    char * text=w->button.text;
     overlay_colour c=OVERLAY_MAIN_COLOUR;
 
     if((w->button.toggle_status)&&(w->button.toggle_status(w)))
     {
-        if((w->button.variant_text)&&(t))
+        if((w->button.variant_text)&&(text))
         {
-            while(*t)t++;
-            t++;
+            while(*text)text++;
+            text++;
         }
 
         if(w->button.highlight)
@@ -156,7 +156,12 @@ static void text_button_widget_render(overlay_data * od,overlay_theme * theme,wi
         }
     }
 
-    theme->h_text_bar_render(rectangle_add_offset(rectangle_new_conversion(w->base.r),x_off,y_off),w->base.status,theme,od,rectangle_new_conversion(bounds),c,t,OVERLAY_TEXT_COLOUR_0_);
+    rectangle_ r=rectangle_add_offset(rectangle_new_conversion(w->base.r),x_off,y_off);
+	theme->h_bar_render(r,w->base.status,theme,od,rectangle_new_conversion(bounds),c);
+
+    r=overlay_simple_text_rectangle(r,theme->font_.glyph_size,theme->h_bar_text_offset);
+    rectangle_ b=get_rectangle_overlap_(r,rectangle_new_conversion(bounds));
+    if(rectangle_has_positive_area(b))overlay_render_text_simple(od,&theme->font_,text,r.x1,r.y1,b,OVERLAY_TEXT_COLOUR_0_);
 }
 
 static widget * text_button_widget_select(overlay_theme * theme,widget * w,int x_in,int y_in)
@@ -172,11 +177,11 @@ static void text_button_widget_min_w(overlay_theme * theme,widget * w)
 
 	if((w->button.variant_text)&&(w->button.toggle_status))
     {
-        char * t=w->button.text;
-        while(*t)t++;
-        t++;
+        char * text=w->button.text;
+        while(*text)text++;
+        text++;
 
-        int min_w=overlay_size_text_simple(&theme->font_,t);//calculate_text_length(theme,t,0);
+        int min_w=overlay_size_text_simple(&theme->font_,text);//calculate_text_length(theme,t,0);
         if(min_w>w->base.min_w)w->base.min_w=min_w;
     }
 
@@ -254,24 +259,27 @@ widget * create_text_highlight_toggle_button(char * text,void * data,bool free_d
 
 static void contiguous_text_button_widget_render(overlay_data * od,overlay_theme * theme,widget * w,int x_off,int y_off,rectangle bounds)
 {
-    char * t=w->button.text;
-    overlay_colour c=OVERLAY_NO_COLOUR;
+    char * text=w->button.text;
+
+    rectangle_ r=rectangle_add_offset(rectangle_new_conversion(w->base.r),x_off,y_off);
 
     if((w->button.toggle_status)&&(w->button.toggle_status(w)))
     {
-        if((w->button.variant_text)&&(t))
+        if((w->button.variant_text)&&(text))
         {
-            while(*t)t++;
-            t++;
+            while(*text)text++;
+            text++;
         }
 
         if(w->button.highlight)
         {
-            c=OVERLAY_HIGHLIGHTING_COLOUR;
+            theme->h_bar_render(r,w->base.status,theme,od,rectangle_new_conversion(bounds),OVERLAY_HIGHLIGHTING_COLOUR);
         }
     }
 
-    theme->h_text_bar_render(rectangle_add_offset(rectangle_new_conversion(w->base.r),x_off,y_off),w->base.status,theme,od,rectangle_new_conversion(bounds),c,t,OVERLAY_TEXT_COLOUR_0_);///use case for no colour??
+    r=overlay_simple_text_rectangle(r,theme->font_.glyph_size,theme->h_bar_text_offset);
+    rectangle_ b=get_rectangle_overlap_(r,rectangle_new_conversion(bounds));
+    if(rectangle_has_positive_area(b))overlay_render_text_simple(od,&theme->font_,text,r.x1,r.y1,b,OVERLAY_TEXT_COLOUR_0_);
 }
 
 static void contiguous_text_button_widget_min_h(overlay_theme * theme,widget * w)

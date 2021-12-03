@@ -486,9 +486,9 @@ void cubic_square_icon_render(rectangle_ r,uint32_t status,overlay_theme * theme
     }
 }
 
-void cubic_h_text_bar_render(rectangle_ r,uint32_t status,overlay_theme * theme,overlay_data * od,rectangle_ bounds,overlay_colour_ colour,char * text,overlay_colour_ text_colour)
+void cubic_h_bar_render(rectangle_ r,uint32_t status,overlay_theme * theme,overlay_data * od,rectangle_ bounds,overlay_colour_ colour)
 {
-    rectangle_ rb,rt,rr;
+    rectangle_ rb,rr;
     cubic_theme_data * cubic;
 
     cubic=theme->other_data;
@@ -497,8 +497,6 @@ void cubic_h_text_bar_render(rectangle_ r,uint32_t status,overlay_theme * theme,
     if(!cubic->foreground_image_tile)return;
 
     cvm_overlay_element_render_buffer * element_render_buffer=od;///HACK, temporary measure before switching types
-
-    rt=r;
 
     r.y1=(r.y1+r.y2-cubic->foreground_d)>>1;
     r.y2=r.y1+cubic->foreground_d;
@@ -553,18 +551,6 @@ void cubic_h_text_bar_render(rectangle_ r,uint32_t status,overlay_theme * theme,
             {rr.x1,rr.y1,rr.x2,rr.y2},
             {(CVM_OVERLAY_ELEMENT_FILL<<12)|(colour&0x0FFF),0,0,83},
         };
-    }
-
-    if(text)
-    {
-        rt.y1=(rt.y1+rt.y2-theme->font_.glyph_size)>>1;
-        rt.y2=rt.y1+theme->font_.glyph_size;
-        rt.x1+=theme->h_bar_text_offset;
-        rt.x2-=theme->h_bar_text_offset;
-
-        rb=get_rectangle_overlap_(rt,bounds);
-
-        if(rectangle_has_positive_area(rb))overlay_render_text_simple(element_render_buffer,&theme->font_,text,rt.x1,rt.y1,&rb,text_colour);
     }
 }
 
@@ -1037,7 +1023,6 @@ overlay_theme * create_cubic_theme(void)
     theme->y_panel_offset=3;
     theme->y_panel_offset_side=3;
 
-    theme->h_bar_minimum_w=0;///WTF IS THIS ???
     theme->h_bar_text_offset=16;
 
     theme->h_sliderbar_lost_w=24;
@@ -1062,9 +1047,9 @@ overlay_theme * create_cubic_theme(void)
 
 
     theme->square_icon_render=cubic_square_icon_render;
-    theme->h_text_bar_render=cubic_h_text_bar_render;
-    theme->h_text_icon_bar_render=cubic_h_text_icon_bar_render;
-    theme->h_icon_text_bar_render=cubic_h_icon_text_bar_render;
+    theme->h_bar_render=cubic_h_bar_render;
+    //theme->h_text_icon_bar_render=cubic_h_text_icon_bar_render;
+    //theme->h_icon_text_bar_render=cubic_h_icon_text_bar_render;
     theme->h_slider_bar_render=cubic_h_slider_bar_render;
     theme->v_slider_bar_render=cubic_v_slider_bar_render;
     theme->box_render=cubic_box_render;

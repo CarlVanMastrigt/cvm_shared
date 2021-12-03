@@ -35,8 +35,15 @@ static void tab_button_widget_render(overlay_data * od,overlay_theme * theme,wid
 {
     widget * page=w->button.data;
 
-    if(widget_active(page)) theme->h_text_bar_render(rectangle_add_offset(rectangle_new_conversion(w->base.r),x_off,y_off),w->base.status,theme,od,rectangle_new_conversion(bounds),
-        (page->base.parent->tab_folder.current_tab_page==page)?OVERLAY_HIGHLIGHTING_COLOUR:OVERLAY_NO_COLOUR,w->button.text,OVERLAY_TEXT_COLOUR_0_);
+    if(widget_active(page))/// ???
+    {
+        rectangle_ r=rectangle_add_offset(rectangle_new_conversion(w->base.r),x_off,y_off);
+        if(page->base.parent->tab_folder.current_tab_page==page)theme->h_bar_render(r,w->base.status,theme,od,rectangle_new_conversion(bounds),OVERLAY_HIGHLIGHTING_COLOUR);
+
+        r=overlay_simple_text_rectangle(r,theme->font_.glyph_size,theme->h_bar_text_offset);
+        rectangle_ b=get_rectangle_overlap_(r,rectangle_new_conversion(bounds));
+        if(rectangle_has_positive_area(b))overlay_render_text_simple(od,&theme->font_,w->button.text,r.x1,r.y1,b,OVERLAY_TEXT_COLOUR_0_);
+    }
 }
 
 static widget * tab_button_widget_select(overlay_theme * theme,widget * w,int x_in,int y_in)

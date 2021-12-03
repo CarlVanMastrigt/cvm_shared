@@ -470,10 +470,10 @@ static void file_search_button_widget_render(overlay_data * od,overlay_theme * t
     else if(fsi->entries[w->button.index].type==1)icon_name="misc_file";
     else icon_name=fsi->sfsd->types[fsi->entries[w->button.index].type-2].icon_name;
 
-    theme->h_icon_text_bar_render(w->base.r,x_off,y_off,w->base.status,theme,od,bounds,
-        (fsi->selected_entry==w)?OVERLAY_HIGHLIGHTING_COLOUR:OVERLAY_NO_COLOUR,
-        fsi->entry_name_data+fsi->entries[w->button.index].name_offset,
-        icon_name,OVERLAY_TEXT_COLOUR_0);
+//    theme->h_icon_text_bar_render(w->base.r,x_off,y_off,w->base.status,theme,od,bounds,
+//        (fsi->selected_entry==w)?OVERLAY_HIGHLIGHTING_COLOUR:OVERLAY_NO_COLOUR,
+//        fsi->entry_name_data+fsi->entries[w->button.index].name_offset,
+//        icon_name,OVERLAY_TEXT_COLOUR_0);
 }
 
 static widget * file_search_button_widget_select(overlay_theme * theme,widget * w,int x_in,int y_in)
@@ -1196,7 +1196,12 @@ static void file_search_filter_type_button_widget_render(overlay_data * od,overl
     if(fsi->active_type_filter>=0) text=fsi->sfsd->types[fsi->active_type_filter].name;
     if(widget_active(fsi->type_filter_popup))text=NULL;
 
-    theme->h_text_bar_render(rectangle_add_offset(rectangle_new_conversion(w->base.r),x_off,y_off),w->base.status,theme,od,rectangle_new_conversion(bounds),OVERLAY_MAIN_COLOUR_,text,OVERLAY_TEXT_COLOUR_0_);
+    rectangle_ r=rectangle_add_offset(rectangle_new_conversion(w->base.r),x_off,y_off);
+	theme->h_bar_render(r,w->base.status,theme,od,rectangle_new_conversion(bounds),OVERLAY_MAIN_COLOUR_);
+
+    r=overlay_simple_text_rectangle(r,theme->font_.glyph_size,theme->h_bar_text_offset);
+    rectangle_ b=get_rectangle_overlap_(r,rectangle_new_conversion(bounds));
+    if(rectangle_has_positive_area(b))overlay_render_text_simple(od,&theme->font_,text,r.x1,r.y1,b,OVERLAY_TEXT_COLOUR_0_);
 }
 
 static widget * file_search_filter_type_button_widget_select(overlay_theme * theme,widget * w,int x_in,int y_in)
@@ -1319,7 +1324,12 @@ static void file_search_export_type_button_widget_render(overlay_data * od,overl
 
     if(fsi->export_formats) text=fsi->export_formats[fsi->active_export_format];
 
-    theme->h_text_bar_render(rectangle_add_offset(rectangle_new_conversion(w->base.r),x_off,y_off),w->base.status,theme,od,rectangle_new_conversion(bounds),OVERLAY_MAIN_COLOUR,text,OVERLAY_TEXT_COLOUR_0_);
+    rectangle_ r=rectangle_add_offset(rectangle_new_conversion(w->base.r),x_off,y_off);
+	theme->h_bar_render(r,w->base.status,theme,od,rectangle_new_conversion(bounds),OVERLAY_MAIN_COLOUR_);
+
+    r=overlay_simple_text_rectangle(r,theme->font_.glyph_size,theme->h_bar_text_offset);
+    rectangle_ b=get_rectangle_overlap_(r,rectangle_new_conversion(bounds));
+    if(rectangle_has_positive_area(b))overlay_render_text_simple(od,&theme->font_,text,r.x1,r.y1,b,OVERLAY_TEXT_COLOUR_0_);
 }
 
 static widget * file_search_export_type_button_widget_select(overlay_theme * theme,widget * w,int x_in,int y_in)

@@ -43,6 +43,8 @@ typedef struct widget_enterbox
 
     char composition_text[CVM_OVERLAY_MAX_COMPOSITION_BYTES];
 
+    int text_offset;///set during width/height? possibly during render? alter during text change
+
     //int font_index;
 
     //int text_x_offset;

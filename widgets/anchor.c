@@ -96,8 +96,15 @@ static widget_behaviour_function_set anchor_behaviour_functions=
 
 static void text_anchor_widget_render(overlay_data * od,overlay_theme * theme,widget * w,int x_off,int y_off,rectangle bounds)
 {
-	//theme->h_text_bar_render(rectangle_add_offset(rectangle_new_conversion(w->base.r),x_off,y_off),w->base.status,theme,od,rectangle_new_conversion(bounds),OVERLAY_MAIN_PROMINENT_COLOUR,w->anchor.text,OVERLAY_TEXT_COLOUR_0_);
-	theme->h_text_bar_render(rectangle_add_offset(rectangle_new_conversion(w->base.r),x_off,y_off),w->base.status,theme,od,rectangle_new_conversion(bounds),OVERLAY_MAIN_COLOUR_,w->anchor.text,OVERLAY_TEXT_COLOUR_0_);
+	rectangle_ r=rectangle_add_offset(rectangle_new_conversion(w->base.r),x_off,y_off);
+	theme->h_bar_render(r,w->base.status,theme,od,rectangle_new_conversion(bounds),OVERLAY_ALTERNATE_MAIN_COLOUR_);
+
+    r=overlay_simple_text_rectangle(r,theme->font_.glyph_size,theme->h_bar_text_offset);
+    rectangle_ b=get_rectangle_overlap_(r,rectangle_new_conversion(bounds));
+    if(rectangle_has_positive_area(b))overlay_render_text_simple(od,&theme->font_,w->anchor.text,r.x1,r.y1,b,OVERLAY_TEXT_COLOUR_0_);
+
+    ///prep rectangle here separately, combine bounds and do testing as well, apply widget specific offset as necessary, otherwise pass in unadjusted x/y pos as param like old setup
+    ///reuires passing 4 fewer ints, and potentially strips out a function call, just need a clean way to accomplish this...
 }
 
 static widget * text_anchor_widget_select(overlay_theme * theme,widget * w,int x_in,int y_in)

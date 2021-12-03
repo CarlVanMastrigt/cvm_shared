@@ -483,7 +483,7 @@ static void textbox_copy_selection_to_clipboard(widget * w)
 //    }
 }
 
-static bool textbox_widget_key_down(overlay_theme * theme,widget * w,SDL_Keycode keycode)
+static bool textbox_widget_key_down(overlay_theme * theme,widget * w,SDL_Keycode keycode,SDL_Keymod mod)
 {
 //    SDL_Keymod mod=SDL_GetModState();
 //

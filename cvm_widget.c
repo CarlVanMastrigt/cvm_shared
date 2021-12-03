@@ -405,7 +405,7 @@ bool blank_widget_scroll(overlay_theme * theme,widget * w,int delta)
     return false;
 }
 
-bool blank_widget_key_down(overlay_theme * theme,widget * w,SDL_Keycode keycode)
+bool blank_widget_key_down(overlay_theme * theme,widget * w,SDL_Keycode keycode,SDL_Keymod mod)
 {
     return false;
 }
@@ -660,11 +660,11 @@ bool handle_widget_overlay_wheel(widget * menu_widget,int x_in,int y_in,int delt
     return true;
 }
 
-bool handle_widget_overlay_keyboard(widget * menu_widget,SDL_Keycode keycode)
+bool handle_widget_overlay_keyboard(widget * menu_widget,SDL_Keycode keycode,SDL_Keymod mod)
 {
     if(currently_active_widget)
     {
-        return currently_active_widget->base.behaviour_functions->key_down(current_theme,currently_active_widget,keycode);
+        return currently_active_widget->base.behaviour_functions->key_down(current_theme,currently_active_widget,keycode,mod);
     }
 
     return false;

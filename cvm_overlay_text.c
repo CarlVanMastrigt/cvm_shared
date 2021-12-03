@@ -214,7 +214,7 @@ bool cvm_overlay_utf8_validate_string_and_count_glyphs(char * text,int * c)
     return true;
 }
 
-int cvm_overlay_utf8_get_previous(char * text,int offset)
+int cvm_overlay_utf8_get_previous_glyph(char * text,int offset)
 {
     //offset-= 3* (offset>2 && text[offset-3]==0xEF && text[offset-2]==0xB8 && (text[offset-1]&0xF0)==0x80);///skip over variation sequence
 
@@ -237,7 +237,7 @@ int cvm_overlay_utf8_get_previous(char * text,int offset)
             }
         }
     }
-    else if(text[o] & 0x80)
+    else if(text[offset] & 0x80)
     {
         fprintf(stderr,"GET PREVIOUS DETECTED INVALID UTF-8 CHAR IN STRING (LEAD CHARACTER NOT FOUND)\n");
         exit(-1);
@@ -246,7 +246,7 @@ int cvm_overlay_utf8_get_previous(char * text,int offset)
     return offset;
 }
 
-int cvm_overlay_utf8_get_next(char * text,int offset)
+int cvm_overlay_utf8_get_next_glyph(char * text,int offset)
 {
     if(text[offset]=='\0')return offset;
 
@@ -275,6 +275,22 @@ int cvm_overlay_utf8_get_next(char * text,int offset)
     }
     else offset++;
 
+    return offset;
+}
+
+int cvm_overlay_utf8_get_previous_word(char * text,int offset)
+{
+    /// could/should also match other whitespace characters?
+    while(offset && text[offset-1]==' ')offset--;
+    while(offset && text[offset-1]!=' ')offset--;
+    return offset;
+}
+
+int cvm_overlay_utf8_get_next_word(char * text,int offset)
+{
+    /// could/should also match other whitespace characters?
+    while(text[offset] && text[offset]==' ')offset++;
+    while(text[offset] && text[offset]!=' ')offset++;
     return offset;
 }
 
@@ -412,7 +428,7 @@ int overlay_size_text_simple(cvm_overlay_font * font,char * text)
     return w;
 }
 
-void overlay_render_text_simple(cvm_overlay_element_render_buffer * element_render_buffer,cvm_overlay_font * font,char * text,int x,int y,rectangle_ * bounds,overlay_colour_ colour)
+void overlay_render_text_simple(cvm_overlay_element_render_buffer * element_render_buffer,cvm_overlay_font * font,char * text,int x,int y,rectangle_ bounds,overlay_colour_ colour)
 {
     uint32_t gi,prev_gi,incr;
     FT_Vector kern;
@@ -421,7 +437,7 @@ void overlay_render_text_simple(cvm_overlay_element_render_buffer * element_rend
 
     prev_gi=0;
 
-    while(*text)
+    if(rectangle_has_positive_area(bounds))while(*text)
     {
         if(*text==' ')
         {
@@ -448,7 +464,7 @@ void overlay_render_text_simple(cvm_overlay_element_render_buffer * element_rend
         if(g->tile && element_render_buffer->count != element_render_buffer->space)///need to check again as can return null once again;
         {
             rb=rectangle_add_offset(g->pos,x,y);
-            rr=get_rectangle_overlap_(rb,*bounds);
+            rr=get_rectangle_overlap_(rb,bounds);
 
             if((rectangle_has_positive_area(rr))) element_render_buffer->buffer[element_render_buffer->count++]=(cvm_overlay_render_data)
             {
@@ -460,6 +476,79 @@ void overlay_render_text_simple(cvm_overlay_element_render_buffer * element_rend
         x+=cvm_overlay_get_glyph_advance(font,g);
 
         text+=incr;
+    }
+}
+
+void overlay_render_text_selection_simple(cvm_overlay_element_render_buffer * element_render_buffer,cvm_overlay_font * font,char * text,int x,int y,rectangle_ bounds,overlay_colour_ colour,char * selection_start,char * selection_end)
+{
+    uint32_t gi,prev_gi,incr;
+    rectangle_ rs;
+    FT_Vector kern;
+    cvm_overlay_glyph * g;
+    rectangle_ rb,rr;
+
+    prev_gi=0;
+    rs.y1=y;
+    rs.y2=y+font->glyph_size;
+    rs.x1=rs.x2=x;
+
+    while(*text)
+    {
+        if(text==selection_start) rs.x1=x;
+        if(text==selection_end) rs.x2=x;
+
+        if(*text==' ')
+        {
+            x+=font->space_advance;
+            prev_gi=font->space_character_index;
+            text++;
+            continue;
+        }
+
+        gi=cvm_overlay_get_utf8_glyph_index(font->face,(uint8_t*)text,&incr);
+
+        g=cvm_overlay_find_glpyh(font,gi);
+
+        cvm_overlay_prepare_glyph_render_data(font,g);
+
+        if(prev_gi)
+        {
+            if(!FT_Get_Kerning(font->face,prev_gi,gi,0,&kern)) x+=kern.x>>6;
+        }
+        //else x-=g->pos.x1;
+
+        prev_gi=gi;
+
+        if(g->tile && element_render_buffer->count != element_render_buffer->space)///need to check again as can return null once again;
+        {
+            rb=rectangle_add_offset(g->pos,x,y);
+            rr=get_rectangle_overlap_(rb,bounds);
+
+            if((rectangle_has_positive_area(rr))) element_render_buffer->buffer[element_render_buffer->count++]=(cvm_overlay_render_data)
+            {
+                {rr.x1,rr.y1,rr.x2,rr.y2},
+                {(CVM_OVERLAY_ELEMENT_SHADED<<12)|(colour&0x0FFF),(g->tile->x_pos<<2)+rr.x1-rb.x1,(g->tile->y_pos<<2)+rr.y1-rb.y1,83},
+            };
+        }
+
+        x+=cvm_overlay_get_glyph_advance(font,g);
+
+        text+=incr;
+    }
+
+    if(text==selection_start) rs.x1=x;
+    if(text==selection_end) rs.x2=x;
+    rs.x2+=selection_end==selection_start;
+
+    if(element_render_buffer->count != element_render_buffer->space)
+    {
+        rs=get_rectangle_overlap_(rs,bounds);
+
+        if((rectangle_has_positive_area(rs))) element_render_buffer->buffer[element_render_buffer->count++]=(cvm_overlay_render_data)
+        {
+            {rs.x1,rs.y1,rs.x2,rs.y2},
+            {(CVM_OVERLAY_ELEMENT_FILL<<12)|(OVERLAY_TEXT_HIGHLIGHT_COLOUR_&0x0FFF),0,0,83},
+        };
     }
 }
 

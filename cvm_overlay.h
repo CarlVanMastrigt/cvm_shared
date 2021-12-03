@@ -37,7 +37,7 @@ typedef enum
     OVERLAY_NO_COLOUR_=0,
     OVERLAY_BACKGROUND_COLOUR_,
     OVERLAY_MAIN_COLOUR_,
-    //OVERLAY_ALTERNATE_MAIN_COLOUR,
+    OVERLAY_ALTERNATE_MAIN_COLOUR_,
 //    OVERLAY_HIGHLIGHTING_COLOUR,
 //    OVERLAY_MAIN_HIGHLIGHTED_COLOUR,
 //    OVERLAY_MAIN_ACTIVE_COLOUR,
@@ -46,7 +46,7 @@ typedef enum
 //    OVERLAY_BORDER_COLOUR,
 
 
-//    OVERLAY_TEXT_HIGHLIGHT_COLOUR,
+    OVERLAY_TEXT_HIGHLIGHT_COLOUR_,
     OVERLAY_TEXT_COLOUR_0_,
 //    OVERLAY_TEXT_COLOUR_1,
 //    OVERLAY_TEXT_COLOUR_2,
@@ -291,7 +291,6 @@ struct overlay_theme
     int base_unit_w;
     int base_unit_h;
 
-    int h_bar_minimum_w;///what is this even used for ???
     int h_bar_text_offset;
 
     int h_sliderbar_lost_w;///horizontal space tied up in visual elements (not part of range)
@@ -326,9 +325,7 @@ struct overlay_theme
     /// replace overlay data with new paradigm (element buffer)
 
     void    (*square_icon_render)       (rectangle_ r,uint32_t status,overlay_theme * theme,overlay_data * od,rectangle_ bounds,overlay_colour_ colour,char * icon_glyph,overlay_colour_ icon_colour);
-    void    (*h_text_bar_render)        (rectangle_ r,uint32_t status,overlay_theme * theme,overlay_data * od,rectangle_ bounds,overlay_colour_ colour,char * text,overlay_colour_ text_colour);
-    void    (*h_text_icon_bar_render)   (rectangle r,int x_off,int y_off,uint32_t status,overlay_theme * theme,overlay_data * od,rectangle bounds,overlay_colour colour,char * text,char * icon_glyph,overlay_colour icon_colour);
-    void    (*h_icon_text_bar_render)   (rectangle r,int x_off,int y_off,uint32_t status,overlay_theme * theme,overlay_data * od,rectangle bounds,overlay_colour colour,char * text,char * icon_glyph,overlay_colour icon_colour);
+    void    (*h_bar_render)        (rectangle_ r,uint32_t status,overlay_theme * theme,overlay_data * od,rectangle_ bounds,overlay_colour_ colour);///just make h_bar?
     void    (*h_slider_bar_render)      (rectangle_ r,uint32_t status,overlay_theme * theme,overlay_data * od,rectangle_ bounds,overlay_colour_ colour,int range,int value,int bar,overlay_colour_ bar_colour);
     void    (*v_slider_bar_render)      (rectangle r,int x_off,int y_off,uint32_t status,overlay_theme * theme,overlay_data * od,rectangle bounds,overlay_colour colour,int range,int value,int bar);
     void    (*box_render)               (rectangle r,int x_off,int y_off,uint32_t status,overlay_theme * theme,overlay_data * od,rectangle bounds,overlay_colour colour);
