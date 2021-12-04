@@ -412,11 +412,7 @@ int overlay_size_text_simple(cvm_overlay_font * font,char * text)
 
         g=cvm_overlay_find_glpyh(font,gi);
 
-        if(prev_gi)
-        {
-            if(!FT_Get_Kerning(font->face,prev_gi,gi,0,&kern)) w+=kern.x>>6;
-        }
-        //else w-=g->pos.x1;
+        if(prev_gi && !FT_Get_Kerning(font->face,prev_gi,gi,0,&kern)) w+=kern.x>>6;
 
         prev_gi=gi;
 
@@ -453,11 +449,7 @@ void overlay_render_text_simple(cvm_overlay_element_render_buffer * element_rend
 
         cvm_overlay_prepare_glyph_render_data(font,g);
 
-        if(prev_gi)
-        {
-            if(!FT_Get_Kerning(font->face,prev_gi,gi,0,&kern)) x+=kern.x>>6;
-        }
-        //else x-=g->pos.x1;
+        if(prev_gi && !FT_Get_Kerning(font->face,prev_gi,gi,0,&kern)) x+=kern.x>>6;
 
         prev_gi=gi;
 
@@ -511,11 +503,15 @@ void overlay_render_text_selection_simple(cvm_overlay_element_render_buffer * el
 
         cvm_overlay_prepare_glyph_render_data(font,g);
 
-        if(prev_gi)
+        if(prev_gi && !FT_Get_Kerning(font->face,prev_gi,gi,0,&kern))
         {
-            if(!FT_Get_Kerning(font->face,prev_gi,gi,0,&kern)) x+=kern.x>>6;
+            x+=kern.x>>6;
+            if(kern.x)
+            {
+                if(text==selection_start) rs.x1=x;
+                if(text==selection_end) rs.x2=x;
+            }
         }
-        //else x-=g->pos.x1;
 
         prev_gi=gi;
 
@@ -558,7 +554,7 @@ int overlay_text_find_offset_simple(cvm_overlay_font * font,char * text,int rela
     FT_Vector kern;
     cvm_overlay_glyph * g;
     char * text_start;
-    int w;
+    int w,a;
 
     prev_gi=0;
     w=0;
@@ -569,6 +565,7 @@ int overlay_text_find_offset_simple(cvm_overlay_font * font,char * text,int rela
     {
         if(*text==' ')
         {
+            if(w+font->space_advance/2 > relative_x)break;
             w+=font->space_advance;
             prev_gi=font->space_character_index;
             text++;
@@ -579,17 +576,15 @@ int overlay_text_find_offset_simple(cvm_overlay_font * font,char * text,int rela
 
         g=cvm_overlay_find_glpyh(font,gi);
 
-        if(prev_gi)
-        {
-            if(!FT_Get_Kerning(font->face,prev_gi,gi,0,&kern)) w+=kern.x>>6;
-        }
-        //else w-=g->pos.x1;
+        if(prev_gi && !FT_Get_Kerning(font->face,prev_gi,gi,0,&kern)) w+=kern.x>>6;
 
         prev_gi=gi;
 
-        w+=cvm_overlay_get_glyph_advance(font,g);
+        a=cvm_overlay_get_glyph_advance(font,g);
 
-        if(w>relative_x)break;
+        if(w+a/2 > relative_x)break;
+
+        w+=a;
 
         text+=incr;
     }
@@ -639,11 +634,7 @@ int overlay_get_text_box_height(cvm_overlay_font * font,char * text,int wrapping
 
         g=cvm_overlay_find_glpyh(font,gi);
 
-        if(prev_gi)
-        {
-            if(!FT_Get_Kerning(font->face,prev_gi,gi,0,&kern)) w+=kern.x>>6;
-        }
-        //else w-=g->pos.x1;
+        if(prev_gi && !FT_Get_Kerning(font->face,prev_gi,gi,0,&kern)) w+=kern.x>>6;
 
         prev_gi=gi;
 
@@ -727,11 +718,7 @@ void overlay_render_text_complex(cvm_overlay_element_render_buffer * element_ren
 
         cvm_overlay_prepare_glyph_render_data(font,g);
 
-        if(prev_gi)
-        {
-            if(!FT_Get_Kerning(font->face,prev_gi,gi,0,&kern)) x+=kern.x>>6;
-        }
-        //else x-=g->pos.x1;
+        if(prev_gi && !FT_Get_Kerning(font->face,prev_gi,gi,0,&kern)) x+=kern.x>>6;
 
         prev_gi=gi;
 

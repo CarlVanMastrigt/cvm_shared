@@ -24,8 +24,6 @@ void blank_enterbox_function(widget * w)
     printf("blank enterbox: %s\n",w->enterbox.text);
 }
 
-
-
 static inline void enterbox_delete_selection(widget * w,int s_begin,int s_end)
 {
     if(s_begin>s_end)
@@ -100,36 +98,28 @@ static void enterbox_check_visible_offset(widget * w,overlay_theme * theme)
 
     w->enterbox.text[w->enterbox.selection_end]=tmp;
 
-    if(w->enterbox.text_offset>current_offset) w->enterbox.text_offset=current_offset;
-    if(w->enterbox.text_offset+text_space<current_offset) w->enterbox.text_offset=current_offset-text_space;
+    if(w->enterbox.visible_offset>current_offset) w->enterbox.visible_offset=current_offset;
+    if(w->enterbox.visible_offset+text_space<current_offset) w->enterbox.visible_offset=current_offset-text_space;
 
     current_offset=overlay_size_text_simple(&theme->font_,w->enterbox.text)-text_space;///max offset
-    if(current_offset < 0) w->enterbox.text_offset=0;
-    else if(w->enterbox.text_offset > current_offset) w->enterbox.text_offset=current_offset;
+    if(current_offset < 0) w->enterbox.visible_offset=0;
+    else if(w->enterbox.visible_offset > current_offset) w->enterbox.visible_offset=current_offset;
 }
 
 
 static bool enterbox_widget_key_down(overlay_theme * theme,widget * w,SDL_Keycode keycode,SDL_Keymod mod)
 {
     int s_begin,s_end,s;
-    //bool accepted;
-    //SDL_Keymod mod;
-    #warning instead take input
 
     if(w->enterbox.selection_end > w->enterbox.selection_begin) s_begin=w->enterbox.selection_begin, s_end=w->enterbox.selection_end;
     else s_begin=w->enterbox.selection_end, s_end=w->enterbox.selection_begin;
 
-    mod=SDL_GetModState();
-    //accepted=false;
-
-    /// KMOD_SHIFT KMOD_CTRL KMOD_ALT
     switch(keycode)
     {
     case SDLK_c:
         if(mod&KMOD_CTRL)
         {
             enterbox_copy_selection_to_clipboard(w);
-            //accepted=true;
         }
         break;
 
@@ -139,7 +129,6 @@ static bool enterbox_widget_key_down(overlay_theme * theme,widget * w,SDL_Keycod
             enterbox_copy_selection_to_clipboard(w);
             enterbox_delete_selection(w,s_begin,s_end);
             w->enterbox.selection_begin = w->enterbox.selection_end = s_begin;
-            //accepted=true;
         }
         break;
 
@@ -150,7 +139,6 @@ static bool enterbox_widget_key_down(overlay_theme * theme,widget * w,SDL_Keycod
             {
                 enterbox_enter_text(w,SDL_GetClipboardText());
             }
-            //accepted=true;
         }
         break;
 
@@ -159,7 +147,6 @@ static bool enterbox_widget_key_down(overlay_theme * theme,widget * w,SDL_Keycod
         {
             w->enterbox.selection_begin=0;
             w->enterbox.selection_end=strlen(w->enterbox.text);
-            //accepted=true;
         }
         break;
 
@@ -182,7 +169,6 @@ static bool enterbox_widget_key_down(overlay_theme * theme,widget * w,SDL_Keycod
             enterbox_delete_selection(w,s_begin,s_end);
             w->enterbox.selection_begin = w->enterbox.selection_end = s_begin;
         }
-        //accepted=true;
         break;
 
     case SDLK_DELETE:
@@ -205,7 +191,6 @@ static bool enterbox_widget_key_down(overlay_theme * theme,widget * w,SDL_Keycod
             enterbox_delete_selection(w,s_begin,s_end);
             w->enterbox.selection_begin = w->enterbox.selection_end = s_begin;
         }
-        //accepted=true;
         break;
 
     case SDLK_LEFT:
@@ -217,7 +202,6 @@ static bool enterbox_widget_key_down(overlay_theme * theme,widget * w,SDL_Keycod
         else if(mod&KMOD_SHIFT)w->enterbox.selection_end=cvm_overlay_utf8_get_previous_glyph(w->enterbox.text,w->enterbox.selection_end);
         else if(s_begin==s_end) w->enterbox.selection_begin = w->enterbox.selection_end = cvm_overlay_utf8_get_previous_glyph(w->enterbox.text,s_begin);
         else w->enterbox.selection_begin = w->enterbox.selection_end = s_begin;
-        //accepted=true;
         break;
 
     case SDLK_RIGHT:
@@ -229,7 +213,6 @@ static bool enterbox_widget_key_down(overlay_theme * theme,widget * w,SDL_Keycod
         else if(mod&KMOD_SHIFT) w->enterbox.selection_end=cvm_overlay_utf8_get_next_glyph(w->enterbox.text,w->enterbox.selection_end);
         else if(s_begin==s_end) w->enterbox.selection_begin = w->enterbox.selection_end = cvm_overlay_utf8_get_next_glyph(w->enterbox.text,s_end);
         else w->enterbox.selection_begin = w->enterbox.selection_end = s_end;
-        //accepted=true;
         break;
 
     case SDLK_UP:
@@ -264,57 +247,16 @@ static bool enterbox_widget_key_down(overlay_theme * theme,widget * w,SDL_Keycod
     return true;
 }
 
-//static bool handle_enterbox_key(overlay_theme * theme,widget * w,SDL_Keycode keycode)
-//{
-//    bool rtrn=enterbox_key_actions(theme,w,keycode);
-//
-//    if(w->enterbox.upon_input!=NULL)
-//    {
-//        w->enterbox.upon_input(w);
-//    }
-//
-//    return rtrn;
-//}
-
-
-
-#warning need ctrl and alt to disable textinput
-/// ^ this is done automatically it turns out
-
-/// U+ input not supported...
-
-///other implementations stop rendering text correctly when selection changes (possibly errantly? no way to handle?)
-/// otherwise would need to track current edit text (is useful for underline...) as well as selected text and move both around in tandem, removing and placing edited test as necessary (inelegant)
-///or render composition over the top of other text (i do like this paradigm) place over current caret and disregard overlaid text in selection (do limit to within window/current bounding box though?)
-///     ^ give composition a special box colour? make active and if enterbox was active (probably the case) make it inactive
-///     ^ negates real need for underline as its obvious what is being entered and removes need for sizing enterbox to accomodate
-///     ^ make space sufficient to accommodate max unicode length (including variation sequence)
-///     ^ also allows unicode to elegantly replace selected text while still showing what will be replaced!
-///     ^ theme specific composition offset?
-
-/// !! rendering over the top in popup window isnt really valid! need to ensure no subsequent glyphs get rendered over the top. instead change enterbox colour and replace contents as simple/temporary solution?
-
-/// text editing (having popup be present) should disable navigation (arrow keys) -- system does this automatically!
-
-///do on key press/release, need proper check to is active to stop/start correctly if clicking away while keys still pressed
-
 #warning SDL_SystemCursor
 
 static void enterbox_widget_left_click(overlay_theme * theme,widget * w,int x,int y)
 {
-    if(!SDL_IsTextInputActive())
-    {
-        SDL_Rect r={0,0,100,20};
-        SDL_SetTextInputRect(&r);
-        SDL_StartTextInput();///need to only call if not already active...
-    }
-    /// currently active widget is set before l_click is called, so checking against that is not a way to test id this has already been called
-    //puts("start text");
+    if(!SDL_IsTextInputActive()) SDL_StartTextInput();///need to only call if not already active...
 
-//    w->enterbox.selection_begin=w->enterbox.selection_end=find_enterbox_character_index_from_position(theme,w,x,y);
+    if(*w->enterbox.composition_text)return;
 
     adjust_coordinates_to_widget_local(w,&x,&y);
-    w->enterbox.selection_begin=w->enterbox.selection_end=overlay_text_find_offset_simple(&theme->font_,w->enterbox.text,x-theme->h_bar_text_offset-w->enterbox.visible_offset);
+    w->enterbox.selection_begin=w->enterbox.selection_end=overlay_text_find_offset_simple(&theme->font_,w->enterbox.text,x-theme->h_bar_text_offset+w->enterbox.visible_offset);
 
     if(w->enterbox.upon_input!=NULL)
     {
@@ -330,16 +272,16 @@ static bool enterbox_widget_left_release(overlay_theme * theme,widget * clicked,
 
 static void enterbox_widget_mouse_movement(overlay_theme * theme,widget * w,int x,int y)
 {
+    if(*w->enterbox.composition_text)return;
+
     adjust_coordinates_to_widget_local(w,&x,&y);
-    w->enterbox.selection_end=overlay_text_find_offset_simple(&theme->font_,w->enterbox.text,x-theme->h_bar_text_offset-w->enterbox.visible_offset);
-    printf(">emb: %d\n",w->enterbox.selection_end);
+    w->enterbox.selection_end=overlay_text_find_offset_simple(&theme->font_,w->enterbox.text,x-theme->h_bar_text_offset+w->enterbox.visible_offset);
 
     enterbox_check_visible_offset(w,theme);
 }
 
 static bool enterbox_widget_text_input(overlay_theme * theme,widget * w,char * text)
 {
-    printf("enterbox input: %s\n",text);
     enterbox_enter_text(w,text);
     enterbox_check_visible_offset(w,theme);
     return true;
@@ -349,8 +291,20 @@ static bool enterbox_widget_text_edit(overlay_theme * theme,widget * w,char * te
 {
     strncpy(w->enterbox.composition_text,text,CVM_OVERLAY_MAX_COMPOSITION_BYTES);
     w->enterbox.composition_text[CVM_OVERLAY_MAX_COMPOSITION_BYTES-1]='\0';
-    ///put this in popup?
-    printf("enterbox edit: %s %d %d\n",text,start,length);
+
+    ///same visiblity checking as enterbox_check_visible_offset, but only needed here, and applying to specific vars so just in place code it
+    int current_offset,text_space;
+
+    text_space=w->base.r.w-2*theme->h_bar_text_offset-1;
+
+    current_offset=overlay_size_text_simple(&theme->font_,w->enterbox.composition_text);
+
+    if(w->enterbox.composition_visible_offset>current_offset) w->enterbox.composition_visible_offset=current_offset;
+    if(w->enterbox.composition_visible_offset+text_space<current_offset) w->enterbox.composition_visible_offset=current_offset-text_space;
+    current_offset-=text_space;///max offset
+    if(current_offset < 0) w->enterbox.composition_visible_offset=0;
+    else if(w->enterbox.composition_visible_offset > current_offset) w->enterbox.composition_visible_offset=current_offset;
+
     return true;
 }
 
@@ -388,16 +342,13 @@ static widget_behaviour_function_set enterbox_behaviour_functions=
 };
 
 
-
-
-
 static void enterbox_widget_render(overlay_data * od,overlay_theme * theme,widget * w,int x_off,int y_off,rectangle bounds)
 {
     if(w->enterbox.update_contents_func && !is_currently_active_widget(w))w->enterbox.update_contents_func(w);
 
 	overlay_colour_ colour=OVERLAY_TEXT_COLOUR_0_;
 	char *text,*sb,*se;
-	int text_offset;
+	int visible_offset;
 
     text=w->enterbox.text;
 
@@ -406,13 +357,12 @@ static void enterbox_widget_render(overlay_data * od,overlay_theme * theme,widge
 
 	if(*w->enterbox.composition_text)
     {
-        colour=OVERLAY_BACKGROUND_COLOUR_;
+        colour=OVERLAY_TEXT_COMPOSITION_COLOUR_0_;
         text=w->enterbox.composition_text;
         sb=se=text+strlen(text);
-        text_offset=0;///test this or calculate as necessary? upon input?
-        #warning change selection in composition mode to actually respect composition selection / edit details
+        visible_offset=w->enterbox.composition_visible_offset;
     }
-    else text_offset=w->enterbox.text_offset;
+    else visible_offset=w->enterbox.visible_offset;
 
 	rectangle_ r=rectangle_add_offset(rectangle_new_conversion(w->base.r),x_off,y_off);
 	theme->h_bar_render(r,w->base.status,theme,od,rectangle_new_conversion(bounds),OVERLAY_MAIN_COLOUR_);
@@ -422,8 +372,8 @@ static void enterbox_widget_render(overlay_data * od,overlay_theme * theme,widge
     if(rectangle_has_positive_area(b))
     {
         #warning make is_currently_active_widget effectively part of w->base.status, would require setting flags in slightly painful manner but w/e
-        if(is_currently_active_widget(w))overlay_render_text_selection_simple(od,&theme->font_,text,r.x1-text_offset,r.y1,b,colour,sb,se);
-        else overlay_render_text_simple(od,&theme->font_,text,r.x1,r.y1,b,colour);
+        if(is_currently_active_widget(w))overlay_render_text_selection_simple(od,&theme->font_,text,r.x1-visible_offset,r.y1,b,colour,sb,se);
+        else overlay_render_text_simple(od,&theme->font_,text,r.x1-visible_offset,r.y1,b,colour);
     }
 }
 
@@ -444,8 +394,10 @@ static void enterbox_widget_min_h(overlay_theme * theme,widget * w)
     w->base.min_h = theme->base_unit_h;
 }
 
-
-
+static void enterbox_widget_set_w(overlay_theme * theme,widget * w)
+{
+    enterbox_check_visible_offset(w,theme);
+}
 
 static widget_appearence_function_set enterbox_appearence_functions=
 (widget_appearence_function_set)
@@ -454,7 +406,7 @@ static widget_appearence_function_set enterbox_appearence_functions=
     .select =   enterbox_widget_select,
     .min_w  =   enterbox_widget_min_w,
     .min_h  =   enterbox_widget_min_h,
-    .set_w  =   blank_widget_set_w,
+    .set_w  =   enterbox_widget_set_w,
     .set_h  =   blank_widget_set_h
 };
 
@@ -481,10 +433,10 @@ widget * create_enterbox(int max_strlen,int max_glyphs,int min_glyphs_visible,ch
 	w->enterbox.free_data=free_data;
 
 	set_enterbox_text(w,initial_text);
-
-	w->enterbox.text_offset=0;
+	w->enterbox.visible_offset=0;
 
 	w->enterbox.composition_text[0]='\0';///use first character as key as to whether text is present/valid
+	w->enterbox.composition_visible_offset=0;
 
 	w->base.appearence_functions=&enterbox_appearence_functions;
 	w->base.behaviour_functions=&enterbox_behaviour_functions;
