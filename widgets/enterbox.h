@@ -44,16 +44,8 @@ typedef struct widget_enterbox
     char composition_text[CVM_OVERLAY_MAX_COMPOSITION_BYTES];
     int composition_visible_offset;
 
-    //int text_offset;///set during width/height? possibly during render? alter during text change
-
-    //int font_index;
-
-    //int text_x_offset;
-    //int text_y_offset;
-
     uint32_t delete_all_when_first_selected:1;
     uint32_t activate_upon_deselect:1;
-    //uint32_t update_contents:1;
     uint32_t free_data:1;
 }
 widget_enterbox;

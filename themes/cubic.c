@@ -118,7 +118,7 @@ along with cvm_shared.  If not, see <https://www.gnu.org/licenses/>.
 //}
 
 
-static void cubic_create_shape(cvm_vk_image_atlas_tile ** tile,uint16_t ** selection_grid,uint32_t r)///change ri & r0 as 16ths of a pixel??
+static void cubic_create_shape(cvm_overlay_element_render_buffer * erb,cvm_vk_image_atlas_tile ** tile,uint16_t ** selection_grid,uint32_t r)///change ri & r0 as 16ths of a pixel??
 {
     uint32_t i,rt,threshold,x,y,xc,yc,xm,ym,t,rm;
     uint8_t * data;
@@ -130,7 +130,7 @@ static void cubic_create_shape(cvm_vk_image_atlas_tile ** tile,uint16_t ** selec
         exit(-1);
     }
 
-    *tile=overlay_create_transparent_image_tile_with_staging((void*)(&data),r*2,r*2);
+    *tile=overlay_create_transparent_image_tile_with_staging(erb,(void*)(&data),r*2,r*2);
 
     if(*tile)
     {
@@ -404,12 +404,12 @@ void cubic_square_icon_render(rectangle_ r,uint32_t status,overlay_theme * theme
 
     cubic=theme->other_data;
 
-    g=overlay_get_glyph(&theme->font_,icon_glyph);
+    cvm_overlay_element_render_buffer * erb=od;///HACK, temporary measure before switching types
 
-    if(!cubic->foreground_image_tile)cubic_create_shape(&cubic->foreground_image_tile,&cubic->foreground_selection_grid,cubic->foreground_r);
+    g=overlay_get_glyph(erb,&theme->font_,icon_glyph);
+
+    if(!cubic->foreground_image_tile)cubic_create_shape(erb,&cubic->foreground_image_tile,&cubic->foreground_selection_grid,cubic->foreground_r);
     if(!cubic->foreground_image_tile || !g->tile)return;
-
-    cvm_overlay_element_render_buffer * element_render_buffer=od;///HACK, temporary measure before switching types
 
     rg=r;
 
@@ -422,13 +422,13 @@ void cubic_square_icon_render(rectangle_ r,uint32_t status,overlay_theme * theme
     {
         r.x1+= o;
 
-        if(element_render_buffer->count != element_render_buffer->space)
+        if(erb->count != erb->space)
         {
             rb=r;
             rb.x2=rb.x1+cubic->foreground_r;
             rr=get_rectangle_overlap_(rb,bounds);
 
-            if((rectangle_has_positive_area(rr))) element_render_buffer->buffer[element_render_buffer->count++]=(cvm_overlay_render_data)
+            if((rectangle_has_positive_area(rr))) erb->buffer[erb->count++]=(cvm_overlay_render_data)
             {
                 {rr.x1,rr.y1,rr.x2,rr.y2},
                 {(CVM_OVERLAY_ELEMENT_SHADED<<12)|(OVERLAY_MAIN_COLOUR_&0x0FFF),(cubic->foreground_image_tile->x_pos<<2)+rr.x1-rb.x1,(cubic->foreground_image_tile->y_pos<<2)+rr.y1-rb.y1,83},
@@ -442,13 +442,13 @@ void cubic_square_icon_render(rectangle_ r,uint32_t status,overlay_theme * theme
     {
         r.x2-= o;
 
-        if(element_render_buffer->count != element_render_buffer->space)
+        if(erb->count != erb->space)
         {
             rb=r;
             rb.x1=rb.x2-cubic->foreground_r;
             rr=get_rectangle_overlap_(rb,bounds);
 
-            if((rectangle_has_positive_area(rr))) element_render_buffer->buffer[element_render_buffer->count++]=(cvm_overlay_render_data)
+            if((rectangle_has_positive_area(rr))) erb->buffer[erb->count++]=(cvm_overlay_render_data)
             {
                 {rr.x1,rr.y1,rr.x2,rr.y2},
                 {(CVM_OVERLAY_ELEMENT_SHADED<<12)|(OVERLAY_MAIN_COLOUR_&0x0FFF),(cubic->foreground_image_tile->x_pos<<2)+rr.x1-rb.x1+cubic->foreground_r,(cubic->foreground_image_tile->y_pos<<2)+rr.y1-rb.y1,83},
@@ -458,11 +458,11 @@ void cubic_square_icon_render(rectangle_ r,uint32_t status,overlay_theme * theme
         r.x2-=cubic->foreground_r;
     }
 
-    if(element_render_buffer->count != element_render_buffer->space)
+    if(erb->count != erb->space)
     {
         rr=get_rectangle_overlap_(r,bounds);
 
-        if((rectangle_has_positive_area(rr))) element_render_buffer->buffer[element_render_buffer->count++]=(cvm_overlay_render_data)
+        if((rectangle_has_positive_area(rr))) erb->buffer[erb->count++]=(cvm_overlay_render_data)
         {
             {rr.x1,rr.y1,rr.x2,rr.y2},
             {(CVM_OVERLAY_ELEMENT_FILL<<12)|(OVERLAY_MAIN_COLOUR_&0x0FFF),0,0,83},
@@ -474,11 +474,11 @@ void cubic_square_icon_render(rectangle_ r,uint32_t status,overlay_theme * theme
     rg.x1=(rg.x1+rg.x2 - g->pos.x2+g->pos.x1)>>1;
     rg.x2=rg.x1+g->pos.x2-g->pos.x1;
 
-    if(element_render_buffer->count != element_render_buffer->space)
+    if(erb->count != erb->space)
     {
         rr=get_rectangle_overlap_(rg,bounds);
 
-        if((rectangle_has_positive_area(rr))) element_render_buffer->buffer[element_render_buffer->count++]=(cvm_overlay_render_data)
+        if((rectangle_has_positive_area(rr))) erb->buffer[erb->count++]=(cvm_overlay_render_data)
         {
             {rr.x1,rr.y1,rr.x2,rr.y2},
             {(CVM_OVERLAY_ELEMENT_SHADED<<12)|(OVERLAY_TEXT_COLOUR_0_&0x0FFF),(g->tile->x_pos<<2)+rr.x1-rg.x1,(g->tile->y_pos<<2)+rr.y1-rg.y1,83},
@@ -493,10 +493,10 @@ void cubic_h_bar_render(rectangle_ r,uint32_t status,overlay_theme * theme,overl
 
     cubic=theme->other_data;
 
-    if(!cubic->foreground_image_tile)cubic_create_shape(&cubic->foreground_image_tile,&cubic->foreground_selection_grid,cubic->foreground_r);
-    if(!cubic->foreground_image_tile)return;
+    cvm_overlay_element_render_buffer * erb=od;///HACK, temporary measure before switching types
 
-    cvm_overlay_element_render_buffer * element_render_buffer=od;///HACK, temporary measure before switching types
+    if(!cubic->foreground_image_tile)cubic_create_shape(erb,&cubic->foreground_image_tile,&cubic->foreground_selection_grid,cubic->foreground_r);
+    if(!cubic->foreground_image_tile)return;
 
     r.y1=(r.y1+r.y2-cubic->foreground_d)>>1;
     r.y2=r.y1+cubic->foreground_d;
@@ -506,13 +506,13 @@ void cubic_h_bar_render(rectangle_ r,uint32_t status,overlay_theme * theme,overl
     {
         r.x1+= cubic->foreground_offset_x;
 
-        if(element_render_buffer->count != element_render_buffer->space)
+        if(erb->count != erb->space)
         {
             rb=r;
             rb.x2=rb.x1+cubic->foreground_r;
             rr=get_rectangle_overlap_(rb,bounds);
 
-            if((rectangle_has_positive_area(rr))) element_render_buffer->buffer[element_render_buffer->count++]=(cvm_overlay_render_data)
+            if((rectangle_has_positive_area(rr))) erb->buffer[erb->count++]=(cvm_overlay_render_data)
             {
                 {rr.x1,rr.y1,rr.x2,rr.y2},
                 {(CVM_OVERLAY_ELEMENT_SHADED<<12)|(colour&0x0FFF),(cubic->foreground_image_tile->x_pos<<2)+rr.x1-rb.x1,(cubic->foreground_image_tile->y_pos<<2)+rr.y1-rb.y1,83},
@@ -526,13 +526,13 @@ void cubic_h_bar_render(rectangle_ r,uint32_t status,overlay_theme * theme,overl
     {
         r.x2-= cubic->foreground_offset_x;
 
-        if(element_render_buffer->count != element_render_buffer->space)
+        if(erb->count != erb->space)
         {
             rb=r;
             rb.x1=rb.x2-cubic->foreground_r;
             rr=get_rectangle_overlap_(rb,bounds);
 
-            if((rectangle_has_positive_area(rr))) element_render_buffer->buffer[element_render_buffer->count++]=(cvm_overlay_render_data)
+            if((rectangle_has_positive_area(rr))) erb->buffer[erb->count++]=(cvm_overlay_render_data)
             {
                 {rr.x1,rr.y1,rr.x2,rr.y2},
                 {(CVM_OVERLAY_ELEMENT_SHADED<<12)|(colour&0x0FFF),(cubic->foreground_image_tile->x_pos<<2)+rr.x1-rb.x1+cubic->foreground_r,(cubic->foreground_image_tile->y_pos<<2)+rr.y1-rb.y1,83},
@@ -542,11 +542,11 @@ void cubic_h_bar_render(rectangle_ r,uint32_t status,overlay_theme * theme,overl
         r.x2-=cubic->foreground_r;
     }
 
-    if(element_render_buffer->count != element_render_buffer->space)
+    if(erb->count != erb->space)
     {
         rr=get_rectangle_overlap_(r,bounds);
 
-        if((rectangle_has_positive_area(rr))) element_render_buffer->buffer[element_render_buffer->count++]=(cvm_overlay_render_data)
+        if((rectangle_has_positive_area(rr))) erb->buffer[erb->count++]=(cvm_overlay_render_data)
         {
             {rr.x1,rr.y1,rr.x2,rr.y2},
             {(CVM_OVERLAY_ELEMENT_FILL<<12)|(colour&0x0FFF),0,0,83},
@@ -650,13 +650,13 @@ void cubic_h_slider_bar_render(rectangle_ r,uint32_t status,overlay_theme * them
 
     cubic=theme->other_data;
 
-    if(!cubic->foreground_image_tile)cubic_create_shape(&cubic->foreground_image_tile,&cubic->foreground_selection_grid,cubic->foreground_r);
+    cvm_overlay_element_render_buffer * erb=od;///HACK, temporary measure before switching types
+
+    if(!cubic->foreground_image_tile)cubic_create_shape(erb,&cubic->foreground_image_tile,&cubic->foreground_selection_grid,cubic->foreground_r);
     if(!cubic->foreground_image_tile)return;
 
-    if(!cubic->internal_image_tile)cubic_create_shape(&cubic->internal_image_tile,NULL,cubic->internal_r);
+    if(!cubic->internal_image_tile)cubic_create_shape(erb,&cubic->internal_image_tile,NULL,cubic->internal_r);
     if(!cubic->internal_image_tile)return;
-
-    cvm_overlay_element_render_buffer * element_render_buffer=od;///HACK, temporary measure before switching types
 
     rs=r;
 
@@ -669,13 +669,13 @@ void cubic_h_slider_bar_render(rectangle_ r,uint32_t status,overlay_theme * them
         r.x1+= cubic->foreground_offset_x;
         rs.x1+= cubic->foreground_offset_x;
 
-        if(element_render_buffer->count != element_render_buffer->space)
+        if(erb->count != erb->space)
         {
             rb=r;
             rb.x2=rb.x1+cubic->foreground_r;
             rr=get_rectangle_overlap_(rb,bounds);
 
-            if((rectangle_has_positive_area(rr))) element_render_buffer->buffer[element_render_buffer->count++]=(cvm_overlay_render_data)
+            if((rectangle_has_positive_area(rr))) erb->buffer[erb->count++]=(cvm_overlay_render_data)
             {
                 {rr.x1,rr.y1,rr.x2,rr.y2},
                 {(CVM_OVERLAY_ELEMENT_SHADED<<12)|(colour&0x0FFF),(cubic->foreground_image_tile->x_pos<<2)+rr.x1-rb.x1,(cubic->foreground_image_tile->y_pos<<2)+rr.y1-rb.y1,83},
@@ -690,13 +690,13 @@ void cubic_h_slider_bar_render(rectangle_ r,uint32_t status,overlay_theme * them
         r.x2-= cubic->foreground_offset_x;
         rs.x2-= cubic->foreground_offset_x;
 
-        if(element_render_buffer->count != element_render_buffer->space)
+        if(erb->count != erb->space)
         {
             rb=r;
             rb.x1=rb.x2-cubic->foreground_r;
             rr=get_rectangle_overlap_(rb,bounds);
 
-            if((rectangle_has_positive_area(rr))) element_render_buffer->buffer[element_render_buffer->count++]=(cvm_overlay_render_data)
+            if((rectangle_has_positive_area(rr))) erb->buffer[erb->count++]=(cvm_overlay_render_data)
             {
                 {rr.x1,rr.y1,rr.x2,rr.y2},
                 {(CVM_OVERLAY_ELEMENT_SHADED<<12)|(colour&0x0FFF),(cubic->foreground_image_tile->x_pos<<2)+rr.x1-rb.x1+cubic->foreground_r,(cubic->foreground_image_tile->y_pos<<2)+rr.y1-rb.y1,83},
@@ -706,11 +706,11 @@ void cubic_h_slider_bar_render(rectangle_ r,uint32_t status,overlay_theme * them
         r.x2-=cubic->foreground_r;
     }
 
-    if(element_render_buffer->count != element_render_buffer->space)
+    if(erb->count != erb->space)
     {
         rr=get_rectangle_overlap_(r,bounds);
 
-        if((rectangle_has_positive_area(rr))) element_render_buffer->buffer[element_render_buffer->count++]=(cvm_overlay_render_data)
+        if((rectangle_has_positive_area(rr))) erb->buffer[erb->count++]=(cvm_overlay_render_data)
         {
             {rr.x1,rr.y1,rr.x2,rr.y2},
             {(CVM_OVERLAY_ELEMENT_FILL<<12)|(colour&0x0FFF),0,0,83},
@@ -735,39 +735,39 @@ void cubic_h_slider_bar_render(rectangle_ r,uint32_t status,overlay_theme * them
         rs.x2-=((rs.x2-rs.x1)*(range-value))/(range+bar);
     }
 
-    if(element_render_buffer->count != element_render_buffer->space)
+    if(erb->count != erb->space)
     {
         rb=rs;
         rb.x2=rb.x1;
         rb.x1-=cubic->internal_r;
         rr=get_rectangle_overlap_(rb,bounds);
 
-        if((rectangle_has_positive_area(rr))) element_render_buffer->buffer[element_render_buffer->count++]=(cvm_overlay_render_data)
+        if((rectangle_has_positive_area(rr))) erb->buffer[erb->count++]=(cvm_overlay_render_data)
         {
             {rr.x1,rr.y1,rr.x2,rr.y2},
             {(CVM_OVERLAY_ELEMENT_SHADED<<12)|(bar_colour&0x0FFF),(cubic->internal_image_tile->x_pos<<2)+rr.x1-rb.x1,(cubic->internal_image_tile->y_pos<<2)+rr.y1-rb.y1,83},
         };
     }
 
-    if(element_render_buffer->count != element_render_buffer->space)
+    if(erb->count != erb->space)
     {
         rb=rs;
         rb.x1=rb.x2;
         rb.x2+=cubic->internal_r;
         rr=get_rectangle_overlap_(rb,bounds);
 
-        if((rectangle_has_positive_area(rr))) element_render_buffer->buffer[element_render_buffer->count++]=(cvm_overlay_render_data)
+        if((rectangle_has_positive_area(rr))) erb->buffer[erb->count++]=(cvm_overlay_render_data)
         {
             {rr.x1,rr.y1,rr.x2,rr.y2},
             {(CVM_OVERLAY_ELEMENT_SHADED<<12)|(bar_colour&0x0FFF),(cubic->internal_image_tile->x_pos<<2)+rr.x1-rb.x1+cubic->internal_r,(cubic->internal_image_tile->y_pos<<2)+rr.y1-rb.y1,83},
         };
     }
 
-    if(element_render_buffer->count != element_render_buffer->space)
+    if(erb->count != erb->space)
     {
         rr=get_rectangle_overlap_(rs,bounds);
 
-        if((rectangle_has_positive_area(rr))) element_render_buffer->buffer[element_render_buffer->count++]=(cvm_overlay_render_data)
+        if((rectangle_has_positive_area(rr))) erb->buffer[erb->count++]=(cvm_overlay_render_data)
         {
             {rr.x1,rr.y1,rr.x2,rr.y2},
             {(CVM_OVERLAY_ELEMENT_FILL<<12)|(bar_colour&0x0FFF),0,0,83},
@@ -869,10 +869,10 @@ void cubic_panel_render(rectangle_ r,uint32_t status,overlay_theme * theme,overl
 
     cubic=theme->other_data;
 
-    if(!cubic->background_image_tile)cubic_create_shape(&cubic->background_image_tile,&cubic->background_selection_grid,cubic->background_r);
-    if(!cubic->background_image_tile)return;
+    cvm_overlay_element_render_buffer * erb=od;///HACK, temporary measure before switching types
 
-    cvm_overlay_element_render_buffer * element_render_buffer=od;///HACK, temporary measure before switching types
+    if(!cubic->background_image_tile)cubic_create_shape(erb,&cubic->background_image_tile,&cubic->background_selection_grid,cubic->background_r);
+    if(!cubic->background_image_tile)return;
 
     if(!(status&WIDGET_H_FIRST))
     {
@@ -881,13 +881,13 @@ void cubic_panel_render(rectangle_ r,uint32_t status,overlay_theme * theme,overl
 
         if(!(status&WIDGET_V_FIRST))
         {
-            if(element_render_buffer->count != element_render_buffer->space)
+            if(erb->count != erb->space)
             {
                 re=rv;
                 re.y2=re.y1+cubic->background_r;
                 rr=get_rectangle_overlap_(re,bounds);
 
-                if((rectangle_has_positive_area(rr))) element_render_buffer->buffer[element_render_buffer->count++]=(cvm_overlay_render_data)
+                if((rectangle_has_positive_area(rr))) erb->buffer[erb->count++]=(cvm_overlay_render_data)
                 {
                     {rr.x1,rr.y1,rr.x2,rr.y2},
                     {(CVM_OVERLAY_ELEMENT_SHADED<<12)|(OVERLAY_BACKGROUND_COLOUR_&0x0FFF),(cubic->background_image_tile->x_pos<<2)+rr.x1-re.x1,(cubic->background_image_tile->y_pos<<2)+rr.y1-re.y1,83},
@@ -899,13 +899,13 @@ void cubic_panel_render(rectangle_ r,uint32_t status,overlay_theme * theme,overl
 
         if(!(status&WIDGET_V_LAST))
         {
-            if(element_render_buffer->count != element_render_buffer->space)
+            if(erb->count != erb->space)
             {
                 re=rv;
                 re.y1=re.y2-cubic->background_r;
                 rr=get_rectangle_overlap_(re,bounds);
 
-                if((rectangle_has_positive_area(rr))) element_render_buffer->buffer[element_render_buffer->count++]=(cvm_overlay_render_data)
+                if((rectangle_has_positive_area(rr))) erb->buffer[erb->count++]=(cvm_overlay_render_data)
                 {
                     {rr.x1,rr.y1,rr.x2,rr.y2},
                     {(CVM_OVERLAY_ELEMENT_SHADED<<12)|(OVERLAY_BACKGROUND_COLOUR_&0x0FFF),(cubic->background_image_tile->x_pos<<2)+rr.x1-re.x1,(cubic->background_image_tile->y_pos<<2)+rr.y1-re.y1+cubic->background_r,83},
@@ -915,11 +915,11 @@ void cubic_panel_render(rectangle_ r,uint32_t status,overlay_theme * theme,overl
             rv.y2-=cubic->background_r;
         }
 
-        if(element_render_buffer->count != element_render_buffer->space)///need to check again as can return null once again;
+        if(erb->count != erb->space)///need to check again as can return null once again;
         {
             rr=get_rectangle_overlap_(rv,bounds);
 
-            if((rectangle_has_positive_area(rr))) element_render_buffer->buffer[element_render_buffer->count++]=(cvm_overlay_render_data)
+            if((rectangle_has_positive_area(rr))) erb->buffer[erb->count++]=(cvm_overlay_render_data)
             {
                 {rr.x1,rr.y1,rr.x2,rr.y2},
                 {(CVM_OVERLAY_ELEMENT_FILL<<12)|(OVERLAY_BACKGROUND_COLOUR_&0x0FFF),0,0,83},
@@ -934,13 +934,13 @@ void cubic_panel_render(rectangle_ r,uint32_t status,overlay_theme * theme,overl
 
         if(!(status&WIDGET_V_FIRST))
         {
-            if(element_render_buffer->count != element_render_buffer->space)
+            if(erb->count != erb->space)
             {
                 re=rv;
                 re.y2=re.y1+cubic->background_r;
                 rr=get_rectangle_overlap_(re,bounds);
 
-                if((rectangle_has_positive_area(rr))) element_render_buffer->buffer[element_render_buffer->count++]=(cvm_overlay_render_data)
+                if((rectangle_has_positive_area(rr))) erb->buffer[erb->count++]=(cvm_overlay_render_data)
                 {
                     {rr.x1,rr.y1,rr.x2,rr.y2},
                     {(CVM_OVERLAY_ELEMENT_SHADED<<12)|(OVERLAY_BACKGROUND_COLOUR_&0x0FFF),(cubic->background_image_tile->x_pos<<2)+rr.x1-re.x1+cubic->background_r,(cubic->background_image_tile->y_pos<<2)+rr.y1-re.y1,83},
@@ -952,13 +952,13 @@ void cubic_panel_render(rectangle_ r,uint32_t status,overlay_theme * theme,overl
 
         if(!(status&WIDGET_V_LAST))
         {
-            if(element_render_buffer->count != element_render_buffer->space)
+            if(erb->count != erb->space)
             {
                 re=rv;
                 re.y1=re.y2-cubic->background_r;
                 rr=get_rectangle_overlap_(re,bounds);
 
-                if((rectangle_has_positive_area(rr))) element_render_buffer->buffer[element_render_buffer->count++]=(cvm_overlay_render_data)
+                if((rectangle_has_positive_area(rr))) erb->buffer[erb->count++]=(cvm_overlay_render_data)
                 {
                     {rr.x1,rr.y1,rr.x2,rr.y2},
                     {(CVM_OVERLAY_ELEMENT_SHADED<<12)|(OVERLAY_BACKGROUND_COLOUR_&0x0FFF),(cubic->background_image_tile->x_pos<<2)+rr.x1-re.x1+cubic->background_r,(cubic->background_image_tile->y_pos<<2)+rr.y1-re.y1+cubic->background_r,83},
@@ -968,11 +968,11 @@ void cubic_panel_render(rectangle_ r,uint32_t status,overlay_theme * theme,overl
             rv.y2-=cubic->background_r;
         }
 
-        if(element_render_buffer->count != element_render_buffer->space)///need to check again as can return null once again;
+        if(erb->count != erb->space)///need to check again as can return null once again;
         {
             rr=get_rectangle_overlap_(rv,bounds);
 
-            if((rectangle_has_positive_area(rr))) element_render_buffer->buffer[element_render_buffer->count++]=(cvm_overlay_render_data)
+            if((rectangle_has_positive_area(rr))) erb->buffer[erb->count++]=(cvm_overlay_render_data)
             {
                 {rr.x1,rr.y1,rr.x2,rr.y2},
                 {(CVM_OVERLAY_ELEMENT_FILL<<12)|(OVERLAY_BACKGROUND_COLOUR_&0x0FFF),0,0,83},
@@ -980,11 +980,11 @@ void cubic_panel_render(rectangle_ r,uint32_t status,overlay_theme * theme,overl
         }
     }
 
-    if(element_render_buffer->count != element_render_buffer->space)///need to check again as can return null once again;
+    if(erb->count != erb->space)///need to check again as can return null once again;
     {
         rr=get_rectangle_overlap_(r,bounds);
 
-        if((rectangle_has_positive_area(rr))) element_render_buffer->buffer[element_render_buffer->count++]=(cvm_overlay_render_data)
+        if((rectangle_has_positive_area(rr))) erb->buffer[erb->count++]=(cvm_overlay_render_data)
         {
             {rr.x1,rr.y1,rr.x2,rr.y2},
             {(CVM_OVERLAY_ELEMENT_FILL<<12)|(OVERLAY_BACKGROUND_COLOUR_&0x0FFF),0,0,83},

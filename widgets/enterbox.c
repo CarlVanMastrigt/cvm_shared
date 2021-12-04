@@ -410,10 +410,6 @@ static widget_appearence_function_set enterbox_appearence_functions=
     .set_h  =   blank_widget_set_h
 };
 
-
-//widget * create_enterbox(int text_max_length,int text_min_visible,char * initial_text,widget_function activation_func,void * data,widget_function update_contents_func,bool activate_upon_deselect,bool free_data)
-
-
 widget * create_enterbox(int max_strlen,int max_glyphs,int min_glyphs_visible,char * initial_text,widget_function activation_func,void * data,widget_function update_contents_func,bool activate_upon_deselect,bool free_data)
 {
 	widget * w=create_widget(ENTERBOX_WIDGET);
@@ -422,11 +418,11 @@ widget * create_enterbox(int max_strlen,int max_glyphs,int min_glyphs_visible,ch
 	w->enterbox.activation_func=activation_func;
 	w->enterbox.update_contents_func=update_contents_func;
 
-	w->enterbox.max_strlen=max_strlen;/// +1 ?
+	w->enterbox.max_strlen=max_strlen;
 	w->enterbox.max_glyphs=max_glyphs;
 	w->enterbox.min_glyphs_visible=min_glyphs_visible;
 
-	w->enterbox.text=malloc(max_strlen+1);///multiply by max unicode character size (including variation sequences) ?
+	w->enterbox.text=malloc(max_strlen+1);///multiply by max unicode character size
 	w->enterbox.upon_input=NULL;
 
     w->enterbox.activate_upon_deselect=activate_upon_deselect;

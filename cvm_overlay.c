@@ -47,9 +47,9 @@ static VkFramebuffer * overlay_framebuffers;
 
 static VkDeviceMemory overlay_image_memory;
 
-static VkImage overlay_transparency_image;
-static VkImageView overlay_transparency_image_view;///views of single array slice from image
-static cvm_vk_image_atlas overlay_transparency_image_atlas;
+static VkImage overlay_transparent_image;
+static VkImageView overlay_transparent_image_view;///views of single array slice from image
+static cvm_vk_image_atlas overlay_transparent_image_atlas;
 
 static VkImage overlay_colour_image;
 static VkImageView overlay_colour_image_view;///views of single array slice from image
@@ -62,7 +62,7 @@ static cvm_vk_transient_buffer overlay_transient_buffer;
 static cvm_vk_staging_buffer overlay_staging_buffer;
 //static uint32_t * overlay_staging_buffer_acquisitions;
 
-static VkCommandBuffer overlay_upload_command_buffer;
+//static VkCommandBuffer overlay_upload_command_buffer;
 
 static uint32_t max_overlay_elements=4096;
 
@@ -195,7 +195,7 @@ static void create_overlay_consistent_descriptors(void)
             {
                 {
                     .sampler=VK_NULL_HANDLE,///using immutable sampler (for now)
-                    .imageView=overlay_transparency_image_view,
+                    .imageView=overlay_transparent_image_view,
                     .imageLayout=VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL
                 }
             },
@@ -614,7 +614,7 @@ static void create_overlay_images(uint32_t t_w,uint32_t t_h,uint32_t c_w,uint32_
     image_creation_info.usage=VK_IMAGE_USAGE_SAMPLED_BIT | VK_IMAGE_USAGE_TRANSFER_DST_BIT;
     image_creation_info.extent.width=t_w;
     image_creation_info.extent.height=t_h;
-    cvm_vk_create_image(&overlay_transparency_image,&image_creation_info);
+    cvm_vk_create_image(&overlay_transparent_image,&image_creation_info);
 
     image_creation_info.format=VK_FORMAT_R8G8B8A8_UNORM;
     image_creation_info.usage=VK_IMAGE_USAGE_SAMPLED_BIT | VK_IMAGE_USAGE_TRANSFER_DST_BIT;///conditionally VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT ???
@@ -622,7 +622,7 @@ static void create_overlay_images(uint32_t t_w,uint32_t t_h,uint32_t c_w,uint32_
     image_creation_info.extent.height=c_h;
     cvm_vk_create_image(&overlay_colour_image,&image_creation_info);
 
-    VkImage images[2]={overlay_transparency_image,overlay_colour_image};
+    VkImage images[2]={overlay_transparent_image,overlay_colour_image};
     cvm_vk_create_and_bind_memory_for_images(&overlay_image_memory,images,2);
 
 
@@ -653,16 +653,16 @@ static void create_overlay_images(uint32_t t_w,uint32_t t_h,uint32_t c_w,uint32_
     };
 
     view_creation_info.format=VK_FORMAT_R8_UNORM;
-    view_creation_info.image=overlay_transparency_image;
-    cvm_vk_create_image_view(&overlay_transparency_image_view,&view_creation_info);
+    view_creation_info.image=overlay_transparent_image;
+    cvm_vk_create_image_view(&overlay_transparent_image_view,&view_creation_info);
 
     view_creation_info.format=VK_FORMAT_R8G8B8A8_UNORM;
     view_creation_info.image=overlay_colour_image;
     cvm_vk_create_image_view(&overlay_colour_image_view,&view_creation_info);
 
 
-    cvm_vk_create_image_atlas(&overlay_transparency_image_atlas,overlay_transparency_image_view,t_w,t_h,false);
-    cvm_vk_create_image_atlas(&overlay_colour_image_atlas,overlay_colour_image_view,c_w,c_h,false);
+    cvm_vk_create_image_atlas(&overlay_transparent_image_atlas,overlay_transparent_image,overlay_transparent_image_view,t_w,t_h,false);
+    cvm_vk_create_image_atlas(&overlay_colour_image_atlas,overlay_colour_image,overlay_colour_image_view,c_w,c_h,false);
 }
 
 static void create_overlay_barriers()
@@ -694,7 +694,7 @@ static void create_overlay_barriers()
     image_barrier.srcQueueFamilyIndex=VK_QUEUE_FAMILY_IGNORED;
     image_barrier.dstQueueFamilyIndex=VK_QUEUE_FAMILY_IGNORED;
 
-    image_barrier.image=overlay_transparency_image;
+    image_barrier.image=overlay_transparent_image;
     overlay_uninitialised_to_transfer_image_barriers[0]=image_barrier;
 
     image_barrier.image=overlay_colour_image;
@@ -723,7 +723,7 @@ static void create_overlay_barriers()
     image_barrier.srcQueueFamilyIndex=VK_QUEUE_FAMILY_IGNORED,//cvm_vk_get_transfer_queue_family();
     image_barrier.dstQueueFamilyIndex=VK_QUEUE_FAMILY_IGNORED,//cvm_vk_get_graphics_queue_family();
 
-    image_barrier.image=overlay_transparency_image;
+    image_barrier.image=overlay_transparent_image;
     overlay_transfer_to_graphics_image_barriers[0]=image_barrier;
 
     image_barrier.image=overlay_colour_image;
@@ -752,7 +752,7 @@ static void create_overlay_barriers()
     image_barrier.srcQueueFamilyIndex=VK_QUEUE_FAMILY_IGNORED,//cvm_vk_get_graphics_queue_family();
     image_barrier.dstQueueFamilyIndex=VK_QUEUE_FAMILY_IGNORED,//cvm_vk_get_transfer_queue_family();
 
-    image_barrier.image=overlay_transparency_image;
+    image_barrier.image=overlay_transparent_image;
     overlay_graphics_to_transfer_image_barriers[0]=image_barrier;
 
     image_barrier.image=overlay_colour_image;
@@ -795,14 +795,7 @@ void initialise_overlay_render_data(void)
 
     cvm_overlay_open_freetype();
 
-    overlay_upload_command_buffer=VK_NULL_HANDLE;
-
-//    cvm_overlay_create_font(&overlay_test_font,"cvm_shared/resources/cvm_font_1.ttf",32);
-    //cvm_overlay_create_font(&overlay_test_font,"cvm_shared/resources/cvm_font_1.ttf",24);
-//    cvm_overlay_create_font(&overlay_test_font,"cvm_shared/resources/OpenSans-Regular.ttf",24);
-//    cvm_overlay_create_font(&overlay_test_font,"cvm_shared/resources/HanaMinA.ttf",24);
-//    cvm_overlay_create_font(&overlay_test_font,"cvm_shared/resources/FreeMono.ttf",24);
-//    cvm_overlay_create_font(&overlay_test_font,"cvm_shared/resources/Symbola_hint.ttf",32);
+//    overlay_upload_command_buffer=VK_NULL_HANDLE;
 }
 
 void terminate_overlay_render_data(void)
@@ -811,16 +804,17 @@ void terminate_overlay_render_data(void)
 
     cvm_overlay_close_freetype();
 
-    cvm_vk_destroy_image_atlas(&overlay_transparency_image_atlas);
-    cvm_vk_destroy_image_atlas(&overlay_colour_image_atlas);
-
-    cvm_vk_destroy_image_view(overlay_transparency_image_view);
+    cvm_vk_destroy_image_view(overlay_transparent_image_view);
     cvm_vk_destroy_image_view(overlay_colour_image_view);
 
-    cvm_vk_destroy_image(overlay_transparency_image);
+    cvm_vk_destroy_image(overlay_transparent_image);
     cvm_vk_destroy_image(overlay_colour_image);
 
     cvm_vk_free_memory(overlay_image_memory);
+
+    cvm_vk_destroy_image_atlas(&overlay_transparent_image_atlas);
+    cvm_vk_destroy_image_atlas(&overlay_colour_image_atlas);
+
 
     cvm_vk_destroy_render_pass(overlay_render_pass);
 
@@ -893,13 +887,7 @@ float overlay_colours[OVERLAY_NUM_COLOURS_*4]=
     0.4,0.6,0.9,0.8,///OVERLAY_TEXT_COLOUR_0
 };
 
-#warning texel buffers probably are NOT the best solution as they would potentially require creating a buffer view every frame (if offset changes) or a least a buffer view per swapchain image
-//uint8_t overlay_colours[OVERLAY_NUM_COLOURS_COLOURS*4]=
-//{
-//    0x40,0x40,0xA0,0xD0,///OVERLAY_BACKGROUND_COLOUR_
-//    0x20,0x20,0x50,0xC0,///OVERLAY_MAIN_COLOUR_
-//    0x50,0x50,0xA0,0xB0,///OVERLAY_TEXT_COLOUR_0_
-//};
+/// texel buffers for overlay colours are probably NOT the best solution as they would potentially require creating a buffer view every frame (if offset changes) or a least a buffer view per swapchain image
 
 cvm_vk_module_work_block * overlay_render_frame(int screen_w,int screen_h,widget * menu_widget)
 {
@@ -924,11 +912,10 @@ cvm_vk_module_work_block * overlay_render_frame(int screen_w,int screen_h,widget
 
     /// could have a single image atlas and use different aspects of part of it (r,g,b,a via image views) for different alpha/transparent image_atlases
     /// this would be fairly inefficient to retrieve though..., probably better not to.
-    static char * str;
 
     if(swapchain_image_index!=CVM_VK_INVALID_IMAGE_INDEX)
     {
-        overlay_upload_command_buffer=work_block->graphics_work;
+//        overlay_upload_command_buffer=work_block->graphics_work;
 
         cvm_vk_begin_staging_buffer(&overlay_staging_buffer);///build barriers into begin/end paradigm maybe???
 
@@ -942,14 +929,6 @@ cvm_vk_module_work_block * overlay_render_frame(int screen_w,int screen_h,widget
         {
             CVM_TMP_vkCmdPipelineBarrier2KHR(work_block->graphics_work,&overlay_uninitialised_to_transfer_dependencies);
             first=false;
-
-//            str=strdup("Hello World! Far リサフランク420 - 現代のコンピュー");
-//            str=strdup("Hello World!         Far a リサフランク420 - 現代のコンピュー  Hello World!\nFar ncdjvfng gvbgf bmgnf dvn vgbf  fjdvbfng vngfb,  ffnf\n bmngk,fgfh vfdbfg fd df gtv dfmbd f vfdhfv g dvb fbnb\n\n  f  dfgg dfmv vdv  xmcnbx fd mjdbvm v\
-d cf fn\n vsrs  sdfmmgt dgf thd gmdrg1234567890-=qwertyuiop[]\\asdfgh\njkl;'zxcvbnm,./ZXCVBNM<>?ASDFGHJKL:QWERTYUIOP{}|!#$%^&*()_+\n ⬆ ❌ 🔄 📁 📷 📄 🎵 ➕ ➖ 👻 🖋 🔓 🔗 🖼 ✂ 👁");
-            str="8Hello World!\tFar リサフランク420 - 現代のコンピュー  Hello World!Far ncdjvfng gvbgf bmgnf dvn vgbf  fjdvbfng vngfb,  ffnf bmngk,fgfh vfdbfg fd df gtv dfmbd f vfdhfv g dvb fbnb  f  dfgg dfmv vdv\
-  xmcnbx fd mjdbvm vd cf fn vsrs  sdfmmgt dgf thd gmdrg1234567890-=qwertyuiop[]\\asdfgh\njkl;'zxcvbnm,./ZXCVBNM<>?ASDFGHJKL:QWERTYUIOP{}|!#$%^&*(_+ ↑←↓→🗙 ❌ 🔄 💾 📁 📷 📄 🎵 ➕ ➖ 👻 🖋 🔓 🔗 🖼 ✂ 👁 ⚙";
-//                       str=strdup("Far");
-//            str=strdup("Helloasa sas");
         }
         else
         {
@@ -959,17 +938,13 @@ d cf fn\n vsrs  sdfmmgt dgf thd gmdrg1234567890-=qwertyuiop[]\\asdfgh\njkl;'zxcv
         element_render_buffer.buffer=cvm_vk_get_transient_buffer_allocation(&overlay_transient_buffer,max_overlay_elements*sizeof(cvm_overlay_render_data),&vertex_offset);
         element_render_buffer.space=max_overlay_elements;
         element_render_buffer.count=0;
+        element_render_buffer.staging_buffer= &overlay_staging_buffer;
+        element_render_buffer.upload_command_buffer= work_block->graphics_work;///if ever using a dedicated transfer queue (probably don't want tbh) use this
 
         //str="The attempt to impose upon man, a creature of growth and capable of sweetness, to ooze juicily at the last round the bearded lips of God, to attempt to impose, I say, laws and conditions appropriate to a mechanical creation, against this I raise my sword-pen.";
         //str="This planet has - or rather had - a problem, which was this: most of the people living on it were unhappy for pretty much of the time. Many solutions were suggested for this problem, but most of these were largely concerned with the movement of small green pieces of paper, which was odd because on the whole it wasn't the small green pieces of paper that were unhappy.";
 
-        //test_timing(true,NULL);
-        //rectangle_ r={.x1=30+(int)(25.0*cos(SDL_GetTicks()*0.002)),.y1=20+(int)(15.0*cos(SDL_GetTicks()*0.0044)),.x2=300+(int)(50.0*cos(SDL_GetTicks()*0.0033)),.y2=160+(int)(40.0*cos(SDL_GetTicks()*0.007))};
-        rectangle_ r={.x1=-1000,.y1=-1000,.x2=3000,.y2=3000};
         render_widget_overlay(&element_render_buffer,menu_widget);
-        //overlay_render_text_complex(&element_render_buffer,&overlay_test_font,(uint8_t*)str,0,0,&r,650);
-        //cubic_test(&element_render_buffer,0,0,&r);
-        //test_timing(false,"render text");
 
         CVM_TMP_vkCmdPipelineBarrier2KHR(work_block->graphics_work,&overlay_transfer_to_graphics_dependencies);
 
@@ -1021,7 +996,7 @@ d cf fn\n vsrs  sdfmmgt dgf thd gmdrg1234567890-=qwertyuiop[]\\asdfgh\njkl;'zxcv
         cvm_vk_end_transient_buffer(&overlay_transient_buffer);
         cvm_vk_end_staging_buffer(&overlay_staging_buffer,swapchain_image_index);
 
-        overlay_upload_command_buffer=VK_NULL_HANDLE;
+//        overlay_upload_command_buffer=VK_NULL_HANDLE;
     }
 
     return cvm_vk_end_module_work_block(&overlay_module_data);
@@ -1037,17 +1012,17 @@ void overlay_frame_cleanup(uint32_t swapchain_image_index)
 
 
 
-cvm_vk_image_atlas_tile * overlay_create_transparent_image_tile_with_staging(void ** staging,uint32_t w, uint32_t h)
+cvm_vk_image_atlas_tile * overlay_create_transparent_image_tile_with_staging(cvm_overlay_element_render_buffer * erb,void ** staging,uint32_t w, uint32_t h)
 {
     VkDeviceSize upload_offset;
     cvm_vk_image_atlas_tile * tile;
 
     tile=NULL;
-    *staging = cvm_vk_get_staging_buffer_allocation(&overlay_staging_buffer,sizeof(uint8_t)*w*h,&upload_offset);
+    *staging = cvm_vk_get_staging_buffer_allocation(erb->staging_buffer,sizeof(uint8_t)*w*h,&upload_offset);
 
     if(*staging)
     {
-        tile=cvm_vk_acquire_image_atlas_tile(&overlay_transparency_image_atlas,w,h);
+        tile=cvm_vk_acquire_image_atlas_tile(&overlay_transparent_image_atlas,w,h);
 
         if(tile)
         {
@@ -1077,7 +1052,7 @@ cvm_vk_image_atlas_tile * overlay_create_transparent_image_tile_with_staging(voi
                 }
             };
 
-            vkCmdCopyBufferToImage(overlay_upload_command_buffer,overlay_staging_buffer.buffer,overlay_transparency_image,VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,1,&copy_info);
+            vkCmdCopyBufferToImage(erb->upload_command_buffer,erb->staging_buffer->buffer,overlay_transparent_image,VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,1,&copy_info);
         }
     }
 
@@ -1086,10 +1061,10 @@ cvm_vk_image_atlas_tile * overlay_create_transparent_image_tile_with_staging(voi
 
 void overlay_destroy_transparent_image_tile(cvm_vk_image_atlas_tile * tile)
 {
-    cvm_vk_relinquish_image_atlas_tile(&overlay_transparency_image_atlas,tile);
+    cvm_vk_relinquish_image_atlas_tile(&overlay_transparent_image_atlas,tile);
 }
 
-cvm_vk_image_atlas_tile * overlay_create_colour_image_tile_with_staging(void ** staging,uint32_t w, uint32_t h)
+cvm_vk_image_atlas_tile * overlay_create_colour_image_tile_with_staging(cvm_overlay_element_render_buffer * erb,void ** staging,uint32_t w, uint32_t h)
 {
     //
 }
@@ -1098,39 +1073,6 @@ void overlay_destroy_colour_image_tile(cvm_vk_image_atlas_tile * tile)
 {
     //
 }
-
-//bool check_click_on_interactable_element(cvm_overlay_interactable_element * element,int x,int y)
-//{
-//    uint32_t i;
-//    if((x>=0)&&(y>=0)&&(x<element->w)&&(y<element->h))
-//    {
-//        uint32_t i=y*element->w+x;
-//		if(element->selection_grid[i>>4] & (1<<(i&0x0F)))
-//        {
-//            return true;
-//        }
-//    }
-//
-//    return false;
-//}
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 
 
 

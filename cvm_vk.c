@@ -1382,7 +1382,7 @@ cvm_vk_module_work_block * cvm_vk_begin_module_work_block(cvm_vk_module_data * m
 
     cvm_vk_module_work_block * block=module_data->work_blocks+module_data->block_index;
 
-    if(swapchain_image_index != CVM_VK_INVALID_IMAGE_INDEX)///data passed in is valid and everything is up to date
+    if(*swapchain_image_index != CVM_VK_INVALID_IMAGE_INDEX)///data passed in is valid and everything is up to date
     {
         if(block->in_flight)
         {

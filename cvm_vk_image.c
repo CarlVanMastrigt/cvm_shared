@@ -19,7 +19,7 @@ along with cvm_shared.  If not, see <https://www.gnu.org/licenses/>.
 
 #include "cvm_shared.h"
 
-void cvm_vk_create_image_atlas(cvm_vk_image_atlas * ia,VkImageView image_view,uint32_t width,uint32_t height,bool multithreaded)
+void cvm_vk_create_image_atlas(cvm_vk_image_atlas * ia,VkImage image,VkImageView image_view,uint32_t width,uint32_t height,bool multithreaded)
 {
     uint32_t i,j;
 
@@ -29,9 +29,10 @@ void cvm_vk_create_image_atlas(cvm_vk_image_atlas * ia,VkImageView image_view,ui
         exit(-1);
     }
 
+    ia->image=image;
     ia->image_view=image_view;
 
-    if(width & width-1 || height & height-1)
+    if(width & (width-1) || height & (height-1))
     {
         fprintf(stderr,"IMAGE ATLAS MUST BE CREATED AT POWER OF 2 WIDTH AND HEIGHT\n");
         exit(-1);

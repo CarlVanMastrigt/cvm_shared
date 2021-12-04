@@ -81,7 +81,13 @@ typedef struct cvm_overlay_element_render_buffer
     cvm_overlay_render_data * buffer;
     uint32_t count,space;//,xm,ym;
 
+    ///better to pass this around (with images that it uses too!) rather than having static allocation or  some split paradigm
     VkCommandBuffer upload_command_buffer;
+
+    cvm_vk_staging_buffer * staging_buffer;
+
+    //cvm_vk_image_atlas * transparent_image_atlas;
+    //cvm_vk_image_atlas * colour_image_atlas;
 }
 cvm_overlay_element_render_buffer;
 
@@ -113,10 +119,10 @@ cvm_vk_module_work_block * overlay_render_frame(int screen_w,int screen_h,widget
 
 void overlay_frame_cleanup(uint32_t swapchain_image_index);
 
-cvm_vk_image_atlas_tile * overlay_create_transparent_image_tile_with_staging(void ** staging,uint32_t w, uint32_t h);
+cvm_vk_image_atlas_tile * overlay_create_transparent_image_tile_with_staging(cvm_overlay_element_render_buffer * erb,void ** staging,uint32_t w, uint32_t h);
 void overlay_destroy_transparent_image_tile(cvm_vk_image_atlas_tile * tile);
 
-cvm_vk_image_atlas_tile * overlay_create_colour_image_tile_with_staging(void ** staging,uint32_t w, uint32_t h);
+cvm_vk_image_atlas_tile * overlay_create_colour_image_tile_with_staging(cvm_overlay_element_render_buffer * erb,void ** staging,uint32_t w, uint32_t h);
 void overlay_destroy_colour_image_tile(cvm_vk_image_atlas_tile * tile);
 
 //bool check_click_on_interactable_element(cvm_overlay_interactable_element * element,int x,int y);
