@@ -46,23 +46,30 @@ static void anchor_widget_left_click(overlay_theme * theme,widget * w,int x,int 
 
 static void anchor_widget_mouse_movement(overlay_theme * theme,widget * w,int x,int y)
 {
-    widget * c;
+    widget *ci,*co;
+    rectangle_ ri,ro;
 
     if(w->anchor.constraint)
     {
-        c=w->anchor.constraint->resize_constraint.constrained;
-        adjust_coordinates_to_widget_local(w->anchor.constraint,&x,&y);
+        co=w->anchor.constraint;
+        ci=co->resize_constraint.constrained;
 
-        if(c)
+        adjust_coordinates_to_widget_local(co->base.parent,&x,&y);
+
+        if(ci)
         {
-            c->base.r.x=x-w->anchor.x_clicked;
-            c->base.r.y=y-w->anchor.y_clicked;
+            ri=rectangle_new_conversion(ci->base.r);
+            ro=rectangle_new_conversion(co->base.r);
 
-            if(c->base.r.x < 0)c->base.r.x=0;
-            if(c->base.r.y < 0)c->base.r.y=0;
+            x-=w->anchor.x_clicked+ri.x1;
+            if(ri.x1+x < ro.x1)x=ro.x1-ri.x1;
+            if(ri.x2+x > ro.x2)x=ro.x2-ri.x2;
 
-            if(c->base.r.x+c->base.r.w > w->anchor.constraint->base.r.w)c->base.r.x= w->anchor.constraint->base.r.w-c->base.r.w;
-            if(c->base.r.y+c->base.r.h > w->anchor.constraint->base.r.h)c->base.r.y= w->anchor.constraint->base.r.h-c->base.r.h;
+            y-=w->anchor.y_clicked+ri.y1;
+            if(ri.y1+y < ro.y1)y=ro.y1-ri.y1;
+            if(ri.y2+y > ro.y2)y=ro.y2-ri.y2;
+
+            ci->base.r=rectangle_old_conversion(rectangle_add_offset(ri,x,y));
         }
     }
 }
