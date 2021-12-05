@@ -183,33 +183,33 @@ matrix3f m3f_mult(matrix3f l,matrix3f r)
 
 
 
-bool get_rectangle_overlap(rectangle * rect,rectangle b)
-{
-    rectangle r=*rect;
-
-    if(!rectangles_overlap(r,b)) return false;
-
-    if((r.x >= b.x)&&(r.y >= b.y)&&(r.x+r.w <= b.x+b.w)&&(r.y+r.h <= b.y+b.h)) return true;
-
-    if(r.x<b.x)
-    {
-        r.w-=b.x-r.x;
-        r.x=b.x;
-    }
-
-    if(r.y<b.y)
-    {
-        r.h-=b.y-r.y;
-        r.y=b.y;
-    }
-
-    if(r.x+r.w>b.x+b.w)r.w=b.x+b.w-r.x;
-
-    if(r.y+r.h>b.y+b.h)r.h=b.y+b.h-r.y;
-
-    *rect=r;
-
-    return true;
-}
+//bool get_rectangle_overlap(rectangle * rect,rectangle b)
+//{
+//    rectangle r=*rect;
+//
+//    if(!rectangles_overlap(r,b)) return false;
+//
+//    if((r.x >= b.x)&&(r.y >= b.y)&&(r.x+r.w <= b.x+b.w)&&(r.y+r.h <= b.y+b.h)) return true;
+//
+//    if(r.x<b.x)
+//    {
+//        r.w-=b.x-r.x;
+//        r.x=b.x;
+//    }
+//
+//    if(r.y<b.y)
+//    {
+//        r.h-=b.y-r.y;
+//        r.y=b.y;
+//    }
+//
+//    if(r.x+r.w>b.x+b.w)r.w=b.x+b.w-r.x;
+//
+//    if(r.y+r.h>b.y+b.h)r.h=b.y+b.h-r.y;
+//
+//    *rect=r;
+//
+//    return true;
+//}
 
 

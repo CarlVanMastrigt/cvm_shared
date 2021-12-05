@@ -45,41 +45,45 @@ void resize_constraint_widget_delete(widget * w)
 
 static void resize_constraint_widget_left_click(overlay_theme * theme,widget * w,int x,int y)
 {
-    if((w->resize_constraint.alignment_data&WIDGET_RESIZABLE_LOCKED_HORIZONTAL)&&(w->resize_constraint.alignment_data&WIDGET_RESIZABLE_LOCKED_VERTICAL))return;
-
     widget * constrained=w->resize_constraint.constrained;
 
-    adjust_coordinates_to_widget_local(constrained,&x,&y);
+    if((!constrained) || ((w->resize_constraint.alignment_data&WIDGET_RESIZABLE_LOCKED_HORIZONTAL)&&(w->resize_constraint.alignment_data&WIDGET_RESIZABLE_LOCKED_VERTICAL)))return;
+
+    adjust_coordinates_to_widget_local(w,&x,&y);
 
     w->resize_constraint.x_clicked=0;
-    w->resize_constraint.x_far_corner=0;
-    if(x > constrained->base.r.w/2)
+    if(x > (constrained->base.r.x1+constrained->base.r.x2)/2)
     {
-        if((x > (constrained->base.r.w-theme->border_resize_selection_range))&&(!(w->resize_constraint.alignment_data&WIDGET_RESIZABLE_TOUCHING_RIGHT)))
+        if((x > constrained->base.r.x2-theme->border_resize_selection_range)&&(!(w->resize_constraint.alignment_data&WIDGET_RESIZABLE_TOUCHING_RIGHT)))
         {
-            w->resize_constraint.x_clicked=x-constrained->base.r.w;///negative (far end)
+            w->resize_constraint.x_clicked=x-constrained->base.r.x2;///negative (far end)
         }
     }
-    else if((x < theme->border_resize_selection_range)&&(!(w->resize_constraint.alignment_data&WIDGET_RESIZABLE_TOUCHING_LEFT)))
+    else
     {
-        w->resize_constraint.x_clicked=x;///positive (close end) (poss add 1 to make nonzero at edge)
-        w->resize_constraint.x_far_corner=constrained->base.r.x+constrained->base.r.w;
+        if((x < constrained->base.r.x1+theme->border_resize_selection_range)&&(!(w->resize_constraint.alignment_data&WIDGET_RESIZABLE_TOUCHING_LEFT)))
+        {
+            w->resize_constraint.x_clicked=x-constrained->base.r.x1+1;///positive (close end) (pos add 1 to make nonzero at edge)
+        }
     }
 
     w->resize_constraint.y_clicked=0;
-    w->resize_constraint.y_far_corner=0;
-    if(y > constrained->base.r.h/2)
+    if(y > (constrained->base.r.y1+constrained->base.r.y2)/2)
     {
-        if((y > (constrained->base.r.h-theme->border_resize_selection_range))&&(!(w->resize_constraint.alignment_data&WIDGET_RESIZABLE_TOUCHING_BOTTOM)))
+        if((y > constrained->base.r.y2-theme->border_resize_selection_range)&&(!(w->resize_constraint.alignment_data&WIDGET_RESIZABLE_TOUCHING_BOTTOM)))
         {
-            w->resize_constraint.y_clicked=y-constrained->base.r.h;///negative (far end)
+            w->resize_constraint.y_clicked=y-constrained->base.r.y2;///negative (far end)
         }
     }
-    else if((y < theme->border_resize_selection_range)&&(!(w->resize_constraint.alignment_data&WIDGET_RESIZABLE_TOUCHING_TOP)))
+    else
     {
-        w->resize_constraint.y_clicked=y;///positive (close end) (poss add 1 to make nonzero at edge)
-        w->resize_constraint.y_far_corner=constrained->base.r.y+constrained->base.r.h;
+        if((y < constrained->base.r.y1+theme->border_resize_selection_range)&&(!(w->resize_constraint.alignment_data&WIDGET_RESIZABLE_TOUCHING_TOP)))
+        {
+            w->resize_constraint.y_clicked=y-constrained->base.r.y1+1;///positive (close end) (poss add 1 to make nonzero at edge)
+        }
     }
+
+    printf(">> %d %d\n",w->resize_constraint.x_clicked,w->resize_constraint.y_clicked);
 }
 
 static void resize_constraint_widget_mouse_movement(overlay_theme * theme,widget * w,int x,int y)
@@ -87,63 +91,55 @@ static void resize_constraint_widget_mouse_movement(overlay_theme * theme,widget
     if((w->resize_constraint.alignment_data&WIDGET_RESIZABLE_LOCKED_HORIZONTAL)&&(w->resize_constraint.alignment_data&WIDGET_RESIZABLE_LOCKED_VERTICAL))return;
 
     widget * constrained=w->resize_constraint.constrained;
+    int n;
 
     adjust_coordinates_to_widget_local(w,&x,&y);
 
     if((w->resize_constraint.x_clicked)&&(!(w->resize_constraint.alignment_data&WIDGET_RESIZABLE_LOCKED_HORIZONTAL)))
     {
+        n=x-w->resize_constraint.x_clicked;
         if(w->resize_constraint.alignment_data&WIDGET_RESIZABLE_CENTRED_HORIZONTAL)
         {
-            if(w->resize_constraint.x_clicked>0)
-            {
-                w->resize_constraint.resized_w=w->base.r.w-2*(x-w->resize_constraint.x_clicked);
-            }
-            else
-            {
-                w->resize_constraint.resized_w=2*(x-w->resize_constraint.x_clicked)-w->base.r.w;
-            }
+            if(w->resize_constraint.x_clicked>0) w->resize_constraint.resized_w=w->base.r.x2-w->base.r.x1-2*n;
+            else w->resize_constraint.resized_w=2*n-w->base.r.x2+w->base.r.x1;
+            #warning above seems bjorked, needs testing
         }
         else if(w->resize_constraint.x_clicked<0)
         {
-            w->resize_constraint.resized_w=x - constrained->base.r.x - w->resize_constraint.x_clicked;
-            if(w->resize_constraint.resized_w > w->base.r.w-constrained->base.r.x)w->resize_constraint.resized_w = w->base.r.w-constrained->base.r.x;
+            if(n>w->base.r.x2-w->base.r.x1)n=w->base.r.x2-w->base.r.x1;
+            w->resize_constraint.resized_w = n-constrained->base.r.x1;
         }
         else
         {
-            constrained->base.r.x=x-w->resize_constraint.x_clicked;
-            if(constrained->base.r.x < 0)constrained->base.r.x=0;
-            if(constrained->base.r.x > w->resize_constraint.x_far_corner-constrained->base.min_w)constrained->base.r.x=w->resize_constraint.x_far_corner-constrained->base.min_w;
-            w->resize_constraint.resized_w=w->resize_constraint.x_far_corner-constrained->base.r.x;
+            if(n<0)n=0;
+            if(n>constrained->base.r.x2-constrained->base.min_w)n=constrained->base.r.x2-constrained->base.min_w;
+            w->resize_constraint.resized_w = constrained->base.r.x2-n;
+            constrained->base.r.x1=n;
         }
     }
 
-    if((w->resize_constraint.y_clicked)&&(!(w->resize_constraint.alignment_data&WIDGET_RESIZABLE_LOCKED_VERTICAL)))
+    if((w->resize_constraint.y_clicked)&&(!(w->resize_constraint.alignment_data&WIDGET_RESIZABLE_LOCKED_HORIZONTAL)))
     {
-        if(w->resize_constraint.alignment_data&WIDGET_RESIZABLE_CENTRED_VERTICAL)
+        n=y-w->resize_constraint.y_clicked;
+        if(w->resize_constraint.alignment_data&WIDGET_RESIZABLE_CENTRED_HORIZONTAL)
         {
-            if(w->resize_constraint.y_clicked>0)
-            {
-                w->resize_constraint.resized_h=w->base.r.h-2*(y-w->resize_constraint.y_clicked);
-            }
-            else
-            {
-                w->resize_constraint.resized_h=2*(y-w->resize_constraint.y_clicked)-w->base.r.h;
-            }
+            if(w->resize_constraint.y_clicked>0) w->resize_constraint.resized_h=w->base.r.y2-w->base.r.y1-2*n;
+            else w->resize_constraint.resized_h=2*n-w->base.r.y2+w->base.r.y1;
+            #warning above seems bjorked, needs testing
         }
         else if(w->resize_constraint.y_clicked<0)
         {
-            w->resize_constraint.resized_h=y - constrained->base.r.y - w->resize_constraint.y_clicked;
-            if(w->resize_constraint.resized_h > w->base.r.h-constrained->base.r.y)w->resize_constraint.resized_h = w->base.r.h-constrained->base.r.y;
+            if(n>w->base.r.y2-w->base.r.y1)n=w->base.r.y2-w->base.r.y1;
+            w->resize_constraint.resized_h = n-constrained->base.r.y1;
         }
         else
         {
-            constrained->base.r.y=y-w->resize_constraint.y_clicked;
-            if(constrained->base.r.y < 0)constrained->base.r.y=0;
-            if(constrained->base.r.y > w->resize_constraint.y_far_corner-constrained->base.min_h)constrained->base.r.y=w->resize_constraint.y_far_corner-constrained->base.min_h;
-            w->resize_constraint.resized_h=w->resize_constraint.y_far_corner-constrained->base.r.y;
+            if(n<0)n=0;
+            if(n>constrained->base.r.y2-constrained->base.min_h)n=constrained->base.r.y2-constrained->base.min_h;
+            w->resize_constraint.resized_h = constrained->base.r.y2-n;
+            constrained->base.r.y1=n;
         }
     }
-
 
     organise_toplevel_widget(w);
 }
@@ -169,9 +165,9 @@ static widget_behaviour_function_set resize_constraint_behaviour_functions=
 
 
 
-void resize_constraint_widget_render(overlay_data * od,overlay_theme * theme,widget * w,int x_off,int y_off,rectangle bounds)
+void resize_constraint_widget_render(overlay_data * od,overlay_theme * theme,widget * w,int x_off,int y_off,rectangle_ bounds)
 {
-    if(w->resize_constraint.constrained) render_widget(od,w->resize_constraint.constrained,x_off+w->base.r.x,y_off+w->base.r.y,bounds);
+    if(w->resize_constraint.constrained) render_widget(od,w->resize_constraint.constrained,x_off+w->base.r.x1,y_off+w->base.r.y1,bounds);
 }
 
 widget * resize_constraint_widget_select(overlay_theme * theme,widget * w,int x_in,int y_in)
@@ -180,18 +176,18 @@ widget * resize_constraint_widget_select(overlay_theme * theme,widget * w,int x_
 
     if(w->resize_constraint.constrained)
     {
-        tmp = select_widget(w->resize_constraint.constrained,x_in-w->base.r.x,y_in-w->base.r.y);
+        x_in-=w->base.r.x1;
+        y_in-=w->base.r.y1;
+
+        tmp = select_widget(w->resize_constraint.constrained,x_in,y_in);
 
         if(tmp == w->resize_constraint.constrained)
         {
-            x_in-=tmp->base.r.x+w->base.r.x;
-            y_in-=tmp->base.r.y+w->base.r.y;
+            if((x_in < tmp->base.r.x1+theme->border_resize_selection_range)&&(!(w->resize_constraint.alignment_data&WIDGET_RESIZABLE_TOUCHING_LEFT)))return w;
+            if((x_in > tmp->base.r.x2-theme->border_resize_selection_range)&&(!(w->resize_constraint.alignment_data&WIDGET_RESIZABLE_TOUCHING_RIGHT)))return w;
 
-            if((x_in < theme->border_resize_selection_range)&&(!(w->resize_constraint.alignment_data&WIDGET_RESIZABLE_TOUCHING_LEFT)))return w;
-            if((x_in > tmp->base.r.w-theme->border_resize_selection_range)&&(!(w->resize_constraint.alignment_data&WIDGET_RESIZABLE_TOUCHING_RIGHT)))return w;
-
-            if((y_in < theme->border_resize_selection_range)&&(!(w->resize_constraint.alignment_data&WIDGET_RESIZABLE_TOUCHING_TOP)))return w;
-            if((y_in > tmp->base.r.h-theme->border_resize_selection_range)&&(!(w->resize_constraint.alignment_data&WIDGET_RESIZABLE_TOUCHING_BOTTOM)))return w;
+            if((y_in < tmp->base.r.y1+theme->border_resize_selection_range)&&(!(w->resize_constraint.alignment_data&WIDGET_RESIZABLE_TOUCHING_TOP)))return w;
+            if((y_in > tmp->base.r.y2-theme->border_resize_selection_range)&&(!(w->resize_constraint.alignment_data&WIDGET_RESIZABLE_TOUCHING_BOTTOM)))return w;
         }
     }
 
@@ -239,19 +235,17 @@ void resize_constraint_widget_set_w(overlay_theme * theme,widget * w)
 
     if(w->resize_constraint.constrained)
 	{
-	    if(w->resize_constraint.resized_w > w->base.r.w)w->resize_constraint.resized_w = w->base.r.w;
-
-	    if((w->resize_constraint.alignment_data & WIDGET_RESIZABLE_TOUCHING_LEFT)&&(w->resize_constraint.alignment_data & WIDGET_RESIZABLE_TOUCHING_RIGHT))width=w->base.r.w;
-	    else width=w->resize_constraint.resized_w;
-
-	    if(width < w->base.min_w)width=w->base.min_w;///min_w same as constrained
+	    width=w->resize_constraint.resized_w;
+        if(width < w->resize_constraint.constrained->base.min_w) width=w->resize_constraint.constrained->base.min_w;
+        if(width > w->base.r.x2-w->base.r.x1 || ((w->resize_constraint.alignment_data & WIDGET_RESIZABLE_TOUCHING_LEFT)&&(w->resize_constraint.alignment_data & WIDGET_RESIZABLE_TOUCHING_RIGHT)))
+            width=w->base.r.x2-w->base.r.x1;
 
         if(w->resize_constraint.alignment_data & WIDGET_RESIZABLE_TOUCHING_LEFT)x_pos=0;
-        else if(w->resize_constraint.alignment_data & WIDGET_RESIZABLE_TOUCHING_RIGHT)x_pos=w->base.r.w-width;
-        else if((w->resize_constraint.alignment_data & WIDGET_RESIZABLE_CENTRED_HORIZONTAL)||(w->resize_constraint.initially_centred))x_pos=(w->base.r.w-width)/2;
-	    else x_pos=w->resize_constraint.constrained->base.r.x;
+        else if(w->resize_constraint.alignment_data & WIDGET_RESIZABLE_TOUCHING_RIGHT)x_pos=w->base.r.x2-w->base.r.x1-width;
+        else if((w->resize_constraint.alignment_data & WIDGET_RESIZABLE_CENTRED_HORIZONTAL)||(w->resize_constraint.initially_centred))x_pos=(w->base.r.x2-w->base.r.x1-width)/2;
+        else x_pos=w->resize_constraint.constrained->base.r.x1;
 
-	    if((x_pos+width) > w->base.r.w)x_pos=w->base.r.w-width;
+        if(x_pos+width > w->base.r.x2-w->base.r.x1)x_pos=w->base.r.x2-w->base.r.x1-width;
 	    if(x_pos<0)x_pos=0;
 
 	    organise_widget_horizontally(w->resize_constraint.constrained,x_pos,width);
@@ -264,19 +258,17 @@ void resize_constraint_widget_set_h(overlay_theme * theme,widget * w)
 
     if(w->resize_constraint.constrained)
 	{
-	    if(w->resize_constraint.resized_h > w->base.r.h)w->resize_constraint.resized_h=w->base.r.h;
+        height=w->resize_constraint.resized_h;
+        if(height < w->resize_constraint.constrained->base.min_h) height=w->resize_constraint.constrained->base.min_h;
+        if(height > w->base.r.y2-w->base.r.y1 || ((w->resize_constraint.alignment_data & WIDGET_RESIZABLE_TOUCHING_TOP)&&(w->resize_constraint.alignment_data & WIDGET_RESIZABLE_TOUCHING_BOTTOM)))
+            height=w->base.r.y2-w->base.r.y1;
 
-	    if((w->resize_constraint.alignment_data & WIDGET_RESIZABLE_TOUCHING_TOP)&&(w->resize_constraint.alignment_data & WIDGET_RESIZABLE_TOUCHING_BOTTOM))height=w->base.r.h;
-	    else height=w->resize_constraint.resized_h;
+        if(w->resize_constraint.alignment_data & WIDGET_RESIZABLE_TOUCHING_TOP)y_pos=0;
+        else if(w->resize_constraint.alignment_data & WIDGET_RESIZABLE_TOUCHING_BOTTOM)y_pos=w->base.r.y2-w->base.r.y1-height;
+        else if((w->resize_constraint.alignment_data & WIDGET_RESIZABLE_CENTRED_VERTICAL)||(w->resize_constraint.initially_centred))y_pos=(w->base.r.y2-w->base.r.y1-height)/2;
+        else y_pos=w->resize_constraint.constrained->base.r.y1;
 
-	    if(height < w->base.min_h)height=w->base.min_h;///min_h same as constrained
-
-	    if(w->resize_constraint.alignment_data & WIDGET_RESIZABLE_TOUCHING_TOP)y_pos=0;
-        else if(w->resize_constraint.alignment_data & WIDGET_RESIZABLE_TOUCHING_BOTTOM)y_pos=w->base.r.h-height;
-        else if((w->resize_constraint.alignment_data & WIDGET_RESIZABLE_CENTRED_VERTICAL)||(w->resize_constraint.initially_centred))y_pos=(w->base.r.h-height)/2;
-	    else y_pos=w->resize_constraint.constrained->base.r.y;
-
-	    if((y_pos+height) > w->base.r.h)y_pos=w->base.r.h-height;
+        if(y_pos+height > w->base.r.y2-w->base.r.y1)y_pos=w->base.r.y2-w->base.r.y1-height;
 	    if(y_pos<0)y_pos=0;
 
 	    organise_widget_vertically(w->resize_constraint.constrained,y_pos,height);
@@ -318,8 +310,8 @@ widget * create_resize_constraint(uint16_t alignment_data,bool maximizable)
     w->resize_constraint.resized_h=0;
     w->resize_constraint.x_clicked=0;
     w->resize_constraint.y_clicked=0;
-    w->resize_constraint.x_far_corner=0;
-    w->resize_constraint.y_far_corner=0;
+//    w->resize_constraint.x_far_corner=0;
+//    w->resize_constraint.y_far_corner=0;
 
     w->resize_constraint.maximizable=maximizable;
     w->resize_constraint.maximized=false;
@@ -340,15 +332,15 @@ void toggle_resize_constraint_maximize(widget * w)
             w->resize_constraint.alignment_data<<=8;
             w->resize_constraint.alignment_data|=WIDGET_RESIZABLE_FILL_AREA;
 
-            w->resize_constraint.alt_x_pos=w->resize_constraint.constrained->base.r.x;
-            w->resize_constraint.alt_y_pos=w->resize_constraint.constrained->base.r.y;
+            w->resize_constraint.alt_x_pos=w->resize_constraint.constrained->base.r.x1;
+            w->resize_constraint.alt_y_pos=w->resize_constraint.constrained->base.r.y1;
         }
         else
         {
             w->resize_constraint.alignment_data>>=8;
 
-            w->resize_constraint.constrained->base.r.x=w->resize_constraint.alt_x_pos;
-            w->resize_constraint.constrained->base.r.y=w->resize_constraint.alt_y_pos;
+            w->resize_constraint.constrained->base.r.x1=w->resize_constraint.alt_x_pos;
+            w->resize_constraint.constrained->base.r.y1=w->resize_constraint.alt_y_pos;
         }
 
         organise_toplevel_widget(w);

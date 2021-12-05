@@ -64,19 +64,19 @@ static widget_behaviour_function_set panel_behaviour_functions=
 
 
 
-void panel_widget_render(overlay_data * od,overlay_theme * theme,widget * w,int x_off,int y_off,rectangle bounds)
+void panel_widget_render(overlay_data * od,overlay_theme * theme,widget * w,int x_off,int y_off,rectangle_ bounds)
 {
-    theme->panel_render(rectangle_add_offset(rectangle_new_conversion(w->base.r),x_off,y_off),w->base.status,theme,od,rectangle_new_conversion(bounds),OVERLAY_BACKGROUND_COLOUR_);
+    theme->panel_render(rectangle_add_offset(w->base.r,x_off,y_off),w->base.status,theme,od,bounds,OVERLAY_BACKGROUND_COLOUR_);
 
-    render_widget(od,w->panel.contents,x_off+w->base.r.x,y_off+w->base.r.y,bounds);
+    render_widget(od,w->panel.contents,x_off+w->base.r.x1,y_off+w->base.r.y1,bounds);
 }
 
 widget * panel_widget_select(overlay_theme * theme,widget * w,int x_in,int y_in)
 {
-    widget * tmp=select_widget(w->panel.contents,x_in-w->base.r.x,y_in-w->base.r.y);
+    widget * tmp=select_widget(w->panel.contents,x_in-w->base.r.x1,y_in-w->base.r.y1);
 	if(tmp)return tmp;
 
-	if(theme->panel_select(rectangle_subtract_offset(rectangle_new_conversion(w->base.r),x_in,y_in),w->base.status,theme))return w;
+	if(theme->panel_select(rectangle_subtract_offset(w->base.r,x_in,y_in),w->base.status,theme))return w;
     return NULL;
 }
 
@@ -112,7 +112,7 @@ void panel_widget_set_w(overlay_theme * theme,widget * w)
     if(w->panel.contents)
 	{
 	    organise_widget_horizontally(w->panel.contents,((w->base.status&WIDGET_H_FIRST)?theme->x_panel_offset_side:theme->x_panel_offset),
-            w->base.r.w-((w->base.status&WIDGET_H_FIRST)?theme->x_panel_offset_side:theme->x_panel_offset)-((w->base.status&WIDGET_H_LAST)?theme->x_panel_offset_side:theme->x_panel_offset));
+            w->base.r.x2-w->base.r.x1-((w->base.status&WIDGET_H_FIRST)?theme->x_panel_offset_side:theme->x_panel_offset)-((w->base.status&WIDGET_H_LAST)?theme->x_panel_offset_side:theme->x_panel_offset));
 	}
 }
 
@@ -121,7 +121,7 @@ void panel_widget_set_h(overlay_theme * theme,widget * w)
 	if(w->panel.contents)
 	{
 	    organise_widget_vertically(w->panel.contents,((w->base.status&WIDGET_V_FIRST)?theme->y_panel_offset_side:theme->y_panel_offset),
-            w->base.r.h-((w->base.status&WIDGET_V_FIRST)?theme->y_panel_offset_side:theme->y_panel_offset)-((w->base.status&WIDGET_V_LAST)?theme->y_panel_offset_side:theme->y_panel_offset));
+            w->base.r.y2-w->base.r.y1-((w->base.status&WIDGET_V_FIRST)?theme->y_panel_offset_side:theme->y_panel_offset)-((w->base.status&WIDGET_V_LAST)?theme->y_panel_offset_side:theme->y_panel_offset));
 	}
 }
 

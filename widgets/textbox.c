@@ -244,7 +244,7 @@ void set_textbox_text(widget * w,char * text_in)
 
 
 
-static void render_textbox_text(overlay_data * od,overlay_theme * theme,widget * w,int x_off,int y_off,rectangle bounds)
+static void render_textbox_text(overlay_data * od,overlay_theme * theme,widget * w,int x_off,int y_off,rectangle_ bounds)
 {
 //    int i,j;
 //    overlay_render_data ord;
@@ -550,7 +550,7 @@ static widget_behaviour_function_set textbox_behaviour_functions=
 
 
 
-static void textbox_widget_render(overlay_data * od,overlay_theme * theme,widget * w,int x_off,int y_off,rectangle bounds)
+static void textbox_widget_render(overlay_data * od,overlay_theme * theme,widget * w,int x_off,int y_off,rectangle_ bounds)
 {
 //	theme->box_render(w->base.r,x_off,y_off,w->base.status,theme,od,bounds,OVERLAY_MAIN_COLOUR);
 //    render_textbox_text(od,theme,w,x_off,y_off,bounds);

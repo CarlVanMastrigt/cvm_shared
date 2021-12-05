@@ -120,16 +120,16 @@ void toggle_widget_button_func(widget * w)
 
 
 
-static void empty_widget_render(overlay_data * od,overlay_theme * theme,widget * w,int x_off,int y_off,rectangle bounds)
+static void empty_widget_render(overlay_data * od,overlay_theme * theme,widget * w,int x_off,int y_off,rectangle_ bounds)
 {
-	rectangle r=w->base.r;
-
-	r.x+=x_off+2;
-	r.y+=y_off+2;
-	r.w-=4;
-	r.h-=4;
-
-	if((r.h<5)||(r.w<5))return;
+//	rectangle_ r=w->base.r;
+//
+//	r.x+=x_off+2;
+//	r.y+=y_off+2;
+//	r.w-=4;
+//	r.h-=4;
+//
+//	if((r.h<5)||(r.w<5))return;
 }
 
 

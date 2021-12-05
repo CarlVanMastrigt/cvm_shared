@@ -21,8 +21,6 @@ along with cvm_shared.  If not, see <https://www.gnu.org/licenses/>.
 
 static void anchor_widget_left_click(overlay_theme * theme,widget * w,int x,int y)
 {
-    widget * c;
-
     if(w->anchor.constraint)
     {
         if(check_widget_double_clicked(w))
@@ -32,13 +30,11 @@ static void anchor_widget_left_click(overlay_theme * theme,widget * w,int x,int 
         }
         else
         {
-            c=w->anchor.constraint->resize_constraint.constrained;
-            adjust_coordinates_to_widget_local(w->anchor.constraint,&x,&y);
-
-            if(c)
+            if(w->anchor.constraint->resize_constraint.constrained)
             {
-                w->anchor.x_clicked=x-c->base.r.x;
-                w->anchor.y_clicked=y-c->base.r.y;
+                adjust_coordinates_to_widget_local(w->anchor.constraint->resize_constraint.constrained,&x,&y);
+                w->anchor.x_clicked=x;
+                w->anchor.y_clicked=y;
             }
         }
     }
@@ -47,7 +43,6 @@ static void anchor_widget_left_click(overlay_theme * theme,widget * w,int x,int 
 static void anchor_widget_mouse_movement(overlay_theme * theme,widget * w,int x,int y)
 {
     widget *ci,*co;
-    rectangle_ ri,ro;
 
     if(w->anchor.constraint)
     {
@@ -58,18 +53,15 @@ static void anchor_widget_mouse_movement(overlay_theme * theme,widget * w,int x,
 
         if(ci)
         {
-            ri=rectangle_new_conversion(ci->base.r);
-            ro=rectangle_new_conversion(co->base.r);
+            x-=w->anchor.x_clicked+ci->base.r.x1;
+            if(ci->base.r.x1+x < co->base.r.x1)x=co->base.r.x1-ci->base.r.x1;
+            if(ci->base.r.x2+x > co->base.r.x2)x=co->base.r.x2-ci->base.r.x2;
 
-            x-=w->anchor.x_clicked+ri.x1;
-            if(ri.x1+x < ro.x1)x=ro.x1-ri.x1;
-            if(ri.x2+x > ro.x2)x=ro.x2-ri.x2;
+            y-=w->anchor.y_clicked+ci->base.r.y1;
+            if(ci->base.r.y1+y < co->base.r.y1)y=co->base.r.y1-ci->base.r.y1;
+            if(ci->base.r.y2+y > co->base.r.y2)y=co->base.r.y2-ci->base.r.y2;
 
-            y-=w->anchor.y_clicked+ri.y1;
-            if(ri.y1+y < ro.y1)y=ro.y1-ri.y1;
-            if(ri.y2+y > ro.y2)y=ro.y2-ri.y2;
-
-            ci->base.r=rectangle_old_conversion(rectangle_add_offset(ri,x,y));
+            ci->base.r=rectangle_add_offset(ci->base.r,x,y);
         }
     }
 }
@@ -101,13 +93,13 @@ static widget_behaviour_function_set anchor_behaviour_functions=
 
 
 
-static void text_anchor_widget_render(overlay_data * od,overlay_theme * theme,widget * w,int x_off,int y_off,rectangle bounds)
+static void text_anchor_widget_render(overlay_data * od,overlay_theme * theme,widget * w,int x_off,int y_off,rectangle_ bounds)
 {
-	rectangle_ r=rectangle_add_offset(rectangle_new_conversion(w->base.r),x_off,y_off);
-	theme->h_bar_render(r,w->base.status,theme,od,rectangle_new_conversion(bounds),OVERLAY_ALTERNATE_MAIN_COLOUR_);
+	rectangle_ r=rectangle_add_offset(w->base.r,x_off,y_off);
+	theme->h_bar_render(r,w->base.status,theme,od,bounds,OVERLAY_ALTERNATE_MAIN_COLOUR_);
 
     r=overlay_simple_text_rectangle(r,theme->font_.glyph_size,theme->h_bar_text_offset);
-    rectangle_ b=get_rectangle_overlap_(r,rectangle_new_conversion(bounds));
+    rectangle_ b=get_rectangle_overlap_(r,bounds);
     if(rectangle_has_positive_area(b))overlay_render_text_simple(od,&theme->font_,w->anchor.text,r.x1,r.y1,b,OVERLAY_TEXT_COLOUR_0_);
 
     ///prep rectangle here separately, combine bounds and do testing as well, apply widget specific offset as necessary, otherwise pass in unadjusted x/y pos as param like old setup
@@ -116,7 +108,7 @@ static void text_anchor_widget_render(overlay_data * od,overlay_theme * theme,wi
 
 static widget * text_anchor_widget_select(overlay_theme * theme,widget * w,int x_in,int y_in)
 {
-    if(theme->h_bar_select(rectangle_subtract_offset(rectangle_new_conversion(w->base.r),x_in,y_in),w->base.status,theme))return w;
+    if(theme->h_bar_select(rectangle_subtract_offset(w->base.r,x_in,y_in),w->base.status,theme))return w;
 
     return NULL;
 }

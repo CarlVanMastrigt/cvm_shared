@@ -554,91 +554,6 @@ void cubic_h_bar_render(rectangle_ r,uint32_t status,overlay_theme * theme,overl
     }
 }
 
-void cubic_h_icon_text_bar_render(rectangle r,int x_off,int y_off,uint32_t status,overlay_theme * theme,overlay_data * od,rectangle bounds,overlay_colour colour,char * text,char * icon_name,overlay_colour icon_colour)
-{
-//    r.x+=x_off;
-//    r.y+=y_off+(r.h-20)/2;
-//    r.h=20;
-//
-//    /// use x_off and y_off here for cleanlyness/legibility purposes ??? also for text placement when on border
-//
-//    x_off=r.x+theme->h_bar_text_offset+theme->icon_bar_extra_w;
-//    y_off=r.y+(r.h-theme->font.font_height)/2;
-//    int text_w=r.w-2*theme->h_bar_text_offset- theme->icon_bar_extra_w;
-//
-//    if(!(status&WIDGET_H_FIRST))///not the first
-//    {
-//        render_overlay_shade(od,(rectangle){.x=r.x+2,.y=r.y,.w=10,.h=20},bounds,foreground_shape_sprite.x_pos,foreground_shape_sprite.y_pos,colour);
-//        r.x+=12;
-//        r.w-=12;
-//    }
-//
-//    if(!(status&WIDGET_H_LAST))///not the last
-//    {
-//        render_overlay_shade(od,(rectangle){.x=r.x+r.w-12,.y=r.y,.w=10,.h=20},bounds,foreground_shape_sprite.x_pos+10,foreground_shape_sprite.y_pos,colour);
-//        r.w-=12;
-//    }
-//
-//    render_rectangle(od,r,bounds,colour);
-//
-//    if(text)
-//    {
-//        rectangle text_bounds=bounds;
-//        if(get_rectangle_overlap(&text_bounds,(rectangle){.x=x_off,.y=y_off,.w=text_w,.h=theme->font.font_height}))render_overlay_text(od,theme,text,x_off,y_off,text_bounds,0,0);
-//    }
-//
-//    if(icon_name)
-//    {
-//        x_off-=theme->h_bar_text_offset+16;///16=icon_size
-//        y_off=r.y+(r.h-16)/2;///16=icon_size
-//
-//        overlay_sprite_data icon=get_overlay_sprite_data(theme,icon_name);
-//        render_overlay_shade(od,(rectangle){.x=x_off,.y=y_off,.w=16,.h=16},bounds,icon.x_pos,icon.y_pos,icon_colour);
-//    }
-}
-
-void cubic_h_text_icon_bar_render(rectangle r,int x_off,int y_off,uint32_t status,overlay_theme * theme,overlay_data * od,rectangle bounds,overlay_colour colour,char * text,char * icon_name,overlay_colour icon_colour)
-{
-//    r.x+=x_off;
-//    r.y+=y_off+(r.h-20)/2;
-//    r.h=20;
-//
-//    /// use x_off and y_off here for cleanlyness/legibility purposes ??? also for text placement when on border
-//
-//    x_off=r.x+theme->h_bar_text_offset;
-//    y_off=r.y+(r.h-theme->font.font_height)/2;
-//    int text_w=r.w-2*theme->h_bar_text_offset-theme->icon_bar_extra_w;
-//
-//    if(!(status&WIDGET_H_FIRST))///not the first
-//    {
-//        render_overlay_shade(od,(rectangle){.x=r.x+2,.y=r.y,.w=10,.h=20},bounds,foreground_shape_sprite.x_pos,foreground_shape_sprite.y_pos,colour);
-//        r.x+=12;
-//        r.w-=12;
-//    }
-//
-//    if(!(status&WIDGET_H_LAST))///not the last
-//    {
-//        render_overlay_shade(od,(rectangle){.x=r.x+r.w-12,.y=r.y,.w=10,.h=20},bounds,foreground_shape_sprite.x_pos+10,foreground_shape_sprite.y_pos,colour);
-//        r.w-=12;
-//    }
-//
-//    render_rectangle(od,r,bounds,colour);
-//
-//    if(text)
-//    {
-//        rectangle text_bounds=bounds;
-//        if(get_rectangle_overlap(&text_bounds,(rectangle){.x=x_off,.y=y_off,.w=text_w,.h=theme->font.font_height}))render_overlay_text(od,theme,text,x_off,y_off,text_bounds,0,0);
-//    }
-//
-//    if(icon_name)
-//    {
-//        x_off+=text_w+theme->h_bar_text_offset;
-//        y_off=r.y+(r.h-16)/2;///16=icon_size
-//
-//        overlay_sprite_data icon=get_overlay_sprite_data(theme,icon_name);
-//        render_overlay_shade(od,(rectangle){.x=x_off,.y=y_off,.w=16,.h=16},bounds,icon.x_pos,icon.y_pos,icon_colour);
-//    }
-}
 
 void cubic_h_slider_bar_render(rectangle_ r,uint32_t status,overlay_theme * theme,overlay_data * od,rectangle_ bounds,overlay_colour_ colour,int range,int value,int bar,overlay_colour_ bar_colour)
 {
@@ -805,7 +720,7 @@ void cubic_h_slider_bar_render(rectangle_ r,uint32_t status,overlay_theme * them
 //    render_rectangle(od,r,bounds,colour);
 }
 
-void cubic_v_slider_bar_render(rectangle r,int x_off,int y_off,uint32_t status,overlay_theme * theme,overlay_data * od,rectangle bounds,overlay_colour colour,int range,int value,int bar)
+void cubic_v_slider_bar_render(rectangle_ r,int x_off,int y_off,uint32_t status,overlay_theme * theme,overlay_data * od,rectangle_ bounds,overlay_colour colour,int range,int value,int bar)
 {
 //    r.x+=x_off+(r.w-20)/2;
 //    r.y+=y_off+11;
@@ -836,7 +751,7 @@ void cubic_v_slider_bar_render(rectangle r,int x_off,int y_off,uint32_t status,o
 //    render_rectangle(od,r,bounds,colour);
 }
 
-void cubic_box_render(rectangle r,int x_off,int y_off,uint32_t status,overlay_theme * theme,overlay_data * od,rectangle bounds,overlay_colour colour)
+void cubic_box_render(rectangle_ r,int x_off,int y_off,uint32_t status,overlay_theme * theme,overlay_data * od,rectangle_ bounds,overlay_colour colour)
 {
 //    r.x+=x_off;
 //    r.y+=y_off+1;

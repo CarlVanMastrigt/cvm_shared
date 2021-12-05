@@ -25,14 +25,14 @@ static widget * new_auto_close_popup=NULL;
 
 
 
-static void popup_widget_render(overlay_data * od,overlay_theme * theme,widget * w,int x_off,int y_off,rectangle bounds)
+static void popup_widget_render(overlay_data * od,overlay_theme * theme,widget * w,int x_off,int y_off,rectangle_ bounds)
 {
-	render_widget(od,w->popup.contents,x_off+w->base.r.x,y_off+w->base.r.y,bounds);
+	render_widget(od,w->popup.contents,x_off+w->base.r.x1,y_off+w->base.r.y1,bounds);
 }
 
 static widget * popup_widget_select(overlay_theme * theme,widget * w,int x_in,int y_in)
 {
-	return select_widget(w->popup.contents,x_in-w->base.r.x,y_in-w->base.r.y);
+	return select_widget(w->popup.contents,x_in-w->base.r.x1,y_in-w->base.r.y1);
 }
 
 static void popup_widget_min_w(overlay_theme * theme,widget * w)
@@ -54,41 +54,41 @@ static void popup_widget_set_w(overlay_theme * theme,widget * w)
 
 static void popup_widget_set_h(overlay_theme * theme,widget * w)
 {
-    organise_widget_vertically(w->popup.contents,0,w->base.min_h);
-
-    widget * c=w->popup.contents;
-
-    if((c)&&(w->popup.internal_alignment_widget)&&(w->popup.external_alignment_widget))
-    {
-        int xi=0;
-        int yi=0;
-        int xe=0;
-        int ye=0;
-
-        get_widgets_global_coordinates(w->popup.external_alignment_widget,&xe,&ye);
-        get_widgets_global_coordinates(w->popup.internal_alignment_widget,&xi,&yi);
-
-        c->base.r.x+=xe-xi;
-        c->base.r.y+=ye-yi;
-
-        if((w->popup.positioning==WIDGET_POSITIONING_CENTRED)||(w->popup.positioning==WIDGET_POSITIONING_CENTRED_DOWN))
-            c->base.r.x+=(w->popup.external_alignment_widget->base.r.w - w->popup.internal_alignment_widget->base.r.w)/2;
-
-        if(w->popup.positioning==WIDGET_POSITIONING_CENTRED)
-            c->base.r.y+=(w->popup.external_alignment_widget->base.r.h - w->popup.internal_alignment_widget->base.r.h)/2;
-
-        if(w->popup.positioning==WIDGET_POSITIONING_OFFSET_RIGHT)
-            c->base.r.x+=w->popup.external_alignment_widget->base.r.w + theme->popup_separation;
-
-        if(w->popup.positioning==WIDGET_POSITIONING_OFFSET_DOWN)
-            c->base.r.y+=w->popup.external_alignment_widget->base.r.h + theme->popup_separation;
-
-        if((c->base.r.x+c->base.r.w)>w->base.r.w)c->base.r.x=w->base.r.w-c->base.r.w;
-        if((c->base.r.y+c->base.r.h)>w->base.r.h)c->base.r.y=w->base.r.h-c->base.r.h;
-
-        if(c->base.r.x<0)c->base.r.x=0;
-        if(c->base.r.y<0)c->base.r.y=0;
-    }
+//    organise_widget_vertically(w->popup.contents,0,w->base.min_h);
+//
+//    widget * c=w->popup.contents;
+//
+//    if((c)&&(w->popup.internal_alignment_widget)&&(w->popup.external_alignment_widget))
+//    {
+//        int xi=0;
+//        int yi=0;
+//        int xe=0;
+//        int ye=0;
+//
+//        get_widgets_global_coordinates(w->popup.external_alignment_widget,&xe,&ye);
+//        get_widgets_global_coordinates(w->popup.internal_alignment_widget,&xi,&yi);
+//
+//        c->base.r.x+=xe-xi;
+//        c->base.r.y+=ye-yi;
+//
+//        if((w->popup.positioning==WIDGET_POSITIONING_CENTRED)||(w->popup.positioning==WIDGET_POSITIONING_CENTRED_DOWN))
+//            c->base.r.x+=(w->popup.external_alignment_widget->base.r.w - w->popup.internal_alignment_widget->base.r.w)/2;
+//
+//        if(w->popup.positioning==WIDGET_POSITIONING_CENTRED)
+//            c->base.r.y+=(w->popup.external_alignment_widget->base.r.h - w->popup.internal_alignment_widget->base.r.h)/2;
+//
+//        if(w->popup.positioning==WIDGET_POSITIONING_OFFSET_RIGHT)
+//            c->base.r.x+=w->popup.external_alignment_widget->base.r.w + theme->popup_separation;
+//
+//        if(w->popup.positioning==WIDGET_POSITIONING_OFFSET_DOWN)
+//            c->base.r.y+=w->popup.external_alignment_widget->base.r.h + theme->popup_separation;
+//
+//        if((c->base.r.x+c->base.r.w)>w->base.r.w)c->base.r.x=w->base.r.w-c->base.r.w;
+//        if((c->base.r.y+c->base.r.h)>w->base.r.h)c->base.r.y=w->base.r.h-c->base.r.h;
+//
+//        if(c->base.r.x<0)c->base.r.x=0;
+//        if(c->base.r.y<0)c->base.r.y=0;
+//    }
 }
 
 

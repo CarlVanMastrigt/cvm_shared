@@ -31,24 +31,24 @@ static void tab_button_func(widget * button)
 }
 
 
-static void tab_button_widget_render(overlay_data * od,overlay_theme * theme,widget * w,int x_off,int y_off,rectangle bounds)
+static void tab_button_widget_render(overlay_data * od,overlay_theme * theme,widget * w,int x_off,int y_off,rectangle_ bounds)
 {
     widget * page=w->button.data;
 
     if(widget_active(page))/// ???
     {
-        rectangle_ r=rectangle_add_offset(rectangle_new_conversion(w->base.r),x_off,y_off);
-        if(page->base.parent->tab_folder.current_tab_page==page)theme->h_bar_render(r,w->base.status,theme,od,rectangle_new_conversion(bounds),OVERLAY_HIGHLIGHTING_COLOUR);
+        rectangle_ r=rectangle_add_offset(w->base.r,x_off,y_off);
+        if(page->base.parent->tab_folder.current_tab_page==page)theme->h_bar_render(r,w->base.status,theme,od,bounds,OVERLAY_HIGHLIGHTING_COLOUR);
 
         r=overlay_simple_text_rectangle(r,theme->font_.glyph_size,theme->h_bar_text_offset);
-        rectangle_ b=get_rectangle_overlap_(r,rectangle_new_conversion(bounds));
+        rectangle_ b=get_rectangle_overlap_(r,bounds);
         if(rectangle_has_positive_area(b))overlay_render_text_simple(od,&theme->font_,w->button.text,r.x1,r.y1,b,OVERLAY_TEXT_COLOUR_0_);
     }
 }
 
 static widget * tab_button_widget_select(overlay_theme * theme,widget * w,int x_in,int y_in)
 {
-    if((widget_active(w->button.data))&&(theme->h_bar_select(rectangle_subtract_offset(rectangle_new_conversion(w->base.r),x_in,y_in),w->base.status,theme)))return w;
+    if((widget_active(w->button.data))&&(theme->h_bar_select(rectangle_subtract_offset(w->base.r,x_in,y_in),w->base.status,theme)))return w;
     return NULL;
 }
 
@@ -192,14 +192,14 @@ static widget_behaviour_function_set tab_folder_behaviour_functions=
 
 
 
-static void tab_folder_widget_render(overlay_data * od,overlay_theme * theme,widget * w,int x_off,int y_off,rectangle bounds)
+static void tab_folder_widget_render(overlay_data * od,overlay_theme * theme,widget * w,int x_off,int y_off,rectangle_ bounds)
 {
-    if(w->tab_folder.current_tab_page)render_widget(od,w->tab_folder.current_tab_page,x_off+w->base.r.x,y_off+w->base.r.y,bounds);
+    if(w->tab_folder.current_tab_page)render_widget(od,w->tab_folder.current_tab_page,x_off+w->base.r.x1,y_off+w->base.r.y1,bounds);
 }
 
 static widget * tab_folder_widget_select(overlay_theme * theme,widget * w,int x_in,int y_in)
 {
-    if(w->tab_folder.current_tab_page)return select_widget(w->tab_folder.current_tab_page,x_in-w->base.r.x,y_in-w->base.r.y);
+    if(w->tab_folder.current_tab_page)return select_widget(w->tab_folder.current_tab_page,x_in-w->base.r.x1,y_in-w->base.r.y1);
     return NULL;
 }
 
@@ -252,7 +252,7 @@ static void tab_folder_widget_set_w(overlay_theme * theme,widget * w)
 
     while(current)
     {
-        organise_widget_horizontally(current,0,w->base.r.w);
+        organise_widget_horizontally(current,0,w->base.r.x2-w->base.r.x1);
         current=current->base.prev;
     }
 }
@@ -263,7 +263,7 @@ static void tab_folder_widget_set_h(overlay_theme * theme,widget * w)
 
     while(current)
     {
-        organise_widget_vertically(current,0,w->base.r.h);
+        organise_widget_vertically(current,0,w->base.r.y2-w->base.r.y1);
 
         current=current->base.prev;
     }

@@ -110,10 +110,10 @@ static widget_behaviour_function_set container_behaviour_functions=
 
 
 
-void container_widget_render(overlay_data * od,overlay_theme * theme,widget * w,int x_off,int y_off,rectangle bounds)
+void container_widget_render(overlay_data * od,overlay_theme * theme,widget * w,int x_off,int y_off,rectangle_ bounds)
 {
-    x_off+=w->base.r.x;
-    y_off+=w->base.r.y;
+    x_off+=w->base.r.x1;
+    y_off+=w->base.r.y1;
 
     widget * current=w->container.first;
 
@@ -130,8 +130,8 @@ widget * container_widget_select(overlay_theme * theme,widget * w,int x_in,int y
     widget * current=w->container.last;
     widget * tmp=NULL;
 
-    x_in-=w->base.r.x;
-    y_in-=w->base.r.y;
+    x_in-=w->base.r.x1;
+    y_in-=w->base.r.y1;
 
     while(current!=NULL)
     {
@@ -193,7 +193,7 @@ static void container_widget_set_w(overlay_theme * theme,widget * w)
 
     while(current)
     {
-        if(widget_active(current)) organise_widget_horizontally(current,0,w->base.r.w);
+        if(widget_active(current)) organise_widget_horizontally(current,0,w->base.r.x2-w->base.r.x1);
 
         current=current->base.next;
     }
@@ -205,7 +205,7 @@ static void container_widget_set_h(overlay_theme * theme,widget * w)
 
     while(current)
     {
-        if(widget_active(current)) organise_widget_vertically(current,0,w->base.r.h);
+        if(widget_active(current)) organise_widget_vertically(current,0,w->base.r.y2-w->base.r.y1);
 
         current=current->base.next;
     }

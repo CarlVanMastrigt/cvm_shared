@@ -332,10 +332,10 @@ struct overlay_theme
     /// replace overlay data with new paradigm (element buffer)
 
     void    (*square_icon_render)       (rectangle_ r,uint32_t status,overlay_theme * theme,overlay_data * od,rectangle_ bounds,overlay_colour_ colour,char * icon_glyph,overlay_colour_ icon_colour);
-    void    (*h_bar_render)        (rectangle_ r,uint32_t status,overlay_theme * theme,overlay_data * od,rectangle_ bounds,overlay_colour_ colour);///just make h_bar?
+    void    (*h_bar_render)             (rectangle_ r,uint32_t status,overlay_theme * theme,overlay_data * od,rectangle_ bounds,overlay_colour_ colour);///just make h_bar?
     void    (*h_slider_bar_render)      (rectangle_ r,uint32_t status,overlay_theme * theme,overlay_data * od,rectangle_ bounds,overlay_colour_ colour,int range,int value,int bar,overlay_colour_ bar_colour);
-    void    (*v_slider_bar_render)      (rectangle r,int x_off,int y_off,uint32_t status,overlay_theme * theme,overlay_data * od,rectangle bounds,overlay_colour colour,int range,int value,int bar);
-    void    (*box_render)               (rectangle r,int x_off,int y_off,uint32_t status,overlay_theme * theme,overlay_data * od,rectangle bounds,overlay_colour colour);
+    void    (*v_slider_bar_render)      (rectangle_ r,uint32_t status,overlay_theme * theme,overlay_data * od,rectangle_ bounds,overlay_colour_ colour,int range,int value,int bar,overlay_colour_ bar_colour);
+    void    (*box_render)               (rectangle_ r,uint32_t status,overlay_theme * theme,overlay_data * od,rectangle_ bounds,overlay_colour_ colour);
     void    (*panel_render)             (rectangle_ r,uint32_t status,overlay_theme * theme,overlay_data * od,rectangle_ bounds,overlay_colour_ colour);
 
     bool    (*square_select)            (rectangle_ r,uint32_t status,overlay_theme * theme);
@@ -345,14 +345,12 @@ struct overlay_theme
     bool    (*panel_select)             (rectangle_ r,uint32_t status,overlay_theme * theme);
 };
 
-void h_bar_text_render(rectangle r,int x_off,int y_off,overlay_theme * theme,overlay_data * od,rectangle bounds,char * text,int colour_index,int font_index);
-
-bool process_regular_text_character(cvm_font * cf,char prev,char current,int * offset);
-int get_new_text_offset(cvm_font * cf,char prev,char current,int current_offset);
-int calculate_text_length(overlay_theme * theme,char * text,int font_index);
-char * shorten_text_to_fit_width_start_ellipses(overlay_theme * theme,int width,char * text,int font_index,char * buffer,int buffer_size,int * x_offset);
-char * shorten_text_to_fit_width_end_ellipses(overlay_theme * theme,int width,char * text,int font_index,char * buffer,int buffer_size);
-
+//bool process_regular_text_character(cvm_font * cf,char prev,char current,int * offset);
+//int get_new_text_offset(cvm_font * cf,char prev,char current,int current_offset);
+//int calculate_text_length(overlay_theme * theme,char * text,int font_index);
+//char * shorten_text_to_fit_width_start_ellipses(overlay_theme * theme,int width,char * text,int font_index,char * buffer,int buffer_size,int * x_offset);
+//char * shorten_text_to_fit_width_end_ellipses(overlay_theme * theme,int width,char * text,int font_index,char * buffer,int buffer_size);
+//
 
 
 //overlay_theme create_overlay_theme(gl_functions * glf,uint32_t shaded_texture_size,uint32_t coloured_texture_size);///make malloced pointer
@@ -365,49 +363,49 @@ char * shorten_text_to_fit_width_end_ellipses(overlay_theme * theme,int width,ch
 
 
 
-typedef enum
-{
-    OVERLAY_ELEMENT_RECTANGLE=0,
-    OVERLAY_ELEMENT_BORDER,
-    OVERLAY_ELEMENT_CHARACTER,
-    OVERLAY_ELEMENT_SHADED,
-    OVERLAY_ELEMENT_COLOURED,
-
-    NUM_OVERLAY_ELEMENT_TYPES
-}
-overlay_element_type;
-
-void initialise_overlay(gl_functions * glf);
-void render_overlay(gl_functions * glf,overlay_data * od,overlay_theme * theme,int screen_w,int screen_h,vec4f * overlay_colours);
-
-
-
-
-
-
-void initialise_overlay_data(overlay_data * od);///make malloced pointer instead
-void delete_overlay_data(overlay_data * od);
-
-
-void ensure_overlay_data_space(overlay_data * od);
-
-
-void render_rectangle(overlay_data * od,rectangle r,rectangle bound,overlay_colour colour_index);
-void render_border(overlay_data * od,rectangle r,rectangle bound,rectangle discard,overlay_colour colour_index);
-void render_character(overlay_data * od,rectangle r,rectangle bound,int char_offset,int font_index,overlay_colour colour_index);
-//void render_overlay_element(overlay_data * od,rectangle r,rectangle bound,int source_x,int source_y,overlay_colour main_colour);
-void render_overlay_shade(overlay_data * od,rectangle r,rectangle bound,int source_x,int source_y,overlay_colour colour);///REMOVE
-void render_shaded_sprite(overlay_data * od,rectangle r,rectangle bound,int source_x,int source_y,overlay_colour colour);
-void render_coloured_sprite(overlay_data * od,rectangle r,rectangle bound,int source_x,int source_y);///has own colour and alpha data
-
-void upload_overlay_render_datum(overlay_data * od,overlay_render_data * ord);
-
-//bool check_click_on_overlay_sprite(overlay_theme * theme,rectangle r,overlay_sprite_data osd);
-bool check_click_on_shaded_sprite(overlay_theme * theme,rectangle r,int sprite_x,int sprite_y);
-bool check_click_on_coloured_sprite(overlay_theme * theme,rectangle r,int sprite_x,int sprite_y);
-
-void render_overlay_text(overlay_data * od,overlay_theme * theme,char * text,int x_off,int y_off,rectangle bounds,int font_index,int colour);
-
+//typedef enum
+//{
+//    OVERLAY_ELEMENT_RECTANGLE=0,
+//    OVERLAY_ELEMENT_BORDER,
+//    OVERLAY_ELEMENT_CHARACTER,
+//    OVERLAY_ELEMENT_SHADED,
+//    OVERLAY_ELEMENT_COLOURED,
+//
+//    NUM_OVERLAY_ELEMENT_TYPES
+//}
+//overlay_element_type;
+//
+//void initialise_overlay(gl_functions * glf);
+//void render_overlay(gl_functions * glf,overlay_data * od,overlay_theme * theme,int screen_w,int screen_h,vec4f * overlay_colours);
+//
+//
+//
+//
+//
+//
+//void initialise_overlay_data(overlay_data * od);///make malloced pointer instead
+//void delete_overlay_data(overlay_data * od);
+//
+//
+//void ensure_overlay_data_space(overlay_data * od);
+//
+//
+//void render_rectangle(overlay_data * od,rectangle r,rectangle bound,overlay_colour colour_index);
+//void render_border(overlay_data * od,rectangle r,rectangle bound,rectangle discard,overlay_colour colour_index);
+//void render_character(overlay_data * od,rectangle r,rectangle bound,int char_offset,int font_index,overlay_colour colour_index);
+////void render_overlay_element(overlay_data * od,rectangle r,rectangle bound,int source_x,int source_y,overlay_colour main_colour);
+//void render_overlay_shade(overlay_data * od,rectangle r,rectangle bound,int source_x,int source_y,overlay_colour colour);///REMOVE
+//void render_shaded_sprite(overlay_data * od,rectangle r,rectangle bound,int source_x,int source_y,overlay_colour colour);
+//void render_coloured_sprite(overlay_data * od,rectangle r,rectangle bound,int source_x,int source_y);///has own colour and alpha data
+//
+//void upload_overlay_render_datum(overlay_data * od,overlay_render_data * ord);
+//
+////bool check_click_on_overlay_sprite(overlay_theme * theme,rectangle r,overlay_sprite_data osd);
+//bool check_click_on_shaded_sprite(overlay_theme * theme,rectangle r,int sprite_x,int sprite_y);
+//bool check_click_on_coloured_sprite(overlay_theme * theme,rectangle r,int sprite_x,int sprite_y);
+//
+//void render_overlay_text(overlay_data * od,overlay_theme * theme,char * text,int x_off,int y_off,rectangle bounds,int font_index,int colour);
+//
 
 
 

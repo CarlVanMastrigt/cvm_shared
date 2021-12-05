@@ -56,8 +56,8 @@ typedef struct widget_resize_constraint
     int resized_w;
     int resized_h;
 
-    int x_far_corner;
-    int y_far_corner;
+//    int x_far_corner;
+//    int y_far_corner;
 }
 widget_resize_constraint;
 

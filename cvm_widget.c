@@ -37,7 +37,7 @@ void render_widget_overlay(overlay_data * od,widget * menu_widget)
 }
 
 
-static void base_widget_render(overlay_data * od,overlay_theme * theme,widget * w,int x_off,int y_off,rectangle bounds)
+static void base_widget_render(overlay_data * od,overlay_theme * theme,widget * w,int x_off,int y_off,rectangle_ bounds)
 {
     puts("error calling base: render");
 }
@@ -110,7 +110,7 @@ static bool base_widget_scroll(overlay_theme * theme,widget * w,int delta)
     return false;
 }
 
-static bool base_widget_key_down(overlay_theme * theme,widget * w,SDL_Keycode keycode)
+static bool base_widget_key_down(overlay_theme * theme,widget * w,SDL_Keycode keycode,SDL_Keymod mod)
 {
     puts("error calling base: key_down");
     return false;
@@ -179,11 +179,7 @@ widget * create_widget(widget_type type)
 
     w->base.parent=NULL;
 
-    w->base.r.x=0;
-    w->base.r.y=0;
-
-    w->base.r.w=0;
-    w->base.r.h=0;
+    w->base.r=(rectangle_){0,0,0,0};
 
     w->base.min_w=0;
     w->base.min_h=0;
@@ -234,8 +230,8 @@ void adjust_coordinates_to_widget_local(widget * w,int * x,int * y)
 {
     while(w->base.parent!=NULL)
     {
-        *x-=w->base.r.x;
-        *y-=w->base.r.y;
+        *x-=w->base.r.x1;
+        *y-=w->base.r.y1;
 
         w=w->base.parent;
     }
@@ -248,8 +244,8 @@ void get_widgets_global_coordinates(widget * w,int * x,int * y)
 
     while(w->base.parent!=NULL)
     {
-        *x+=w->base.r.x;
-        *y+=w->base.r.y;
+        *x+=w->base.r.x1;
+        *y+=w->base.r.y1;
 
         w=w->base.parent;
     }
@@ -309,7 +305,7 @@ void organise_toplevel_widget(widget * w)
 {
     w=get_widgets_toplevel_ancestor(w);
 
-    if(w) organise_widget(w,w->base.parent->base.r.w,w->base.parent->base.r.h);
+    if(w) organise_widget(w,w->base.parent->base.r.x2-w->base.parent->base.r.x1,w->base.parent->base.r.y2-w->base.parent->base.r.y1);
 }
 
 void move_toplevel_widget_to_front(widget * w)
@@ -355,7 +351,7 @@ void move_toplevel_widget_to_front(widget * w)
 
 
 
-void blank_widget_render(overlay_data * od,overlay_theme * theme,widget * w,int x_off,int y_off,rectangle bounds)
+void blank_widget_render(overlay_data * od,overlay_theme * theme,widget * w,int x_off,int y_off,rectangle_ bounds)
 {
 }
 
@@ -479,11 +475,9 @@ void set_currently_active_widget(widget * w)
 }
 
 
-void render_widget(overlay_data * od,widget * w,int x_off,int y_off,rectangle bounds)
+void render_widget(overlay_data * od,widget * w,int x_off,int y_off,rectangle_ bounds)
 {
-    rectangle r=w->base.r;
-    r.x+=x_off;
-    r.y+=y_off;
+    rectangle_ r=rectangle_add_offset(w->base.r,x_off,y_off);
 
     if((w)&&(w->base.status&WIDGET_ACTIVE)&&(rectangles_overlap(r,bounds)))
     {
@@ -531,8 +525,8 @@ int organise_widget_horizontally(widget * w,int x_pos,int width)
 {
     if((w)&&(w->base.status&WIDGET_ACTIVE))
     {
-        w->base.r.x=x_pos;
-        w->base.r.w=width;
+        w->base.r.x1=x_pos;
+        w->base.r.x2=x_pos+width;
         w->base.appearence_functions->set_w(current_theme,w);
         return width;
     }
@@ -543,8 +537,8 @@ int organise_widget_vertically(widget * w,int y_pos,int height)
 {
     if((w)&&(w->base.status&WIDGET_ACTIVE))
     {
-        w->base.r.y=y_pos;
-        w->base.r.h=height;
+        w->base.r.y1=y_pos;
+        w->base.r.y2=y_pos+height;
         w->base.appearence_functions->set_h(current_theme,w);
         return height;
     }

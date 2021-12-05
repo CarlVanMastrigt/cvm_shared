@@ -136,7 +136,7 @@ static void horizontal_first_distributed_box_widget_set_w(overlay_theme * theme,
     widget * current=w->container.first;
 
     int offset=0;
-    int difference=w->base.r.w-w->base.min_w;
+    int difference=w->base.r.x2-w->base.r.x1-w->base.min_w;
 
     while(current)
     {
@@ -168,7 +168,7 @@ static void horizontal_last_distributed_box_widget_set_w(overlay_theme * theme,w
         current=current->base.next;
     }
 
-    if(prev)organise_widget_horizontally(prev,offset,prev->base.min_w + w->base.r.w-w->base.min_w);
+    if(prev)organise_widget_horizontally(prev,offset,prev->base.min_w + w->base.r.x2-w->base.r.x1-w->base.min_w);
 }
 
 static void horizontal_evenly_distributed_box_widget_set_w(overlay_theme * theme,widget * w)
@@ -177,7 +177,7 @@ static void horizontal_evenly_distributed_box_widget_set_w(overlay_theme * theme
 
     int offset=0;
     int element_number=0;
-    int difference=w->base.r.w-w->base.min_w;
+    int difference=w->base.r.x2-w->base.r.x1-w->base.min_w;
     int num_elements=count_affecting_box_contents(w);
 
     while(current)
@@ -215,7 +215,7 @@ static void horizontal_all_same_distributed_box_widget_set_w(overlay_theme * the
 
     int offset=0;
     int element_number=0;
-    int difference=w->base.r.w;
+    int difference=w->base.r.x2-w->base.r.x1;
     int num_elements=count_affecting_box_contents(w);
 
     while(current)
@@ -240,7 +240,7 @@ static void horizontal_box_widget_set_h(overlay_theme * theme,widget * w)
     {
         if(widget_active(current))
         {
-            organise_widget_vertically(current,0,w->base.r.h);
+            organise_widget_vertically(current,0,w->base.r.y2-w->base.r.y1);
         }
 
         current=current->base.next;
@@ -345,7 +345,7 @@ static void vertical_box_widget_set_w(overlay_theme * theme,widget * w)
     {
         if(widget_active(current))
         {
-            organise_widget_horizontally(current,0,w->base.r.w);
+            organise_widget_horizontally(current,0,w->base.r.x2-w->base.r.x1);
         }
 
         current=current->base.next;
@@ -357,7 +357,7 @@ static void vertical_first_distributed_box_widget_set_h(overlay_theme * theme,wi
     widget * current=w->container.first;
 
     int offset=0;
-    int difference=w->base.r.h-w->base.min_h;
+    int difference=w->base.r.y2-w->base.r.y1-w->base.min_h;
 
     while(current)
     {
@@ -379,6 +379,8 @@ static void vertical_last_distributed_box_widget_set_h(overlay_theme * theme,wid
 
     int offset=0;
 
+    #warning this doesnt appear to check if last widget in box is active! (probably same with horizontal version)
+
     while(current)
     {
         if(widget_active(current))
@@ -390,7 +392,7 @@ static void vertical_last_distributed_box_widget_set_h(overlay_theme * theme,wid
         current=current->base.next;
     }
 
-    if(prev)organise_widget_vertically(prev,offset,prev->base.min_h+w->base.r.h-w->base.min_h);
+    if(prev)organise_widget_vertically(prev,offset,prev->base.min_h+w->base.r.y2-w->base.r.y1-w->base.min_h);
 }
 
 static void vertical_evenly_distributed_box_widget_set_h(overlay_theme * theme,widget * w)
@@ -399,7 +401,7 @@ static void vertical_evenly_distributed_box_widget_set_h(overlay_theme * theme,w
 
     int offset=0;
     int element_number=0;
-    int difference=w->base.r.h-w->base.min_h;
+    int difference=w->base.r.y2-w->base.r.y1-w->base.min_h;
     int num_elements=count_affecting_box_contents(w);
 
     while(current)
@@ -438,7 +440,7 @@ static void vertical_all_same_distributed_box_widget_set_h(overlay_theme * theme
 
     int offset=0;
     int element_number=0;
-    int difference=w->base.r.h;
+    int difference=w->base.r.y2-w->base.r.y1;
     int num_elements=count_affecting_box_contents(w);
 
     while(current)

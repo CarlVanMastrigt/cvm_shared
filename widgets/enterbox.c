@@ -89,7 +89,7 @@ static void enterbox_check_visible_offset(widget * w,overlay_theme * theme)
     char tmp;
     int current_offset,text_space;
 
-    text_space=w->base.r.w-2*theme->h_bar_text_offset-1;
+    text_space=w->base.r.x2-w->base.r.x1-2*theme->h_bar_text_offset-1;
 
     tmp=w->enterbox.text[w->enterbox.selection_end];
     w->enterbox.text[w->enterbox.selection_end]='\0';
@@ -295,7 +295,7 @@ static bool enterbox_widget_text_edit(overlay_theme * theme,widget * w,char * te
     ///same visiblity checking as enterbox_check_visible_offset, but only needed here, and applying to specific vars so just in place code it
     int current_offset,text_space;
 
-    text_space=w->base.r.w-2*theme->h_bar_text_offset-1;
+    text_space=w->base.r.x2-w->base.r.x1-2*theme->h_bar_text_offset-1;
 
     current_offset=overlay_size_text_simple(&theme->font_,w->enterbox.composition_text);
 
@@ -342,7 +342,7 @@ static widget_behaviour_function_set enterbox_behaviour_functions=
 };
 
 
-static void enterbox_widget_render(overlay_data * od,overlay_theme * theme,widget * w,int x_off,int y_off,rectangle bounds)
+static void enterbox_widget_render(overlay_data * od,overlay_theme * theme,widget * w,int x_off,int y_off,rectangle_ bounds)
 {
     if(w->enterbox.update_contents_func && !is_currently_active_widget(w))w->enterbox.update_contents_func(w);
 
@@ -364,11 +364,11 @@ static void enterbox_widget_render(overlay_data * od,overlay_theme * theme,widge
     }
     else visible_offset=w->enterbox.visible_offset;
 
-	rectangle_ r=rectangle_add_offset(rectangle_new_conversion(w->base.r),x_off,y_off);
-	theme->h_bar_render(r,w->base.status,theme,od,rectangle_new_conversion(bounds),OVERLAY_MAIN_COLOUR_);
+	rectangle_ r=rectangle_add_offset(w->base.r,x_off,y_off);
+	theme->h_bar_render(r,w->base.status,theme,od,bounds,OVERLAY_MAIN_COLOUR_);
 
     r=overlay_simple_text_rectangle(r,theme->font_.glyph_size,theme->h_bar_text_offset);
-    rectangle_ b=get_rectangle_overlap_(r,rectangle_new_conversion(bounds));
+    rectangle_ b=get_rectangle_overlap_(r,bounds);
     if(rectangle_has_positive_area(b))
     {
         #warning make is_currently_active_widget effectively part of w->base.status, would require setting flags in slightly painful manner but w/e
@@ -379,7 +379,7 @@ static void enterbox_widget_render(overlay_data * od,overlay_theme * theme,widge
 
 static widget * enterbox_widget_select(overlay_theme * theme,widget * w,int x_in,int y_in)
 {
-    if(theme->h_bar_select(rectangle_subtract_offset(rectangle_new_conversion(w->base.r),x_in,y_in),w->base.status,theme))return w;
+    if(theme->h_bar_select(rectangle_subtract_offset(w->base.r,x_in,y_in),w->base.status,theme))return w;
 
     return NULL;
 }

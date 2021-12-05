@@ -87,7 +87,7 @@ static void set_sliderbar_value_using_mouse_x(overlay_theme * theme,widget * w,i
     validate_sliderbar_range(w);
 
 
-	int width=w->base.r.w-theme->h_sliderbar_lost_w;
+	int width=w->base.r.x2-w->base.r.x1-theme->h_sliderbar_lost_w;
 	int range=w->sliderbar.max_value-w->sliderbar.min_value;
 	int bar_width;
 
@@ -139,7 +139,7 @@ static void set_sliderbar_value_using_mouse_y(overlay_theme * theme,widget * w,i
 
     validate_sliderbar_range(w);
 
-	int height=w->base.r.h-theme->v_sliderbar_lost_h;
+	int height=w->base.r.y2-w->base.r.y1-theme->v_sliderbar_lost_h;
 	int range=w->sliderbar.max_value-w->sliderbar.min_value;
 	int bar_height;
 
@@ -190,20 +190,20 @@ static widget_behaviour_function_set vertical_sliderbar_behaviour_functions=
 
 
 
-static void horizontal_sliderbar_widget_render(overlay_data * od,overlay_theme * theme,widget * w,int x_off,int y_off,rectangle bounds)
+static void horizontal_sliderbar_widget_render(overlay_data * od,overlay_theme * theme,widget * w,int x_off,int y_off,rectangle_ bounds)
 {
     validate_sliderbar_range(w);
 
     int bar=(w->sliderbar.bar_size_ptr) ? *w->sliderbar.bar_size_ptr : -w->sliderbar.bar_fraction;
     if(bar==0)bar=1;
 
-	theme->h_slider_bar_render(rectangle_add_offset(rectangle_new_conversion(w->base.r),x_off,y_off),w->base.status,theme,od,rectangle_new_conversion(bounds),
-                            OVERLAY_MAIN_COLOUR_,abs(w->sliderbar.max_value-w->sliderbar.min_value),abs(*w->sliderbar.value_ptr-w->sliderbar.min_value),bar,OVERLAY_TEXT_COLOUR_0_);
+	theme->h_slider_bar_render(rectangle_add_offset(w->base.r,x_off,y_off),w->base.status,theme,od,bounds,OVERLAY_MAIN_COLOUR_,
+        abs(w->sliderbar.max_value-w->sliderbar.min_value),abs(*w->sliderbar.value_ptr-w->sliderbar.min_value),bar,OVERLAY_TEXT_COLOUR_0_);
 }
 
 static widget * horizontal_sliderbar_widget_select(overlay_theme * theme,widget * w,int x_in,int y_in)
 {
-    if(theme->h_bar_select(rectangle_subtract_offset(rectangle_new_conversion(w->base.r),x_in,y_in),w->base.status,theme))return w;
+    if(theme->h_bar_select(rectangle_subtract_offset(w->base.r,x_in,y_in),w->base.status,theme))return w;
 
     return NULL;
 }
@@ -236,19 +236,20 @@ static widget_appearence_function_set horizontal_sliderbar_appearence_functions=
 
 
 
-static void vertical_sliderbar_widget_render(overlay_data * od,overlay_theme * theme,widget * w,int x_off,int y_off,rectangle bounds)
+static void vertical_sliderbar_widget_render(overlay_data * od,overlay_theme * theme,widget * w,int x_off,int y_off,rectangle_ bounds)
 {
     validate_sliderbar_range(w);
 
     int bar=(w->sliderbar.bar_size_ptr) ? *w->sliderbar.bar_size_ptr : -w->sliderbar.bar_fraction;
     if(bar==0)bar=1;
 
-	theme->v_slider_bar_render(w->base.r,x_off,y_off,w->base.status,theme,od,bounds,OVERLAY_MAIN_COLOUR,abs(w->sliderbar.max_value-w->sliderbar.min_value),abs(*w->sliderbar.value_ptr-w->sliderbar.min_value),bar);
+	theme->v_slider_bar_render(rectangle_add_offset(w->base.r,x_off,y_off),w->base.status,theme,od,bounds,OVERLAY_MAIN_COLOUR,
+        abs(w->sliderbar.max_value-w->sliderbar.min_value),abs(*w->sliderbar.value_ptr-w->sliderbar.min_value),bar,OVERLAY_TEXT_COLOUR_0_);
 }
 
 static widget * vertical_sliderbar_widget_select(overlay_theme * theme,widget * w,int x_in,int y_in)
 {
-    if(theme->v_bar_select(rectangle_subtract_offset(rectangle_new_conversion(w->base.r),x_in,y_in),w->base.status,theme))return w;
+    if(theme->v_bar_select(rectangle_subtract_offset(w->base.r,x_in,y_in),w->base.status,theme))return w;
 
     return NULL;
 }

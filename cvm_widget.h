@@ -52,7 +52,7 @@ typedef void(*widget_function)(widget*);
 
 typedef struct widget_appearence_function_set
 {
-    void    (*render)   (overlay_data*,overlay_theme*,widget*,int,int,rectangle);
+    void    (*render)   (overlay_data*,overlay_theme*,widget*,int,int,rectangle_);
     widget* (*select)   (overlay_theme*,widget*,int,int);
     void    (*min_w)    (overlay_theme*,widget*);
     void    (*min_h)    (overlay_theme*,widget*);
@@ -167,7 +167,7 @@ typedef struct widget_base
     widget_type type;
     uint32_t status;
 
-    rectangle r;
+    rectangle_ r;
 
     int min_w;
     int min_h;
@@ -262,7 +262,7 @@ void get_widgets_global_coordinates(widget * w,int * x,int * y);
 
 
 
-void render_widget(overlay_data * od,widget * w,int x_off,int y_off,rectangle bounds);
+void render_widget(overlay_data * od,widget * w,int x_off,int y_off,rectangle_ bounds);
 widget * select_widget(widget * w,int x_in,int y_in);
 int set_widget_minimum_width(widget * w,uint32_t pos_flags);
 int set_widget_minimum_height(widget * w,uint32_t pos_flags);
@@ -271,7 +271,7 @@ int organise_widget_vertically(widget * w,int y_pos,int height);
 
 
 
-void        blank_widget_render         (overlay_data * od,overlay_theme * theme,widget * w,int x_off,int y_off,rectangle bounds);
+void        blank_widget_render         (overlay_data * od,overlay_theme * theme,widget * w,int x_off,int y_off,rectangle_ bounds);
 widget *    blank_widget_select         (overlay_theme * theme,widget * w,int x_in,int y_in);
 void        blank_widget_min_w          (overlay_theme * theme,widget * w);
 void        blank_widget_min_h          (overlay_theme * theme,widget * w);
