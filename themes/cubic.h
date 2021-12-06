@@ -29,7 +29,7 @@ typedef struct cubic_theme_data
     cvm_vk_image_atlas_tile * foreground_image_tile;
     uint16_t * foreground_selection_grid;
     int foreground_offset_x;
-    //int foreground_offset_y;
+    int foreground_offset_y;
     int foreground_r;
     int foreground_d;
 

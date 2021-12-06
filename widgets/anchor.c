@@ -101,9 +101,6 @@ static void text_anchor_widget_render(overlay_data * od,overlay_theme * theme,wi
     r=overlay_simple_text_rectangle(r,theme->font_.glyph_size,theme->h_bar_text_offset);
     rectangle_ b=get_rectangle_overlap_(r,bounds);
     if(rectangle_has_positive_area(b))overlay_render_text_simple(od,&theme->font_,w->anchor.text,r.x1,r.y1,b,OVERLAY_TEXT_COLOUR_0_);
-
-    ///prep rectangle here separately, combine bounds and do testing as well, apply widget specific offset as necessary, otherwise pass in unadjusted x/y pos as param like old setup
-    ///reuires passing 4 fewer ints, and potentially strips out a function call, just need a clean way to accomplish this...
 }
 
 static widget * text_anchor_widget_select(overlay_theme * theme,widget * w,int x_in,int y_in)

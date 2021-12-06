@@ -1066,7 +1066,7 @@ void overlay_destroy_transparent_image_tile(cvm_vk_image_atlas_tile * tile)
 
 cvm_vk_image_atlas_tile * overlay_create_colour_image_tile_with_staging(cvm_overlay_element_render_buffer * erb,void ** staging,uint32_t w, uint32_t h)
 {
-    //
+    return NULL;
 }
 
 void overlay_destroy_colour_image_tile(cvm_vk_image_atlas_tile * tile)

@@ -300,9 +300,9 @@ struct overlay_theme
 
     int h_bar_text_offset;
 
-    int h_sliderbar_lost_w;///horizontal space tied up in visual elements (not part of range)
-    int v_sliderbar_lost_h;///vertical space tied up in visual elements (not part of range)
-    ///int sliderbar_bar_fraction;
+    int h_slider_bar_lost_w;///horizontal space tied up in visual elements (not part of range)
+    int v_slider_bar_lost_h;///vertical space tied up in visual elements (not part of range)
+    ///int slider_bar_bar_fraction;
 
     int x_box_offset;///both text and other???
     int y_box_offset;
@@ -333,14 +333,14 @@ struct overlay_theme
 
     void    (*square_icon_render)       (rectangle_ r,uint32_t status,overlay_theme * theme,overlay_data * od,rectangle_ bounds,overlay_colour_ colour,char * icon_glyph,overlay_colour_ icon_colour);
     void    (*h_bar_render)             (rectangle_ r,uint32_t status,overlay_theme * theme,overlay_data * od,rectangle_ bounds,overlay_colour_ colour);///just make h_bar?
-    void    (*h_slider_bar_render)      (rectangle_ r,uint32_t status,overlay_theme * theme,overlay_data * od,rectangle_ bounds,overlay_colour_ colour,int range,int value,int bar,overlay_colour_ bar_colour);
-    void    (*v_slider_bar_render)      (rectangle_ r,uint32_t status,overlay_theme * theme,overlay_data * od,rectangle_ bounds,overlay_colour_ colour,int range,int value,int bar,overlay_colour_ bar_colour);
+    void    (*h_bar_slider_render)      (rectangle_ r,uint32_t status,overlay_theme * theme,overlay_data * od,rectangle_ bounds,overlay_colour_ colour,int range,int value,int bar);
+    void    (*h_adjactent_slider_render)(rectangle_ r,uint32_t status,overlay_theme * theme,overlay_data * od,rectangle_ bounds,overlay_colour_ colour,int range,int value,int bar);///usually/always tacked onto box
+    void    (*v_adjactent_slider_render)(rectangle_ r,uint32_t status,overlay_theme * theme,overlay_data * od,rectangle_ bounds,overlay_colour_ colour,int range,int value,int bar);///usually/always tacked onto box
     void    (*box_render)               (rectangle_ r,uint32_t status,overlay_theme * theme,overlay_data * od,rectangle_ bounds,overlay_colour_ colour);
     void    (*panel_render)             (rectangle_ r,uint32_t status,overlay_theme * theme,overlay_data * od,rectangle_ bounds,overlay_colour_ colour);
 
     bool    (*square_select)            (rectangle_ r,uint32_t status,overlay_theme * theme);
     bool    (*h_bar_select)             (rectangle_ r,uint32_t status,overlay_theme * theme);
-    bool    (*v_bar_select)             (rectangle_ r,uint32_t status,overlay_theme * theme);
     bool    (*box_select)               (rectangle_ r,uint32_t status,overlay_theme * theme);
     bool    (*panel_select)             (rectangle_ r,uint32_t status,overlay_theme * theme);
 };

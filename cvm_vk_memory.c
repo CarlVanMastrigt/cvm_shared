@@ -562,9 +562,6 @@ void cvm_vk_destroy_staging_buffer(cvm_vk_staging_buffer * sb)
 {
     if(atomic_load(&sb->space_remaining)!=sb->total_space)
     {
-        int i;
-        for(i=0;i<4;i++)printf(">%u\n",sb->acquisitions[i]);
-        printf(">>> %u\n",atomic_load(&sb->space_remaining));
         fprintf(stderr,"NOT ALL STAGING BUFFER SPACE RELINQUISHED BEFORE DESTRUCTION!\n");
         exit(-1);
     }

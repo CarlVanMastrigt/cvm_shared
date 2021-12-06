@@ -510,37 +510,6 @@ static inline bool rectangles_overlap(rectangle_ r1,rectangle_ r2)
     return r1.x1<r2.x2 && r2.x1<r1.x2 && r1.y1<r2.y2 && r2.y1<r1.y2;
 }
 
-///following allows piecewise conversion, delete when finished
-//static inline rectangle rectangle_old_conversion(rectangle_ r)
-//{
-//    return (rectangle){.x=r.x1,.y=r.y1,.w=r.x2-r.x1,.h=r.y2-r.y1};
-//}
-//
-//static inline rectangle_ rectangle_new_conversion(rectangle r)
-//{
-//    return (rectangle_){.x1=r.x,.y1=r.y,.x2=r.x+r.w,.y2=r.y+r.h};
-//}
-
-
-//bool get_rectangle_overlap(rectangle * rect,rectangle b);
-//
-//static inline bool rectangle_surrounds_origin(rectangle r)
-//{
-//    return ((r.x <= 0)&&(r.y <= 0)&&(r.x+r.w > 0)&&(r.y+r.h > 0));
-//}
-//
-//static inline bool rectangle_surrounds_point(rectangle r,vec2i p)
-//{
-//    return ((r.x <= p.x)&&(r.y <= p.y)&&(r.x+r.w > p.x)&&(r.y+r.h > p.y));
-//}
-//
-//static inline bool rectangles_overlap(rectangle r1,rectangle r2)
-//{
-//    return ((r1.x+r1.w > r2.x)&&(r1.y+r1.h > r2.y)&&(r1.x < r2.x+r2.w)&&(r1.y < r2.y+r2.h));
-//}
-
-
-
 
 static inline quaternion quaternion_multiply(quaternion l,quaternion r)
 {

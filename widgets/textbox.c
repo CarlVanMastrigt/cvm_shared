@@ -688,8 +688,9 @@ widget * create_textbox(char * text,int min_horizontal_glyphs,int min_visible_li
 
 widget * create_textbox_scrollbar(widget * textbox)
 {
-    widget * w=create_sliderbar(&textbox->textbox.offset,0,0,NULL,NULL,false,WIDGET_VERTICAL,0);
-    set_sliderbar_other_values(w,NULL,&textbox->textbox.max_offset,&textbox->textbox.visible_size,&textbox->textbox.wheel_delta);
+    widget * w=create_slider_bar(&textbox->textbox.offset,0,0,NULL,NULL,false,0);
+    #warning replace above with adjacent slider
+    set_slider_bar_other_values(w,NULL,&textbox->textbox.max_offset,&textbox->textbox.visible_size,&textbox->textbox.wheel_delta);
 
     return w;
 }

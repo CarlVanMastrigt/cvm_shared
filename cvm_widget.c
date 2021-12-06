@@ -649,7 +649,7 @@ bool handle_widget_overlay_wheel(widget * menu_widget,int x_in,int y_in,int delt
         w=w->base.parent;
     }
 
-    handle_widget_overlay_movement(menu_widget,x_in,y_in);///to avoid scrollbar/sliderbar etc. changing when currently clicked
+    handle_widget_overlay_movement(menu_widget,x_in,y_in);///to avoid scrollbar/slider_bar etc. changing when currently clicked
 
     return true;
 }

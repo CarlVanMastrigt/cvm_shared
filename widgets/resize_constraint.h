@@ -33,8 +33,9 @@ along with cvm_shared.  If not, see <https://www.gnu.org/licenses/>.
 #define WIDGET_RESIZABLE_CENTRED_VERTICAL   0x0020
 #define WIDGET_RESIZABLE_LOCKED_HORIZONTAL  0x0040
 #define WIDGET_RESIZABLE_LOCKED_VERTICAL    0x0080
-#define WIDGET_RESIZABLE_FILL_AREA          0x00CF
+#define WIDGET_RESIZABLE_FILL_AREA          0x000F
 
+/// WIDGET_RESIZABLE_CENTRED_VERTICAL and WIDGET_RESIZABLE_CENTRED_HORIZONTAL are intended for items touching edges that automatically centre (e.g. dropdown game panels)
 
 typedef struct widget_resize_constraint
 {
@@ -55,9 +56,6 @@ typedef struct widget_resize_constraint
 
     int resized_w;
     int resized_h;
-
-//    int x_far_corner;
-//    int y_far_corner;
 }
 widget_resize_constraint;
 

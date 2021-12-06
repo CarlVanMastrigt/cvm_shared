@@ -21,11 +21,11 @@ along with cvm_shared.  If not, see <https://www.gnu.org/licenses/>.
 #include "cvm_shared.h"
 #endif
 
-#ifndef WIDGET_SLIDERBAR_H
-#define WIDGET_SLIDERBAR_H
+#ifndef WIDGET_slider_bar_H
+#define WIDGET_slider_bar_H
 
 
-typedef struct widget_sliderbar
+typedef struct widget_slider_bar
 {
     widget_base base;
 
@@ -50,16 +50,17 @@ typedef struct widget_sliderbar
 
     uint32_t free_data:1;
 }
-widget_sliderbar;
+widget_slider_bar;
 
-widget * create_sliderbar(int * value_ptr,int min_value,int max_value,widget_function func,void * data,bool free_data,widget_layout layout,int bar_fraction);
+widget * create_slider_bar(int * value_ptr,int min_value,int max_value,widget_function func,void * data,bool free_data,int bar_fraction);
+//widget * create_adjacent_slider(int * value_ptr,int min_value,int max_value,widget_function func,void * data,bool free_data,widget_layout layout,int bar_fraction);
 
-void set_sliderbar_other_values(widget * w,int * min_value_ptr,int * max_value_ptr,int * bar_size_ptr,int * wheel_delta_ptr);
+void set_slider_bar_other_values(widget * w,int * min_value_ptr,int * max_value_ptr,int * bar_size_ptr,int * wheel_delta_ptr);
 
-//void validate_sliderbar_value(widget * w);
-int set_sliderbar_value(widget * w,int v);
+//void validate_slider_bar_value(widget * w);
+int set_slider_bar_value(widget * w,int v);
 
-void blank_sliderbar_function(widget * w);
+void blank_slider_bar_function(widget * w);
 
 #endif
 

@@ -31,7 +31,7 @@ along with cvm_shared.  If not, see <https://www.gnu.org/licenses/>.
 
 widget * create_adjuster_pair(int * value_ptr,int min_value,int max_value,int text_space,int bar_fraction);
 
-void adjuster_pair_sliderbar_function(widget * w);
+void adjuster_pair_slider_bar_function(widget * w);
 void adjuster_pair_enterbox_function(widget * w);
 
 void toggle_widget(widget * w);

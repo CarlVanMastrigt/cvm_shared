@@ -20,20 +20,20 @@ along with cvm_shared.  If not, see <https://www.gnu.org/licenses/>.
 #include "cvm_shared.h"
 
 
-void resize_constraint_widget_add_child(widget * w,widget * child)
+static void resize_constraint_widget_add_child(widget * w,widget * child)
 {
     /// could set w,h,x,y (of appropriate widgets) to 0 here
     w->resize_constraint.constrained=child;
     child->base.parent=w;
 }
 
-void resize_constraint_widget_remove_child(widget * w,widget * child)
+static void resize_constraint_widget_remove_child(widget * w,widget * child)
 {
     w->resize_constraint.constrained=NULL;
     child->base.parent=NULL;
 }
 
-void resize_constraint_widget_delete(widget * w)
+static void resize_constraint_widget_delete(widget * w)
 {
     if(w->resize_constraint.constrained)
     {
@@ -41,13 +41,11 @@ void resize_constraint_widget_delete(widget * w)
     }
 }
 
-
-
 static void resize_constraint_widget_left_click(overlay_theme * theme,widget * w,int x,int y)
 {
-    widget * constrained=w->resize_constraint.constrained;
+    if((w->resize_constraint.alignment_data&WIDGET_RESIZABLE_LOCKED_HORIZONTAL)&&(w->resize_constraint.alignment_data&WIDGET_RESIZABLE_LOCKED_VERTICAL))return;
 
-    if((!constrained) || ((w->resize_constraint.alignment_data&WIDGET_RESIZABLE_LOCKED_HORIZONTAL)&&(w->resize_constraint.alignment_data&WIDGET_RESIZABLE_LOCKED_VERTICAL)))return;
+    widget * constrained=w->resize_constraint.constrained;
 
     adjust_coordinates_to_widget_local(w,&x,&y);
 
@@ -82,8 +80,6 @@ static void resize_constraint_widget_left_click(overlay_theme * theme,widget * w
             w->resize_constraint.y_clicked=y-constrained->base.r.y1+1;///positive (close end) (poss add 1 to make nonzero at edge)
         }
     }
-
-    printf(">> %d %d\n",w->resize_constraint.x_clicked,w->resize_constraint.y_clicked);
 }
 
 static void resize_constraint_widget_mouse_movement(overlay_theme * theme,widget * w,int x,int y)
@@ -102,7 +98,6 @@ static void resize_constraint_widget_mouse_movement(overlay_theme * theme,widget
         {
             if(w->resize_constraint.x_clicked>0) w->resize_constraint.resized_w=w->base.r.x2-w->base.r.x1-2*n;
             else w->resize_constraint.resized_w=2*n-w->base.r.x2+w->base.r.x1;
-            #warning above seems bjorked, needs testing
         }
         else if(w->resize_constraint.x_clicked<0)
         {
@@ -125,7 +120,6 @@ static void resize_constraint_widget_mouse_movement(overlay_theme * theme,widget
         {
             if(w->resize_constraint.y_clicked>0) w->resize_constraint.resized_h=w->base.r.y2-w->base.r.y1-2*n;
             else w->resize_constraint.resized_h=2*n-w->base.r.y2+w->base.r.y1;
-            #warning above seems bjorked, needs testing
         }
         else if(w->resize_constraint.y_clicked<0)
         {
@@ -163,14 +157,12 @@ static widget_behaviour_function_set resize_constraint_behaviour_functions=
 };
 
 
-
-
-void resize_constraint_widget_render(overlay_data * od,overlay_theme * theme,widget * w,int x_off,int y_off,rectangle_ bounds)
+static void resize_constraint_widget_render(overlay_data * od,overlay_theme * theme,widget * w,int x_off,int y_off,rectangle_ bounds)
 {
     if(w->resize_constraint.constrained) render_widget(od,w->resize_constraint.constrained,x_off+w->base.r.x1,y_off+w->base.r.y1,bounds);
 }
 
-widget * resize_constraint_widget_select(overlay_theme * theme,widget * w,int x_in,int y_in)
+static widget * resize_constraint_widget_select(overlay_theme * theme,widget * w,int x_in,int y_in)
 {
     widget * tmp=NULL;
 
@@ -194,12 +186,7 @@ widget * resize_constraint_widget_select(overlay_theme * theme,widget * w,int x_
     return tmp;
 }
 
-
-
-
-
-
-void resize_constraint_widget_min_w(overlay_theme * theme,widget * w)
+static void resize_constraint_widget_min_w(overlay_theme * theme,widget * w)
 {
     w->base.min_w=0;
 
@@ -214,7 +201,7 @@ void resize_constraint_widget_min_w(overlay_theme * theme,widget * w)
     }
 }
 
-void resize_constraint_widget_min_h(overlay_theme * theme,widget * w)
+static void resize_constraint_widget_min_h(overlay_theme * theme,widget * w)
 {
     w->base.min_h=0;
 
@@ -229,7 +216,7 @@ void resize_constraint_widget_min_h(overlay_theme * theme,widget * w)
     }
 }
 
-void resize_constraint_widget_set_w(overlay_theme * theme,widget * w)
+static void resize_constraint_widget_set_w(overlay_theme * theme,widget * w)
 {
     int width,x_pos;
 
@@ -252,7 +239,7 @@ void resize_constraint_widget_set_w(overlay_theme * theme,widget * w)
 	}
 }
 
-void resize_constraint_widget_set_h(overlay_theme * theme,widget * w)
+static void resize_constraint_widget_set_h(overlay_theme * theme,widget * w)
 {
     int height,y_pos;
 
@@ -310,8 +297,6 @@ widget * create_resize_constraint(uint16_t alignment_data,bool maximizable)
     w->resize_constraint.resized_h=0;
     w->resize_constraint.x_clicked=0;
     w->resize_constraint.y_clicked=0;
-//    w->resize_constraint.x_far_corner=0;
-//    w->resize_constraint.y_far_corner=0;
 
     w->resize_constraint.maximizable=maximizable;
     w->resize_constraint.maximized=false;

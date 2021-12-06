@@ -371,9 +371,10 @@ void ensure_widget_in_contiguous_box_is_visible(widget * w,widget * cb)
 
 widget * create_contiguous_box_scrollbar(widget * box)
 {
-    widget * w=create_sliderbar(box->contiguous_box.offset,0,0,NULL,NULL,false,box->contiguous_box.layout,0);
+    widget * w=create_slider_bar(box->contiguous_box.offset,0,0,NULL,NULL,false,0);
+    #warning replace above with adjacent slider
 
-    set_sliderbar_other_values(w,&box->contiguous_box.max_offset,&box->contiguous_box.min_offset,&box->contiguous_box.visible_size,&box->contiguous_box.wheel_delta);
+    set_slider_bar_other_values(w,&box->contiguous_box.max_offset,&box->contiguous_box.min_offset,&box->contiguous_box.visible_size,&box->contiguous_box.wheel_delta);
 
     return w;
 }
