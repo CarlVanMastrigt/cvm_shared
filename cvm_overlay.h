@@ -301,7 +301,7 @@ struct overlay_theme
     int h_bar_text_offset;
 
     int h_slider_bar_lost_w;///horizontal space tied up in visual elements (not part of range)
-    int v_slider_bar_lost_h;///vertical space tied up in visual elements (not part of range)
+    //int v_slider_bar_lost_h;///vertical space tied up in visual elements (not part of range)
     ///int slider_bar_bar_fraction;
 
     int x_box_offset;///both text and other???

@@ -26,26 +26,11 @@ along with cvm_shared.  If not, see <https://www.gnu.org/licenses/>.
 
 
 
-typedef struct textbox_line
-{
-    int character_start;
-    int character_finish;
-
-    int x_size;
-}
-textbox_line;
-
 typedef struct widget_textbox
 {
     widget_base base;
 
     char * text;
-    overlay_render_data * glyph_render_data;
-    int text_length;///this doesn't seem to be used (REMOVE ??)
-
-    textbox_line * render_lines;
-    int render_lines_count;
-    int render_lines_space;
 
     int min_visible_lines;
 
@@ -54,19 +39,22 @@ typedef struct widget_textbox
 
     int min_horizontal_glyphs;
 
-    int font_index;
+    cvm_overlay_text_block text_block;
 
     int text_height;
-    int offset;
+    int x_offset;
+    int y_offset;
     int max_offset;
     int visible_size;
-    int wheel_delta;
+    int wheel_delta;///instead scroll by line(s)?
+
+    ///if forcing all text to be visible (not recommended) use straight rendering, otherwise probably best to have per line rendering technique implemented for performance
 }
 widget_textbox;
 
-widget * create_textbox(char * text,int min_horizontal_glyphs,int min_visible_lines);
+widget * create_textbox(char * text,bool owns_text,int min_horizontal_glyphs,int min_visible_lines);
 
-void change_textbox_contents(widget * w,char * new_contents);
+void change_textbox_text(widget * w,char * new_text,bool owns_new_text);
 
 widget * create_textbox_scrollbar(widget * textbox);
 

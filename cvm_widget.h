@@ -331,7 +331,7 @@ void delete_widget(widget * w);
 
 
 void set_current_overlay_theme(overlay_theme * theme);
-//overlay_theme * get_current_overlay_theme(void);
+overlay_theme * get_current_overlay_theme(void);
 
 void set_only_interactable_widget(widget * w);
 void set_currently_active_widget(widget * w);

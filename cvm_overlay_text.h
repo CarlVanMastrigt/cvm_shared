@@ -50,6 +50,8 @@ typedef struct cvm_overlay_font
     int space_advance;
     int space_character_index;
 
+    int line_spacing;
+
     int max_advance;
 
     ///not a great solution but bubble sort new glyphs from end?, is rare enough op and gives low enough cache use to justify?
@@ -59,6 +61,21 @@ typedef struct cvm_overlay_font
 }
 cvm_overlay_font;
 
+///obviously this will need to be updated when changing the enterbox text
+typedef struct cvm_overlay_text_line
+{
+    char * start;
+    char * finish;
+}
+cvm_overlay_text_line;
+
+typedef struct cvm_overlay_text_block
+{
+    cvm_overlay_text_line * lines;
+    uint32_t line_count;
+    uint32_t line_space;
+}
+cvm_overlay_text_block;
 
 void cvm_overlay_open_freetype(void);
 void cvm_overlay_close_freetype(void);
@@ -79,24 +96,23 @@ int cvm_overlay_utf8_get_previous_word(char * text,int offset);
 int cvm_overlay_utf8_get_next_word(char * text,int offset);
 
 
-
+//rename these to be single line
 ///returns the required width of a string
 int overlay_size_text_simple(cvm_overlay_font * font,char * text);
+
 void overlay_render_text_simple(cvm_overlay_element_render_buffer * erb,cvm_overlay_font * font,char * text,int x,int y,rectangle_ bounds,overlay_colour_ colour);
 void overlay_render_text_selection_simple(cvm_overlay_element_render_buffer * erb,cvm_overlay_font * font,char * text,int x,int y,rectangle_ bounds,overlay_colour_ colour,char * selection_start,char * selection_end);
 
-///returns the height (in pixels) to accomodate the given string with the given wrapping width
-int overlay_get_text_box_height(cvm_overlay_font * font,char * text,int wrapping_width);
-///render complex is somewhat detached from the required height above, as complex render can handle more situations than just text boxes
-///perhaps want to revisit this design though
-void overlay_render_text_complex(cvm_overlay_element_render_buffer * erb,cvm_overlay_font * font,char * text,int x,int y,rectangle_ * bounds,overlay_colour_ colour,int wrapping_width);
+int overlay_text_find_offset_simple(cvm_overlay_font * font,char * text,int relative_x);
 
 cvm_overlay_glyph * overlay_get_glyph(cvm_overlay_element_render_buffer * erb,cvm_overlay_font * font,char * text);///assumes a single glyph in text
 
-int overlay_text_find_offset_simple(cvm_overlay_font * font,char * text,int relative_x);
-//int overlay_text_find_offset_simple(cvm_overlay_font * font,char * text,int relative_x,int relative_y,int wrapping_width);
 
-//void overlay_render_text_complex_selection_box(cvm_overlay_element_render_buffer * erb,cvm_overlay_font * font,char * text,int x,int y,rectangle_ * bounds,int wrapping_width,int selection_start,int selection_end);
+void overlay_process_multiline_text(cvm_overlay_font * font,cvm_overlay_text_block * block,char * text,int wrapping_width);
+void overlay_render_multiline_text(cvm_overlay_element_render_buffer * erb,cvm_overlay_font * font,cvm_overlay_text_block * block,int x,int y,rectangle_ bounds,overlay_colour_ colour);
+void overlay_render_multiline_text_selection(cvm_overlay_element_render_buffer * erb,cvm_overlay_font * font,cvm_overlay_text_block * block,int x,int y,rectangle_ bounds,overlay_colour_ colour,char * selection_start,char * selection_end);
+int overlay_find_multiline_text_offset(cvm_overlay_font * font,cvm_overlay_text_block * block,char * text,int relative_x,int relative_y);
+
 
 static inline rectangle_ overlay_simple_text_rectangle(rectangle_ r,int glyph_size,int x_border)
 {
@@ -106,6 +122,7 @@ static inline rectangle_ overlay_simple_text_rectangle(rectangle_ r,int glyph_si
     r.x2-=x_border;
     return r;
 }
+///need way to blend out text towards end of textbox
 
 #endif
 

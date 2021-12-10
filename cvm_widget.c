@@ -452,6 +452,11 @@ void set_current_overlay_theme(overlay_theme * theme)
     current_theme=theme;
 }
 
+overlay_theme * get_current_overlay_theme(void)
+{
+    return current_theme;
+}
+
 void set_only_interactable_widget(widget * w)
 {
     set_currently_active_widget(NULL);///if triggerd when something is selected

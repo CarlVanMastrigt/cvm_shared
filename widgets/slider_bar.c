@@ -132,55 +132,55 @@ static widget_behaviour_function_set horizontal_slider_bar_behaviour_functions=
 
 
 
-static void set_slider_bar_value_using_mouse_y(overlay_theme * theme,widget * w,int y)
-{
-    int dummy_x;
-    adjust_coordinates_to_widget_local(w,&dummy_x,&y);
+//static void set_slider_bar_value_using_mouse_y(overlay_theme * theme,widget * w,int y)
+//{
+//    int dummy_x;
+//    adjust_coordinates_to_widget_local(w,&dummy_x,&y);
+//
+//    validate_slider_bar_range(w);
+//
+//	int height=w->base.r.y2-w->base.r.y1-theme->v_slider_bar_lost_h;
+//	int range=w->slider_bar.max_value-w->slider_bar.min_value;
+//	int bar_height;
+//
+//	if((w->slider_bar.bar_size_ptr)&&((*w->slider_bar.bar_size_ptr)+abs(range))) bar_height = ((*w->slider_bar.bar_size_ptr)*height)/((*w->slider_bar.bar_size_ptr)+abs(range));
+//    else if(w->slider_bar.bar_fraction) bar_height=height/w->slider_bar.bar_fraction;
+//    else bar_height=0;
+//
+//	height-=bar_height;
+//	if(height<1)height=1;
+//
+//    *w->slider_bar.value_ptr = w->slider_bar.min_value + ((y-(theme->v_slider_bar_lost_h+bar_height)/2)*range+ height/(2-4*(range<0)) )/height;
+//
+//    validate_slider_bar_value(w);
+//}
 
-    validate_slider_bar_range(w);
-
-	int height=w->base.r.y2-w->base.r.y1-theme->v_slider_bar_lost_h;
-	int range=w->slider_bar.max_value-w->slider_bar.min_value;
-	int bar_height;
-
-	if((w->slider_bar.bar_size_ptr)&&((*w->slider_bar.bar_size_ptr)+abs(range))) bar_height = ((*w->slider_bar.bar_size_ptr)*height)/((*w->slider_bar.bar_size_ptr)+abs(range));
-    else if(w->slider_bar.bar_fraction) bar_height=height/w->slider_bar.bar_fraction;
-    else bar_height=0;
-
-	height-=bar_height;
-	if(height<1)height=1;
-
-    *w->slider_bar.value_ptr = w->slider_bar.min_value + ((y-(theme->v_slider_bar_lost_h+bar_height)/2)*range+ height/(2-4*(range<0)) )/height;
-
-    validate_slider_bar_value(w);
-}
-
-static void vertical_slider_bar_widget_left_click(overlay_theme * theme,widget * w,int x,int y)
-{
-	set_slider_bar_value_using_mouse_y(theme,w,y);
-}
-
-static void vertical_slider_bar_widget_mouse_movement(overlay_theme * theme,widget * w,int x,int y)
-{
-	set_slider_bar_value_using_mouse_y(theme,w,y);
-}
-
-static widget_behaviour_function_set vertical_slider_bar_behaviour_functions=
-(widget_behaviour_function_set)
-{
-    .l_click        =   vertical_slider_bar_widget_left_click,
-    .l_release      =   blank_widget_left_release,
-    .r_click        =   blank_widget_right_click,
-    .m_move         =   vertical_slider_bar_widget_mouse_movement,
-    .scroll         =   slider_bar_widget_scroll,
-    .key_down       =   blank_widget_key_down,
-    .text_input     =   blank_widget_text_input,
-    .text_edit      =   blank_widget_text_edit,
-    .click_away     =   blank_widget_click_away,
-    .add_child      =   blank_widget_add_child,
-    .remove_child   =   blank_widget_remove_child,
-    .wid_delete     =   slider_bar_widget_delete
-};
+//static void vertical_slider_bar_widget_left_click(overlay_theme * theme,widget * w,int x,int y)
+//{
+//	set_slider_bar_value_using_mouse_y(theme,w,y);
+//}
+//
+//static void vertical_slider_bar_widget_mouse_movement(overlay_theme * theme,widget * w,int x,int y)
+//{
+//	set_slider_bar_value_using_mouse_y(theme,w,y);
+//}
+//
+//static widget_behaviour_function_set vertical_slider_bar_behaviour_functions=
+//(widget_behaviour_function_set)
+//{
+//    .l_click        =   vertical_slider_bar_widget_left_click,
+//    .l_release      =   blank_widget_left_release,
+//    .r_click        =   blank_widget_right_click,
+//    .m_move         =   vertical_slider_bar_widget_mouse_movement,
+//    .scroll         =   slider_bar_widget_scroll,
+//    .key_down       =   blank_widget_key_down,
+//    .text_input     =   blank_widget_text_input,
+//    .text_edit      =   blank_widget_text_edit,
+//    .click_away     =   blank_widget_click_away,
+//    .add_child      =   blank_widget_add_child,
+//    .remove_child   =   blank_widget_remove_child,
+//    .wid_delete     =   slider_bar_widget_delete
+//};
 
 
 

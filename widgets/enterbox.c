@@ -236,6 +236,7 @@ static bool enterbox_widget_key_down(overlay_theme * theme,widget * w,SDL_Keycod
         break;
 
     case SDLK_ESCAPE:
+        #warning probably dont want escape to ever activate, or at least not most of the time, ay wat to accomplish this, should it be the same as clicking away?
         set_currently_active_widget(NULL);
         break;
 

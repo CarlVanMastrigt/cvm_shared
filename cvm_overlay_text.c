@@ -65,6 +65,7 @@ void cvm_overlay_create_font(cvm_overlay_font * font,char * filename,int pixel_s
 
     font->space_advance=font->face->glyph->advance.x>>6;
     font->max_advance= font->face->size->metrics.max_advance>>6;
+    font->line_spacing=font->face->size->metrics.height>>6;
 
     font->glyphs=malloc(4*sizeof(cvm_overlay_glyph));
     font->glyph_space=4;
@@ -474,15 +475,14 @@ void overlay_render_text_simple(cvm_overlay_element_render_buffer * erb,cvm_over
 void overlay_render_text_selection_simple(cvm_overlay_element_render_buffer * erb,cvm_overlay_font * font,char * text,int x,int y,rectangle_ bounds,overlay_colour_ colour,char * selection_start,char * selection_end)
 {
     uint32_t gi,prev_gi,incr;
-    rectangle_ rs;
     FT_Vector kern;
     cvm_overlay_glyph * g;
-    rectangle_ rb,rr;
+    rectangle_ rb,rr,rs;
 
     prev_gi=0;
     rs.y1=y;
     rs.y2=y+font->glyph_size;
-    rs.x1=rs.x2=x;
+    //rs.x1=rs.x2=x;
 
     while(*text)
     {
@@ -554,10 +554,10 @@ int overlay_text_find_offset_simple(cvm_overlay_font * font,char * text,int rela
     FT_Vector kern;
     cvm_overlay_glyph * g;
     char * text_start;
-    int w,a;
+    int x,a;
 
     prev_gi=0;
-    w=0;
+    x=0;
 
     text_start=text;
 
@@ -565,8 +565,8 @@ int overlay_text_find_offset_simple(cvm_overlay_font * font,char * text,int rela
     {
         if(*text==' ')
         {
-            if(w+font->space_advance/2 > relative_x)break;
-            w+=font->space_advance;
+            if(x+font->space_advance/2 >= relative_x)break;
+            x+=font->space_advance;
             prev_gi=font->space_character_index;
             text++;
             continue;
@@ -576,194 +576,20 @@ int overlay_text_find_offset_simple(cvm_overlay_font * font,char * text,int rela
 
         g=cvm_overlay_find_glpyh(font,gi);
 
-        if(prev_gi && !FT_Get_Kerning(font->face,prev_gi,gi,0,&kern)) w+=kern.x>>6;
+        if(prev_gi && !FT_Get_Kerning(font->face,prev_gi,gi,0,&kern)) x+=kern.x>>6;
 
         prev_gi=gi;
 
         a=cvm_overlay_get_glyph_advance(font,g);
 
-        if(w+a/2 > relative_x)break;
+        if(x+a/2 >= relative_x)break;
 
-        w+=a;
+        x+=a;
 
         text+=incr;
     }
 
     return text-text_start;
-}
-
-int overlay_get_text_box_height(cvm_overlay_font * font,char * text,int wrapping_width)
-{
-    uint32_t gi,prev_gi,incr;
-    int w,h;
-    char * word_start;
-    bool line_start=true;
-    FT_Vector kern;
-
-    cvm_overlay_glyph * g;
-
-    w=0;
-    h=font->glyph_size;
-
-    ///used for wrapping
-    word_start=text;
-    prev_gi=0;
-
-
-    while(*text)
-    {
-        if(*text==' ')
-        {
-            w+=font->space_advance;
-            prev_gi=font->space_character_index;
-            word_start= ++text;
-            line_start=false;
-            continue;
-        }
-        else if(*text=='\n')
-        {
-            w=0;
-            h+=font->glyph_size;
-            prev_gi=0;
-            word_start= ++text;
-            line_start=true;
-            continue;
-        }
-
-        gi=cvm_overlay_get_utf8_glyph_index(font->face,(uint8_t*)text,&incr);
-
-        g=cvm_overlay_find_glpyh(font,gi);
-
-        if(prev_gi && !FT_Get_Kerning(font->face,prev_gi,gi,0,&kern)) w+=kern.x>>6;
-
-        prev_gi=gi;
-
-        w+=cvm_overlay_get_glyph_advance(font,g);
-
-        if(wrapping_width && w > wrapping_width)
-        {
-            if(line_start)
-            {
-                if(text==word_start) word_start=(text+=incr);///force render if character takes up more than whole line
-                w=0;
-                h+=font->glyph_size;
-                word_start=text;
-                prev_gi=0;
-                line_start=true;/// need to "while" out any spaces here, or come up with smarter solution to wrapping on space...
-            }
-            else ///restart rendering this word on a new line, is a little awkward with overwriting elements in gpu memory though...
-            {
-                text=word_start;
-                w=0;
-                h+=font->glyph_size;
-                prev_gi=0;
-                line_start=true;
-            }
-        }
-        else
-        {
-            text+=incr;
-        }
-    }
-
-    return h;
-}
-/// complex allows variant word wrapping/ compression with front to back or back to front ellipses, as well as colour changing text, up to 10 variant colours (0-9)
-void overlay_render_text_complex(cvm_overlay_element_render_buffer * erb,cvm_overlay_font * font,char * text,int x,int y,rectangle_ * bounds,overlay_colour_ colour,int wrapping_width)
-{
-    uint32_t gi,prev_gi,incr;
-    int s_x;
-    char * word_start;
-    uint32_t word_start_element_count;
-    bool line_start=true;
-    bool rendered_this_glyph;
-    FT_Vector kern;
-
-    cvm_overlay_glyph * g;
-    rectangle_ rb,rr;
-
-    s_x=x;
-
-    ///used for wrapping
-    word_start=text;
-    prev_gi=0;
-    word_start_element_count=erb->count;///technically not needed but prevents warning
-
-
-    while(*text)
-    {
-        if(*text==' ')
-        {
-            x+=font->space_advance;
-            prev_gi=font->space_character_index;
-            word_start_element_count=erb->count;
-            word_start= ++text;
-            line_start=false;
-            continue;
-        }
-        else if(*text=='\n')
-        {
-            x=s_x;
-            y+=font->glyph_size;
-            prev_gi=0;
-            word_start_element_count=erb->count;
-            word_start= ++text;
-            line_start=true;
-            continue;
-        }
-
-        gi=cvm_overlay_get_utf8_glyph_index(font->face,(uint8_t*)text,&incr);
-
-        g=cvm_overlay_find_glpyh(font,gi);
-
-        cvm_overlay_prepare_glyph_render_data(erb,font,g);
-
-        if(prev_gi && !FT_Get_Kerning(font->face,prev_gi,gi,0,&kern)) x+=kern.x>>6;
-
-        prev_gi=gi;
-
-        rendered_this_glyph=false;
-        if(g->tile && erb->count != erb->space)///need to check again as can return null once again;
-        {
-            rb=rectangle_add_offset(g->pos,x,y);
-            rr=get_rectangle_overlap_(rb,*bounds);
-
-            if((rendered_this_glyph=rectangle_has_positive_area(rr))) erb->buffer[erb->count++]=(cvm_overlay_render_data)
-            {
-                {rr.x1,rr.y1,rr.x2,rr.y2},
-                {CVM_OVERLAY_ELEMENT_SHADED<<12|(colour&0x0FFF),(g->tile->x_pos<<2)+rr.x1-rb.x1,(g->tile->y_pos<<2)+rr.y1-rb.y1,83},
-            };
-        }
-
-        x+=cvm_overlay_get_glyph_advance(font,g);
-
-        if(wrapping_width && x-s_x > wrapping_width)
-        {
-            if(line_start)
-            {
-                if(text==word_start) word_start=(text+=incr);///force render if character takes up more than whole line
-                else if(rendered_this_glyph)erb->count--;
-                x=s_x;
-                y+=font->glyph_size;
-                word_start=text;
-                prev_gi=0;
-                line_start=true;/// need to "while" out any spaces here, or come up with smarter solution to wrapping on space...
-            }
-            else ///restart rendering this word on a new line, is a little awkward with overwriting elements in gpu memory though...
-            {
-                text=word_start;
-                erb->count=word_start_element_count;
-                x=s_x;
-                y+=font->glyph_size;
-                prev_gi=0;
-                line_start=true;
-            }
-        }
-        else
-        {
-            text+=incr;
-        }
-    }
 }
 
 cvm_overlay_glyph * overlay_get_glyph(cvm_overlay_element_render_buffer * erb,cvm_overlay_font * font,char * text)
@@ -789,3 +615,286 @@ cvm_overlay_glyph * overlay_get_glyph(cvm_overlay_element_render_buffer * erb,cv
 
     return g;
 }
+
+void overlay_process_multiline_text(cvm_overlay_font * font,cvm_overlay_text_block * block,char * text,int wrapping_width)
+{
+    uint32_t gi,prev_gi,incr;
+    int w;
+    char * word_start;
+    bool line_start=true;
+    FT_Vector kern;
+
+    cvm_overlay_glyph * g;
+
+    w=0;
+
+    ///used for wrapping
+    word_start=text;
+    prev_gi=0;
+
+    block->line_count=0;
+    block->lines[block->line_count].start=text;
+
+    while(*text)
+    {
+        if(*text==' ')
+        {
+            w+=font->space_advance;
+            prev_gi=font->space_character_index;
+            word_start= ++text;
+            line_start=false;
+            continue;
+        }
+        else if(*text=='\n')
+        {
+            if(block->line_count==block->line_space)block->lines=realloc(block->lines,sizeof(cvm_overlay_text_line)*(block->line_space*=2));
+            block->lines[block->line_count++].finish=text;///non-inclusive_end
+            block->lines[block->line_count].start=text+1;///dont include newline in next line
+
+            w=0;
+            prev_gi=0;
+            word_start= ++text;
+            line_start=true;
+            continue;
+        }
+
+        gi=cvm_overlay_get_utf8_glyph_index(font->face,(uint8_t*)text,&incr);
+
+        g=cvm_overlay_find_glpyh(font,gi);
+
+        if(prev_gi && !FT_Get_Kerning(font->face,prev_gi,gi,0,&kern)) w+=kern.x>>6;
+
+        prev_gi=gi;
+
+        w+=cvm_overlay_get_glyph_advance(font,g);
+
+        if(wrapping_width && w > wrapping_width)
+        {
+            if(line_start)
+            {
+                if(text==word_start) text+=incr;///force render if character takes up more than whole line
+
+                if(block->line_count==block->line_space)block->lines=realloc(block->lines,sizeof(cvm_overlay_text_line)*(block->line_space*=2));
+                block->lines[block->line_count++].finish=text;///non-inclusive_end
+                block->lines[block->line_count].start=text;///dont include newline in next line
+
+                w=0;
+                word_start=text;
+                prev_gi=0;
+                line_start=true;/// need to "while" out any spaces here, or come up with smarter solution to wrapping on space...
+            }
+            else ///restart rendering this word on a new line, is a little awkward with overwriting elements in gpu memory though...
+            {
+                if(block->line_count==block->line_space)block->lines=realloc(block->lines,sizeof(cvm_overlay_text_line)*(block->line_space*=2));
+                block->lines[block->line_count++].finish=word_start;///non-inclusive_end
+                block->lines[block->line_count].start=word_start;///dont include newline in next line
+
+                w=0;
+                text=word_start;
+                prev_gi=0;
+                line_start=true;
+            }
+        }
+        else
+        {
+            text+=incr;
+        }
+    }
+
+    block->lines[block->line_count++].finish=text;
+}
+
+void overlay_render_multiline_text(cvm_overlay_element_render_buffer * erb,cvm_overlay_font * font,cvm_overlay_text_block * block,int x,int y,rectangle_ bounds,overlay_colour_ colour)
+{
+    uint32_t i,gi,prev_gi,incr;
+    FT_Vector kern;
+    cvm_overlay_glyph * g;
+    rectangle_ rb,rr;
+    char *text,*text_end;
+    int x_start,first_line;
+
+    prev_gi=0;
+    x_start=x;
+
+    first_line=(bounds.y1-y)/font->line_spacing;
+    first_line*=first_line>0;
+    y+=first_line*font->line_spacing;
+
+    if(rectangle_has_positive_area(bounds))for(i=first_line;i<block->line_count && y<bounds.y2;i++)
+    {
+        text_end=block->lines[i].finish;
+
+        for(text=block->lines[i].start;text<text_end;text+=incr)
+        {
+            if(*text==' ')
+            {
+                x+=font->space_advance;
+                prev_gi=font->space_character_index;
+                incr=1;
+                continue;
+            }
+
+            gi=cvm_overlay_get_utf8_glyph_index(font->face,(uint8_t*)text,&incr);
+
+            g=cvm_overlay_find_glpyh(font,gi);
+
+            cvm_overlay_prepare_glyph_render_data(erb,font,g);
+
+            if(prev_gi && !FT_Get_Kerning(font->face,prev_gi,gi,0,&kern)) x+=kern.x>>6;
+
+            prev_gi=gi;
+
+            if(g->tile && erb->count != erb->space)///need to check again as can return null once again;
+            {
+                rb=rectangle_add_offset(g->pos,x,y);
+                rr=get_rectangle_overlap_(rb,bounds);
+
+                if((rectangle_has_positive_area(rr))) erb->buffer[erb->count++]=(cvm_overlay_render_data)
+                {
+                    {rr.x1,rr.y1,rr.x2,rr.y2},
+                    {(CVM_OVERLAY_ELEMENT_SHADED<<12)|(colour&0x0FFF),(g->tile->x_pos<<2)+rr.x1-rb.x1,(g->tile->y_pos<<2)+rr.y1-rb.y1,83},
+                };
+            }
+
+            x+=cvm_overlay_get_glyph_advance(font,g);
+        }
+
+        x=x_start;
+        y+=font->line_spacing;
+    }
+}
+
+void overlay_render_multiline_text_selection(cvm_overlay_element_render_buffer * erb,cvm_overlay_font * font,cvm_overlay_text_block * block,int x,int y,rectangle_ bounds,overlay_colour_ colour,char * selection_start,char * selection_end)
+{
+    uint32_t i,gi,prev_gi,incr;
+    FT_Vector kern;
+    cvm_overlay_glyph * g;
+    rectangle_ rb,rr,rs;
+    char *text,*text_end;
+    int x_start,first_line;
+
+    prev_gi=0;
+    rs.x1=rs.x2=x_start=x;
+
+    first_line=(bounds.y1-y)/font->line_spacing;
+    first_line*=first_line>0;
+    y+=first_line*font->line_spacing;
+
+    if(rectangle_has_positive_area(bounds))for(i=first_line;i<block->line_count && y<bounds.y2;i++)
+    {
+        text_end=block->lines[i].finish;
+
+        for(text=block->lines[i].start;text<text_end;text+=incr)
+        {
+            if(text==selection_start) rs.x1=x;
+            if(text==selection_end) rs.x2=x;
+
+            if(*text==' ')
+            {
+                x+=font->space_advance;
+                prev_gi=font->space_character_index;
+                incr=1;
+                continue;
+            }
+
+            gi=cvm_overlay_get_utf8_glyph_index(font->face,(uint8_t*)text,&incr);
+
+            g=cvm_overlay_find_glpyh(font,gi);
+
+            cvm_overlay_prepare_glyph_render_data(erb,font,g);
+
+            if(prev_gi && !FT_Get_Kerning(font->face,prev_gi,gi,0,&kern)) x+=kern.x>>6;
+
+            prev_gi=gi;
+
+            if(g->tile && erb->count != erb->space)///need to check again as can return null once again;
+            {
+                rb=rectangle_add_offset(g->pos,x,y);
+                rr=get_rectangle_overlap_(rb,bounds);
+
+                if((rectangle_has_positive_area(rr))) erb->buffer[erb->count++]=(cvm_overlay_render_data)
+                {
+                    {rr.x1,rr.y1,rr.x2,rr.y2},
+                    {(CVM_OVERLAY_ELEMENT_SHADED<<12)|(colour&0x0FFF),(g->tile->x_pos<<2)+rr.x1-rb.x1,(g->tile->y_pos<<2)+rr.y1-rb.y1,83},
+                };
+            }
+
+            x+=cvm_overlay_get_glyph_advance(font,g);
+        }
+
+        if(text>selection_start && text<=selection_end)rs.x2=x;
+
+        if(rs.x1!=rs.x2 && erb->count != erb->space)
+        {
+            rs.y1=y;
+            rs.y2=y+font->glyph_size;
+            rs=get_rectangle_overlap_(rs,bounds);
+
+            if((rectangle_has_positive_area(rs))) erb->buffer[erb->count++]=(cvm_overlay_render_data)
+            {
+                {rs.x1,rs.y1,rs.x2,rs.y2},
+                {(CVM_OVERLAY_ELEMENT_FILL<<12)|(OVERLAY_TEXT_HIGHLIGHT_COLOUR_&0x0FFF),0,0,83},
+            };
+
+            rs.x1=rs.x2=x_start;
+        }
+
+        x=x_start;
+        y+=font->line_spacing;
+    }
+}
+
+int overlay_find_multiline_text_offset(cvm_overlay_font * font,cvm_overlay_text_block * block,char * text_base,int relative_x,int relative_y)
+{
+    uint32_t gi,prev_gi,incr;
+    FT_Vector kern;
+    cvm_overlay_glyph * g;
+    char *text,*text_end;
+    int x,line,a;
+
+    prev_gi=0;
+    x=0;
+
+    if(relative_y<0)return 0;
+    if(relative_y > (block->line_count-1)*font->line_spacing+font->glyph_size) return block->lines[block->line_count-1].finish-text_base;
+
+    line=relative_y/font->line_spacing;
+
+    text_end=block->lines[line].finish;
+
+    for(text=block->lines[line].start;text<text_end;text+=incr)
+    {
+        if(*text==' ')
+        {
+            if(x+font->space_advance/2 >= relative_x)break;
+            x+=font->space_advance;
+            prev_gi=font->space_character_index;
+            incr=1;
+            continue;
+        }
+
+        gi=cvm_overlay_get_utf8_glyph_index(font->face,(uint8_t*)text,&incr);
+
+        g=cvm_overlay_find_glpyh(font,gi);
+
+        if(prev_gi && !FT_Get_Kerning(font->face,prev_gi,gi,0,&kern)) x+=kern.x>>6;
+
+        prev_gi=gi;
+
+        a=cvm_overlay_get_glyph_advance(font,g);
+
+        if(x+a/2 >= relative_x)break;
+
+        x+=a;
+    }
+
+    return text-text_base;
+}
+
+
+
+
+
+
+
+

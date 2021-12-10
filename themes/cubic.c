@@ -263,71 +263,99 @@ bool cubic_h_bar_select(rectangle_ r,uint32_t status,overlay_theme * theme)
     return r.x1<=0 && r.x2>0;
 }
 
-//bool cubic_v_bar_select(rectangle_ r,uint32_t status,overlay_theme * theme)
-//{
-//    int i,y,x;
-//    cubic_theme_data * cubic;
-//
-//    cubic=theme->other_data;
-//
-//    if(!cubic->foreground_selection_grid)return false;
-//
-//    x=(cubic->foreground_d-r.x1-r.x2)>>1;
-//
-//    if(x<0 || y>=cubic->foreground_d)return false;
-//
-//
-//    y= -r.y1-cubic->foreground_offset_y;
-//
-//    if(y>=0 && y<cubic->foreground_r)
-//    {
-//        i=y*cubic->foreground_d+x;
-//        if(cubic->foreground_selection_grid[i>>4] & (1<<(i&0x0F))) return true;
-//    }
-//
-//    r.y1+=cubic->foreground_offset_y+cubic->foreground_r;
-//
-//
-//    y= cubic->foreground_d+cubic->foreground_offset_y-r.y2;
-//
-//    if(y>=cubic->foreground_r && y<cubic->foreground_d)
-//    {
-//        i=y*cubic->foreground_d+x;
-//        if(cubic->foreground_selection_grid[i>>4] & (1<<(i&0x0F))) return true;
-//    }
-//
-//    r.y2-=cubic->foreground_offset_y+cubic->foreground_r;
-//
-//
-//    return r.y1<=0 && r.y2>0;
-//}
-
 bool cubic_box_select(rectangle_ r,uint32_t status,overlay_theme * theme)
 {
-//    r.x-=x_in;
-//    r.y+=1-y_in;
-//    r.h-=2;
-//
-//    if(!(status&WIDGET_H_FIRST))///not the first
-//    {
-//        if(check_click_on_shaded_sprite(theme,(rectangle){.x=r.x+2,.y=r.y,.w=10,.h=10},foreground_shape_sprite.x_pos,foreground_shape_sprite.y_pos))return true;
-//        if(rectangle_surrounds_origin((rectangle){.x=r.x+2,.y=r.y+10,.w=10,.h=r.h-20}))return true;
-//        if(check_click_on_shaded_sprite(theme,(rectangle){.x=r.x+2,.y=r.y+r.h-10,.w=10,.h=10},foreground_shape_sprite.x_pos,foreground_shape_sprite.y_pos+10))return true;
-//        r.x+=12;
-//        r.w-=12;
-//    }
-//
-//    if(!(status&WIDGET_H_LAST))///not the last
-//    {
-//
-//        if(check_click_on_shaded_sprite(theme,(rectangle){.x=r.x+r.w-12,.y=r.y,.w=10,.h=20},foreground_shape_sprite.x_pos+10,foreground_shape_sprite.y_pos))return true;
-//        if(rectangle_surrounds_origin((rectangle){.x=r.x+r.w-12,.y=r.y+10,.w=10,.h=r.h-20}))return true;
-//        if(check_click_on_shaded_sprite(theme,(rectangle){.x=r.x+r.w-12,.y=r.y+r.h-10,.w=10,.h=10},foreground_shape_sprite.x_pos+10,foreground_shape_sprite.y_pos+10))return true;
-//
-//        r.w-=12;
-//    }
-//
-//    return rectangle_surrounds_origin(r);
+    int i,y,x,y1,y2;
+    cubic_theme_data * cubic;
+
+    cubic=theme->other_data;
+
+    if(!cubic->foreground_selection_grid)return false;
+
+    r.x1+=cubic->foreground_offset_x;
+    r.x2-=cubic->foreground_offset_x;
+    r.y1+=cubic->foreground_offset_y;
+    r.y2-=cubic->foreground_offset_y;
+
+    if(!(status&WIDGET_H_FIRST))
+    {
+        x= -r.x1;
+        y1=r.y1;
+        y2=r.y2;
+        r.x1+=cubic->foreground_r;
+
+        if(x>=0 && x<cubic->foreground_r)
+        {
+            if(!(status&WIDGET_V_FIRST))
+            {
+                y= -y1;
+
+                if(y>=0 && y<cubic->foreground_r)
+                {
+                    i=y*cubic->foreground_d+x;
+                    if(cubic->foreground_selection_grid[i>>4] & (1<<(i&0x0F))) return true;
+                }
+
+                y1+=cubic->foreground_r;
+            }
+
+            if(!(status&WIDGET_V_LAST))
+            {
+                y= cubic->foreground_d-y2;
+
+                if(y>=cubic->foreground_r && y<cubic->foreground_d)
+                {
+                    i=y*cubic->foreground_d+x;
+                    if(cubic->foreground_selection_grid[i>>4] & (1<<(i&0x0F))) return true;
+                }
+
+                y2-=cubic->foreground_r;
+            }
+
+            return y1<=0 && y2>0;
+        }
+    }
+
+    if(!(status&WIDGET_H_LAST))
+    {
+        x= cubic->foreground_d-r.x2;
+        y1=r.y1;
+        y2=r.y2;
+        r.x2-=cubic->foreground_r;
+
+        if(x>=cubic->foreground_r && x<cubic->foreground_d)
+        {
+            if(!(status&WIDGET_V_FIRST))
+            {
+                y= -y1;
+
+                if(y>=0 && y<cubic->foreground_r)
+                {
+                    i=y*cubic->foreground_d+x;
+                    if(cubic->foreground_selection_grid[i>>4] & (1<<(i&0x0F))) return true;
+                }
+
+                y1+=cubic->foreground_r;
+            }
+
+            if(!(status&WIDGET_V_LAST))
+            {
+                y= cubic->foreground_d-y2;
+
+                if(y>=cubic->foreground_r && y<cubic->foreground_d)
+                {
+                    i=y*cubic->foreground_d+x;
+                    if(cubic->foreground_selection_grid[i>>4] & (1<<(i&0x0F))) return true;
+                }
+
+                y2-=cubic->foreground_r;
+            }
+
+            return y1<=0 && y2>0;
+        }
+    }
+
+    return rectangle_surrounds_origin_(r);
 }
 
 bool cubic_panel_select(rectangle_ r,uint32_t status,overlay_theme * theme)
@@ -732,61 +760,139 @@ void cubic_h_bar_slider_render(rectangle_ r,uint32_t status,overlay_theme * them
     }
 }
 
-void cubic_v_slider_bar_render(rectangle_ r,uint32_t status,overlay_theme * theme,overlay_data * od,rectangle_ bounds,overlay_colour_ colour,int range,int value,int bar,overlay_colour_ bar_colour)
-{
-//    r.x+=x_off+(r.w-20)/2;
-//    r.y+=y_off+11;
-//    r.w=20;
-//    r.h-=theme->v_slider_bar_lost_h;
-//
-//    render_overlay_shade(od,(rectangle){.x=r.x,.y=r.y-10,.w=20,.h=10},bounds,foreground_border_sprite.x_pos,foreground_border_sprite.y_pos,colour);
-//    render_overlay_shade(od,(rectangle){.x=r.x,.y=r.y+r.h,.w=20,.h=10},bounds,foreground_border_sprite.x_pos,foreground_border_sprite.y_pos+10,colour);
-//    render_border(od,r,bounds,(rectangle){.x=r.x+1,.y=r.y,.w=18,.h=r.h},colour);
-//
-//    r.x+=3;
-//    r.w-=6;
-//
-//    if(bar<0)
-//    {
-//        bar=r.h/(-bar);
-//        r.y+=((r.h-bar)*value)/range;
-//        r.h=bar;
-//    }
-//    else
-//    {
-//        r.y+=(r.h*value)/(range+bar);
-//        r.h-=(r.h*range)/(range+bar);
-//    }
-//
-//    render_overlay_shade(od,(rectangle){.x=r.x,.y=r.y-7,.w=14,.h=7},bounds,small_foreground_shape_sprite.x_pos,small_foreground_shape_sprite.y_pos,colour);
-//    render_overlay_shade(od,(rectangle){.x=r.x,.y=r.y+r.h,.w=14,.h=7},bounds,small_foreground_shape_sprite.x_pos,small_foreground_shape_sprite.y_pos+7,colour);
-//    render_rectangle(od,r,bounds,colour);
-}
-
 void cubic_box_render(rectangle_ r,uint32_t status,overlay_theme * theme,overlay_data * od,rectangle_ bounds,overlay_colour_ colour)
 {
-//    r.x+=x_off;
-//    r.y+=y_off+1;
-//    r.h-=2;
-//
-//    if(!(status&WIDGET_H_FIRST))///not the first
-//    {
-//        render_overlay_shade(od,(rectangle){.x=r.x+2,.y=r.y,.w=10,.h=10},bounds,foreground_shape_sprite.x_pos,foreground_shape_sprite.y_pos,colour);
-//        render_rectangle(od,(rectangle){.x=r.x+2,.y=r.y+10,.w=10,.h=r.h-20},bounds,colour);
-//        render_overlay_shade(od,(rectangle){.x=r.x+2,.y=r.y+r.h-10,.w=10,.h=10},bounds,foreground_shape_sprite.x_pos,foreground_shape_sprite.y_pos+10,colour);
-//        r.x+=12;
-//        r.w-=12;
-//    }
-//
-//    if(!(status&WIDGET_H_LAST))///not the last
-//    {
-//        render_overlay_shade(od,(rectangle){.x=r.x+r.w-12,.y=r.y,.w=10,.h=10},bounds,foreground_shape_sprite.x_pos+10,foreground_shape_sprite.y_pos,colour);
-//        render_rectangle(od,(rectangle){.x=r.x+r.w-12,.y=r.y+10,.w=10,.h=r.h-20},bounds,colour);
-//        render_overlay_shade(od,(rectangle){.x=r.x+r.w-12,.y=r.y+r.h-10,.w=10,.h=10},bounds,foreground_shape_sprite.x_pos+10,foreground_shape_sprite.y_pos+10,colour);
-//        r.w-=12;
-//    }
-//
-//    render_rectangle(od,r,bounds,colour);
+    rectangle_ rv,re,rr;
+    cubic_theme_data * cubic;
+
+    cubic=theme->other_data;
+
+    cvm_overlay_element_render_buffer * erb=od;///HACK, temporary measure before switching types
+
+    if(!cubic->foreground_image_tile)cubic_create_shape(erb,&cubic->foreground_image_tile,&cubic->foreground_selection_grid,cubic->foreground_r);
+    if(!cubic->foreground_image_tile)return;
+
+    r.x1+=cubic->foreground_offset_x;
+    r.x2-=cubic->foreground_offset_x;
+    r.y1+=cubic->foreground_offset_y;
+    r.y2-=cubic->foreground_offset_y;
+
+    if(!(status&WIDGET_H_FIRST))
+    {
+        rv=r;
+        rv.x2=r.x1+=cubic->foreground_r;
+
+        if(!(status&WIDGET_V_FIRST))
+        {
+            if(erb->count != erb->space)
+            {
+                re=rv;
+                re.y2=re.y1+cubic->foreground_r;
+                rr=get_rectangle_overlap_(re,bounds);
+
+                if((rectangle_has_positive_area(rr))) erb->buffer[erb->count++]=(cvm_overlay_render_data)
+                {
+                    {rr.x1,rr.y1,rr.x2,rr.y2},
+                    {(CVM_OVERLAY_ELEMENT_SHADED<<12)|(colour&0x0FFF),(cubic->foreground_image_tile->x_pos<<2)+rr.x1-re.x1,(cubic->foreground_image_tile->y_pos<<2)+rr.y1-re.y1,83},
+                };
+            }
+
+            rv.y1+=cubic->foreground_r;
+        }
+
+        if(!(status&WIDGET_V_LAST))
+        {
+            if(erb->count != erb->space)
+            {
+                re=rv;
+                re.y1=re.y2-cubic->foreground_r;
+                rr=get_rectangle_overlap_(re,bounds);
+
+                if((rectangle_has_positive_area(rr))) erb->buffer[erb->count++]=(cvm_overlay_render_data)
+                {
+                    {rr.x1,rr.y1,rr.x2,rr.y2},
+                    {(CVM_OVERLAY_ELEMENT_SHADED<<12)|(colour&0x0FFF),(cubic->foreground_image_tile->x_pos<<2)+rr.x1-re.x1,(cubic->foreground_image_tile->y_pos<<2)+rr.y1-re.y1+cubic->foreground_r,83},
+                };
+            }
+
+            rv.y2-=cubic->foreground_r;
+        }
+
+        if(erb->count != erb->space)///need to check again as can return null once again;
+        {
+            rr=get_rectangle_overlap_(rv,bounds);
+
+            if((rectangle_has_positive_area(rr))) erb->buffer[erb->count++]=(cvm_overlay_render_data)
+            {
+                {rr.x1,rr.y1,rr.x2,rr.y2},
+                {(CVM_OVERLAY_ELEMENT_FILL<<12)|(colour&0x0FFF),0,0,83},
+            };
+        }
+    }
+
+    if(!(status&WIDGET_H_LAST))
+    {
+        rv=r;
+        rv.x1=r.x2-=cubic->foreground_r;
+
+        if(!(status&WIDGET_V_FIRST))
+        {
+            if(erb->count != erb->space)
+            {
+                re=rv;
+                re.y2=re.y1+cubic->foreground_r;
+                rr=get_rectangle_overlap_(re,bounds);
+
+                if((rectangle_has_positive_area(rr))) erb->buffer[erb->count++]=(cvm_overlay_render_data)
+                {
+                    {rr.x1,rr.y1,rr.x2,rr.y2},
+                    {(CVM_OVERLAY_ELEMENT_SHADED<<12)|(colour&0x0FFF),(cubic->foreground_image_tile->x_pos<<2)+rr.x1-re.x1+cubic->foreground_r,(cubic->foreground_image_tile->y_pos<<2)+rr.y1-re.y1,83},
+                };
+            }
+
+            rv.y1+=cubic->foreground_r;
+        }
+
+        if(!(status&WIDGET_V_LAST))
+        {
+            if(erb->count != erb->space)
+            {
+                re=rv;
+                re.y1=re.y2-cubic->foreground_r;
+                rr=get_rectangle_overlap_(re,bounds);
+
+                if((rectangle_has_positive_area(rr))) erb->buffer[erb->count++]=(cvm_overlay_render_data)
+                {
+                    {rr.x1,rr.y1,rr.x2,rr.y2},
+                    {(CVM_OVERLAY_ELEMENT_SHADED<<12)|(colour&0x0FFF),(cubic->foreground_image_tile->x_pos<<2)+rr.x1-re.x1+cubic->foreground_r,(cubic->foreground_image_tile->y_pos<<2)+rr.y1-re.y1+cubic->foreground_r,83},
+                };
+            }
+
+            rv.y2-=cubic->foreground_r;
+        }
+
+        if(erb->count != erb->space)///need to check again as can return null once again;
+        {
+            rr=get_rectangle_overlap_(rv,bounds);
+
+            if((rectangle_has_positive_area(rr))) erb->buffer[erb->count++]=(cvm_overlay_render_data)
+            {
+                {rr.x1,rr.y1,rr.x2,rr.y2},
+                {(CVM_OVERLAY_ELEMENT_FILL<<12)|(colour&0x0FFF),0,0,83},
+            };
+        }
+    }
+
+    if(erb->count != erb->space)///need to check again as can return null once again;
+    {
+        rr=get_rectangle_overlap_(r,bounds);
+
+        if((rectangle_has_positive_area(rr))) erb->buffer[erb->count++]=(cvm_overlay_render_data)
+        {
+            {rr.x1,rr.y1,rr.x2,rr.y2},
+            {(CVM_OVERLAY_ELEMENT_FILL<<12)|(colour&0x0FFF),0,0,83},
+        };
+    }
 }
 
 void cubic_panel_render(rectangle_ r,uint32_t status,overlay_theme * theme,overlay_data * od,rectangle_ bounds,overlay_colour_ colour)
@@ -817,7 +923,7 @@ void cubic_panel_render(rectangle_ r,uint32_t status,overlay_theme * theme,overl
                 if((rectangle_has_positive_area(rr))) erb->buffer[erb->count++]=(cvm_overlay_render_data)
                 {
                     {rr.x1,rr.y1,rr.x2,rr.y2},
-                    {(CVM_OVERLAY_ELEMENT_SHADED<<12)|(OVERLAY_BACKGROUND_COLOUR_&0x0FFF),(cubic->background_image_tile->x_pos<<2)+rr.x1-re.x1,(cubic->background_image_tile->y_pos<<2)+rr.y1-re.y1,83},
+                    {(CVM_OVERLAY_ELEMENT_SHADED<<12)|(colour&0x0FFF),(cubic->background_image_tile->x_pos<<2)+rr.x1-re.x1,(cubic->background_image_tile->y_pos<<2)+rr.y1-re.y1,83},
                 };
             }
 
@@ -835,7 +941,7 @@ void cubic_panel_render(rectangle_ r,uint32_t status,overlay_theme * theme,overl
                 if((rectangle_has_positive_area(rr))) erb->buffer[erb->count++]=(cvm_overlay_render_data)
                 {
                     {rr.x1,rr.y1,rr.x2,rr.y2},
-                    {(CVM_OVERLAY_ELEMENT_SHADED<<12)|(OVERLAY_BACKGROUND_COLOUR_&0x0FFF),(cubic->background_image_tile->x_pos<<2)+rr.x1-re.x1,(cubic->background_image_tile->y_pos<<2)+rr.y1-re.y1+cubic->background_r,83},
+                    {(CVM_OVERLAY_ELEMENT_SHADED<<12)|(colour&0x0FFF),(cubic->background_image_tile->x_pos<<2)+rr.x1-re.x1,(cubic->background_image_tile->y_pos<<2)+rr.y1-re.y1+cubic->background_r,83},
                 };
             }
 
@@ -849,7 +955,7 @@ void cubic_panel_render(rectangle_ r,uint32_t status,overlay_theme * theme,overl
             if((rectangle_has_positive_area(rr))) erb->buffer[erb->count++]=(cvm_overlay_render_data)
             {
                 {rr.x1,rr.y1,rr.x2,rr.y2},
-                {(CVM_OVERLAY_ELEMENT_FILL<<12)|(OVERLAY_BACKGROUND_COLOUR_&0x0FFF),0,0,83},
+                {(CVM_OVERLAY_ELEMENT_FILL<<12)|(colour&0x0FFF),0,0,83},
             };
         }
     }
@@ -870,7 +976,7 @@ void cubic_panel_render(rectangle_ r,uint32_t status,overlay_theme * theme,overl
                 if((rectangle_has_positive_area(rr))) erb->buffer[erb->count++]=(cvm_overlay_render_data)
                 {
                     {rr.x1,rr.y1,rr.x2,rr.y2},
-                    {(CVM_OVERLAY_ELEMENT_SHADED<<12)|(OVERLAY_BACKGROUND_COLOUR_&0x0FFF),(cubic->background_image_tile->x_pos<<2)+rr.x1-re.x1+cubic->background_r,(cubic->background_image_tile->y_pos<<2)+rr.y1-re.y1,83},
+                    {(CVM_OVERLAY_ELEMENT_SHADED<<12)|(colour&0x0FFF),(cubic->background_image_tile->x_pos<<2)+rr.x1-re.x1+cubic->background_r,(cubic->background_image_tile->y_pos<<2)+rr.y1-re.y1,83},
                 };
             }
 
@@ -888,7 +994,7 @@ void cubic_panel_render(rectangle_ r,uint32_t status,overlay_theme * theme,overl
                 if((rectangle_has_positive_area(rr))) erb->buffer[erb->count++]=(cvm_overlay_render_data)
                 {
                     {rr.x1,rr.y1,rr.x2,rr.y2},
-                    {(CVM_OVERLAY_ELEMENT_SHADED<<12)|(OVERLAY_BACKGROUND_COLOUR_&0x0FFF),(cubic->background_image_tile->x_pos<<2)+rr.x1-re.x1+cubic->background_r,(cubic->background_image_tile->y_pos<<2)+rr.y1-re.y1+cubic->background_r,83},
+                    {(CVM_OVERLAY_ELEMENT_SHADED<<12)|(colour&0x0FFF),(cubic->background_image_tile->x_pos<<2)+rr.x1-re.x1+cubic->background_r,(cubic->background_image_tile->y_pos<<2)+rr.y1-re.y1+cubic->background_r,83},
                 };
             }
 
@@ -902,7 +1008,7 @@ void cubic_panel_render(rectangle_ r,uint32_t status,overlay_theme * theme,overl
             if((rectangle_has_positive_area(rr))) erb->buffer[erb->count++]=(cvm_overlay_render_data)
             {
                 {rr.x1,rr.y1,rr.x2,rr.y2},
-                {(CVM_OVERLAY_ELEMENT_FILL<<12)|(OVERLAY_BACKGROUND_COLOUR_&0x0FFF),0,0,83},
+                {(CVM_OVERLAY_ELEMENT_FILL<<12)|(colour&0x0FFF),0,0,83},
             };
         }
     }
@@ -914,27 +1020,13 @@ void cubic_panel_render(rectangle_ r,uint32_t status,overlay_theme * theme,overl
         if((rectangle_has_positive_area(rr))) erb->buffer[erb->count++]=(cvm_overlay_render_data)
         {
             {rr.x1,rr.y1,rr.x2,rr.y2},
-            {(CVM_OVERLAY_ELEMENT_FILL<<12)|(OVERLAY_BACKGROUND_COLOUR_&0x0FFF),0,0,83},
+            {(CVM_OVERLAY_ELEMENT_FILL<<12)|(colour&0x0FFF),0,0,83},
         };
     }
 }
 
 overlay_theme * create_cubic_theme(void)
 {
-//    uint8_t * shaded_sprite_buffer=malloc(sizeof(uint8_t)*cubic_sprite_buffer_size*cubic_sprite_buffer_size);
-//    overlay_sprite_data osd;
-//    int d;
-//
-//    load_font_to_overlay(glf,theme,"resources/CVM_font_1.ttf",16);
-//    SDL_Surface * icons_surface=IMG_Load("resources/icons_alpha.png");
-//
-//    if(icons_surface==NULL)
-//    {
-//        puts("THEME ICONS FILE NOT FOUND");
-//        exit(-1);
-//    }
-//
-//
     overlay_theme * theme;
     cubic_theme_data * cubic;
 
@@ -953,12 +1045,10 @@ overlay_theme * create_cubic_theme(void)
     theme->h_bar_text_offset=16;
 
     theme->h_slider_bar_lost_w=24;
-    theme->v_slider_bar_lost_h=22;
 
     theme->x_box_offset=16;/// ??? figure out what this should be (text and
     theme->y_box_offset=7;/// ??? figure out what this should be
 
-    //theme->icon_bar_close_extra_w=20;///16(icon_size)+ 2(offset of end) +2 ((bar_height(20)-icon_size(16))/2)
     theme->icon_bar_extra_w=32;///16(icon_size)+ text_offset(16) e.g. same offset as text bar
     theme->separator_w=8;
     theme->separator_h=4;
@@ -975,17 +1065,13 @@ overlay_theme * create_cubic_theme(void)
 
     theme->square_icon_render=cubic_square_icon_render;
     theme->h_bar_render=cubic_h_bar_render;
-    //theme->h_text_icon_bar_render=cubic_h_text_icon_bar_render;
-    //theme->h_icon_text_bar_render=cubic_h_icon_text_bar_render;
     theme->h_bar_slider_render=cubic_h_bar_slider_render;
-    //theme->v_slider_bar_render=cubic_v_slider_bar_render;
     theme->box_render=cubic_box_render;
     theme->panel_render=cubic_panel_render;
 
 
     theme->square_select=cubic_square_select;
     theme->h_bar_select=cubic_h_bar_select;
-    //theme->v_bar_select=cubic_v_bar_select;
     theme->box_select=cubic_box_select;
     theme->panel_select=cubic_panel_select;
 
@@ -1002,44 +1088,12 @@ overlay_theme * create_cubic_theme(void)
     cubic->background_d=28;
 
     cubic->internal_image_tile=NULL;
-    //cubic->internal_selection_grid=NULL;
     cubic->internal_r=8;
     cubic->internal_d=16;
 
     cvm_overlay_create_font(&theme->font_,"cvm_shared/resources/cvm_font_1.ttf",16);
-//
-//
-//    foreground_shape_sprite=create_cubic_shaded_sprite(theme,shaded_sprite_buffer,"foreground_shape",40,0);///r=10 ergo rx4=40
-//    background_shape_sprite=create_cubic_shaded_sprite(theme,shaded_sprite_buffer,"background_shape",56,0);///r=14 ergo rx4=56
-//    foreground_border_sprite=create_cubic_shaded_sprite(theme,shaded_sprite_buffer,"foreground_border",40,36);///r=10 ergo rx4=40  &  r=9 ergo rx4=36
-//    small_foreground_shape_sprite=create_cubic_shaded_sprite(theme,shaded_sprite_buffer,"small_foreground_shape",28,0);///r=7 ergo rx4=28
-//
-//    create_overlay_sprite_from_sdl_surface(theme,"exit",icons_surface,16,16,0,0,OVERLAY_SHADED_SPRITE);
-//    create_overlay_sprite_from_sdl_surface(theme,"directory_up",icons_surface,16,16,16,0,OVERLAY_SHADED_SPRITE);
-//    create_overlay_sprite_from_sdl_surface(theme,"directory_refresh",icons_surface,16,16,32,0,OVERLAY_SHADED_SPRITE);
-//    create_overlay_sprite_from_sdl_surface(theme,"directory_hidden",icons_surface,16,16,48,0,OVERLAY_SHADED_SPRITE);
-//    create_overlay_sprite_from_sdl_surface(theme,"expand",icons_surface,16,16,0,16,OVERLAY_SHADED_SPRITE);
-//    create_overlay_sprite_from_sdl_surface(theme,"collapse",icons_surface,16,16,16,16,OVERLAY_SHADED_SPRITE);
-//    create_overlay_sprite_from_sdl_surface(theme,"folder",icons_surface,16,16,32,16,OVERLAY_SHADED_SPRITE);
-//    create_overlay_sprite_from_sdl_surface(theme,"misc_file",icons_surface,16,16,48,16,OVERLAY_SHADED_SPRITE);
-//    create_overlay_sprite_from_sdl_surface(theme,"image_file",icons_surface,16,16,0,32,OVERLAY_SHADED_SPRITE);
-//    create_overlay_sprite_from_sdl_surface(theme,"music_file",icons_surface,16,16,16,32,OVERLAY_SHADED_SPRITE);
-//    create_overlay_sprite_from_sdl_surface(theme,"vector_file",icons_surface,16,16,32,32,OVERLAY_SHADED_SPRITE);
-//
-///// ↑←↓→ 🗙 🔄 💾 📁 📷 📄 🎵 ➕ ➖ 👻 🖋 🔓 🔗 🖼 ✂ 👁 ⚙
-//
-//    d=set_cubic_shaded_sprite_data(shaded_sprite_buffer,28,24,32,true);
-//    osd=create_overlay_sprite(theme,"false",d,d,OVERLAY_SHADED_SPRITE);
-//    set_overlay_sprite_image_data(theme,osd,shaded_sprite_buffer,cubic_sprite_buffer_size,d,d,0,0);
-//
-//    d=set_cubic_shaded_sprite_data(shaded_sprite_buffer,16,0,32,false);
-//    osd=create_overlay_sprite(theme,"true",d,d,OVERLAY_SHADED_SPRITE);
-//    set_overlay_sprite_image_data(theme,osd,shaded_sprite_buffer,cubic_sprite_buffer_size,d,d,0,0);
-//
-//
-//
-//    SDL_FreeSurface(icons_surface);
-//    free(shaded_sprite_buffer);
+
+/// ↑←↓→ 🗙 🔄 💾 📁 📷 📄 🎵 ➕ ➖ 👻 🖋 🔓 🔗 🖼 ✂ 👁 ⚙
 }
 
 void destroy_cubic_theme(overlay_theme * theme)
@@ -1061,10 +1115,6 @@ void destroy_cubic_theme(overlay_theme * theme)
 
     free(theme);
 }
-
-///make themes union/punned type, relying on base theme but extending as onther type of struct with extra needed data
-
-
 
 
 
