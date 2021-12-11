@@ -36,7 +36,7 @@ typedef struct cvm_overlay_glyph
     FT_UInt glyph_index;///because of variant selectors, cannot search by code point, search by glyph index
     uint32_t usage_counter;///when hitting 0 it gets deleted? (or scheduled for deletion) is this even necessary?
     ///perhaps need better way to handle unused overlay elements and glyphs (could just agressively delete...)
-    rectangle_ pos;
+    rectangle pos;
     int advance;
 }
 cvm_overlay_glyph;///hmmm, glyph vs string based rendering... glyph has more potential to be loaded at once and is faster in worst case, but slower in average
@@ -100,8 +100,8 @@ int cvm_overlay_utf8_get_next_word(char * text,int offset);
 ///returns the required width of a string
 int overlay_size_text_simple(cvm_overlay_font * font,char * text);
 
-void overlay_render_text_simple(cvm_overlay_element_render_buffer * erb,cvm_overlay_font * font,char * text,int x,int y,rectangle_ bounds,overlay_colour_ colour);
-void overlay_render_text_selection_simple(cvm_overlay_element_render_buffer * erb,cvm_overlay_font * font,char * text,int x,int y,rectangle_ bounds,overlay_colour_ colour,char * selection_start,char * selection_end);
+void overlay_render_text_simple(cvm_overlay_element_render_buffer * erb,cvm_overlay_font * font,char * text,int x,int y,rectangle bounds,overlay_colour_ colour);
+void overlay_render_text_selection_simple(cvm_overlay_element_render_buffer * erb,cvm_overlay_font * font,char * text,int x,int y,rectangle bounds,overlay_colour_ colour,char * selection_start,char * selection_end);
 
 int overlay_text_find_offset_simple(cvm_overlay_font * font,char * text,int relative_x);
 
@@ -109,12 +109,12 @@ cvm_overlay_glyph * overlay_get_glyph(cvm_overlay_element_render_buffer * erb,cv
 
 
 void overlay_process_multiline_text(cvm_overlay_font * font,cvm_overlay_text_block * block,char * text,int wrapping_width);
-void overlay_render_multiline_text(cvm_overlay_element_render_buffer * erb,cvm_overlay_font * font,cvm_overlay_text_block * block,int x,int y,rectangle_ bounds,overlay_colour_ colour);
-void overlay_render_multiline_text_selection(cvm_overlay_element_render_buffer * erb,cvm_overlay_font * font,cvm_overlay_text_block * block,int x,int y,rectangle_ bounds,overlay_colour_ colour,char * selection_start,char * selection_end);
+void overlay_render_multiline_text(cvm_overlay_element_render_buffer * erb,cvm_overlay_font * font,cvm_overlay_text_block * block,int x,int y,rectangle bounds,overlay_colour_ colour);
+void overlay_render_multiline_text_selection(cvm_overlay_element_render_buffer * erb,cvm_overlay_font * font,cvm_overlay_text_block * block,int x,int y,rectangle bounds,overlay_colour_ colour,char * selection_start,char * selection_end);
 int overlay_find_multiline_text_offset(cvm_overlay_font * font,cvm_overlay_text_block * block,char * text,int relative_x,int relative_y);
 
 
-static inline rectangle_ overlay_simple_text_rectangle(rectangle_ r,int glyph_size,int x_border)
+static inline rectangle overlay_simple_text_rectangle(rectangle r,int glyph_size,int x_border)
 {
     r.y1=(r.y1+r.y2-glyph_size)>>1;
     r.y2=r.y1+glyph_size;

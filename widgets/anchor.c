@@ -93,14 +93,14 @@ static widget_behaviour_function_set anchor_behaviour_functions=
 
 
 
-static void text_anchor_widget_render(overlay_data * od,overlay_theme * theme,widget * w,int x_off,int y_off,rectangle_ bounds)
+static void text_anchor_widget_render(overlay_theme * theme,widget * w,int x_off,int y_off,cvm_overlay_element_render_buffer * erb,rectangle bounds)
 {
-	rectangle_ r=rectangle_add_offset(w->base.r,x_off,y_off);
-	theme->h_bar_render(r,w->base.status,theme,od,bounds,OVERLAY_ALTERNATE_MAIN_COLOUR_);
+	rectangle r=rectangle_add_offset(w->base.r,x_off,y_off);
+	theme->h_bar_render(r,w->base.status,theme,erb,bounds,OVERLAY_ALTERNATE_MAIN_COLOUR_);
 
     r=overlay_simple_text_rectangle(r,theme->font_.glyph_size,theme->h_bar_text_offset);
-    rectangle_ b=get_rectangle_overlap_(r,bounds);
-    if(rectangle_has_positive_area(b))overlay_render_text_simple(od,&theme->font_,w->anchor.text,r.x1,r.y1,b,OVERLAY_TEXT_COLOUR_0_);
+    rectangle b=get_rectangle_overlap(r,bounds);
+    if(rectangle_has_positive_area(b))overlay_render_text_simple(erb,&theme->font_,w->anchor.text,r.x1,r.y1,b,OVERLAY_TEXT_COLOUR_0_);
 }
 
 static widget * text_anchor_widget_select(overlay_theme * theme,widget * w,int x_in,int y_in)

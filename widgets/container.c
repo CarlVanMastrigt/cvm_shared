@@ -110,7 +110,7 @@ static widget_behaviour_function_set container_behaviour_functions=
 
 
 
-void container_widget_render(overlay_data * od,overlay_theme * theme,widget * w,int x_off,int y_off,rectangle_ bounds)
+void container_widget_render(overlay_theme * theme,widget * w,int x_off,int y_off,cvm_overlay_element_render_buffer * erb,rectangle bounds)
 {
     x_off+=w->base.r.x1;
     y_off+=w->base.r.y1;
@@ -119,7 +119,7 @@ void container_widget_render(overlay_data * od,overlay_theme * theme,widget * w,
 
     while(current!=NULL)
     {
-        render_widget(od,current,x_off,y_off,bounds);
+        render_widget(current,x_off,y_off,erb,bounds);
 
         current=current->base.next;
     }

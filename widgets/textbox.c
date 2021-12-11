@@ -151,28 +151,28 @@ static widget_behaviour_function_set textbox_behaviour_functions=
 
 
 
-static void textbox_widget_render(overlay_data * od,overlay_theme * theme,widget * w,int x_off,int y_off,rectangle_ bounds)
+static void textbox_widget_render(overlay_theme * theme,widget * w,int x_off,int y_off,cvm_overlay_element_render_buffer * erb,rectangle bounds)
 {
     char *sb,*se;
 
-    rectangle_ r=rectangle_add_offset(w->base.r,x_off,y_off);
-	theme->box_render(r,w->base.status,theme,od,bounds,OVERLAY_MAIN_COLOUR_);
+    rectangle r=rectangle_add_offset(w->base.r,x_off,y_off);
+	theme->box_render(r,w->base.status,theme,erb,bounds,OVERLAY_MAIN_COLOUR_);
 
 	r.x1+=theme->x_box_offset;
 	r.x2-=theme->x_box_offset;
 	r.y1+=theme->y_box_offset;
 	r.y2-=theme->y_box_offset;
 
-    rectangle_ b=get_rectangle_overlap_(r,bounds);
+    rectangle b=get_rectangle_overlap(r,bounds);
     if(rectangle_has_positive_area(b))
     {
-        if(w->textbox.selection_begin==w->textbox.selection_end)overlay_render_multiline_text(od,&theme->font_,&w->textbox.text_block,r.x1,r.y1-w->textbox.y_offset,b,OVERLAY_TEXT_COLOUR_0_);
+        if(w->textbox.selection_begin==w->textbox.selection_end)overlay_render_multiline_text(erb,&theme->font_,&w->textbox.text_block,r.x1,r.y1-w->textbox.y_offset,b,OVERLAY_TEXT_COLOUR_0_);
         else
         {
             if(w->textbox.selection_end > w->textbox.selection_begin) sb=w->textbox.text+w->textbox.selection_begin, se=w->textbox.text+w->textbox.selection_end;
             else sb=w->textbox.text+w->textbox.selection_end, se=w->textbox.text+w->textbox.selection_begin;
 
-            overlay_render_multiline_text_selection(od,&theme->font_,&w->textbox.text_block,r.x1,r.y1-w->textbox.y_offset,b,OVERLAY_TEXT_COLOUR_0_,sb,se);
+            overlay_render_multiline_text_selection(erb,&theme->font_,&w->textbox.text_block,r.x1,r.y1-w->textbox.y_offset,b,OVERLAY_TEXT_COLOUR_0_,sb,se);
         }
     }
 }
@@ -245,6 +245,8 @@ void change_textbox_text(widget * w,char * new_text,bool owns_new_text)///use re
 
     w->textbox.y_offset=0;
     w->textbox.text_block.line_count=0;
+    w->textbox.selection_begin=0;
+    w->textbox.selection_end=0;
 
     if(w->textbox.min_visible_lines)
     {

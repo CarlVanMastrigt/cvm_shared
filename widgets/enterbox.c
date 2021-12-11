@@ -343,7 +343,7 @@ static widget_behaviour_function_set enterbox_behaviour_functions=
 };
 
 
-static void enterbox_widget_render(overlay_data * od,overlay_theme * theme,widget * w,int x_off,int y_off,rectangle_ bounds)
+static void enterbox_widget_render(overlay_theme * theme,widget * w,int x_off,int y_off,cvm_overlay_element_render_buffer * erb,rectangle bounds)
 {
     if(w->enterbox.update_contents_func && !is_currently_active_widget(w))w->enterbox.update_contents_func(w);
 
@@ -365,16 +365,16 @@ static void enterbox_widget_render(overlay_data * od,overlay_theme * theme,widge
     }
     else visible_offset=w->enterbox.visible_offset;
 
-	rectangle_ r=rectangle_add_offset(w->base.r,x_off,y_off);
-	theme->h_bar_render(r,w->base.status,theme,od,bounds,OVERLAY_MAIN_COLOUR_);
+	rectangle r=rectangle_add_offset(w->base.r,x_off,y_off);
+	theme->h_bar_render(r,w->base.status,theme,erb,bounds,OVERLAY_MAIN_COLOUR_);
 
     r=overlay_simple_text_rectangle(r,theme->font_.glyph_size,theme->h_bar_text_offset);
-    rectangle_ b=get_rectangle_overlap_(r,bounds);
+    rectangle b=get_rectangle_overlap(r,bounds);
     if(rectangle_has_positive_area(b))
     {
         #warning make is_currently_active_widget effectively part of w->base.status, would require setting flags in slightly painful manner but w/e
-        if(is_currently_active_widget(w))overlay_render_text_selection_simple(od,&theme->font_,text,r.x1-visible_offset,r.y1,b,colour,sb,se);
-        else overlay_render_text_simple(od,&theme->font_,text,r.x1-visible_offset,r.y1,b,colour);
+        if(is_currently_active_widget(w))overlay_render_text_selection_simple(erb,&theme->font_,text,r.x1-visible_offset,r.y1,b,colour,sb,se);
+        else overlay_render_text_simple(erb,&theme->font_,text,r.x1-visible_offset,r.y1,b,colour);
     }
 }
 

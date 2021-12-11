@@ -425,12 +425,12 @@ int overlay_size_text_simple(cvm_overlay_font * font,char * text)
     return w;
 }
 
-void overlay_render_text_simple(cvm_overlay_element_render_buffer * erb,cvm_overlay_font * font,char * text,int x,int y,rectangle_ bounds,overlay_colour_ colour)
+void overlay_render_text_simple(cvm_overlay_element_render_buffer * erb,cvm_overlay_font * font,char * text,int x,int y,rectangle bounds,overlay_colour_ colour)
 {
     uint32_t gi,prev_gi,incr;
     FT_Vector kern;
     cvm_overlay_glyph * g;
-    rectangle_ rb,rr;
+    rectangle rb,rr;
 
     prev_gi=0;
 
@@ -457,7 +457,7 @@ void overlay_render_text_simple(cvm_overlay_element_render_buffer * erb,cvm_over
         if(g->tile && erb->count != erb->space)///need to check again as can return null once again;
         {
             rb=rectangle_add_offset(g->pos,x,y);
-            rr=get_rectangle_overlap_(rb,bounds);
+            rr=get_rectangle_overlap(rb,bounds);
 
             if((rectangle_has_positive_area(rr))) erb->buffer[erb->count++]=(cvm_overlay_render_data)
             {
@@ -472,12 +472,12 @@ void overlay_render_text_simple(cvm_overlay_element_render_buffer * erb,cvm_over
     }
 }
 
-void overlay_render_text_selection_simple(cvm_overlay_element_render_buffer * erb,cvm_overlay_font * font,char * text,int x,int y,rectangle_ bounds,overlay_colour_ colour,char * selection_start,char * selection_end)
+void overlay_render_text_selection_simple(cvm_overlay_element_render_buffer * erb,cvm_overlay_font * font,char * text,int x,int y,rectangle bounds,overlay_colour_ colour,char * selection_start,char * selection_end)
 {
     uint32_t gi,prev_gi,incr;
     FT_Vector kern;
     cvm_overlay_glyph * g;
-    rectangle_ rb,rr,rs;
+    rectangle rb,rr,rs;
 
     prev_gi=0;
     rs.y1=y;
@@ -518,7 +518,7 @@ void overlay_render_text_selection_simple(cvm_overlay_element_render_buffer * er
         if(g->tile && erb->count != erb->space)///need to check again as can return null once again;
         {
             rb=rectangle_add_offset(g->pos,x,y);
-            rr=get_rectangle_overlap_(rb,bounds);
+            rr=get_rectangle_overlap(rb,bounds);
 
             if((rectangle_has_positive_area(rr))) erb->buffer[erb->count++]=(cvm_overlay_render_data)
             {
@@ -538,7 +538,7 @@ void overlay_render_text_selection_simple(cvm_overlay_element_render_buffer * er
 
     if(erb->count != erb->space)
     {
-        rs=get_rectangle_overlap_(rs,bounds);
+        rs=get_rectangle_overlap(rs,bounds);
 
         if((rectangle_has_positive_area(rs))) erb->buffer[erb->count++]=(cvm_overlay_render_data)
         {
@@ -704,12 +704,12 @@ void overlay_process_multiline_text(cvm_overlay_font * font,cvm_overlay_text_blo
     block->lines[block->line_count++].finish=text;
 }
 
-void overlay_render_multiline_text(cvm_overlay_element_render_buffer * erb,cvm_overlay_font * font,cvm_overlay_text_block * block,int x,int y,rectangle_ bounds,overlay_colour_ colour)
+void overlay_render_multiline_text(cvm_overlay_element_render_buffer * erb,cvm_overlay_font * font,cvm_overlay_text_block * block,int x,int y,rectangle bounds,overlay_colour_ colour)
 {
     uint32_t i,gi,prev_gi,incr;
     FT_Vector kern;
     cvm_overlay_glyph * g;
-    rectangle_ rb,rr;
+    rectangle rb,rr;
     char *text,*text_end;
     int x_start,first_line;
 
@@ -747,7 +747,7 @@ void overlay_render_multiline_text(cvm_overlay_element_render_buffer * erb,cvm_o
             if(g->tile && erb->count != erb->space)///need to check again as can return null once again;
             {
                 rb=rectangle_add_offset(g->pos,x,y);
-                rr=get_rectangle_overlap_(rb,bounds);
+                rr=get_rectangle_overlap(rb,bounds);
 
                 if((rectangle_has_positive_area(rr))) erb->buffer[erb->count++]=(cvm_overlay_render_data)
                 {
@@ -764,12 +764,12 @@ void overlay_render_multiline_text(cvm_overlay_element_render_buffer * erb,cvm_o
     }
 }
 
-void overlay_render_multiline_text_selection(cvm_overlay_element_render_buffer * erb,cvm_overlay_font * font,cvm_overlay_text_block * block,int x,int y,rectangle_ bounds,overlay_colour_ colour,char * selection_start,char * selection_end)
+void overlay_render_multiline_text_selection(cvm_overlay_element_render_buffer * erb,cvm_overlay_font * font,cvm_overlay_text_block * block,int x,int y,rectangle bounds,overlay_colour_ colour,char * selection_start,char * selection_end)
 {
     uint32_t i,gi,prev_gi,incr;
     FT_Vector kern;
     cvm_overlay_glyph * g;
-    rectangle_ rb,rr,rs;
+    rectangle rb,rr,rs;
     char *text,*text_end;
     int x_start,first_line;
 
@@ -810,7 +810,7 @@ void overlay_render_multiline_text_selection(cvm_overlay_element_render_buffer *
             if(g->tile && erb->count != erb->space)///need to check again as can return null once again;
             {
                 rb=rectangle_add_offset(g->pos,x,y);
-                rr=get_rectangle_overlap_(rb,bounds);
+                rr=get_rectangle_overlap(rb,bounds);
 
                 if((rectangle_has_positive_area(rr))) erb->buffer[erb->count++]=(cvm_overlay_render_data)
                 {
@@ -828,7 +828,7 @@ void overlay_render_multiline_text_selection(cvm_overlay_element_render_buffer *
         {
             rs.y1=y;
             rs.y2=y+font->glyph_size;
-            rs=get_rectangle_overlap_(rs,bounds);
+            rs=get_rectangle_overlap(rs,bounds);
 
             if((rectangle_has_positive_area(rs))) erb->buffer[erb->count++]=(cvm_overlay_render_data)
             {

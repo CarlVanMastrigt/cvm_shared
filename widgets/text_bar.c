@@ -48,7 +48,7 @@ static widget_behaviour_function_set text_bar_behaviour_functions=
 
 
 
-static void text_bar_widget_render(overlay_data * od,overlay_theme * theme,widget * w,int x_off,int y_off,rectangle_ bounds)
+static void text_bar_widget_render(overlay_theme * theme,widget * w,int x_off,int y_off,cvm_overlay_element_render_buffer * erb,rectangle bounds)
 {
 //    int sub_x_off=0;;
 //

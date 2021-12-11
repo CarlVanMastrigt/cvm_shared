@@ -137,7 +137,7 @@ widget * create_button(void * data,widget_function func,bool free_data)
 
 
 
-static void text_button_widget_render(overlay_data * od,overlay_theme * theme,widget * w,int x_off,int y_off,rectangle_ bounds)
+static void text_button_widget_render(overlay_theme * theme,widget * w,int x_off,int y_off,cvm_overlay_element_render_buffer * erb,rectangle bounds)
 {
     char * text=w->button.text;
     overlay_colour c=OVERLAY_MAIN_COLOUR;
@@ -156,12 +156,12 @@ static void text_button_widget_render(overlay_data * od,overlay_theme * theme,wi
         }
     }
 
-    rectangle_ r=rectangle_add_offset(w->base.r,x_off,y_off);
-	theme->h_bar_render(r,w->base.status,theme,od,bounds,c);
+    rectangle r=rectangle_add_offset(w->base.r,x_off,y_off);
+	theme->h_bar_render(r,w->base.status,theme,erb,bounds,c);
 
     r=overlay_simple_text_rectangle(r,theme->font_.glyph_size,theme->h_bar_text_offset);
-    rectangle_ b=get_rectangle_overlap_(r,bounds);
-    if(rectangle_has_positive_area(b))overlay_render_text_simple(od,&theme->font_,text,r.x1,r.y1,b,OVERLAY_TEXT_COLOUR_0_);
+    rectangle b=get_rectangle_overlap(r,bounds);
+    if(rectangle_has_positive_area(b))overlay_render_text_simple(erb,&theme->font_,text,r.x1,r.y1,b,OVERLAY_TEXT_COLOUR_0_);
 }
 
 static widget * text_button_widget_select(overlay_theme * theme,widget * w,int x_in,int y_in)
@@ -257,11 +257,11 @@ widget * create_text_highlight_toggle_button(char * text,void * data,bool free_d
 
 
 
-static void contiguous_text_button_widget_render(overlay_data * od,overlay_theme * theme,widget * w,int x_off,int y_off,rectangle_ bounds)
+static void contiguous_text_button_widget_render(overlay_theme * theme,widget * w,int x_off,int y_off,cvm_overlay_element_render_buffer * erb,rectangle bounds)
 {
     char * text=w->button.text;
 
-    rectangle_ r=rectangle_add_offset(w->base.r,x_off,y_off);
+    rectangle r=rectangle_add_offset(w->base.r,x_off,y_off);
 
     if((w->button.toggle_status)&&(w->button.toggle_status(w)))
     {
@@ -273,13 +273,13 @@ static void contiguous_text_button_widget_render(overlay_data * od,overlay_theme
 
         if(w->button.highlight)
         {
-            theme->h_bar_render(r,w->base.status,theme,od,bounds,OVERLAY_HIGHLIGHTING_COLOUR);
+            theme->h_bar_render(r,w->base.status,theme,erb,bounds,OVERLAY_HIGHLIGHTING_COLOUR);
         }
     }
 
     r=overlay_simple_text_rectangle(r,theme->font_.glyph_size,theme->h_bar_text_offset);
-    rectangle_ b=get_rectangle_overlap_(r,bounds);
-    if(rectangle_has_positive_area(b))overlay_render_text_simple(od,&theme->font_,text,r.x1,r.y1,b,OVERLAY_TEXT_COLOUR_0_);
+    rectangle b=get_rectangle_overlap(r,bounds);
+    if(rectangle_has_positive_area(b))overlay_render_text_simple(erb,&theme->font_,text,r.x1,r.y1,b,OVERLAY_TEXT_COLOUR_0_);
 }
 
 static void contiguous_text_button_widget_min_h(overlay_theme * theme,widget * w)
@@ -333,7 +333,7 @@ widget * create_contiguous_text_highlight_toggle_button(char * text,void * data,
 
 
 
-static void icon_button_widget_render(overlay_data * od,overlay_theme * theme,widget * w,int x_off,int y_off,rectangle_ bounds)
+static void icon_button_widget_render(overlay_theme * theme,widget * w,int x_off,int y_off,cvm_overlay_element_render_buffer * erb,rectangle bounds)
 {
     char * t=w->button.text;
 
@@ -343,7 +343,7 @@ static void icon_button_widget_render(overlay_data * od,overlay_theme * theme,wi
         t++;
     }
 
-    theme->square_icon_render(rectangle_add_offset(w->base.r,x_off,y_off),w->base.status,theme,od,bounds,OVERLAY_MAIN_COLOUR_,t,OVERLAY_TEXT_COLOUR_0_);
+    theme->square_icon_render(rectangle_add_offset(w->base.r,x_off,y_off),w->base.status,theme,erb,bounds,OVERLAY_MAIN_COLOUR_,t,OVERLAY_TEXT_COLOUR_0_);
 }
 
 static widget * icon_button_widget_select(overlay_theme * theme,widget * w,int x_in,int y_in)

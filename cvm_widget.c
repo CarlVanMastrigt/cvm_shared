@@ -31,13 +31,13 @@ bool check_widget_double_clicked(widget * w)
     return (SDL_GetTicks()<(w->base.last_click_time+double_click_time));
 }
 
-void render_widget_overlay(overlay_data * od,widget * menu_widget)
+void render_widget_overlay(cvm_overlay_element_render_buffer * erb,widget * menu_widget)
 {
-    render_widget(od,menu_widget,0,0,menu_widget->base.r);
+    render_widget(menu_widget,0,0,erb,menu_widget->base.r);
 }
 
 
-static void base_widget_render(overlay_data * od,overlay_theme * theme,widget * w,int x_off,int y_off,rectangle_ bounds)
+static void base_widget_render(overlay_theme * theme,widget * w,int x_off,int y_off,cvm_overlay_element_render_buffer * erb,rectangle bounds)
 {
     puts("error calling base: render");
 }
@@ -179,7 +179,7 @@ widget * create_widget(widget_type type)
 
     w->base.parent=NULL;
 
-    w->base.r=(rectangle_){0,0,0,0};
+    w->base.r=(rectangle){0,0,0,0};
 
     w->base.min_w=0;
     w->base.min_h=0;
@@ -351,7 +351,7 @@ void move_toplevel_widget_to_front(widget * w)
 
 
 
-void blank_widget_render(overlay_data * od,overlay_theme * theme,widget * w,int x_off,int y_off,rectangle_ bounds)
+void blank_widget_render(overlay_theme * theme,widget * w,int x_off,int y_off,cvm_overlay_element_render_buffer * erb,rectangle bounds)
 {
 }
 
@@ -480,13 +480,13 @@ void set_currently_active_widget(widget * w)
 }
 
 
-void render_widget(overlay_data * od,widget * w,int x_off,int y_off,rectangle_ bounds)
+void render_widget(widget * w,int x_off,int y_off,cvm_overlay_element_render_buffer * erb,rectangle bounds)
 {
-    rectangle_ r=rectangle_add_offset(w->base.r,x_off,y_off);
+    rectangle r=rectangle_add_offset(w->base.r,x_off,y_off);
 
     if((w)&&(w->base.status&WIDGET_ACTIVE)&&(rectangles_overlap(r,bounds)))
     {
-        w->base.appearence_functions->render(od,current_theme,w,x_off,y_off,bounds);
+        w->base.appearence_functions->render(current_theme,w,x_off,y_off,erb,bounds);
     }
 }
 

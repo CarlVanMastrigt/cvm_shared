@@ -19,13 +19,6 @@ along with cvm_shared.  If not, see <https://www.gnu.org/licenses/>.
 
 #include "cvm_shared.h"
 
-
-
-
-
-
-
-
 static bool contiguous_box_widget_scroll(overlay_theme * theme,widget * w,int delta)
 {
 	*w->contiguous_box.offset += delta*w->contiguous_box.wheel_delta;
@@ -36,12 +29,12 @@ static bool contiguous_box_widget_scroll(overlay_theme * theme,widget * w,int de
 	return true;
 }
 
-void contiguous_box_widget_add_child(widget * w,widget * child)
+static void contiguous_box_widget_add_child(widget * w,widget * child)
 {
     add_child_to_parent(w->contiguous_box.contained_box,child);
 }
 
-void contiguous_box_widget_remove_child(widget * w,widget * child)
+static void contiguous_box_widget_remove_child(widget * w,widget * child)
 {
     //puts("FINISH: contiguous_box_widget_remove_child");
     //remove_child_from_parent()
@@ -49,7 +42,7 @@ void contiguous_box_widget_remove_child(widget * w,widget * child)
     child->base.parent=NULL;
 }
 
-void contiguous_box_widget_delete(widget * w)
+static void contiguous_box_widget_delete(widget * w)
 {
     delete_widget(w->contiguous_box.contained_box);
 }
@@ -73,31 +66,26 @@ static widget_behaviour_function_set contiguous_box_behaviour_functions=
 
 
 
-
-
-
-
-
-void all_visible_contiguous_box_widget_render(overlay_data * od,overlay_theme * theme,widget * w,int x_off,int y_off,rectangle_ bounds)
+static void all_visible_contiguous_box_widget_render(overlay_theme * theme,widget * w,int x_off,int y_off,cvm_overlay_element_render_buffer * erb,rectangle bounds)
 {
-    theme->box_render(rectangle_add_offset(w->base.r,x_off,y_off),w->base.status,theme,od,bounds,OVERLAY_MAIN_COLOUR_);
+    theme->box_render(rectangle_add_offset(w->base.r,x_off,y_off),w->base.status,theme,erb,bounds,OVERLAY_MAIN_COLOUR_);
 
     x_off+=w->base.r.x1;
     y_off+=w->base.r.y1;
 
-    render_widget(od,w->contiguous_box.contained_box,x_off,y_off,bounds);
+    render_widget(w->contiguous_box.contained_box,x_off,y_off,erb,bounds);
 }
 
-void some_visible_contiguous_box_widget_render(overlay_data * od,overlay_theme * theme,widget * w,int x_off,int y_off,rectangle_ bounds)
+static void some_visible_contiguous_box_widget_render(overlay_theme * theme,widget * w,int x_off,int y_off,cvm_overlay_element_render_buffer * erb,rectangle bounds)
 {
-    theme->box_render(rectangle_add_offset(w->base.r,x_off,y_off),w->base.status,theme,od,bounds,OVERLAY_MAIN_COLOUR);
+    theme->box_render(rectangle_add_offset(w->base.r,x_off,y_off),w->base.status,theme,erb,bounds,OVERLAY_MAIN_COLOUR);
 
     x_off+=w->base.r.x1;
     y_off+=w->base.r.y1;
 
     #warning better way to set bounds below?
 
-    bounds=get_rectangle_overlap_(bounds,(rectangle_)
+    bounds=get_rectangle_overlap(bounds,(rectangle)
     {
         .x1=x_off+theme->contiguous_some_box_x_offset,
         .y1=y_off+theme->contiguous_some_box_y_offset,
@@ -105,10 +93,10 @@ void some_visible_contiguous_box_widget_render(overlay_data * od,overlay_theme *
         .y2=y_off+w->base.r.y2-w->base.r.y1-theme->contiguous_some_box_y_offset
     });
 
-    if(rectangle_has_positive_area(bounds))render_widget(od,w->contiguous_box.contained_box,x_off,y_off,bounds);
+    if(rectangle_has_positive_area(bounds))render_widget(w->contiguous_box.contained_box,x_off,y_off,erb,bounds);
 }
 
-widget * contiguous_box_widget_select(overlay_theme * theme,widget * w,int x_in,int y_in)
+static widget * contiguous_box_widget_select(overlay_theme * theme,widget * w,int x_in,int y_in)
 {
     widget * tmp;
 
@@ -125,22 +113,6 @@ widget * contiguous_box_widget_select(overlay_theme * theme,widget * w,int x_in,
 
     return NULL;
 }
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 
 
 

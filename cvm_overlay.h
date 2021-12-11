@@ -101,14 +101,6 @@ cvm_overlay_element_render_buffer;
 */
 
 
-//typedef struct cvm_overlay_theme
-//{
-//    //
-//}
-//cvm_overlay_theme;
-
-
-
 void initialise_overlay_render_data(void);
 void terminate_overlay_render_data(void);
 
@@ -129,44 +121,6 @@ void overlay_destroy_colour_image_tile(cvm_vk_image_atlas_tile * tile);
 #include "cvm_overlay_text.h"
 
 
-
-
-///@todo check if below defines are necessary
-#define BASE_OVERLAY_SPRITE_SIZE 16
-#define NUM_OVERLAY_SPRITE_LEVELS 11
-/// 0=16 10=16k
-
-
-
-typedef struct cvm_glyph
-{
-    int offset;///offset in image
-
-    int width;
-    int bearingX;
-    int advance;
-
-    int kerning[94];
-}
-cvm_glyph;
-
-typedef struct cvm_font
-{
-    GLuint text_image;
-
-    cvm_glyph glyphs[94];
-    int font_size;
-    int space_width;
-    int line_spacing;
-    int font_height;
-    int max_glyph_width;
-
-    char * text_image_pixels;
-    int text_image_width;
-    int text_image_height;
-    int text_image_offset;
-}
-cvm_font;
 
 typedef enum
 {
@@ -201,98 +155,11 @@ typedef enum
 }
 overlay_colour;
 
-typedef struct overlay_render_data
-{
-    GLshort data1[4];
-    GLshort data2[4];
-    GLshort data3[4];
-}
-overlay_render_data;
-
-typedef struct overlay_render_data_
-{
-    uint16_t data1[4];
-    uint16_t data2[4];
-    uint16_t data3[4];
-}
-overlay_render_data_;
-
-typedef struct overlay_data
-{
-    overlay_render_data * data;
-
-    uint32_t space;
-    uint32_t count;
-}
-overlay_data;
-
-/*typedef struct overlay_sprite_data
-{
-    uint32_t type:1;///0=shade 1=coloured
-    uint32_t x_pos:14;///max 8192 =total 335mb
-    uint32_t y_pos:14;
-    uint32_t size_factor:3;///size factor: 1<<size_factor == width/height (min value is 4 usually max is 12)
-
-    char * name;///use (binary ?) search (div 2 test) with ordering
-}
-overlay_sprite_data;*/
-
-typedef enum
-{
-    OVERLAY_SHADED_SPRITE=0,
-    OVERLAY_COLOURED_SPRITE
-}
-overlay_sprite_type;
-
-typedef struct overlay_sprite_data
-{
-    overlay_sprite_type type;
-    int x_pos;
-    int y_pos;
-    uint32_t size_factor;///size factor: 16<<size_factor == width/height (min value is 4 usually max is 12)
-
-    char * name;///use (binary ?) search (div 2 test) with ordering
-}
-overlay_sprite_data;
-
-typedef struct sprite_heirarchy_level
-{
-    int x_positions[3];
-    int y_positions[3];
-
-    int remaining;///0 to 3;
-}
-sprite_heirarchy_level;
-
 
 typedef struct overlay_theme overlay_theme;
 
 struct overlay_theme
 {
-//    char * name;
-
-//    cvm_font font;
-
-//    overlay_sprite_data * sprite_data;
-//    uint32_t sprite_count;
-//    uint32_t sprite_space;
-//
-//    sprite_heirarchy_level shaded_sprite_levels[NUM_OVERLAY_SPRITE_LEVELS];
-//    sprite_heirarchy_level coloured_sprite_levels[NUM_OVERLAY_SPRITE_LEVELS];
-
-//    bool shaded_texture_updated;
-//    GLuint shaded_texture;
-//    uint8_t * shaded_texture_data;
-//    uint32_t shaded_texture_size;
-//    uint32_t shaded_texture_tier;
-
-//    bool coloured_texture_updated;
-//    GLuint coloured_texture;
-//    uint8_t * coloured_texture_data;
-//    uint32_t coloured_texture_size;
-//    uint32_t coloured_texture_tier;
-
-
     cvm_overlay_font font_;
 
     int base_unit_w;
@@ -327,107 +194,43 @@ struct overlay_theme
 
     void * other_data;
 
-    ///remove x_off, y_off, x_in and y_in below by instead just modifying the input rectangles
-    ///replace rectangles with new rectangles
-    /// replace overlay data with new paradigm (element buffer)
+    void    (*square_icon_render)       (rectangle r,uint32_t status,overlay_theme * theme,cvm_overlay_element_render_buffer * erb,rectangle bounds,overlay_colour_ colour,char * icon_glyph,overlay_colour_ icon_colour);
+    void    (*h_bar_render)             (rectangle r,uint32_t status,overlay_theme * theme,cvm_overlay_element_render_buffer * erb,rectangle bounds,overlay_colour_ colour);///just make h_bar?
+    void    (*h_bar_slider_render)      (rectangle r,uint32_t status,overlay_theme * theme,cvm_overlay_element_render_buffer * erb,rectangle bounds,overlay_colour_ colour,int range,int value,int bar);
+    void    (*h_adjactent_slider_render)(rectangle r,uint32_t status,overlay_theme * theme,cvm_overlay_element_render_buffer * erb,rectangle bounds,overlay_colour_ colour,int range,int value,int bar);///usually/always tacked onto box
+    void    (*v_adjactent_slider_render)(rectangle r,uint32_t status,overlay_theme * theme,cvm_overlay_element_render_buffer * erb,rectangle bounds,overlay_colour_ colour,int range,int value,int bar);///usually/always tacked onto box
+    void    (*box_render)               (rectangle r,uint32_t status,overlay_theme * theme,cvm_overlay_element_render_buffer * erb,rectangle bounds,overlay_colour_ colour);
+    void    (*panel_render)             (rectangle r,uint32_t status,overlay_theme * theme,cvm_overlay_element_render_buffer * erb,rectangle bounds,overlay_colour_ colour);
 
-    void    (*square_icon_render)       (rectangle_ r,uint32_t status,overlay_theme * theme,overlay_data * od,rectangle_ bounds,overlay_colour_ colour,char * icon_glyph,overlay_colour_ icon_colour);
-    void    (*h_bar_render)             (rectangle_ r,uint32_t status,overlay_theme * theme,overlay_data * od,rectangle_ bounds,overlay_colour_ colour);///just make h_bar?
-    void    (*h_bar_slider_render)      (rectangle_ r,uint32_t status,overlay_theme * theme,overlay_data * od,rectangle_ bounds,overlay_colour_ colour,int range,int value,int bar);
-    void    (*h_adjactent_slider_render)(rectangle_ r,uint32_t status,overlay_theme * theme,overlay_data * od,rectangle_ bounds,overlay_colour_ colour,int range,int value,int bar);///usually/always tacked onto box
-    void    (*v_adjactent_slider_render)(rectangle_ r,uint32_t status,overlay_theme * theme,overlay_data * od,rectangle_ bounds,overlay_colour_ colour,int range,int value,int bar);///usually/always tacked onto box
-    void    (*box_render)               (rectangle_ r,uint32_t status,overlay_theme * theme,overlay_data * od,rectangle_ bounds,overlay_colour_ colour);
-    void    (*panel_render)             (rectangle_ r,uint32_t status,overlay_theme * theme,overlay_data * od,rectangle_ bounds,overlay_colour_ colour);
-
-    bool    (*square_select)            (rectangle_ r,uint32_t status,overlay_theme * theme);
-    bool    (*h_bar_select)             (rectangle_ r,uint32_t status,overlay_theme * theme);
-    bool    (*box_select)               (rectangle_ r,uint32_t status,overlay_theme * theme);
-    bool    (*panel_select)             (rectangle_ r,uint32_t status,overlay_theme * theme);
+    bool    (*square_select)            (rectangle r,uint32_t status,overlay_theme * theme);
+    bool    (*h_bar_select)             (rectangle r,uint32_t status,overlay_theme * theme);
+    bool    (*box_select)               (rectangle r,uint32_t status,overlay_theme * theme);
+    bool    (*panel_select)             (rectangle r,uint32_t status,overlay_theme * theme);
 };
 
-//bool process_regular_text_character(cvm_font * cf,char prev,char current,int * offset);
-//int get_new_text_offset(cvm_font * cf,char prev,char current,int current_offset);
-//int calculate_text_length(overlay_theme * theme,char * text,int font_index);
-//char * shorten_text_to_fit_width_start_ellipses(overlay_theme * theme,int width,char * text,int font_index,char * buffer,int buffer_size,int * x_offset);
-//char * shorten_text_to_fit_width_end_ellipses(overlay_theme * theme,int width,char * text,int font_index,char * buffer,int buffer_size);
-//
+static inline void cvm_render_shaded_overlay_element(cvm_overlay_element_render_buffer * erb,rectangle r,rectangle b,int x_off,int y_off,overlay_colour_ colour)
+{
+    b=get_rectangle_overlap(r,b);
 
+    if(erb->count != erb->space && rectangle_has_positive_area(b))
+        erb->buffer[erb->count++]=(cvm_overlay_render_data)
+        {
+            {b.x1,b.y1,b.x2,b.y2},
+            {(CVM_OVERLAY_ELEMENT_SHADED<<12)|(colour&0x0FFF),b.x1-r.x1+x_off,b.y1-r.y1+y_off,0/*unused*/},
+        };
+}
 
-//overlay_theme create_overlay_theme(gl_functions * glf,uint32_t shaded_texture_size,uint32_t coloured_texture_size);///make malloced pointer
-//void delete_overlay_theme(overlay_theme * theme);
-//void load_font_to_overlay(gl_functions * glf,overlay_theme * theme,char * ttf_file,int size);
+static inline void cvm_render_fill_overlay_element(cvm_overlay_element_render_buffer * erb,rectangle r,rectangle b,overlay_colour_ colour)
+{
+    b=get_rectangle_overlap(r,b);
 
-//void update_theme_textures_on_videocard(gl_functions * glf,overlay_theme * theme);
-
-
-
-
-
-//typedef enum
-//{
-//    OVERLAY_ELEMENT_RECTANGLE=0,
-//    OVERLAY_ELEMENT_BORDER,
-//    OVERLAY_ELEMENT_CHARACTER,
-//    OVERLAY_ELEMENT_SHADED,
-//    OVERLAY_ELEMENT_COLOURED,
-//
-//    NUM_OVERLAY_ELEMENT_TYPES
-//}
-//overlay_element_type;
-//
-//void initialise_overlay(gl_functions * glf);
-//void render_overlay(gl_functions * glf,overlay_data * od,overlay_theme * theme,int screen_w,int screen_h,vec4f * overlay_colours);
-//
-//
-//
-//
-//
-//
-//void initialise_overlay_data(overlay_data * od);///make malloced pointer instead
-//void delete_overlay_data(overlay_data * od);
-//
-//
-//void ensure_overlay_data_space(overlay_data * od);
-//
-//
-//void render_rectangle(overlay_data * od,rectangle r,rectangle bound,overlay_colour colour_index);
-//void render_border(overlay_data * od,rectangle r,rectangle bound,rectangle discard,overlay_colour colour_index);
-//void render_character(overlay_data * od,rectangle r,rectangle bound,int char_offset,int font_index,overlay_colour colour_index);
-////void render_overlay_element(overlay_data * od,rectangle r,rectangle bound,int source_x,int source_y,overlay_colour main_colour);
-//void render_overlay_shade(overlay_data * od,rectangle r,rectangle bound,int source_x,int source_y,overlay_colour colour);///REMOVE
-//void render_shaded_sprite(overlay_data * od,rectangle r,rectangle bound,int source_x,int source_y,overlay_colour colour);
-//void render_coloured_sprite(overlay_data * od,rectangle r,rectangle bound,int source_x,int source_y);///has own colour and alpha data
-//
-//void upload_overlay_render_datum(overlay_data * od,overlay_render_data * ord);
-//
-////bool check_click_on_overlay_sprite(overlay_theme * theme,rectangle r,overlay_sprite_data osd);
-//bool check_click_on_shaded_sprite(overlay_theme * theme,rectangle r,int sprite_x,int sprite_y);
-//bool check_click_on_coloured_sprite(overlay_theme * theme,rectangle r,int sprite_x,int sprite_y);
-//
-//void render_overlay_text(overlay_data * od,overlay_theme * theme,char * text,int x_off,int y_off,rectangle bounds,int font_index,int colour);
-//
-
-
-
-
-
-
-
-
-
-
-
-
-
-//overlay_sprite_data create_overlay_sprite(overlay_theme * theme,char * name,int max_w,int max_h,overlay_sprite_type type);
-//overlay_sprite_data get_overlay_sprite_data(overlay_theme * theme,char * name);
-//
-//void set_overlay_sprite_image_data(overlay_theme * theme,overlay_sprite_data osd,uint8_t * source_data,int source_w,int w,int h,int x,int y);
-//void set_overlay_sprite_image_data_from_sdl_surface(overlay_theme * theme,overlay_sprite_data osd,SDL_Surface * surface,int w,int h,int x,int y);
-//
-//overlay_sprite_data create_overlay_sprite_from_sdl_surface(overlay_theme * theme,char * name,SDL_Surface * surface,int w,int h,int x,int y,overlay_sprite_type type);
-
-
+    if(erb->count != erb->space && rectangle_has_positive_area(b))
+        erb->buffer[erb->count++]=(cvm_overlay_render_data)
+        {
+            {b.x1,b.y1,b.x2,b.y2},
+            {(CVM_OVERLAY_ELEMENT_FILL<<12)|(colour&0x0FFF),0,0,0/*unused*/},
+        };
+}
 
 #include "themes/cubic.h"
 

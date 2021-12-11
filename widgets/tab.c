@@ -31,18 +31,18 @@ static void tab_button_func(widget * button)
 }
 
 
-static void tab_button_widget_render(overlay_data * od,overlay_theme * theme,widget * w,int x_off,int y_off,rectangle_ bounds)
+static void tab_button_widget_render(overlay_theme * theme,widget * w,int x_off,int y_off,cvm_overlay_element_render_buffer * erb,rectangle bounds)
 {
     widget * page=w->button.data;
 
     if(widget_active(page))/// ???
     {
-        rectangle_ r=rectangle_add_offset(w->base.r,x_off,y_off);
-        if(page->base.parent->tab_folder.current_tab_page==page)theme->h_bar_render(r,w->base.status,theme,od,bounds,OVERLAY_HIGHLIGHTING_COLOUR);
+        rectangle r=rectangle_add_offset(w->base.r,x_off,y_off);
+        if(page->base.parent->tab_folder.current_tab_page==page)theme->h_bar_render(r,w->base.status,theme,erb,bounds,OVERLAY_HIGHLIGHTING_COLOUR);
 
         r=overlay_simple_text_rectangle(r,theme->font_.glyph_size,theme->h_bar_text_offset);
-        rectangle_ b=get_rectangle_overlap_(r,bounds);
-        if(rectangle_has_positive_area(b))overlay_render_text_simple(od,&theme->font_,w->button.text,r.x1,r.y1,b,OVERLAY_TEXT_COLOUR_0_);
+        rectangle b=get_rectangle_overlap(r,bounds);
+        if(rectangle_has_positive_area(b))overlay_render_text_simple(erb,&theme->font_,w->button.text,r.x1,r.y1,b,OVERLAY_TEXT_COLOUR_0_);
     }
 }
 
@@ -192,9 +192,9 @@ static widget_behaviour_function_set tab_folder_behaviour_functions=
 
 
 
-static void tab_folder_widget_render(overlay_data * od,overlay_theme * theme,widget * w,int x_off,int y_off,rectangle_ bounds)
+static void tab_folder_widget_render(overlay_theme * theme,widget * w,int x_off,int y_off,cvm_overlay_element_render_buffer * erb,rectangle bounds)
 {
-    if(w->tab_folder.current_tab_page)render_widget(od,w->tab_folder.current_tab_page,x_off+w->base.r.x1,y_off+w->base.r.y1,bounds);
+    if(w->tab_folder.current_tab_page)render_widget(w->tab_folder.current_tab_page,x_off+w->base.r.x1,y_off+w->base.r.y1,erb,bounds);
 }
 
 static widget * tab_folder_widget_select(overlay_theme * theme,widget * w,int x_in,int y_in)
