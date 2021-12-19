@@ -322,9 +322,9 @@ bool str_lower_cmp(char * s1,char * s2)
 
 static void clear_all_file_search_selection_information(file_search_instance * fsi)
 {
-    fsi->selected_entry=NULL;
-    if(fsi->enterbox)set_enterbox_text(fsi->enterbox,NULL);
-    *fsi->file_box->contiguous_box.offset=fsi->file_box->contiguous_box.max_offset;
+//    fsi->selected_entry=NULL;
+//    if(fsi->enterbox)set_enterbox_text(fsi->enterbox,NULL);
+//    *fsi->file_box->contiguous_box.offset=fsi->file_box->contiguous_box.max_offset;
 }
 
 static void file_search_func(file_search_instance * fsi,bool use_only_enterbox_text)
@@ -643,39 +643,39 @@ static bool file_search_file_currently_valid(file_search_instance * fsi,uint32_t
 
 static void populate_file_search_buttons(file_search_instance * fsi)
 {
-    if(fsi->file_box==NULL)return;
-
-    //widget * file_box=fsi->file_box;
-    widget * current=fsi->file_box->contiguous_box.contained_box->container.first;
-
-
-    fsi->selected_entry=NULL;
-
-    uint32_t i;
-
-    for(i=0;i < fsi->entry_count;i++)
-    {
-        if(file_search_file_currently_valid(fsi,i))
-        {
-            if(current) current->button.index=i;
-            else current=add_child_to_parent(fsi->file_box,create_file_search_list_button(fsi,i));
-
-            current->base.status|=WIDGET_ACTIVE;
-            current->base.appearence_functions=&file_search_button_appearence_functions;
-
-            current=current->base.next;
-        }
-    }
-
-    while(current)
-    {
-        current->base.status&= ~WIDGET_ACTIVE;
-        current=current->base.next;
-    }
-
-    *fsi->file_box->contiguous_box.offset=100000;///will be reverted to contiguous_box.max_offset when actually organised (following will not be fully called if parent widget inactive)
-
-    organise_toplevel_widget(fsi->file_box);
+//    if(fsi->file_box==NULL)return;
+//
+//    //widget * file_box=fsi->file_box;
+//    widget * current=fsi->file_box->contiguous_box.contained_box->container.first;
+//
+//
+//    fsi->selected_entry=NULL;
+//
+//    uint32_t i;
+//
+//    for(i=0;i < fsi->entry_count;i++)
+//    {
+//        if(file_search_file_currently_valid(fsi,i))
+//        {
+//            if(current) current->button.index=i;
+//            else current=add_child_to_parent(fsi->file_box,create_file_search_list_button(fsi,i));
+//
+//            current->base.status|=WIDGET_ACTIVE;
+//            current->base.appearence_functions=&file_search_button_appearence_functions;
+//
+//            current=current->base.next;
+//        }
+//    }
+//
+//    while(current)
+//    {
+//        current->base.status&= ~WIDGET_ACTIVE;
+//        current=current->base.next;
+//    }
+//
+//    *fsi->file_box->contiguous_box.offset=100000;///will be reverted to contiguous_box.max_offset when actually organised (following will not be fully called if parent widget inactive)
+//
+//    organise_toplevel_widget(fsi->file_box);
 }
 
 void set_entry_type(file_search_instance * fsi,uint32_t entry_index)

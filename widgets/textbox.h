@@ -34,8 +34,8 @@ typedef struct widget_textbox
 
     int min_visible_lines;
 
-    int selection_begin;
-    int selection_end;
+    char * selection_begin;
+    char * selection_end;
 
     int min_horizontal_glyphs;
 

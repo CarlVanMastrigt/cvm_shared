@@ -170,24 +170,21 @@ int cvm_overlay_utf8_count_glyphs(char * text)
     return c;
 }
 
-int cvm_overlay_utf8_count_glyphs_outside_range(char * text,int begin,int end)
+int cvm_overlay_utf8_count_glyphs_outside_range(char * text,char * begin,char * end)
 {
-    int i,c,o;
-    o=0;
+    int i,c;
     c=0;
-    while(text[o])
+    while(*text)
     {
-        if(text[o] & 0x80)
+        c+= text<begin || text>=end;
+
+        if(*text & 0x80)
         {
-            for(i=1;text[o] & (0x80 >> i);i++);
+            for(i=1;*text & (0x80 >> i);i++);
 
-            //i+=3*(text[o]==0xEF && text[o+1]==0xB8 && (text[o+2]&0xF0)==0x80);///variation sequences dont count as a glyph
+            text+=i;
         }
-        else i=1;
-
-        c+= o<begin || o>=end;
-
-        o+=i;
+        else text++;
     }
     return c;
 }
@@ -215,49 +212,44 @@ bool cvm_overlay_utf8_validate_string_and_count_glyphs(char * text,int * c)
     return true;
 }
 
-int cvm_overlay_utf8_get_previous_glyph(char * text,int offset)
+char * cvm_overlay_utf8_get_previous_glyph(char * base,char * t)
 {
     //offset-= 3* (offset>2 && text[offset-3]==0xEF && text[offset-2]==0xB8 && (text[offset-1]&0xF0)==0x80);///skip over variation sequence
 
-    if(offset==0)return 0;
+    if(t==base)return base;
 
-    int i,o=offset;///error checking, exclude from final build
+    char *to,*tt;
+    to=t;
 
-    do offset--;
-    while(offset && (text[offset]&0xC0) == 0x80);
+    do t--;
+    while(t!=base && (*t & 0xC0) == 0x80);
 
-    if(text[offset] & 0x80)///error checking, exclude from final build
+    if(*t & 0x80)///error checking, exclude from final build
     {
-        o-=offset;
-        for(i=1;i<o;i++)///0 implicitly checked above
+        for(tt=t+1;tt<to;tt++)///0 implicitly checked above
         {
-            if(!(((uint8_t*)text)[offset]<<i & 0x80))
+            if(!(*((uint8_t*)t)<<(tt-t) & 0x80))
             {
                 fprintf(stderr,"GET PREVIOUS DETECTED INVALID UTF-8 CHAR IN STRING (INVALID LENGTH SPECIFIED)\n");
                 exit(-1);
             }
         }
     }
-    else if(text[offset] & 0x80)
-    {
-        fprintf(stderr,"GET PREVIOUS DETECTED INVALID UTF-8 CHAR IN STRING (LEAD CHARACTER NOT FOUND)\n");
-        exit(-1);
-    }
 
-    return offset;
+    return t;
 }
 
-int cvm_overlay_utf8_get_next_glyph(char * text,int offset)
+char * cvm_overlay_utf8_get_next_glyph(char * t)
 {
-    if(text[offset]=='\0')return offset;
+    if(!*t)return t;
 
-    if(text[offset] & 0x80)
+    if(*t & 0x80)
     {
         int i;
-        for(i=1;text[offset] & (0x80 >> i);i++)
+        for(i=1;*t & (0x80 >> i);i++)
         {
             ///error check, dont put in release version
-            if((text[offset+i]&0xC0) != 0x80)
+            if((t[i]&0xC0) != 0x80)
             {
                 fprintf(stderr,"GET NEXT DETECTED INVALID UTF-8 CHAR IN STRING (TOP BIT MISMATCH)\n");
                 exit(-1);
@@ -270,29 +262,29 @@ int cvm_overlay_utf8_get_next_glyph(char * text,int offset)
             exit(-1);
         }
 
-        offset+=i;
+        t+=i;
 
         //offset+=3*(text[offset]==0xEF && text[offset+1]==0xB8 && (text[offset+2]&0xF0)==0x80);///skip over variation sequence
     }
-    else offset++;
+    else t++;
 
-    return offset;
+    return t;
 }
 
-int cvm_overlay_utf8_get_previous_word(char * text,int offset)
+char * cvm_overlay_utf8_get_previous_word(char * base,char * t)
 {
     /// could/should also match other whitespace characters?
-    while(offset && text[offset-1]==' ')offset--;
-    while(offset && text[offset-1]!=' ')offset--;
-    return offset;
+    while(t!=base && *(t-1)==' ')t--;
+    while(t!=base && *(t-1)!=' ')t--;
+    return t;
 }
 
-int cvm_overlay_utf8_get_next_word(char * text,int offset)
+char * cvm_overlay_utf8_get_next_word(char * t)
 {
     /// could/should also match other whitespace characters?
-    while(text[offset] && text[offset]==' ')offset++;
-    while(text[offset] && text[offset]!=' ')offset++;
-    return offset;
+    while(*t && *t==' ')t++;
+    while(*t && *t!=' ')t++;
+    return t;
 }
 
 static inline cvm_overlay_glyph * cvm_overlay_find_glpyh(cvm_overlay_font * font,uint32_t gi)
@@ -430,7 +422,6 @@ void overlay_render_text_simple(cvm_overlay_element_render_buffer * erb,cvm_over
     uint32_t gi,prev_gi,incr;
     FT_Vector kern;
     cvm_overlay_glyph * g;
-    rectangle rb,rr;
 
     prev_gi=0;
 
@@ -454,17 +445,7 @@ void overlay_render_text_simple(cvm_overlay_element_render_buffer * erb,cvm_over
 
         prev_gi=gi;
 
-        if(g->tile && erb->count != erb->space)///need to check again as can return null once again;
-        {
-            rb=rectangle_add_offset(g->pos,x,y);
-            rr=get_rectangle_overlap(rb,bounds);
-
-            if((rectangle_has_positive_area(rr))) erb->buffer[erb->count++]=(cvm_overlay_render_data)
-            {
-                {rr.x1,rr.y1,rr.x2,rr.y2},
-                {(CVM_OVERLAY_ELEMENT_SHADED<<12)|(colour&0x0FFF),(g->tile->x_pos<<2)+rr.x1-rb.x1,(g->tile->y_pos<<2)+rr.y1-rb.y1,83},
-            };
-        }
+        cvm_render_shaded_overlay_element(erb,rectangle_add_offset(g->pos,x,y),bounds,g->tile->x_pos<<2,g->tile->y_pos<<2,colour);
 
         x+=cvm_overlay_get_glyph_advance(font,g);
 
@@ -477,17 +458,14 @@ void overlay_render_text_selection_simple(cvm_overlay_element_render_buffer * er
     uint32_t gi,prev_gi,incr;
     FT_Vector kern;
     cvm_overlay_glyph * g;
-    rectangle rb,rr,rs;
+    int ss,se;
 
     prev_gi=0;
-    rs.y1=y;
-    rs.y2=y+font->glyph_size;
-    //rs.x1=rs.x2=x;
 
     while(*text)
     {
-        if(text==selection_start) rs.x1=x;
-        if(text==selection_end) rs.x2=x;
+        if(text==selection_start) ss=x;
+        if(text==selection_end) se=x;
 
         if(*text==' ')
         {
@@ -508,58 +486,36 @@ void overlay_render_text_selection_simple(cvm_overlay_element_render_buffer * er
             x+=kern.x>>6;
             if(kern.x)
             {
-                if(text==selection_start) rs.x1=x;
-                if(text==selection_end) rs.x2=x;
+                if(text==selection_start) ss=x;
+                if(text==selection_end) se=x;
             }
         }
 
         prev_gi=gi;
 
-        if(g->tile && erb->count != erb->space)///need to check again as can return null once again;
-        {
-            rb=rectangle_add_offset(g->pos,x,y);
-            rr=get_rectangle_overlap(rb,bounds);
-
-            if((rectangle_has_positive_area(rr))) erb->buffer[erb->count++]=(cvm_overlay_render_data)
-            {
-                {rr.x1,rr.y1,rr.x2,rr.y2},
-                {(CVM_OVERLAY_ELEMENT_SHADED<<12)|(colour&0x0FFF),(g->tile->x_pos<<2)+rr.x1-rb.x1,(g->tile->y_pos<<2)+rr.y1-rb.y1,83},
-            };
-        }
+        cvm_render_shaded_overlay_element(erb,rectangle_add_offset(g->pos,x,y),bounds,g->tile->x_pos<<2,g->tile->y_pos<<2,colour);
 
         x+=cvm_overlay_get_glyph_advance(font,g);
 
         text+=incr;
     }
 
-    if(text==selection_start) rs.x1=x;
-    if(text==selection_end) rs.x2=x;
-    rs.x2+=selection_end==selection_start;
+    if(text==selection_start) ss=x;
+    if(text==selection_end) se=x;
+    se+=selection_end==selection_start;
 
-    if(erb->count != erb->space)
-    {
-        rs=get_rectangle_overlap(rs,bounds);
-
-        if((rectangle_has_positive_area(rs))) erb->buffer[erb->count++]=(cvm_overlay_render_data)
-        {
-            {rs.x1,rs.y1,rs.x2,rs.y2},
-            {(CVM_OVERLAY_ELEMENT_FILL<<12)|(OVERLAY_TEXT_HIGHLIGHT_COLOUR_&0x0FFF),0,0,83},
-        };
-    }
+    cvm_render_fill_overlay_element(erb,(rectangle){.x1=ss,.y1=y,.x2=se,.y2=y+font->glyph_size},bounds,OVERLAY_TEXT_HIGHLIGHT_COLOUR_);
 }
 
-int overlay_text_find_offset_simple(cvm_overlay_font * font,char * text,int relative_x)
+char * overlay_text_find_offset_simple(cvm_overlay_font * font,char * text,int relative_x)
 {
     uint32_t gi,prev_gi,incr;
     FT_Vector kern;
     cvm_overlay_glyph * g;
-    char * text_start;
     int x,a;
 
     prev_gi=0;
     x=0;
-
-    text_start=text;
 
     while(*text)
     {
@@ -589,31 +545,7 @@ int overlay_text_find_offset_simple(cvm_overlay_font * font,char * text,int rela
         text+=incr;
     }
 
-    return text-text_start;
-}
-
-cvm_overlay_glyph * overlay_get_glyph(cvm_overlay_element_render_buffer * erb,cvm_overlay_font * font,char * text)
-{
-    uint32_t gi,incr;
-    cvm_overlay_glyph * g;
-
-    g=NULL;
-
-    if(*text && *text!=' ')
-    {
-        gi=cvm_overlay_get_utf8_glyph_index(font->face,(uint8_t*)text,&incr);
-
-        g=cvm_overlay_find_glpyh(font,gi);
-
-        cvm_overlay_prepare_glyph_render_data(erb,font,g);
-
-        if(text[incr])
-        {
-            fprintf(stderr,"TRYING TO GET SINGLE GLYPH FOR STRING WITH MORE THAN ONE: %s\n",text);
-        }
-    }
-
-    return g;
+    return text;
 }
 
 void overlay_process_multiline_text(cvm_overlay_font * font,cvm_overlay_text_block * block,char * text,int wrapping_width)
@@ -709,7 +641,6 @@ void overlay_render_multiline_text(cvm_overlay_element_render_buffer * erb,cvm_o
     uint32_t i,gi,prev_gi,incr;
     FT_Vector kern;
     cvm_overlay_glyph * g;
-    rectangle rb,rr;
     char *text,*text_end;
     int x_start,first_line;
 
@@ -744,17 +675,7 @@ void overlay_render_multiline_text(cvm_overlay_element_render_buffer * erb,cvm_o
 
             prev_gi=gi;
 
-            if(g->tile && erb->count != erb->space)///need to check again as can return null once again;
-            {
-                rb=rectangle_add_offset(g->pos,x,y);
-                rr=get_rectangle_overlap(rb,bounds);
-
-                if((rectangle_has_positive_area(rr))) erb->buffer[erb->count++]=(cvm_overlay_render_data)
-                {
-                    {rr.x1,rr.y1,rr.x2,rr.y2},
-                    {(CVM_OVERLAY_ELEMENT_SHADED<<12)|(colour&0x0FFF),(g->tile->x_pos<<2)+rr.x1-rb.x1,(g->tile->y_pos<<2)+rr.y1-rb.y1,83},
-                };
-            }
+            cvm_render_shaded_overlay_element(erb,rectangle_add_offset(g->pos,x,y),bounds,g->tile->x_pos<<2,g->tile->y_pos<<2,colour);
 
             x+=cvm_overlay_get_glyph_advance(font,g);
         }
@@ -769,12 +690,11 @@ void overlay_render_multiline_text_selection(cvm_overlay_element_render_buffer *
     uint32_t i,gi,prev_gi,incr;
     FT_Vector kern;
     cvm_overlay_glyph * g;
-    rectangle rb,rr,rs;
     char *text,*text_end;
-    int x_start,first_line;
+    int x_start,first_line,ss,se;
 
     prev_gi=0;
-    rs.x1=rs.x2=x_start=x;
+    ss=se=x_start=x;
 
     first_line=(bounds.y1-y)/font->line_spacing;
     first_line*=first_line>0;
@@ -786,8 +706,8 @@ void overlay_render_multiline_text_selection(cvm_overlay_element_render_buffer *
 
         for(text=block->lines[i].start;text<text_end;text+=incr)
         {
-            if(text==selection_start) rs.x1=x;
-            if(text==selection_end) rs.x2=x;
+            if(text==selection_start) ss=x;
+            if(text==selection_end) se=x;
 
             if(*text==' ')
             {
@@ -803,40 +723,29 @@ void overlay_render_multiline_text_selection(cvm_overlay_element_render_buffer *
 
             cvm_overlay_prepare_glyph_render_data(erb,font,g);
 
-            if(prev_gi && !FT_Get_Kerning(font->face,prev_gi,gi,0,&kern)) x+=kern.x>>6;
+            if(prev_gi && !FT_Get_Kerning(font->face,prev_gi,gi,0,&kern))
+            {
+                x+=kern.x>>6;
+                if(kern.x)
+                {
+                    if(text==selection_start) ss=x;
+                    if(text==selection_end) se=x;
+                }
+            }
 
             prev_gi=gi;
 
-            if(g->tile && erb->count != erb->space)///need to check again as can return null once again;
-            {
-                rb=rectangle_add_offset(g->pos,x,y);
-                rr=get_rectangle_overlap(rb,bounds);
-
-                if((rectangle_has_positive_area(rr))) erb->buffer[erb->count++]=(cvm_overlay_render_data)
-                {
-                    {rr.x1,rr.y1,rr.x2,rr.y2},
-                    {(CVM_OVERLAY_ELEMENT_SHADED<<12)|(colour&0x0FFF),(g->tile->x_pos<<2)+rr.x1-rb.x1,(g->tile->y_pos<<2)+rr.y1-rb.y1,83},
-                };
-            }
+            cvm_render_shaded_overlay_element(erb,rectangle_add_offset(g->pos,x,y),bounds,g->tile->x_pos<<2,g->tile->y_pos<<2,colour);
 
             x+=cvm_overlay_get_glyph_advance(font,g);
         }
 
-        if(text>selection_start && text<=selection_end)rs.x2=x;
+        if(text>selection_start && text<=selection_end)se=x;
 
-        if(rs.x1!=rs.x2 && erb->count != erb->space)
+        if(ss!=se)
         {
-            rs.y1=y;
-            rs.y2=y+font->glyph_size;
-            rs=get_rectangle_overlap(rs,bounds);
-
-            if((rectangle_has_positive_area(rs))) erb->buffer[erb->count++]=(cvm_overlay_render_data)
-            {
-                {rs.x1,rs.y1,rs.x2,rs.y2},
-                {(CVM_OVERLAY_ELEMENT_FILL<<12)|(OVERLAY_TEXT_HIGHLIGHT_COLOUR_&0x0FFF),0,0,83},
-            };
-
-            rs.x1=rs.x2=x_start;
+            cvm_render_fill_overlay_element(erb,(rectangle){.x1=ss,.y1=y,.x2=se,.y2=y+font->glyph_size},bounds,OVERLAY_TEXT_HIGHLIGHT_COLOUR_);
+            ss=se=x_start;
         }
 
         x=x_start;
@@ -844,7 +753,7 @@ void overlay_render_multiline_text_selection(cvm_overlay_element_render_buffer *
     }
 }
 
-int overlay_find_multiline_text_offset(cvm_overlay_font * font,cvm_overlay_text_block * block,char * text_base,int relative_x,int relative_y)
+char * overlay_find_multiline_text_offset(cvm_overlay_font * font,cvm_overlay_text_block * block,int relative_x,int relative_y)
 {
     uint32_t gi,prev_gi,incr;
     FT_Vector kern;
@@ -856,7 +765,7 @@ int overlay_find_multiline_text_offset(cvm_overlay_font * font,cvm_overlay_text_
     x=0;
 
     if(relative_y<0)return 0;
-    if(relative_y > (block->line_count-1)*font->line_spacing+font->glyph_size) return block->lines[block->line_count-1].finish-text_base;
+    if(relative_y > (block->line_count-1)*font->line_spacing+font->glyph_size) return block->lines[block->line_count-1].finish;
 
     line=relative_y/font->line_spacing;
 
@@ -888,9 +797,50 @@ int overlay_find_multiline_text_offset(cvm_overlay_font * font,cvm_overlay_text_
         x+=a;
     }
 
-    return text-text_base;
+    return text;
 }
 
+
+
+cvm_overlay_glyph * overlay_get_glyph(cvm_overlay_element_render_buffer * erb,cvm_overlay_font * font,char * text)
+{
+    uint32_t gi,incr;
+    cvm_overlay_glyph * g;
+
+    g=NULL;
+
+    if(*text && *text!=' ')
+    {
+        gi=cvm_overlay_get_utf8_glyph_index(font->face,(uint8_t*)text,&incr);
+
+        g=cvm_overlay_find_glpyh(font,gi);
+
+        cvm_overlay_prepare_glyph_render_data(erb,font,g);
+
+        if(text[incr])
+        {
+            fprintf(stderr,"TRYING TO GET SINGLE GLYPH FOR STRING WITH MORE THAN ONE: %s\n",text);
+        }
+    }
+
+    return g;
+}
+
+void overlay_render_centred_glyph(cvm_overlay_element_render_buffer * erb,cvm_overlay_font * font,char * icon_glyph,rectangle r,rectangle bounds,overlay_colour_ colour)
+{
+    cvm_overlay_glyph * g;
+
+    g=overlay_get_glyph(erb,font,icon_glyph);
+
+    if(!g->tile)return;
+
+    r.y1=((r.y1+r.y2)>>1) - ((g->pos.y2-g->pos.y1+1)>>1);
+    r.y2=r.y1+g->pos.y2-g->pos.y1;
+    r.x1=((r.x1+r.x2)>>1) - ((g->pos.x2-g->pos.x1+1)>>1);
+    r.x2=r.x1+g->pos.x2-g->pos.x1;
+
+    cvm_render_shaded_overlay_element(erb,r,bounds,g->tile->x_pos<<2,g->tile->y_pos<<2,colour);
+}
 
 
 

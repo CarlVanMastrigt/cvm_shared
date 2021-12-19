@@ -428,7 +428,7 @@ static void create_overlay_pipelines(VkRect2D screen_rectangle)
                 },
                 .vertexAttributeDescriptionCount=0,
                 .pVertexAttributeDescriptions=NULL,
-                .vertexAttributeDescriptionCount=2,//3
+                .vertexAttributeDescriptionCount=3,
                 .pVertexAttributeDescriptions=(VkVertexInputAttributeDescription[3])
                 {
                     {
@@ -443,12 +443,12 @@ static void create_overlay_pipelines(VkRect2D screen_rectangle)
                         .format=VK_FORMAT_R16G16B16A16_UINT,
                         .offset=offsetof(cvm_overlay_render_data,data1)
                     },
-//                    {
-//                        .location=2,
-//                        .binding=0,
-//                        .format=VK_FORMAT_R16G16B16A16_UINT,
-//                        .offset=offsetof(cvm_overlay_render_data,data2)
-//                    }
+                    {
+                        .location=2,
+                        .binding=0,
+                        .format=VK_FORMAT_R16G16B16A16_UINT,
+                        .offset=offsetof(cvm_overlay_render_data,data2)
+                    }
                 }
             }
         },
@@ -882,10 +882,22 @@ float overlay_colours[OVERLAY_NUM_COLOURS_*4]=
     0.24,0.24,0.6,0.9,///OVERLAY_BACKGROUND_COLOUR
     0.12,0.12,0.36,0.85,///OVERLAY_MAIN_COLOUR
     0.12,0.12,0.48,0.85,///OVERLAY_MAIN_ALTERNATE_COLOUR
+    0.0,0.9,1.0,0.3,///OVERLAY_HIGHLIGHTING_COLOUR
     0.4,0.6,0.9,0.3,///OVERLAY_TEXT_HIGHLIGHT_COLOUR_
     0.2,0.3,1.0,0.8,///OVERLAY_TEXT_COMPOSITION_COLOUR_0_
     0.4,0.6,0.9,0.8,///OVERLAY_TEXT_COLOUR_0
 };
+
+//float overlay_colours[OVERLAY_NUM_COLOURS_*4]=
+//{
+//    0.1,0.1,1.0,1.0,///OVERLAY_NO_COLOUR (error)
+//    0.05,0.05,0.05,0.9,///OVERLAY_BACKGROUND_COLOUR
+//    0.8,0.15,0.15,0.85,///OVERLAY_MAIN_COLOUR
+//    0.8,0.1,0.1,0.85,///OVERLAY_MAIN_ALTERNATE_COLOUR
+//    0.05,0.05,0.05,0.3,///OVERLAY_TEXT_HIGHLIGHT_COLOUR_
+//    0.3,0.05,0.05,0.9,///OVERLAY_TEXT_COMPOSITION_COLOUR_0_
+//    0.05,0.05,0.05,0.9,///OVERLAY_TEXT_COLOUR_0
+//};
 
 /// texel buffers for overlay colours are probably NOT the best solution as they would potentially require creating a buffer view every frame (if offset changes) or a least a buffer view per swapchain image
 
@@ -943,8 +955,9 @@ cvm_vk_module_work_block * overlay_render_frame(int screen_w,int screen_h,widget
 
         //str="The attempt to impose upon man, a creature of growth and capable of sweetness, to ooze juicily at the last round the bearded lips of God, to attempt to impose, I say, laws and conditions appropriate to a mechanical creation, against this I raise my sword-pen.";
         //str="This planet has - or rather had - a problem, which was this: most of the people living on it were unhappy for pretty much of the time. Many solutions were suggested for this problem, but most of these were largely concerned with the movement of small green pieces of paper, which was odd because on the whole it wasn't the small green pieces of paper that were unhappy.";
-
+        //test_timing(true,NULL);
         render_widget_overlay(&element_render_buffer,menu_widget);
+        //test_timing(false,"overlay");
 
         CVM_TMP_vkCmdPipelineBarrier2KHR(work_block->graphics_work,&overlay_transfer_to_graphics_dependencies);
 
@@ -1073,7 +1086,6 @@ void overlay_destroy_colour_image_tile(cvm_vk_image_atlas_tile * tile)
 {
     //
 }
-
 
 
 

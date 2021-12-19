@@ -244,10 +244,10 @@ void get_widgets_global_coordinates(widget * w,int * x,int * y)
 
     while(w->base.parent!=NULL)
     {
+        w=w->base.parent;
+
         *x+=w->base.r.x1;
         *y+=w->base.r.y1;
-
-        w=w->base.parent;
     }
 }
 

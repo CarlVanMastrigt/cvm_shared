@@ -24,7 +24,7 @@ void blank_enterbox_function(widget * w)
     printf("blank enterbox: %s\n",w->enterbox.text);
 }
 
-static inline void enterbox_delete_selection(widget * w,int s_begin,int s_end)
+static inline void enterbox_delete_selection(widget * w,char * s_begin,char * s_end)
 {
     if(s_begin>s_end)
     {
@@ -34,13 +34,13 @@ static inline void enterbox_delete_selection(widget * w,int s_begin,int s_end)
 
     if(s_begin!=s_end)
     {
-        memmove(w->enterbox.text + s_begin,w->enterbox.text + s_end,strlen(w->enterbox.text + s_end) + 1);/// +1 for null terminating character
+        memmove(s_begin,s_end,strlen(s_end) + 1);/// +1 for null terminating character
     }
 }
 
 static void enterbox_copy_selection_to_clipboard(widget * w)
 {
-    int s_begin,s_end;
+    char *s_begin,*s_end;
     char tmp;
 
     if(w->enterbox.selection_end > w->enterbox.selection_begin) s_begin=w->enterbox.selection_begin, s_end=w->enterbox.selection_end;
@@ -50,12 +50,12 @@ static void enterbox_copy_selection_to_clipboard(widget * w)
     /// copy all contents if nothing selected?
     if(s_begin!=s_end)
     {
-        tmp=w->enterbox.text[s_end];
-        w->enterbox.text[s_end]='\0';
+        tmp=*s_end;
+        *s_end='\0';
 
-        SDL_SetClipboardText(w->enterbox.text+s_begin);
+        SDL_SetClipboardText(s_begin);
 
-        w->enterbox.text[s_end]=tmp;
+        *s_end=tmp;
     }
     else if(*w->enterbox.text)///not empty
     {
@@ -66,7 +66,8 @@ static void enterbox_copy_selection_to_clipboard(widget * w)
 /// perhaps return pass/fail such that enterbox can flash/fade a colour upon failure
 static void enterbox_enter_text(widget * w,char * text)
 {
-    int s_begin,s_end,new_glyph_count,new_strlen;
+    char *s_begin,*s_end;
+    int new_glyph_count,new_strlen;
 
     if(w->enterbox.selection_end > w->enterbox.selection_begin) s_begin=w->enterbox.selection_begin, s_end=w->enterbox.selection_end;
     else s_begin=w->enterbox.selection_end, s_end=w->enterbox.selection_begin;
@@ -78,8 +79,8 @@ static void enterbox_enter_text(widget * w,char * text)
         strlen(w->enterbox.text) + s_begin - s_end + new_strlen <= w->enterbox.max_strlen)
         /// adding the new chars while replacing the old ones wont exceed limit
     {
-        memmove(w->enterbox.text + s_begin + new_strlen,w->enterbox.text + s_end,strlen(w->enterbox.text + s_end) + 1);/// +1 for null terminating character
-        memcpy(w->enterbox.text + s_begin,text,new_strlen);
+        memmove(s_begin + new_strlen,s_end,strlen(s_end) + 1);/// +1 for null terminating character
+        memcpy(s_begin,text,new_strlen);
         w->enterbox.selection_begin = w->enterbox.selection_end = s_begin + new_strlen;
     }
 }
@@ -91,12 +92,12 @@ static void enterbox_check_visible_offset(widget * w,overlay_theme * theme)
 
     text_space=w->base.r.x2-w->base.r.x1-2*theme->h_bar_text_offset-1;
 
-    tmp=w->enterbox.text[w->enterbox.selection_end];
-    w->enterbox.text[w->enterbox.selection_end]='\0';
+    tmp=*w->enterbox.selection_end;
+    *w->enterbox.selection_end='\0';
 
     current_offset=overlay_size_text_simple(&theme->font_,w->enterbox.text);
 
-    w->enterbox.text[w->enterbox.selection_end]=tmp;
+    *w->enterbox.selection_end=tmp;
 
     if(w->enterbox.visible_offset>current_offset) w->enterbox.visible_offset=current_offset;
     if(w->enterbox.visible_offset+text_space<current_offset) w->enterbox.visible_offset=current_offset-text_space;
@@ -109,7 +110,7 @@ static void enterbox_check_visible_offset(widget * w,overlay_theme * theme)
 
 static bool enterbox_widget_key_down(overlay_theme * theme,widget * w,SDL_Keycode keycode,SDL_Keymod mod)
 {
-    int s_begin,s_end,s;
+    char *s_begin,*s_end,*s;
 
     if(w->enterbox.selection_end > w->enterbox.selection_begin) s_begin=w->enterbox.selection_begin, s_end=w->enterbox.selection_end;
     else s_begin=w->enterbox.selection_end, s_end=w->enterbox.selection_begin;
@@ -145,15 +146,15 @@ static bool enterbox_widget_key_down(overlay_theme * theme,widget * w,SDL_Keycod
     case SDLK_a:
         if(mod&KMOD_CTRL)
         {
-            w->enterbox.selection_begin=0;
-            w->enterbox.selection_end=strlen(w->enterbox.text);
+            w->enterbox.selection_begin=w->enterbox.text;
+            w->enterbox.selection_end=w->enterbox.text+strlen(w->enterbox.text);
         }
         break;
 
     case SDLK_BACKSPACE:
         if(mod&KMOD_CTRL)
         {
-            if(mod&KMOD_SHIFT)s=0;
+            if(mod&KMOD_SHIFT)s=w->textbox.text;
             else s=cvm_overlay_utf8_get_previous_word(w->enterbox.text,w->enterbox.selection_end);
 
             if(w->enterbox.selection_begin > w->enterbox.selection_end) w->enterbox.selection_begin-=w->enterbox.selection_end-s;
@@ -174,8 +175,8 @@ static bool enterbox_widget_key_down(overlay_theme * theme,widget * w,SDL_Keycod
     case SDLK_DELETE:
         if(mod&KMOD_CTRL)
         {
-            if(mod&KMOD_SHIFT)s=strlen(w->enterbox.text);
-            else s=cvm_overlay_utf8_get_next_word(w->enterbox.text,w->enterbox.selection_end);
+            if(mod&KMOD_SHIFT)s=w->enterbox.text+strlen(w->enterbox.text);
+            else s=cvm_overlay_utf8_get_next_word(w->enterbox.selection_end);
 
             if(w->enterbox.selection_begin > w->enterbox.selection_end)
             {
@@ -187,7 +188,7 @@ static bool enterbox_widget_key_down(overlay_theme * theme,widget * w,SDL_Keycod
         }
         else
         {
-            if(s_begin==s_end) s_end=cvm_overlay_utf8_get_next_glyph(w->enterbox.text,s_end);
+            if(s_begin==s_end) s_end=cvm_overlay_utf8_get_next_glyph(s_end);
             enterbox_delete_selection(w,s_begin,s_end);
             w->enterbox.selection_begin = w->enterbox.selection_end = s_begin;
         }
@@ -196,10 +197,10 @@ static bool enterbox_widget_key_down(overlay_theme * theme,widget * w,SDL_Keycod
     case SDLK_LEFT:
         if(mod&KMOD_CTRL)///can move based on ctrl (jump word),  then set to same based on shift
         {
-            if(mod&KMOD_SHIFT) w->enterbox.selection_end=cvm_overlay_utf8_get_previous_word(w->enterbox.text,w->enterbox.selection_end);
+            if(mod&KMOD_SHIFT) w->enterbox.selection_end = cvm_overlay_utf8_get_previous_word(w->enterbox.text,w->enterbox.selection_end);
             else w->enterbox.selection_begin = w->enterbox.selection_end = cvm_overlay_utf8_get_previous_word(w->enterbox.text,w->enterbox.selection_end);
         }
-        else if(mod&KMOD_SHIFT)w->enterbox.selection_end=cvm_overlay_utf8_get_previous_glyph(w->enterbox.text,w->enterbox.selection_end);
+        else if(mod&KMOD_SHIFT)w->enterbox.selection_end = cvm_overlay_utf8_get_previous_glyph(w->enterbox.text,w->enterbox.selection_end);
         else if(s_begin==s_end) w->enterbox.selection_begin = w->enterbox.selection_end = cvm_overlay_utf8_get_previous_glyph(w->enterbox.text,s_begin);
         else w->enterbox.selection_begin = w->enterbox.selection_end = s_begin;
         break;
@@ -207,24 +208,24 @@ static bool enterbox_widget_key_down(overlay_theme * theme,widget * w,SDL_Keycod
     case SDLK_RIGHT:
         if(mod&KMOD_CTRL)
         {
-            if(mod&KMOD_SHIFT) w->enterbox.selection_end=cvm_overlay_utf8_get_next_word(w->enterbox.text,w->enterbox.selection_end);
-            else w->enterbox.selection_begin = w->enterbox.selection_end = cvm_overlay_utf8_get_next_word(w->enterbox.text,w->enterbox.selection_end);
+            if(mod&KMOD_SHIFT) w->enterbox.selection_end = cvm_overlay_utf8_get_next_word(w->enterbox.selection_end);
+            else w->enterbox.selection_begin = w->enterbox.selection_end = cvm_overlay_utf8_get_next_word(w->enterbox.selection_end);
         }
-        else if(mod&KMOD_SHIFT) w->enterbox.selection_end=cvm_overlay_utf8_get_next_glyph(w->enterbox.text,w->enterbox.selection_end);
-        else if(s_begin==s_end) w->enterbox.selection_begin = w->enterbox.selection_end = cvm_overlay_utf8_get_next_glyph(w->enterbox.text,s_end);
+        else if(mod&KMOD_SHIFT) w->enterbox.selection_end = cvm_overlay_utf8_get_next_glyph(w->enterbox.selection_end);
+        else if(s_begin==s_end) w->enterbox.selection_begin = w->enterbox.selection_end = cvm_overlay_utf8_get_next_glyph(s_end);
         else w->enterbox.selection_begin = w->enterbox.selection_end = s_end;
         break;
 
     case SDLK_UP:
     case SDLK_HOME:
-        if(mod&KMOD_SHIFT) w->enterbox.selection_end = 0;
-        else w->enterbox.selection_begin = w->enterbox.selection_end = 0;
+        if(mod&KMOD_SHIFT) w->enterbox.selection_end = w->enterbox.text;
+        else w->enterbox.selection_begin = w->enterbox.selection_end = w->enterbox.text;
         break;
 
     case SDLK_DOWN:
     case SDLK_END:
-        if(mod&KMOD_SHIFT) w->enterbox.selection_end = strlen(w->enterbox.text);
-        else w->enterbox.selection_begin = w->enterbox.selection_end = strlen(w->enterbox.text);
+        if(mod&KMOD_SHIFT) w->enterbox.selection_end = w->enterbox.text+strlen(w->enterbox.text);
+        else w->enterbox.selection_begin = w->enterbox.selection_end = w->enterbox.text+strlen(w->enterbox.text);
         break;
 
     case SDLK_RETURN:
@@ -353,8 +354,8 @@ static void enterbox_widget_render(overlay_theme * theme,widget * w,int x_off,in
 
     text=w->enterbox.text;
 
-    if(w->enterbox.selection_end > w->enterbox.selection_begin) sb=text+w->enterbox.selection_begin, se=text+w->enterbox.selection_end;
-    else sb=text+w->enterbox.selection_end, se=text+w->enterbox.selection_begin;
+    if(w->enterbox.selection_end > w->enterbox.selection_begin) sb=w->enterbox.selection_begin, se=w->enterbox.selection_end;
+    else sb=w->enterbox.selection_end, se=w->enterbox.selection_begin;
 
 	if(*w->enterbox.composition_text)
     {
@@ -459,8 +460,8 @@ void set_enterbox_text(widget * w,char * text)
     else w->enterbox.text[0]='\0';
 
     w->enterbox.visible_offset=0;
-    w->enterbox.selection_begin=0;
-    w->enterbox.selection_end=0;
+    w->enterbox.selection_begin=w->enterbox.text;
+    w->enterbox.selection_end=w->enterbox.text;
 }
 
 void set_enterbox_action_upon_input(widget * w,widget_function func)

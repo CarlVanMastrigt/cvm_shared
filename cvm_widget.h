@@ -32,8 +32,9 @@ along with cvm_shared.  If not, see <https://www.gnu.org/licenses/>.
 #define WIDGET_ACTIVE               0x00000001
 #define WIDGET_REQUIRES_RENDERING   0x00000002 /** used to specify completely transparent widgets overlaid over more complex game elements */
 #define WIDGET_CLOSE_POPUP_TREE     0x00000004 /** does not collapse parent popup hierarchy upon interaction (e.g. toggle buttons, popup triggering buttons, enterboxes, scrollbars and slider_bars)  */
-#define WIDGET_IS_MENU              0x00000040 /** used for testing find_toplevel_ancestor worked (is parent-child structure correct) */
-#define WIDGET_IS_AUTO_CLOSE_POPUP  0x00000080
+#define WIDGET_IS_MENU              0x00000010 /** used for testing find_toplevel_ancestor worked (is parent-child structure correct) */
+#define WIDGET_IS_AUTO_CLOSE_POPUP  0x00000020
+#define WIDGET_IS_CONTIGUOUS_BOX    0x00000040
 
 #define WIDGET_H_FIRST  0x10000000
 #define WIDGET_H_LAST   0x20000000

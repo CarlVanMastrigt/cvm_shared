@@ -33,16 +33,16 @@ typedef struct widget_contiguous_box
     widget_base base;
 
     int min_display_count;///if 0 display all
-    int visible_size;
-    int * offset;///when min_display_count only
-    int max_offset;
-    int min_offset;
-    int wheel_delta;///used for scrolling
+//    int visible_size;
+    //int * offset;///when min_display_count only
+//    int max_offset;
+//    int min_offset;
+//    int wheel_delta;///used for scrolling
 
-    widget_layout layout;
+    ///widget_layout layout;///this appers to have never been used...
 
-    widget_dimension_function default_min_w;
-    widget_dimension_function default_min_h;
+//    widget_dimension_function default_min_w;
+//    widget_dimension_function default_min_h;
 
     ///set wheel delta using min nonzero button/content width/height
 
@@ -56,6 +56,8 @@ void set_contiguous_box_default_contained_dimensions(widget * contiguous_box,wid
 
 void ensure_widget_in_contiguous_box_is_visible(widget * w,widget * cb);
 widget * create_contiguous_box_scrollbar(widget * box);
+
+bool get_ancestor_contiguous_box_data(widget * w,rectangle * r,uint32_t * status);
 
 #endif
 

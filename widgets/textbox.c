@@ -20,6 +20,36 @@ along with cvm_shared.  If not, see <https://www.gnu.org/licenses/>.
 #include "cvm_shared.h"
 
 
+static void textbox_check_visible_offset(widget * w,overlay_theme * theme)
+{
+    int i;
+    for(i=0;i<w->textbox.text_block.line_count && w->textbox.selection_end > w->textbox.text_block.lines[i].finish;i++);
+
+    if(w->textbox.y_offset > i*theme->font_.line_spacing) w->textbox.y_offset = i*theme->font_.line_spacing;
+    if(w->textbox.y_offset < i*theme->font_.line_spacing+theme->font_.glyph_size-w->textbox.visible_size) w->textbox.y_offset = i*theme->font_.line_spacing+theme->font_.glyph_size-w->textbox.visible_size;
+}
+
+static void textbox_copy_selection_to_clipboard(widget * w)
+{
+    char *s_begin,*s_end;
+    char tmp;
+
+    if(w->textbox.selection_end > w->textbox.selection_begin) s_begin=w->textbox.selection_begin, s_end=w->textbox.selection_end;
+    else s_begin=w->textbox.selection_end, s_end=w->textbox.selection_begin;
+
+    if(s_begin!=s_end)
+    {
+        tmp=*s_end;
+        *s_end='\0';
+
+        SDL_SetClipboardText(s_begin);
+
+        *s_end=tmp;
+    }
+}
+
+
+
 
 
 
@@ -36,8 +66,8 @@ static bool textbox_widget_scroll(overlay_theme * theme,widget * w,int delta)
 static void textbox_widget_left_click(overlay_theme * theme,widget * w,int x,int y)
 {
     adjust_coordinates_to_widget_local(w,&x,&y);
-    w->textbox.selection_end=w->textbox.selection_begin=overlay_find_multiline_text_offset(&theme->font_,&w->textbox.text_block,w->textbox.text,
-        x-theme->x_box_offset-w->textbox.x_offset,y-theme->y_box_offset-w->textbox.y_offset);
+    w->textbox.selection_end=w->textbox.selection_begin=overlay_find_multiline_text_offset(&theme->font_,&w->textbox.text_block,
+        x-theme->x_box_offset-w->textbox.x_offset,y-theme->y_box_offset+w->textbox.y_offset);
 }
 
 #warning use again with return true; if textbox allows selecting/copying again
@@ -54,70 +84,46 @@ static bool textbox_widget_left_release(overlay_theme * theme,widget * clicked,w
 static void textbox_widget_mouse_movement(overlay_theme * theme,widget * w,int x,int y)
 {
     adjust_coordinates_to_widget_local(w,&x,&y);
-    w->textbox.selection_end=overlay_find_multiline_text_offset(&theme->font_,&w->textbox.text_block,w->textbox.text,
-        x-theme->x_box_offset-w->textbox.x_offset,y-theme->y_box_offset-w->textbox.y_offset);
-}
+    w->textbox.selection_end=overlay_find_multiline_text_offset(&theme->font_,&w->textbox.text_block,
+        x-theme->x_box_offset-w->textbox.x_offset,y-theme->y_box_offset+w->textbox.y_offset);
 
-static void textbox_copy_selection_to_clipboard(widget * w)
-{
-//    int first,last;
-//    char tmp;
-//
-//    if(w->textbox.selection_begin!=w->textbox.selection_end)
-//    {
-//        if(w->textbox.selection_end > w->textbox.selection_begin)
-//        {
-//            first   =w->textbox.selection_begin;
-//            last    =w->textbox.selection_end;
-//        }
-//        else
-//        {
-//            first   =w->textbox.selection_end;
-//            last    =w->textbox.selection_begin;
-//        }
-//
-//        tmp=w->textbox.text[last];
-//        w->textbox.text[last]='\0';
-//
-//        SDL_SetClipboardText(w->textbox.text+first);
-//
-//        w->textbox.text[last]=tmp;
-//    }
+    textbox_check_visible_offset(w,theme);
 }
 
 static bool textbox_widget_key_down(overlay_theme * theme,widget * w,SDL_Keycode keycode,SDL_Keymod mod)
 {
-//    SDL_Keymod mod=SDL_GetModState();
-//
-//    //bool caps=((mod&KMOD_CAPS)==KMOD_CAPS);
-//    //bool shift=(((mod&KMOD_RSHIFT)==KMOD_RSHIFT)||((mod&KMOD_LSHIFT)==KMOD_LSHIFT));
-//
-//    #warning have last input time here
-//
-//
-//    if(mod&KMOD_CTRL)
-//    {
-//        switch(keycode)
-//        {
-//            case 'c':
-//            textbox_copy_selection_to_clipboard(w);
-//            break;
-//
-//            case 'x':
-//            textbox_copy_selection_to_clipboard(w);
-//            break;
-//
-//            case 'a':
-//            w->textbox.selection_begin=0;
-//            w->textbox.selection_end=strlen(w->textbox.text);
-//            break;
-//
-//            default: return false;
-//        }
-//        return true;
-//    }
-//
-    return false;
+    switch(keycode)
+    {
+    case SDLK_c:
+        if(mod&KMOD_CTRL)
+        {
+            textbox_copy_selection_to_clipboard(w);
+        }
+        break;
+
+    case SDLK_a:
+        if(mod&KMOD_CTRL)
+        {
+            w->textbox.selection_begin=w->textbox.text;
+            w->textbox.selection_end=w->textbox.text+strlen(w->textbox.text);
+        }
+        break;
+
+    case SDLK_ESCAPE:
+        set_currently_active_widget(NULL);
+        break;
+
+        default:;
+    }
+
+    textbox_check_visible_offset(w,theme);
+
+    return true;
+}
+
+static void textbox_widget_click_away(overlay_theme * theme,widget * w)
+{
+    w->textbox.selection_begin=w->textbox.selection_end;///cancel selection but dont affect visibility if possible
 }
 
 static void textbox_widget_delete(widget * w)
@@ -137,7 +143,7 @@ static widget_behaviour_function_set textbox_behaviour_functions=
     .key_down       =   textbox_widget_key_down,
     .text_input     =   blank_widget_text_input,
     .text_edit      =   blank_widget_text_edit,
-    .click_away     =   blank_widget_click_away,
+    .click_away     =   textbox_widget_click_away,
     .add_child      =   blank_widget_add_child,
     .remove_child   =   blank_widget_remove_child,
     .wid_delete     =   textbox_widget_delete
@@ -169,8 +175,8 @@ static void textbox_widget_render(overlay_theme * theme,widget * w,int x_off,int
         if(w->textbox.selection_begin==w->textbox.selection_end)overlay_render_multiline_text(erb,&theme->font_,&w->textbox.text_block,r.x1,r.y1-w->textbox.y_offset,b,OVERLAY_TEXT_COLOUR_0_);
         else
         {
-            if(w->textbox.selection_end > w->textbox.selection_begin) sb=w->textbox.text+w->textbox.selection_begin, se=w->textbox.text+w->textbox.selection_end;
-            else sb=w->textbox.text+w->textbox.selection_end, se=w->textbox.text+w->textbox.selection_begin;
+            if(w->textbox.selection_end > w->textbox.selection_begin) sb=w->textbox.selection_begin, se=w->textbox.selection_end;
+            else sb=w->textbox.selection_end, se=w->textbox.selection_begin;
 
             overlay_render_multiline_text_selection(erb,&theme->font_,&w->textbox.text_block,r.x1,r.y1-w->textbox.y_offset,b,OVERLAY_TEXT_COLOUR_0_,sb,se);
         }
@@ -245,8 +251,8 @@ void change_textbox_text(widget * w,char * new_text,bool owns_new_text)///use re
 
     w->textbox.y_offset=0;
     w->textbox.text_block.line_count=0;
-    w->textbox.selection_begin=0;
-    w->textbox.selection_end=0;
+    w->textbox.selection_begin=w->textbox.text;
+    w->textbox.selection_end=w->textbox.text;
 
     if(w->textbox.min_visible_lines)
     {
@@ -276,7 +282,7 @@ widget * create_textbox(char * text,bool owns_text,int min_horizontal_glyphs,int
 
     w->textbox.min_visible_lines = min_visible_lines;///0=show all
 
-    w->textbox.selection_begin = w->textbox.selection_end = 0;
+    w->textbox.selection_begin = w->textbox.selection_end = w->textbox.text;
 
     w->textbox.min_horizontal_glyphs=min_horizontal_glyphs;
 

@@ -87,13 +87,13 @@ void cvm_overlay_destroy_font(cvm_overlay_font * font);
 ///some generic
 bool cvm_overlay_utf8_validate_string(char * text);
 int cvm_overlay_utf8_count_glyphs(char * text);
-int cvm_overlay_utf8_count_glyphs_outside_range(char * text,int begin,int end);///end is uninclusive offset, start is inclusive offset
+int cvm_overlay_utf8_count_glyphs_outside_range(char * text,char * begin,char * end);///end is uninclusive offset, start is inclusive offset
 bool cvm_overlay_utf8_validate_string_and_count_glyphs(char * text,int * c);
 ///following also check for variation sequences, assumes string is valid utf8 already
-int cvm_overlay_utf8_get_previous_glyph(char * text,int offset);
-int cvm_overlay_utf8_get_next_glyph(char * text,int offset);
-int cvm_overlay_utf8_get_previous_word(char * text,int offset);
-int cvm_overlay_utf8_get_next_word(char * text,int offset);
+char * cvm_overlay_utf8_get_previous_glyph(char * base,char * t);
+char * cvm_overlay_utf8_get_next_glyph(char * t);
+char * cvm_overlay_utf8_get_previous_word(char * base,char * t);
+char * cvm_overlay_utf8_get_next_word(char * t);
 
 
 //rename these to be single line
@@ -103,15 +103,15 @@ int overlay_size_text_simple(cvm_overlay_font * font,char * text);
 void overlay_render_text_simple(cvm_overlay_element_render_buffer * erb,cvm_overlay_font * font,char * text,int x,int y,rectangle bounds,overlay_colour_ colour);
 void overlay_render_text_selection_simple(cvm_overlay_element_render_buffer * erb,cvm_overlay_font * font,char * text,int x,int y,rectangle bounds,overlay_colour_ colour,char * selection_start,char * selection_end);
 
-int overlay_text_find_offset_simple(cvm_overlay_font * font,char * text,int relative_x);
+char * overlay_text_find_offset_simple(cvm_overlay_font * font,char * text,int relative_x);
 
-cvm_overlay_glyph * overlay_get_glyph(cvm_overlay_element_render_buffer * erb,cvm_overlay_font * font,char * text);///assumes a single glyph in text
+
 
 
 void overlay_process_multiline_text(cvm_overlay_font * font,cvm_overlay_text_block * block,char * text,int wrapping_width);
 void overlay_render_multiline_text(cvm_overlay_element_render_buffer * erb,cvm_overlay_font * font,cvm_overlay_text_block * block,int x,int y,rectangle bounds,overlay_colour_ colour);
 void overlay_render_multiline_text_selection(cvm_overlay_element_render_buffer * erb,cvm_overlay_font * font,cvm_overlay_text_block * block,int x,int y,rectangle bounds,overlay_colour_ colour,char * selection_start,char * selection_end);
-int overlay_find_multiline_text_offset(cvm_overlay_font * font,cvm_overlay_text_block * block,char * text,int relative_x,int relative_y);
+char * overlay_find_multiline_text_offset(cvm_overlay_font * font,cvm_overlay_text_block * block,int relative_x,int relative_y);
 
 
 static inline rectangle overlay_simple_text_rectangle(rectangle r,int glyph_size,int x_border)
@@ -122,6 +122,9 @@ static inline rectangle overlay_simple_text_rectangle(rectangle r,int glyph_size
     r.x2-=x_border;
     return r;
 }
+
+cvm_overlay_glyph * overlay_get_glyph(cvm_overlay_element_render_buffer * erb,cvm_overlay_font * font,char * text);///assumes a single glyph in text
+void overlay_render_centred_glyph(cvm_overlay_element_render_buffer * erb,cvm_overlay_font * font,char * icon_glyph,rectangle r,rectangle bounds,overlay_colour_ colour);
 ///need way to blend out text towards end of textbox
 
 #endif

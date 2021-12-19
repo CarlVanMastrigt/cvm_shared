@@ -24,13 +24,20 @@ along with cvm_shared.  If not, see <https://www.gnu.org/licenses/>.
 #ifndef CVM_OVERLAY_H
 #define CVM_OVERLAY_H
 
-typedef enum
-{
-    CVM_OVERLAY_ELEMENT_SHADED,
-    CVM_OVERLAY_ELEMENT_COLOURED,
-    CVM_OVERLAY_ELEMENT_FILL,
-}
-cvm_overlay_element_type;
+#define CVM_OVERLAY_ELEMENT_FILL        0x0000
+#define CVM_OVERLAY_ELEMENT_SHADED      0x1000
+#define CVM_OVERLAY_ELEMENT_COLOURED    0x2000
+///having both set could signify something??
+#define CVM_OVERLAY_ELEMENT_OVERLAP_MIN 0x4000
+#define CVM_OVERLAY_ELEMENT_OVERLAP_MUL 0x8000
+//typedef enum
+//{
+//    CVM_OVERLAY_ELEMENT_FILL,
+//    CVM_OVERLAY_ELEMENT_SHADED,
+//    CVM_OVERLAY_ELEMENT_COLOURED,
+//
+//}
+//cvm_overlay_element_type;
 
 typedef enum
 {
@@ -38,7 +45,7 @@ typedef enum
     OVERLAY_BACKGROUND_COLOUR_,
     OVERLAY_MAIN_COLOUR_,
     OVERLAY_ALTERNATE_MAIN_COLOUR_,
-//    OVERLAY_HIGHLIGHTING_COLOUR,
+    OVERLAY_HIGHLIGHTING_COLOUR_,
 //    OVERLAY_MAIN_HIGHLIGHTED_COLOUR,
 //    OVERLAY_MAIN_ACTIVE_COLOUR,
 //    OVERLAY_MAIN_INACTIVE_COLOUR,
@@ -71,7 +78,7 @@ typedef struct cvm_overlay_render_data
 {
     uint16_t data0[4];///position
     uint16_t data1[4];///int data: type|colour_id, tex_lookup.xy, fade_offset|fade_speed(for glyphs) can be known based on contents (calculated at sizing step and applied at render based on current x)
-    //uint16_t data2[4];/// ? ? ? ?
+    uint16_t data2[4];/// ? ? ? ?
 }
 cvm_overlay_render_data;
 
@@ -194,13 +201,20 @@ struct overlay_theme
 
     void * other_data;
 
-    void    (*square_icon_render)       (rectangle r,uint32_t status,overlay_theme * theme,cvm_overlay_element_render_buffer * erb,rectangle bounds,overlay_colour_ colour,char * icon_glyph,overlay_colour_ icon_colour);
-    void    (*h_bar_render)             (rectangle r,uint32_t status,overlay_theme * theme,cvm_overlay_element_render_buffer * erb,rectangle bounds,overlay_colour_ colour);///just make h_bar?
+    void    (*square_render)            (rectangle r,uint32_t status,overlay_theme * theme,cvm_overlay_element_render_buffer * erb,rectangle bounds,overlay_colour_ colour);
+    void    (*h_bar_render)             (rectangle r,uint32_t status,overlay_theme * theme,cvm_overlay_element_render_buffer * erb,rectangle bounds,overlay_colour_ colour);
     void    (*h_bar_slider_render)      (rectangle r,uint32_t status,overlay_theme * theme,cvm_overlay_element_render_buffer * erb,rectangle bounds,overlay_colour_ colour,int range,int value,int bar);
     void    (*h_adjactent_slider_render)(rectangle r,uint32_t status,overlay_theme * theme,cvm_overlay_element_render_buffer * erb,rectangle bounds,overlay_colour_ colour,int range,int value,int bar);///usually/always tacked onto box
     void    (*v_adjactent_slider_render)(rectangle r,uint32_t status,overlay_theme * theme,cvm_overlay_element_render_buffer * erb,rectangle bounds,overlay_colour_ colour,int range,int value,int bar);///usually/always tacked onto box
     void    (*box_render)               (rectangle r,uint32_t status,overlay_theme * theme,cvm_overlay_element_render_buffer * erb,rectangle bounds,overlay_colour_ colour);
     void    (*panel_render)             (rectangle r,uint32_t status,overlay_theme * theme,cvm_overlay_element_render_buffer * erb,rectangle bounds,overlay_colour_ colour);
+
+    void    (*square_over_box_render)   (rectangle r,uint32_t status,overlay_theme * theme,cvm_overlay_element_render_buffer * erb,rectangle bounds,overlay_colour_ colour,rectangle box_r,uint32_t box_status);
+    void    (*h_bar_over_box_render)    (rectangle r,uint32_t status,overlay_theme * theme,cvm_overlay_element_render_buffer * erb,rectangle bounds,overlay_colour_ colour,rectangle box_r,uint32_t box_status);
+    void    (*box_over_box_render)      (rectangle r,uint32_t status,overlay_theme * theme,cvm_overlay_element_render_buffer * erb,rectangle bounds,overlay_colour_ colour,rectangle box_r,uint32_t box_status);
+
+    void    (*shaded_over_box_render)   (rectangle r,overlay_theme * theme,cvm_overlay_element_render_buffer * erb,rectangle bounds,overlay_colour_ colour,rectangle box_r,uint32_t box_status,int x_off,int y_off);
+    void    (*fill_over_box_render)     (rectangle r,overlay_theme * theme,cvm_overlay_element_render_buffer * erb,rectangle bounds,overlay_colour_ colour,rectangle box_r,uint32_t box_status);
 
     bool    (*square_select)            (rectangle r,uint32_t status,overlay_theme * theme);
     bool    (*h_bar_select)             (rectangle r,uint32_t status,overlay_theme * theme);
@@ -208,6 +222,7 @@ struct overlay_theme
     bool    (*panel_select)             (rectangle r,uint32_t status,overlay_theme * theme);
 };
 
+/// x/y_off are the texture space coordinates to read data from at position r, i.e. at r the texture coordinates looked up would be x_off,y_off
 static inline void cvm_render_shaded_overlay_element(cvm_overlay_element_render_buffer * erb,rectangle r,rectangle b,int x_off,int y_off,overlay_colour_ colour)
 {
     b=get_rectangle_overlap(r,b);
@@ -216,7 +231,22 @@ static inline void cvm_render_shaded_overlay_element(cvm_overlay_element_render_
         erb->buffer[erb->count++]=(cvm_overlay_render_data)
         {
             {b.x1,b.y1,b.x2,b.y2},
-            {(CVM_OVERLAY_ELEMENT_SHADED<<12)|(colour&0x0FFF),b.x1-r.x1+x_off,b.y1-r.y1+y_off,0/*unused*/},
+            {CVM_OVERLAY_ELEMENT_SHADED|(colour&0x0FFF),b.x1-r.x1+x_off,b.y1-r.y1+y_off,0/*unused*/},
+            {0,0,0,0}
+        };
+}
+
+/// x/y_over_b equates to combination of, screen space coordinates of base of "overlap" element (negative) with texture coordinates of the tile the "overlap" element uses
+static inline void cvm_render_shaded_overlap_min_overlay_element(cvm_overlay_element_render_buffer * erb,rectangle r,rectangle b,int x_off,int y_off,int x_over_b,int y_over_b,overlay_colour_ colour)
+{
+    b=get_rectangle_overlap(r,b);
+
+    if(erb->count != erb->space && rectangle_has_positive_area(b))
+        erb->buffer[erb->count++]=(cvm_overlay_render_data)
+        {
+            {b.x1,b.y1,b.x2,b.y2},
+            {CVM_OVERLAY_ELEMENT_SHADED|CVM_OVERLAY_ELEMENT_OVERLAP_MIN|(colour&0x0FFF),b.x1-r.x1+x_off,b.y1-r.y1+y_off,0/*unused*/},
+            {b.x1+x_over_b,b.y1+y_over_b,0,0}
         };
 }
 
@@ -228,7 +258,8 @@ static inline void cvm_render_fill_overlay_element(cvm_overlay_element_render_bu
         erb->buffer[erb->count++]=(cvm_overlay_render_data)
         {
             {b.x1,b.y1,b.x2,b.y2},
-            {(CVM_OVERLAY_ELEMENT_FILL<<12)|(colour&0x0FFF),0,0,0/*unused*/},
+            {CVM_OVERLAY_ELEMENT_FILL|(colour&0x0FFF),0,0,0/*unused*/},
+            {0,0,0,0}
         };
 }
 

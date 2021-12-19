@@ -343,7 +343,10 @@ static void icon_button_widget_render(overlay_theme * theme,widget * w,int x_off
         t++;
     }
 
-    theme->square_icon_render(rectangle_add_offset(w->base.r,x_off,y_off),w->base.status,theme,erb,bounds,OVERLAY_MAIN_COLOUR_,t,OVERLAY_TEXT_COLOUR_0_);
+    rectangle r=rectangle_add_offset(w->base.r,x_off,y_off);
+
+    theme->square_render(r,w->base.status,theme,erb,bounds,OVERLAY_MAIN_COLOUR_);
+    overlay_render_centred_glyph(erb,&theme->font_,t,r,bounds,OVERLAY_TEXT_COLOUR_0_);
 }
 
 static widget * icon_button_widget_select(overlay_theme * theme,widget * w,int x_in,int y_in)

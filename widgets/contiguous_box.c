@@ -21,12 +21,12 @@ along with cvm_shared.  If not, see <https://www.gnu.org/licenses/>.
 
 static bool contiguous_box_widget_scroll(overlay_theme * theme,widget * w,int delta)
 {
-	*w->contiguous_box.offset += delta*w->contiguous_box.wheel_delta;
-
-	if(*w->contiguous_box.offset > w->contiguous_box.max_offset) *w->contiguous_box.offset=w->contiguous_box.max_offset;
-	if(*w->contiguous_box.offset < w->contiguous_box.min_offset) *w->contiguous_box.offset=w->contiguous_box.min_offset;
-
-	return true;
+//	*w->contiguous_box.offset += delta*w->contiguous_box.wheel_delta;
+//
+//	if(*w->contiguous_box.offset > w->contiguous_box.max_offset) *w->contiguous_box.offset=w->contiguous_box.max_offset;
+//	if(*w->contiguous_box.offset < w->contiguous_box.min_offset) *w->contiguous_box.offset=w->contiguous_box.min_offset;
+//
+//	return true;
 }
 
 static void contiguous_box_widget_add_child(widget * w,widget * child)
@@ -68,7 +68,11 @@ static widget_behaviour_function_set contiguous_box_behaviour_functions=
 
 static void all_visible_contiguous_box_widget_render(overlay_theme * theme,widget * w,int x_off,int y_off,cvm_overlay_element_render_buffer * erb,rectangle bounds)
 {
-    theme->box_render(rectangle_add_offset(w->base.r,x_off,y_off),w->base.status,theme,erb,bounds,OVERLAY_MAIN_COLOUR_);
+    rectangle r=rectangle_add_offset(w->base.r,x_off,y_off);
+    //r.y1+=7+(int)(11.0*sin(SDL_GetTicks()*0.004));
+    //r.x1+=65+(int)(11.0*sin(SDL_GetTicks()*0.001-1));
+    theme->box_render(r,w->base.status|WIDGET_V_FIRST,theme,erb,bounds,OVERLAY_MAIN_COLOUR_);
+    //theme->box_render(rectangle_add_offset(w->base.r,x_off,y_off),w->base.status,theme,erb,bounds,OVERLAY_MAIN_COLOUR_);
 
     x_off+=w->base.r.x1;
     y_off+=w->base.r.y1;
@@ -78,22 +82,22 @@ static void all_visible_contiguous_box_widget_render(overlay_theme * theme,widge
 
 static void some_visible_contiguous_box_widget_render(overlay_theme * theme,widget * w,int x_off,int y_off,cvm_overlay_element_render_buffer * erb,rectangle bounds)
 {
-    theme->box_render(rectangle_add_offset(w->base.r,x_off,y_off),w->base.status,theme,erb,bounds,OVERLAY_MAIN_COLOUR);
-
-    x_off+=w->base.r.x1;
-    y_off+=w->base.r.y1;
-
-    #warning better way to set bounds below?
-
-    bounds=get_rectangle_overlap(bounds,(rectangle)
-    {
-        .x1=x_off+theme->contiguous_some_box_x_offset,
-        .y1=y_off+theme->contiguous_some_box_y_offset,
-        .x2=x_off+w->base.r.x2-w->base.r.x1-theme->contiguous_some_box_x_offset,
-        .y2=y_off+w->base.r.y2-w->base.r.y1-theme->contiguous_some_box_y_offset
-    });
-
-    if(rectangle_has_positive_area(bounds))render_widget(w->contiguous_box.contained_box,x_off,y_off,erb,bounds);
+//    theme->box_render(rectangle_add_offset(w->base.r,x_off,y_off),w->base.status,theme,erb,bounds,OVERLAY_MAIN_COLOUR_);
+//
+//    x_off+=w->base.r.x1;
+//    y_off+=w->base.r.y1;
+//
+//    #warning better way to set bounds below?
+//
+//    bounds=get_rectangle_overlap(bounds,(rectangle)
+//    {
+//        .x1=x_off+theme->contiguous_some_box_x_offset,
+//        .y1=y_off+theme->contiguous_some_box_y_offset,
+//        .x2=x_off+w->base.r.x2-w->base.r.x1-theme->contiguous_some_box_x_offset,
+//        .y2=y_off+w->base.r.y2-w->base.r.y1-theme->contiguous_some_box_y_offset
+//    });
+//
+//    if(rectangle_has_positive_area(bounds))render_widget(w->contiguous_box.contained_box,x_off,y_off,erb,bounds);
 }
 
 static widget * contiguous_box_widget_select(overlay_theme * theme,widget * w,int x_in,int y_in)
@@ -122,22 +126,24 @@ static widget * contiguous_box_widget_select(overlay_theme * theme,widget * w,in
 
 static void all_visible_contiguous_box_widget_min_w(overlay_theme * theme,widget * w)
 {
-    w->base.min_w = set_widget_minimum_width(w->contiguous_box.contained_box,0)+2*theme->contiguous_all_box_x_offset;
+    w->base.min_w = set_widget_minimum_width(w->contiguous_box.contained_box,0);//+2*theme->contiguous_all_box_x_offset;
 }
 
 static void all_visible_contiguous_box_widget_min_h(overlay_theme * theme,widget * w)
 {
-    w->base.min_h = set_widget_minimum_height(w->contiguous_box.contained_box,0)+2*theme->contiguous_all_box_y_offset;
+    w->base.min_h = set_widget_minimum_height(w->contiguous_box.contained_box,0);//+2*theme->contiguous_all_box_y_offset;
 }
 
 static void all_visible_contiguous_box_widget_set_w(overlay_theme * theme,widget * w)
 {
-    organise_widget_horizontally(w->contiguous_box.contained_box,theme->contiguous_all_box_x_offset,w->base.r.x2-w->base.r.x1-2*theme->contiguous_all_box_x_offset);
+    //organise_widget_horizontally(w->contiguous_box.contained_box,theme->contiguous_all_box_x_offset,w->base.r.x2-w->base.r.x1-2*theme->contiguous_all_box_x_offset);
+    organise_widget_horizontally(w->contiguous_box.contained_box,0,w->base.r.x2-w->base.r.x1);
 }
 
 static void all_visible_contiguous_box_widget_set_h(overlay_theme * theme,widget * w)
 {
-    organise_widget_vertically(w->contiguous_box.contained_box,theme->contiguous_all_box_y_offset,w->base.r.y2-w->base.r.y1-2*theme->contiguous_all_box_y_offset);
+    //organise_widget_vertically(w->contiguous_box.contained_box,theme->contiguous_all_box_y_offset,w->base.r.y2-w->base.r.y1-2*theme->contiguous_all_box_y_offset);
+    organise_widget_vertically(w->contiguous_box.contained_box,0,w->base.r.y2-w->base.r.y1);
 }
 
 static widget_appearence_function_set all_visible_contiguous_box_functions=
@@ -159,56 +165,54 @@ static widget_appearence_function_set all_visible_contiguous_box_functions=
 
 
 
-static void vertical_some_visible_contiguous_box_widget_min_w(overlay_theme * theme,widget * w)
-{
-    w->base.min_w = w->contiguous_box.default_min_w(theme);
-
-    set_widget_minimum_width(w->contiguous_box.contained_box,0);
-
-    if(w->base.min_w < w->contiguous_box.contained_box->base.min_w)w->base.min_w = w->contiguous_box.contained_box->base.min_w;
-
-    w->base.min_w+=theme->contiguous_some_box_x_offset*2;
-}
-
-static void vertical_some_visible_contiguous_box_widget_min_h(overlay_theme * theme,widget * w)
-{
-    set_widget_minimum_height(w->contiguous_box.contained_box,0);
-
-    w->base.min_h=w->contiguous_box.min_display_count*w->contiguous_box.default_min_h(theme)+2*theme->contiguous_some_box_y_offset;
-}
-
-static void vertical_some_visible_contiguous_box_widget_set_w(overlay_theme * theme,widget * w)
-{
-    organise_widget_horizontally(w->contiguous_box.contained_box,theme->contiguous_some_box_x_offset,w->base.r.x2-w->base.r.x1-2*theme->contiguous_some_box_x_offset);
-}
-
-static void vertical_some_visible_contiguous_box_widget_set_h(overlay_theme * theme,widget * w)
-{
-    organise_widget_vertically(w->contiguous_box.contained_box,*w->contiguous_box.offset,w->contiguous_box.contained_box->base.min_h);
-
-    w->contiguous_box.wheel_delta = w->contiguous_box.default_min_h(theme);
-    w->contiguous_box.visible_size=w->base.r.y2-w->base.r.y1-2*theme->contiguous_some_box_y_offset;
-    w->contiguous_box.min_offset=theme->contiguous_some_box_y_offset- (w->contiguous_box.contained_box->base.r.y2-w->contiguous_box.contained_box->base.r.y1 - w->contiguous_box.visible_size);
-    w->contiguous_box.max_offset=theme->contiguous_some_box_y_offset;
-
-    if(w->contiguous_box.min_offset > w->contiguous_box.max_offset)w->contiguous_box.min_offset=w->contiguous_box.max_offset;
-
-    if(*w->contiguous_box.offset > w->contiguous_box.max_offset) *w->contiguous_box.offset=w->contiguous_box.max_offset;
-	if(*w->contiguous_box.offset < w->contiguous_box.min_offset) *w->contiguous_box.offset=w->contiguous_box.min_offset;
-}
-
-static widget_appearence_function_set vertical_some_visible_contiguous_box_functions=
-(widget_appearence_function_set)
-{
-    .render =   some_visible_contiguous_box_widget_render,
-    .select =   contiguous_box_widget_select,
-    .min_w  =   vertical_some_visible_contiguous_box_widget_min_w,
-    .min_h  =   vertical_some_visible_contiguous_box_widget_min_h,
-    .set_w  =   vertical_some_visible_contiguous_box_widget_set_w,
-    .set_h  =   vertical_some_visible_contiguous_box_widget_set_h
-};
-
-
+//static void vertical_some_visible_contiguous_box_widget_min_w(overlay_theme * theme,widget * w)
+//{
+//    w->base.min_w = w->contiguous_box.default_min_w(theme);
+//
+//    set_widget_minimum_width(w->contiguous_box.contained_box,0);
+//
+//    if(w->base.min_w < w->contiguous_box.contained_box->base.min_w)w->base.min_w = w->contiguous_box.contained_box->base.min_w;
+//
+//    w->base.min_w+=theme->contiguous_some_box_x_offset*2;
+//}
+//
+//static void vertical_some_visible_contiguous_box_widget_min_h(overlay_theme * theme,widget * w)
+//{
+//    set_widget_minimum_height(w->contiguous_box.contained_box,0);
+//
+//    w->base.min_h=w->contiguous_box.min_display_count*w->contiguous_box.default_min_h(theme)+2*theme->contiguous_some_box_y_offset;
+//}
+//
+//static void vertical_some_visible_contiguous_box_widget_set_w(overlay_theme * theme,widget * w)
+//{
+//    organise_widget_horizontally(w->contiguous_box.contained_box,theme->contiguous_some_box_x_offset,w->base.r.x2-w->base.r.x1-2*theme->contiguous_some_box_x_offset);
+//}
+//
+//static void vertical_some_visible_contiguous_box_widget_set_h(overlay_theme * theme,widget * w)
+//{
+//    organise_widget_vertically(w->contiguous_box.contained_box,*w->contiguous_box.offset,w->contiguous_box.contained_box->base.min_h);
+//
+//    w->contiguous_box.wheel_delta = w->contiguous_box.default_min_h(theme);
+//    w->contiguous_box.visible_size=w->base.r.y2-w->base.r.y1-2*theme->contiguous_some_box_y_offset;
+//    w->contiguous_box.min_offset=theme->contiguous_some_box_y_offset- (w->contiguous_box.contained_box->base.r.y2-w->contiguous_box.contained_box->base.r.y1 - w->contiguous_box.visible_size);
+//    w->contiguous_box.max_offset=theme->contiguous_some_box_y_offset;
+//
+//    if(w->contiguous_box.min_offset > w->contiguous_box.max_offset)w->contiguous_box.min_offset=w->contiguous_box.max_offset;
+//
+//    if(*w->contiguous_box.offset > w->contiguous_box.max_offset) *w->contiguous_box.offset=w->contiguous_box.max_offset;
+//	if(*w->contiguous_box.offset < w->contiguous_box.min_offset) *w->contiguous_box.offset=w->contiguous_box.min_offset;
+//}
+//
+//static widget_appearence_function_set vertical_some_visible_contiguous_box_functions=
+//(widget_appearence_function_set)
+//{
+//    .render =   some_visible_contiguous_box_widget_render,
+//    .select =   contiguous_box_widget_select,
+//    .min_w  =   vertical_some_visible_contiguous_box_widget_min_w,
+//    .min_h  =   vertical_some_visible_contiguous_box_widget_min_h,
+//    .set_w  =   vertical_some_visible_contiguous_box_widget_set_w,
+//    .set_h  =   vertical_some_visible_contiguous_box_widget_set_h
+//};
 
 
 
@@ -217,82 +221,89 @@ static widget_appearence_function_set vertical_some_visible_contiguous_box_funct
 
 
 
-static void horizontal_some_visible_contiguous_box_widget_min_w(overlay_theme * theme,widget * w)
-{
-    set_widget_minimum_width(w->contiguous_box.contained_box,0);
-
-    w->base.min_w=w->contiguous_box.min_display_count*w->contiguous_box.default_min_w(theme)+2*theme->contiguous_some_box_x_offset;
-}
-
-static void horizontal_some_visible_contiguous_box_widget_min_h(overlay_theme * theme,widget * w)
-{
-    w->base.min_h = w->contiguous_box.default_min_h(theme);
-
-    set_widget_minimum_height(w->contiguous_box.contained_box,0);
-
-    if(w->base.min_h < w->contiguous_box.contained_box->base.min_h)w->base.min_h = w->contiguous_box.contained_box->base.min_h;
-
-    w->base.min_h+=theme->contiguous_some_box_y_offset*2;
-}
-
-static void horizontal_some_visible_contiguous_box_widget_set_w(overlay_theme * theme,widget * w)
-{
-}
-
-static void horizontal_some_visible_contiguous_box_widget_set_h(overlay_theme * theme,widget * w)
-{
-}
-
-static widget_appearence_function_set horizontal_some_visible_contiguous_box_functions=
-(widget_appearence_function_set)
-{
-    .render =   some_visible_contiguous_box_widget_render,
-    .select =   contiguous_box_widget_select,
-    .min_w  =   horizontal_some_visible_contiguous_box_widget_min_w,
-    .min_h  =   horizontal_some_visible_contiguous_box_widget_min_h,
-    .set_w  =   horizontal_some_visible_contiguous_box_widget_set_w,
-    .set_h  =   horizontal_some_visible_contiguous_box_widget_set_h
-};
 
 
-
-
-
-
-
-static int contiguous_element_default_w(overlay_theme * theme)
-{
-    return theme->base_unit_w;
-}
-
-static int contiguous_element_default_h(overlay_theme * theme)
-{
-    return theme->contiguous_horizintal_bar_h;
-}
+//static void horizontal_some_visible_contiguous_box_widget_min_w(overlay_theme * theme,widget * w)
+//{
+//    set_widget_minimum_width(w->contiguous_box.contained_box,0);
+//
+//    w->base.min_w=w->contiguous_box.min_display_count*w->contiguous_box.default_min_w(theme)+2*theme->contiguous_some_box_x_offset;
+//}
+//
+//static void horizontal_some_visible_contiguous_box_widget_min_h(overlay_theme * theme,widget * w)
+//{
+//    w->base.min_h = w->contiguous_box.default_min_h(theme);
+//
+//    set_widget_minimum_height(w->contiguous_box.contained_box,0);
+//
+//    if(w->base.min_h < w->contiguous_box.contained_box->base.min_h)w->base.min_h = w->contiguous_box.contained_box->base.min_h;
+//
+//    w->base.min_h+=theme->contiguous_some_box_y_offset*2;
+//}
+//
+//static void horizontal_some_visible_contiguous_box_widget_set_w(overlay_theme * theme,widget * w)
+//{
+//}
+//
+//static void horizontal_some_visible_contiguous_box_widget_set_h(overlay_theme * theme,widget * w)
+//{
+//}
+//
+//static widget_appearence_function_set horizontal_some_visible_contiguous_box_functions=
+//(widget_appearence_function_set)
+//{
+//    .render =   some_visible_contiguous_box_widget_render,
+//    .select =   contiguous_box_widget_select,
+//    .min_w  =   horizontal_some_visible_contiguous_box_widget_min_w,
+//    .min_h  =   horizontal_some_visible_contiguous_box_widget_min_h,
+//    .set_w  =   horizontal_some_visible_contiguous_box_widget_set_w,
+//    .set_h  =   horizontal_some_visible_contiguous_box_widget_set_h
+//};
+//
+//
+//
+//
+//
+//
+//
+//static int contiguous_element_default_w(overlay_theme * theme)
+//{
+//    return theme->base_unit_w;
+//}
+//
+//static int contiguous_element_default_h(overlay_theme * theme)
+//{
+//    return theme->contiguous_horizintal_bar_h;
+//}
 
 
 widget * create_contiguous_box(widget_layout layout,int min_display_count)
 {
     widget * w=create_container();
 
-//    if(min_display_count)
-//    {
+    if(min_display_count)
+    {
+        puts("NYI");
+        exit(-1);
 //        if(layout==WIDGET_VERTICAL) w->base.appearence_functions=&vertical_some_visible_contiguous_box_functions;///NOT CORRECTED/FINISHED
 //        else if(layout==WIDGET_HORIZONTAL) w->base.appearence_functions=&horizontal_some_visible_contiguous_box_functions;
 //        else puts("ERROR contiguous box layout unhandled");
-//    }
-//    else w->base.appearence_functions=&all_visible_contiguous_box_functions;
-//    w->base.behaviour_functions=&contiguous_box_behaviour_functions;
-//
-//    w->contiguous_box.contained_box=create_box(layout,WIDGET_NORMALLY_DISTRIBUTED);
-//    w->contiguous_box.contained_box->base.parent=w;
-//
-//    w->base.type=CONTIGUOUS_BOX_WIDGET;
-//
+    }
+    else w->base.appearence_functions=&all_visible_contiguous_box_functions;
+
+    w->base.behaviour_functions=&contiguous_box_behaviour_functions;
+
+    w->contiguous_box.contained_box=create_box(layout,WIDGET_NORMALLY_DISTRIBUTED);
+    w->contiguous_box.contained_box->base.parent=w;
+
+    w->base.type=CONTIGUOUS_BOX_WIDGET;
+
+    w->base.status|=WIDGET_IS_CONTIGUOUS_BOX;
+
 //    if(layout==WIDGET_VERTICAL) w->contiguous_box.offset = &w->contiguous_box.contained_box->base.r.y;
 //    else w->contiguous_box.offset = &w->contiguous_box.contained_box->base.r.x;
-//
-//    w->contiguous_box.min_display_count=min_display_count;
+
+    w->contiguous_box.min_display_count=min_display_count;
 //    w->contiguous_box.visible_size=0;
 //    w->contiguous_box.max_offset=0;
 //    w->contiguous_box.min_offset=0;
@@ -308,8 +319,8 @@ widget * create_contiguous_box(widget_layout layout,int min_display_count)
 
 void set_contiguous_box_default_contained_dimensions(widget * contiguous_box,widget_dimension_function default_min_w,widget_dimension_function default_min_h)
 {
-    if(default_min_w)contiguous_box->contiguous_box.default_min_w=default_min_w;
-    if(default_min_h)contiguous_box->contiguous_box.default_min_h=default_min_h;
+//    if(default_min_w)contiguous_box->contiguous_box.default_min_w=default_min_w;
+//    if(default_min_h)contiguous_box->contiguous_box.default_min_h=default_min_h;
 }
 
 
@@ -343,12 +354,37 @@ void ensure_widget_in_contiguous_box_is_visible(widget * w,widget * cb)
 
 widget * create_contiguous_box_scrollbar(widget * box)
 {
-    widget * w=create_slider_bar(box->contiguous_box.offset,0,0,NULL,NULL,false,0);
-    #warning replace above with adjacent slider
-
-    set_slider_bar_other_values(w,&box->contiguous_box.max_offset,&box->contiguous_box.min_offset,&box->contiguous_box.visible_size,&box->contiguous_box.wheel_delta);
-
-    return w;
+//    widget * w=create_slider_bar(box->contiguous_box.offset,0,0,NULL,NULL,false,0);
+//    #warning replace above with adjacent slider
+//
+//    set_slider_bar_other_values(w,&box->contiguous_box.max_offset,&box->contiguous_box.min_offset,&box->contiguous_box.visible_size,&box->contiguous_box.wheel_delta);
+//
+//    return w;
 }
+
+bool get_ancestor_contiguous_box_data(widget * w,rectangle * r,uint32_t * status)
+{
+    while(w->base.parent)
+    {
+        w=w->base.parent;
+
+        if(w->base.status&WIDGET_IS_CONTIGUOUS_BOX)
+        {
+            if(0)return false;
+            int cbx,cby;
+            get_widgets_global_coordinates(w,&cbx,&cby);
+            *r=rectangle_add_offset(w->base.r,cbx,cby);
+            *status=w->base.status;
+            return true;
+        }
+    }
+
+    fprintf(stderr,"SEARCHING FOR NONEXISTANT ANCESTOR CONTIGUOUS BOX\n");
+    exit(-1);
+
+    return false;
+}
+
+
 
 

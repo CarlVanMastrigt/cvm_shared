@@ -38,8 +38,8 @@ typedef struct widget_enterbox
     widget_function upon_input;
     void * data;
 
-    int selection_begin;
-    int selection_end;
+    char * selection_begin;
+    char * selection_end;
 
     char composition_text[CVM_OVERLAY_MAX_COMPOSITION_BYTES];
     int composition_visible_offset;
