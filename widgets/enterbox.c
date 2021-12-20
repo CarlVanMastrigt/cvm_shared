@@ -258,7 +258,7 @@ static void enterbox_widget_left_click(overlay_theme * theme,widget * w,int x,in
     if(*w->enterbox.composition_text)return;
 
     adjust_coordinates_to_widget_local(w,&x,&y);
-    w->enterbox.selection_begin=w->enterbox.selection_end=overlay_text_find_offset_simple(&theme->font_,w->enterbox.text,x-theme->h_bar_text_offset+w->enterbox.visible_offset);
+    w->enterbox.selection_begin=w->enterbox.selection_end=overlay_text_single_line_find_offset(&theme->font_,w->enterbox.text,x-theme->h_bar_text_offset+w->enterbox.visible_offset);
 
     if(w->enterbox.upon_input!=NULL)
     {
@@ -277,7 +277,7 @@ static void enterbox_widget_mouse_movement(overlay_theme * theme,widget * w,int 
     if(*w->enterbox.composition_text)return;
 
     adjust_coordinates_to_widget_local(w,&x,&y);
-    w->enterbox.selection_end=overlay_text_find_offset_simple(&theme->font_,w->enterbox.text,x-theme->h_bar_text_offset+w->enterbox.visible_offset);
+    w->enterbox.selection_end=overlay_text_single_line_find_offset(&theme->font_,w->enterbox.text,x-theme->h_bar_text_offset+w->enterbox.visible_offset);
 
     enterbox_check_visible_offset(w,theme);
 }
@@ -367,21 +367,21 @@ static void enterbox_widget_render(overlay_theme * theme,widget * w,int x_off,in
     else visible_offset=w->enterbox.visible_offset;
 
 	rectangle r=rectangle_add_offset(w->base.r,x_off,y_off);
-	theme->h_bar_render(r,w->base.status,theme,erb,bounds,OVERLAY_MAIN_COLOUR_);
+	theme->h_bar_render(erb,theme,bounds,r,w->base.status,OVERLAY_MAIN_COLOUR_);
 
     r=overlay_simple_text_rectangle(r,theme->font_.glyph_size,theme->h_bar_text_offset);
     rectangle b=get_rectangle_overlap(r,bounds);
     if(rectangle_has_positive_area(b))
     {
         #warning make is_currently_active_widget effectively part of w->base.status, would require setting flags in slightly painful manner but w/e
-        if(is_currently_active_widget(w))overlay_render_text_selection_simple(erb,&theme->font_,text,r.x1-visible_offset,r.y1,b,colour,sb,se);
-        else overlay_render_text_simple(erb,&theme->font_,text,r.x1-visible_offset,r.y1,b,colour);
+        if(is_currently_active_widget(w))overlay_text_single_line_render_selection(erb,&theme->font_,text,r.x1-visible_offset,r.y1,b,colour,sb,se);
+        else overlay_text_single_line_render(erb,&theme->font_,b,text,r.x1-visible_offset,r.y1,colour);
     }
 }
 
 static widget * enterbox_widget_select(overlay_theme * theme,widget * w,int x_in,int y_in)
 {
-    if(theme->h_bar_select(rectangle_subtract_offset(w->base.r,x_in,y_in),w->base.status,theme))return w;
+    if(theme,theme->h_bar_select(theme,rectangle_subtract_offset(w->base.r,x_in,y_in),w->base.status))return w;
 
     return NULL;
 }

@@ -39,6 +39,8 @@ along with cvm_shared.  If not, see <https://www.gnu.org/licenses/>.
 //}
 //cvm_overlay_element_type;
 
+typedef struct overlay_theme overlay_theme;
+
 typedef enum
 {
     OVERLAY_NO_COLOUR_=0,
@@ -162,9 +164,6 @@ typedef enum
 }
 overlay_colour;
 
-
-typedef struct overlay_theme overlay_theme;
-
 struct overlay_theme
 {
     cvm_overlay_font font_;
@@ -201,29 +200,30 @@ struct overlay_theme
 
     void * other_data;
 
-    void    (*square_render)            (rectangle r,uint32_t status,overlay_theme * theme,cvm_overlay_element_render_buffer * erb,rectangle bounds,overlay_colour_ colour);
-    void    (*h_bar_render)             (rectangle r,uint32_t status,overlay_theme * theme,cvm_overlay_element_render_buffer * erb,rectangle bounds,overlay_colour_ colour);
-    void    (*h_bar_slider_render)      (rectangle r,uint32_t status,overlay_theme * theme,cvm_overlay_element_render_buffer * erb,rectangle bounds,overlay_colour_ colour,int range,int value,int bar);
-    void    (*h_adjactent_slider_render)(rectangle r,uint32_t status,overlay_theme * theme,cvm_overlay_element_render_buffer * erb,rectangle bounds,overlay_colour_ colour,int range,int value,int bar);///usually/always tacked onto box
-    void    (*v_adjactent_slider_render)(rectangle r,uint32_t status,overlay_theme * theme,cvm_overlay_element_render_buffer * erb,rectangle bounds,overlay_colour_ colour,int range,int value,int bar);///usually/always tacked onto box
-    void    (*box_render)               (rectangle r,uint32_t status,overlay_theme * theme,cvm_overlay_element_render_buffer * erb,rectangle bounds,overlay_colour_ colour);
-    void    (*panel_render)             (rectangle r,uint32_t status,overlay_theme * theme,cvm_overlay_element_render_buffer * erb,rectangle bounds,overlay_colour_ colour);
+    void    (*square_render)            (cvm_overlay_element_render_buffer * erb,overlay_theme * theme,rectangle bounds,rectangle r,uint32_t status,overlay_colour_ colour);
+    void    (*h_bar_render)             (cvm_overlay_element_render_buffer * erb,overlay_theme * theme,rectangle bounds,rectangle r,uint32_t status,overlay_colour_ colour);
+    void    (*h_bar_slider_render)      (cvm_overlay_element_render_buffer * erb,overlay_theme * theme,rectangle bounds,rectangle r,uint32_t status,overlay_colour_ colour,int range,int value,int bar);
+    void    (*h_adjactent_slider_render)(cvm_overlay_element_render_buffer * erb,overlay_theme * theme,rectangle bounds,rectangle r,uint32_t status,overlay_colour_ colour,int range,int value,int bar);///usually/always tacked onto box
+    void    (*v_adjactent_slider_render)(cvm_overlay_element_render_buffer * erb,overlay_theme * theme,rectangle bounds,rectangle r,uint32_t status,overlay_colour_ colour,int range,int value,int bar);///usually/always tacked onto box
+    void    (*box_render)               (cvm_overlay_element_render_buffer * erb,overlay_theme * theme,rectangle bounds,rectangle r,uint32_t status,overlay_colour_ colour);
+    void    (*panel_render)             (cvm_overlay_element_render_buffer * erb,overlay_theme * theme,rectangle bounds,rectangle r,uint32_t status,overlay_colour_ colour);
+    ///                                 (cvm_overlay_element_render_buffer * erb,overlay_theme * theme,rectangle bounds,rectangle r,uint32_t status,overlay_colour_ colour)
 
-    void    (*square_over_box_render)   (rectangle r,uint32_t status,overlay_theme * theme,cvm_overlay_element_render_buffer * erb,rectangle bounds,overlay_colour_ colour,rectangle box_r,uint32_t box_status);
-    void    (*h_bar_over_box_render)    (rectangle r,uint32_t status,overlay_theme * theme,cvm_overlay_element_render_buffer * erb,rectangle bounds,overlay_colour_ colour,rectangle box_r,uint32_t box_status);
-    void    (*box_over_box_render)      (rectangle r,uint32_t status,overlay_theme * theme,cvm_overlay_element_render_buffer * erb,rectangle bounds,overlay_colour_ colour,rectangle box_r,uint32_t box_status);
+    void    (*square_over_box_render)   (cvm_overlay_element_render_buffer * erb,overlay_theme * theme,rectangle bounds,rectangle r,uint32_t status,overlay_colour_ colour,rectangle box_r,uint32_t box_status);
+    void    (*h_bar_over_box_render)    (cvm_overlay_element_render_buffer * erb,overlay_theme * theme,rectangle bounds,rectangle r,uint32_t status,overlay_colour_ colour,rectangle box_r,uint32_t box_status);
+    void    (*box_over_box_render)      (cvm_overlay_element_render_buffer * erb,overlay_theme * theme,rectangle bounds,rectangle r,uint32_t status,overlay_colour_ colour,rectangle box_r,uint32_t box_status);
 
-    void    (*shaded_over_box_render)   (rectangle r,overlay_theme * theme,cvm_overlay_element_render_buffer * erb,rectangle bounds,overlay_colour_ colour,rectangle box_r,uint32_t box_status,int x_off,int y_off);
-    void    (*fill_over_box_render)     (rectangle r,overlay_theme * theme,cvm_overlay_element_render_buffer * erb,rectangle bounds,overlay_colour_ colour,rectangle box_r,uint32_t box_status);
+    void    (*shaded_over_box_render)   (cvm_overlay_element_render_buffer * erb,overlay_theme * theme,rectangle bounds,rectangle r,overlay_colour_ colour,rectangle box_r,uint32_t box_status,int x_off,int y_off);
+    void    (*fill_over_box_render)     (cvm_overlay_element_render_buffer * erb,overlay_theme * theme,rectangle bounds,rectangle r,overlay_colour_ colour,rectangle box_r,uint32_t box_status);
 
-    bool    (*square_select)            (rectangle r,uint32_t status,overlay_theme * theme);
-    bool    (*h_bar_select)             (rectangle r,uint32_t status,overlay_theme * theme);
-    bool    (*box_select)               (rectangle r,uint32_t status,overlay_theme * theme);
-    bool    (*panel_select)             (rectangle r,uint32_t status,overlay_theme * theme);
+    bool    (*square_select)            (overlay_theme * theme,rectangle r,uint32_t status);
+    bool    (*h_bar_select)             (overlay_theme * theme,rectangle r,uint32_t status);
+    bool    (*box_select)               (overlay_theme * theme,rectangle r,uint32_t status);
+    bool    (*panel_select)             (overlay_theme * theme,rectangle r,uint32_t status);
 };
 
 /// x/y_off are the texture space coordinates to read data from at position r, i.e. at r the texture coordinates looked up would be x_off,y_off
-static inline void cvm_render_shaded_overlay_element(cvm_overlay_element_render_buffer * erb,rectangle r,rectangle b,int x_off,int y_off,overlay_colour_ colour)
+static inline void cvm_render_shaded_overlay_element(cvm_overlay_element_render_buffer * erb,rectangle b,rectangle r,int x_off,int y_off,overlay_colour_ colour)
 {
     b=get_rectangle_overlap(r,b);
 
@@ -237,7 +237,7 @@ static inline void cvm_render_shaded_overlay_element(cvm_overlay_element_render_
 }
 
 /// x/y_over_b equates to combination of, screen space coordinates of base of "overlap" element (negative) with texture coordinates of the tile the "overlap" element uses
-static inline void cvm_render_shaded_overlap_min_overlay_element(cvm_overlay_element_render_buffer * erb,rectangle r,rectangle b,int x_off,int y_off,int x_over_b,int y_over_b,overlay_colour_ colour)
+static inline void cvm_render_shaded_overlap_min_overlay_element(cvm_overlay_element_render_buffer * erb,rectangle b,rectangle r,int x_off,int y_off,int x_over_b,int y_over_b,overlay_colour_ colour)
 {
     b=get_rectangle_overlap(r,b);
 
@@ -250,7 +250,7 @@ static inline void cvm_render_shaded_overlap_min_overlay_element(cvm_overlay_ele
         };
 }
 
-static inline void cvm_render_fill_overlay_element(cvm_overlay_element_render_buffer * erb,rectangle r,rectangle b,overlay_colour_ colour)
+static inline void cvm_render_fill_overlay_element(cvm_overlay_element_render_buffer * erb,rectangle b,rectangle r,overlay_colour_ colour)
 {
     b=get_rectangle_overlap(r,b);
 

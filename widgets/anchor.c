@@ -96,16 +96,16 @@ static widget_behaviour_function_set anchor_behaviour_functions=
 static void text_anchor_widget_render(overlay_theme * theme,widget * w,int x_off,int y_off,cvm_overlay_element_render_buffer * erb,rectangle bounds)
 {
 	rectangle r=rectangle_add_offset(w->base.r,x_off,y_off);
-	theme->h_bar_render(r,w->base.status,theme,erb,bounds,OVERLAY_ALTERNATE_MAIN_COLOUR_);
+	theme->h_bar_render(erb,theme,bounds,r,w->base.status,OVERLAY_ALTERNATE_MAIN_COLOUR_);
 
     r=overlay_simple_text_rectangle(r,theme->font_.glyph_size,theme->h_bar_text_offset);
     rectangle b=get_rectangle_overlap(r,bounds);
-    if(rectangle_has_positive_area(b))overlay_render_text_simple(erb,&theme->font_,w->anchor.text,r.x1,r.y1,b,OVERLAY_TEXT_COLOUR_0_);
+    if(rectangle_has_positive_area(b))overlay_text_single_line_render(erb,&theme->font_,b,w->anchor.text,r.x1,r.y1,OVERLAY_TEXT_COLOUR_0_);
 }
 
 static widget * text_anchor_widget_select(overlay_theme * theme,widget * w,int x_in,int y_in)
 {
-    if(theme->h_bar_select(rectangle_subtract_offset(w->base.r,x_in,y_in),w->base.status,theme))return w;
+    if(theme->h_bar_select(theme,rectangle_subtract_offset(w->base.r,x_in,y_in),w->base.status))return w;
 
     return NULL;
 }

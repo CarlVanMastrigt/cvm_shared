@@ -71,7 +71,7 @@ static void all_visible_contiguous_box_widget_render(overlay_theme * theme,widge
     rectangle r=rectangle_add_offset(w->base.r,x_off,y_off);
     //r.y1+=7+(int)(11.0*sin(SDL_GetTicks()*0.004));
     //r.x1+=65+(int)(11.0*sin(SDL_GetTicks()*0.001-1));
-    theme->box_render(r,w->base.status|WIDGET_V_FIRST,theme,erb,bounds,OVERLAY_MAIN_COLOUR_);
+    theme->box_render(erb,theme,bounds,r,w->base.status,OVERLAY_MAIN_COLOUR_);
     //theme->box_render(rectangle_add_offset(w->base.r,x_off,y_off),w->base.status,theme,erb,bounds,OVERLAY_MAIN_COLOUR_);
 
     x_off+=w->base.r.x1;
@@ -104,7 +104,7 @@ static widget * contiguous_box_widget_select(overlay_theme * theme,widget * w,in
 {
     widget * tmp;
 
-    if(theme->box_select(rectangle_subtract_offset(w->base.r,x_in,y_in),w->base.status,theme))
+    if(theme->box_select(theme,rectangle_subtract_offset(w->base.r,x_in,y_in),w->base.status))
     {
         x_in-=w->base.r.x1;
         y_in-=w->base.r.y1;

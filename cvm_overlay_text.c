@@ -417,7 +417,7 @@ int overlay_size_text_simple(cvm_overlay_font * font,char * text)
     return w;
 }
 
-void overlay_render_text_simple(cvm_overlay_element_render_buffer * erb,cvm_overlay_font * font,char * text,int x,int y,rectangle bounds,overlay_colour_ colour)
+void overlay_text_single_line_render(cvm_overlay_element_render_buffer * erb,cvm_overlay_font * font,rectangle bounds,char * text,int x,int y,overlay_colour_ colour)
 {
     uint32_t gi,prev_gi,incr;
     FT_Vector kern;
@@ -445,7 +445,7 @@ void overlay_render_text_simple(cvm_overlay_element_render_buffer * erb,cvm_over
 
         prev_gi=gi;
 
-        cvm_render_shaded_overlay_element(erb,rectangle_add_offset(g->pos,x,y),bounds,g->tile->x_pos<<2,g->tile->y_pos<<2,colour);
+        cvm_render_shaded_overlay_element(erb,bounds,rectangle_add_offset(g->pos,x,y),g->tile->x_pos<<2,g->tile->y_pos<<2,colour);
 
         x+=cvm_overlay_get_glyph_advance(font,g);
 
@@ -453,7 +453,7 @@ void overlay_render_text_simple(cvm_overlay_element_render_buffer * erb,cvm_over
     }
 }
 
-void overlay_render_text_selection_simple(cvm_overlay_element_render_buffer * erb,cvm_overlay_font * font,char * text,int x,int y,rectangle bounds,overlay_colour_ colour,char * selection_start,char * selection_end)
+void overlay_text_single_line_render_selection(cvm_overlay_element_render_buffer * erb,cvm_overlay_font * font,char * text,int x,int y,rectangle bounds,overlay_colour_ colour,char * selection_start,char * selection_end)
 {
     uint32_t gi,prev_gi,incr;
     FT_Vector kern;
@@ -493,7 +493,7 @@ void overlay_render_text_selection_simple(cvm_overlay_element_render_buffer * er
 
         prev_gi=gi;
 
-        cvm_render_shaded_overlay_element(erb,rectangle_add_offset(g->pos,x,y),bounds,g->tile->x_pos<<2,g->tile->y_pos<<2,colour);
+        cvm_render_shaded_overlay_element(erb,bounds,rectangle_add_offset(g->pos,x,y),g->tile->x_pos<<2,g->tile->y_pos<<2,colour);
 
         x+=cvm_overlay_get_glyph_advance(font,g);
 
@@ -504,10 +504,104 @@ void overlay_render_text_selection_simple(cvm_overlay_element_render_buffer * er
     if(text==selection_end) se=x;
     se+=selection_end==selection_start;
 
-    cvm_render_fill_overlay_element(erb,(rectangle){.x1=ss,.y1=y,.x2=se,.y2=y+font->glyph_size},bounds,OVERLAY_TEXT_HIGHLIGHT_COLOUR_);
+    cvm_render_fill_overlay_element(erb,bounds,((rectangle){.x1=ss,.y1=y,.x2=se,.y2=y+font->glyph_size}),OVERLAY_TEXT_HIGHLIGHT_COLOUR_);
 }
 
-char * overlay_text_find_offset_simple(cvm_overlay_font * font,char * text,int relative_x)
+void overlay_text_single_line_box_constrained_render(cvm_overlay_element_render_buffer * erb,overlay_theme * theme,rectangle bounds,char * text,int x,int y,overlay_colour_ colour,rectangle box_r,uint32_t box_status)
+{
+    uint32_t gi,prev_gi,incr;
+    FT_Vector kern;
+    cvm_overlay_glyph * g;
+    cvm_overlay_font * font;
+
+    prev_gi=0;
+    font=&theme->font_;
+
+    if(rectangle_has_positive_area(bounds))while(*text)
+    {
+        if(*text==' ')
+        {
+            x+=font->space_advance;
+            prev_gi=font->space_character_index;
+            text++;
+            continue;
+        }
+
+        gi=cvm_overlay_get_utf8_glyph_index(font->face,(uint8_t*)text,&incr);
+
+        g=cvm_overlay_find_glpyh(font,gi);
+
+        cvm_overlay_prepare_glyph_render_data(erb,font,g);
+
+        if(prev_gi && !FT_Get_Kerning(font->face,prev_gi,gi,0,&kern)) x+=kern.x>>6;
+
+        prev_gi=gi;
+
+        theme->shaded_over_box_render(erb,theme,bounds,rectangle_add_offset(g->pos,x,y),colour,box_r,box_status,g->tile->x_pos<<2,g->tile->y_pos<<2);
+
+        x+=cvm_overlay_get_glyph_advance(font,g);
+
+        text+=incr;
+    }
+}
+
+void overlay_text_single_line_box_constrained_selection_render(cvm_overlay_element_render_buffer * erb,overlay_theme * theme,rectangle bounds,char * text,int x,int y,overlay_colour_ colour,char * selection_start,char * selection_end,rectangle box_r,uint32_t box_status)
+{
+    uint32_t gi,prev_gi,incr;
+    FT_Vector kern;
+    cvm_overlay_glyph * g;
+    int ss,se;
+    cvm_overlay_font * font;
+
+    prev_gi=0;
+    font=&theme->font_;
+
+    while(*text)
+    {
+        if(text==selection_start) ss=x;
+        if(text==selection_end) se=x;
+
+        if(*text==' ')
+        {
+            x+=font->space_advance;
+            prev_gi=font->space_character_index;
+            text++;
+            continue;
+        }
+
+        gi=cvm_overlay_get_utf8_glyph_index(font->face,(uint8_t*)text,&incr);
+
+        g=cvm_overlay_find_glpyh(font,gi);
+
+        cvm_overlay_prepare_glyph_render_data(erb,font,g);
+
+        if(prev_gi && !FT_Get_Kerning(font->face,prev_gi,gi,0,&kern))
+        {
+            x+=kern.x>>6;
+            if(kern.x)
+            {
+                if(text==selection_start) ss=x;
+                if(text==selection_end) se=x;
+            }
+        }
+
+        prev_gi=gi;
+
+        theme->shaded_over_box_render(erb,theme,bounds,rectangle_add_offset(g->pos,x,y),colour,box_r,box_status,g->tile->x_pos<<2,g->tile->y_pos<<2);
+
+        x+=cvm_overlay_get_glyph_advance(font,g);
+
+        text+=incr;
+    }
+
+    if(text==selection_start) ss=x;
+    if(text==selection_end) se=x;
+    se+=selection_end==selection_start;
+
+    theme->fill_over_box_render(erb,theme,bounds,((rectangle){.x1=ss,.y1=y,.x2=se,.y2=y+font->glyph_size}),colour,box_r,box_status);
+}
+
+char * overlay_text_single_line_find_offset(cvm_overlay_font * font,char * text,int relative_x)
 {
     uint32_t gi,prev_gi,incr;
     FT_Vector kern;
@@ -548,14 +642,13 @@ char * overlay_text_find_offset_simple(cvm_overlay_font * font,char * text,int r
     return text;
 }
 
-void overlay_process_multiline_text(cvm_overlay_font * font,cvm_overlay_text_block * block,char * text,int wrapping_width)
+void overlay_text_multiline_processing(cvm_overlay_font * font,cvm_overlay_text_block * block,char * text,int wrapping_width)
 {
     uint32_t gi,prev_gi,incr;
     int w;
     char * word_start;
     bool line_start=true;
     FT_Vector kern;
-
     cvm_overlay_glyph * g;
 
     w=0;
@@ -636,7 +729,7 @@ void overlay_process_multiline_text(cvm_overlay_font * font,cvm_overlay_text_blo
     block->lines[block->line_count++].finish=text;
 }
 
-void overlay_render_multiline_text(cvm_overlay_element_render_buffer * erb,cvm_overlay_font * font,cvm_overlay_text_block * block,int x,int y,rectangle bounds,overlay_colour_ colour)
+void overlay_text_multiline_render(cvm_overlay_element_render_buffer * erb,cvm_overlay_font * font,rectangle bounds,cvm_overlay_text_block * block,int x,int y,overlay_colour_ colour)
 {
     uint32_t i,gi,prev_gi,incr;
     FT_Vector kern;
@@ -675,7 +768,7 @@ void overlay_render_multiline_text(cvm_overlay_element_render_buffer * erb,cvm_o
 
             prev_gi=gi;
 
-            cvm_render_shaded_overlay_element(erb,rectangle_add_offset(g->pos,x,y),bounds,g->tile->x_pos<<2,g->tile->y_pos<<2,colour);
+            cvm_render_shaded_overlay_element(erb,bounds,rectangle_add_offset(g->pos,x,y),g->tile->x_pos<<2,g->tile->y_pos<<2,colour);
 
             x+=cvm_overlay_get_glyph_advance(font,g);
         }
@@ -685,7 +778,7 @@ void overlay_render_multiline_text(cvm_overlay_element_render_buffer * erb,cvm_o
     }
 }
 
-void overlay_render_multiline_text_selection(cvm_overlay_element_render_buffer * erb,cvm_overlay_font * font,cvm_overlay_text_block * block,int x,int y,rectangle bounds,overlay_colour_ colour,char * selection_start,char * selection_end)
+void overlay_text_multiline_selection_render(cvm_overlay_element_render_buffer * erb,cvm_overlay_font * font,rectangle bounds,cvm_overlay_text_block * block,int x,int y,overlay_colour_ colour,char * selection_start,char * selection_end)
 {
     uint32_t i,gi,prev_gi,incr;
     FT_Vector kern;
@@ -735,7 +828,7 @@ void overlay_render_multiline_text_selection(cvm_overlay_element_render_buffer *
 
             prev_gi=gi;
 
-            cvm_render_shaded_overlay_element(erb,rectangle_add_offset(g->pos,x,y),bounds,g->tile->x_pos<<2,g->tile->y_pos<<2,colour);
+            cvm_render_shaded_overlay_element(erb,bounds,rectangle_add_offset(g->pos,x,y),g->tile->x_pos<<2,g->tile->y_pos<<2,colour);
 
             x+=cvm_overlay_get_glyph_advance(font,g);
         }
@@ -744,7 +837,7 @@ void overlay_render_multiline_text_selection(cvm_overlay_element_render_buffer *
 
         if(ss!=se)
         {
-            cvm_render_fill_overlay_element(erb,(rectangle){.x1=ss,.y1=y,.x2=se,.y2=y+font->glyph_size},bounds,OVERLAY_TEXT_HIGHLIGHT_COLOUR_);
+            cvm_render_fill_overlay_element(erb,bounds,((rectangle){.x1=ss,.y1=y,.x2=se,.y2=y+font->glyph_size}),OVERLAY_TEXT_HIGHLIGHT_COLOUR_);
             ss=se=x_start;
         }
 
@@ -753,7 +846,7 @@ void overlay_render_multiline_text_selection(cvm_overlay_element_render_buffer *
     }
 }
 
-char * overlay_find_multiline_text_offset(cvm_overlay_font * font,cvm_overlay_text_block * block,int relative_x,int relative_y)
+char * overlay_text_multiline_find_offset(cvm_overlay_font * font,cvm_overlay_text_block * block,int relative_x,int relative_y)
 {
     uint32_t gi,prev_gi,incr;
     FT_Vector kern;
@@ -826,7 +919,7 @@ cvm_overlay_glyph * overlay_get_glyph(cvm_overlay_element_render_buffer * erb,cv
     return g;
 }
 
-void overlay_render_centred_glyph(cvm_overlay_element_render_buffer * erb,cvm_overlay_font * font,char * icon_glyph,rectangle r,rectangle bounds,overlay_colour_ colour)
+void overlay_text_centred_glyph_render(cvm_overlay_element_render_buffer * erb,cvm_overlay_font * font,rectangle bounds,rectangle r,char * icon_glyph,overlay_colour_ colour)
 {
     cvm_overlay_glyph * g;
 
@@ -839,9 +932,24 @@ void overlay_render_centred_glyph(cvm_overlay_element_render_buffer * erb,cvm_ov
     r.x1=((r.x1+r.x2)>>1) - ((g->pos.x2-g->pos.x1+1)>>1);
     r.x2=r.x1+g->pos.x2-g->pos.x1;
 
-    cvm_render_shaded_overlay_element(erb,r,bounds,g->tile->x_pos<<2,g->tile->y_pos<<2,colour);
+    cvm_render_shaded_overlay_element(erb,bounds,r,g->tile->x_pos<<2,g->tile->y_pos<<2,colour);
 }
 
+void overlay_text_centred_glyph_box_constrained_render(cvm_overlay_element_render_buffer * erb,overlay_theme * theme,rectangle bounds,rectangle r,char * icon_glyph,overlay_colour_ colour,rectangle box_r,uint32_t box_status)
+{
+    cvm_overlay_glyph * g;
+
+    g=overlay_get_glyph(erb,&theme->font_,icon_glyph);
+
+    if(!g->tile)return;
+
+    r.y1=((r.y1+r.y2)>>1) - ((g->pos.y2-g->pos.y1+1)>>1);
+    r.y2=r.y1+g->pos.y2-g->pos.y1;
+    r.x1=((r.x1+r.x2)>>1) - ((g->pos.x2-g->pos.x1+1)>>1);
+    r.x2=r.x1+g->pos.x2-g->pos.x1;
+
+    theme->shaded_over_box_render(erb,theme,bounds,r,colour,box_r,box_status,g->tile->x_pos<<2,g->tile->y_pos<<2);
+}
 
 
 

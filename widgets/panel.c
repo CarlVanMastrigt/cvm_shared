@@ -66,7 +66,7 @@ static widget_behaviour_function_set panel_behaviour_functions=
 
 void panel_widget_render(overlay_theme * theme,widget * w,int x_off,int y_off,cvm_overlay_element_render_buffer * erb,rectangle bounds)
 {
-    theme->panel_render(rectangle_add_offset(w->base.r,x_off,y_off),w->base.status,theme,erb,bounds,OVERLAY_BACKGROUND_COLOUR_);
+    theme->panel_render(erb,theme,bounds,rectangle_add_offset(w->base.r,x_off,y_off),w->base.status,OVERLAY_BACKGROUND_COLOUR_);
 
     render_widget(w->panel.contents,x_off+w->base.r.x1,y_off+w->base.r.y1,erb,bounds);
 }
@@ -76,7 +76,7 @@ widget * panel_widget_select(overlay_theme * theme,widget * w,int x_in,int y_in)
     widget * tmp=select_widget(w->panel.contents,x_in-w->base.r.x1,y_in-w->base.r.y1);
 	if(tmp)return tmp;
 
-	if(theme->panel_select(rectangle_subtract_offset(w->base.r,x_in,y_in),w->base.status,theme))return w;
+	if(theme->panel_select(theme,rectangle_subtract_offset(w->base.r,x_in,y_in),w->base.status))return w;
     return NULL;
 }
 

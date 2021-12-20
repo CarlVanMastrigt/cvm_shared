@@ -478,7 +478,7 @@ static void file_search_button_widget_render(overlay_theme * theme,widget * w,in
 
 static widget * file_search_button_widget_select(overlay_theme * theme,widget * w,int x_in,int y_in)
 {
-    if(theme->h_bar_select(rectangle_subtract_offset(w->base.r,x_in,y_in),w->base.status,theme))return w;
+    if(theme->h_bar_select(theme,rectangle_subtract_offset(w->base.r,x_in,y_in),w->base.status))return w;
     return NULL;
 }
 
@@ -1197,16 +1197,16 @@ static void file_search_filter_type_button_widget_render(overlay_theme * theme,w
     if(widget_active(fsi->type_filter_popup))text=NULL;
 
     rectangle r=rectangle_add_offset(w->base.r,x_off,y_off);
-	theme->h_bar_render(r,w->base.status,theme,erb,bounds,OVERLAY_MAIN_COLOUR_);
+	theme->h_bar_render(erb,theme,bounds,r,w->base.status,OVERLAY_MAIN_COLOUR_);
 
     r=overlay_simple_text_rectangle(r,theme->font_.glyph_size,theme->h_bar_text_offset);
     rectangle b=get_rectangle_overlap(r,bounds);
-    if(rectangle_has_positive_area(b))overlay_render_text_simple(erb,&theme->font_,text,r.x1,r.y1,b,OVERLAY_TEXT_COLOUR_0_);
+    if(rectangle_has_positive_area(b))overlay_text_single_line_render(erb,&theme->font_,b,text,r.x1,r.y1,OVERLAY_TEXT_COLOUR_0_);
 }
 
 static widget * file_search_filter_type_button_widget_select(overlay_theme * theme,widget * w,int x_in,int y_in)
 {
-    if(theme->h_bar_select(rectangle_subtract_offset(w->base.r,x_in,y_in),w->base.status,theme))return w;
+    if(theme->h_bar_select(theme,rectangle_subtract_offset(w->base.r,x_in,y_in),w->base.status))return w;
     return NULL;
 }
 
@@ -1317,16 +1317,16 @@ static void file_search_export_type_button_widget_render(overlay_theme * theme,w
     if(fsi->export_formats) text=fsi->export_formats[fsi->active_export_format];
 
     rectangle r=rectangle_add_offset(w->base.r,x_off,y_off);
-	theme->h_bar_render(r,w->base.status,theme,erb,bounds,OVERLAY_MAIN_COLOUR_);
+	theme->h_bar_render(erb,theme,bounds,r,w->base.status,OVERLAY_MAIN_COLOUR_);
 
     r=overlay_simple_text_rectangle(r,theme->font_.glyph_size,theme->h_bar_text_offset);
     rectangle b=get_rectangle_overlap(r,bounds);
-    if(rectangle_has_positive_area(b))overlay_render_text_simple(erb,&theme->font_,text,r.x1,r.y1,b,OVERLAY_TEXT_COLOUR_0_);
+    if(rectangle_has_positive_area(b))overlay_text_single_line_render(erb,&theme->font_,b,text,r.x1,r.y1,OVERLAY_TEXT_COLOUR_0_);
 }
 
 static widget * file_search_export_type_button_widget_select(overlay_theme * theme,widget * w,int x_in,int y_in)
 {
-    if(theme->h_bar_select(rectangle_subtract_offset(w->base.r,x_in,y_in),w->base.status,theme))return w;
+    if(theme->h_bar_select(theme,rectangle_subtract_offset(w->base.r,x_in,y_in),w->base.status))return w;
     return NULL;
 }
 

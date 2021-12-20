@@ -66,7 +66,7 @@ static bool textbox_widget_scroll(overlay_theme * theme,widget * w,int delta)
 static void textbox_widget_left_click(overlay_theme * theme,widget * w,int x,int y)
 {
     adjust_coordinates_to_widget_local(w,&x,&y);
-    w->textbox.selection_end=w->textbox.selection_begin=overlay_find_multiline_text_offset(&theme->font_,&w->textbox.text_block,
+    w->textbox.selection_end=w->textbox.selection_begin=overlay_text_multiline_find_offset(&theme->font_,&w->textbox.text_block,
         x-theme->x_box_offset-w->textbox.x_offset,y-theme->y_box_offset+w->textbox.y_offset);
 }
 
@@ -84,7 +84,7 @@ static bool textbox_widget_left_release(overlay_theme * theme,widget * clicked,w
 static void textbox_widget_mouse_movement(overlay_theme * theme,widget * w,int x,int y)
 {
     adjust_coordinates_to_widget_local(w,&x,&y);
-    w->textbox.selection_end=overlay_find_multiline_text_offset(&theme->font_,&w->textbox.text_block,
+    w->textbox.selection_end=overlay_text_multiline_find_offset(&theme->font_,&w->textbox.text_block,
         x-theme->x_box_offset-w->textbox.x_offset,y-theme->y_box_offset+w->textbox.y_offset);
 
     textbox_check_visible_offset(w,theme);
@@ -162,7 +162,7 @@ static void textbox_widget_render(overlay_theme * theme,widget * w,int x_off,int
     char *sb,*se;
 
     rectangle r=rectangle_add_offset(w->base.r,x_off,y_off);
-	theme->box_render(r,w->base.status,theme,erb,bounds,OVERLAY_MAIN_COLOUR_);
+	theme->box_render(erb,theme,bounds,r,w->base.status,OVERLAY_MAIN_COLOUR_);
 
 	r.x1+=theme->x_box_offset;
 	r.x2-=theme->x_box_offset;
@@ -172,20 +172,20 @@ static void textbox_widget_render(overlay_theme * theme,widget * w,int x_off,int
     rectangle b=get_rectangle_overlap(r,bounds);
     if(rectangle_has_positive_area(b))
     {
-        if(w->textbox.selection_begin==w->textbox.selection_end)overlay_render_multiline_text(erb,&theme->font_,&w->textbox.text_block,r.x1,r.y1-w->textbox.y_offset,b,OVERLAY_TEXT_COLOUR_0_);
+        if(w->textbox.selection_begin==w->textbox.selection_end)overlay_text_multiline_render(erb,&theme->font_,b,&w->textbox.text_block,r.x1,r.y1-w->textbox.y_offset,OVERLAY_TEXT_COLOUR_0_);
         else
         {
             if(w->textbox.selection_end > w->textbox.selection_begin) sb=w->textbox.selection_begin, se=w->textbox.selection_end;
             else sb=w->textbox.selection_end, se=w->textbox.selection_begin;
 
-            overlay_render_multiline_text_selection(erb,&theme->font_,&w->textbox.text_block,r.x1,r.y1-w->textbox.y_offset,b,OVERLAY_TEXT_COLOUR_0_,sb,se);
+            overlay_text_multiline_selection_render(erb,&theme->font_,b,&w->textbox.text_block,r.x1,r.y1-w->textbox.y_offset,OVERLAY_TEXT_COLOUR_0_,sb,se);
         }
     }
 }
 
 static widget * textbox_widget_select(overlay_theme * theme,widget * w,int x_in,int y_in)
 {
-    if(theme->box_select(rectangle_subtract_offset(w->base.r,x_in,y_in),w->base.status,theme))return w;
+    if(theme->box_select(theme,rectangle_subtract_offset(w->base.r,x_in,y_in),w->base.status))return w;
     return NULL;
 }
 
@@ -196,7 +196,7 @@ static void textbox_widget_min_w(overlay_theme * theme,widget * w)
 
 static void textbox_widget_min_h(overlay_theme * theme,widget * w)
 {
-    overlay_process_multiline_text(&theme->font_,&w->textbox.text_block,w->textbox.text,w->base.r.x2-w->base.r.x1-2*theme->x_box_offset);
+    overlay_text_multiline_processing(&theme->font_,&w->textbox.text_block,w->textbox.text,w->base.r.x2-w->base.r.x1-2*theme->x_box_offset);
 
     if(w->textbox.min_visible_lines==0)
     {
