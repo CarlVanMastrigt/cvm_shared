@@ -24,7 +24,7 @@ void blank_enterbox_function(widget * w)
     printf("blank enterbox: %s\n",w->enterbox.text);
 }
 
-static inline void enterbox_delete_selection(widget * w,char * s_begin,char * s_end)
+static inline void enterbox_delete_selection(overlay_theme * theme,widget * w,char * s_begin,char * s_end)
 {
     if(s_begin>s_end)
     {
@@ -36,6 +36,8 @@ static inline void enterbox_delete_selection(widget * w,char * s_begin,char * s_
     {
         memmove(s_begin,s_end,strlen(s_end) + 1);/// +1 for null terminating character
     }
+
+    w->enterbox.text_pixel_length=overlay_text_single_line_get_pixel_length(&theme->font_,w->enterbox.text);
 }
 
 static void enterbox_copy_selection_to_clipboard(widget * w)
@@ -64,7 +66,7 @@ static void enterbox_copy_selection_to_clipboard(widget * w)
 }
 
 /// perhaps return pass/fail such that enterbox can flash/fade a colour upon failure
-static void enterbox_enter_text(widget * w,char * text)
+static void enterbox_enter_text(overlay_theme * theme,widget * w,char * text)
 {
     char *s_begin,*s_end;
     int new_glyph_count,new_strlen;
@@ -83,6 +85,8 @@ static void enterbox_enter_text(widget * w,char * text)
         memcpy(s_begin,text,new_strlen);
         w->enterbox.selection_begin = w->enterbox.selection_end = s_begin + new_strlen;
     }
+
+    w->enterbox.text_pixel_length=overlay_text_single_line_get_pixel_length(&theme->font_,w->enterbox.text);
 }
 
 static void enterbox_check_visible_offset(widget * w,overlay_theme * theme)
@@ -95,14 +99,19 @@ static void enterbox_check_visible_offset(widget * w,overlay_theme * theme)
     tmp=*w->enterbox.selection_end;
     *w->enterbox.selection_end='\0';
 
-    current_offset=overlay_size_text_simple(&theme->font_,w->enterbox.text);
+    current_offset=overlay_text_single_line_get_pixel_length(&theme->font_,w->enterbox.text);
 
     *w->enterbox.selection_end=tmp;
 
-    if(w->enterbox.visible_offset>current_offset) w->enterbox.visible_offset=current_offset;
-    if(w->enterbox.visible_offset+text_space<current_offset) w->enterbox.visible_offset=current_offset-text_space;
+//    if(w->enterbox.visible_offset>current_offset) w->enterbox.visible_offset=current_offset;
+//    if(w->enterbox.visible_offset+text_space<current_offset) w->enterbox.visible_offset=current_offset-text_space;
 
-    current_offset=overlay_size_text_simple(&theme->font_,w->enterbox.text)-text_space;///max offset
+    if(w->enterbox.visible_offset>current_offset-theme->h_text_fade_range) w->enterbox.visible_offset=current_offset-theme->h_text_fade_range;
+    if(w->enterbox.visible_offset<current_offset-text_space+theme->h_text_fade_range) w->enterbox.visible_offset=current_offset-text_space+theme->h_text_fade_range;
+
+    ///special condition to put offset at middle???
+    if(w->enterbox.visible_offset<0)w->enterbox.visible_offset=0;
+    current_offset=w->enterbox.text_pixel_length-text_space;///max offset
     if(current_offset < 0) w->enterbox.visible_offset=0;
     else if(w->enterbox.visible_offset > current_offset) w->enterbox.visible_offset=current_offset;
 }
@@ -128,7 +137,7 @@ static bool enterbox_widget_key_down(overlay_theme * theme,widget * w,SDL_Keycod
         if(mod&KMOD_CTRL)
         {
             enterbox_copy_selection_to_clipboard(w);
-            enterbox_delete_selection(w,s_begin,s_end);
+            enterbox_delete_selection(theme,w,s_begin,s_end);
             w->enterbox.selection_begin = w->enterbox.selection_end = s_begin;
         }
         break;
@@ -138,7 +147,7 @@ static bool enterbox_widget_key_down(overlay_theme * theme,widget * w,SDL_Keycod
         {
             if(SDL_HasClipboardText())
             {
-                enterbox_enter_text(w,SDL_GetClipboardText());
+                enterbox_enter_text(theme,w,SDL_GetClipboardText());
             }
         }
         break;
@@ -160,14 +169,14 @@ static bool enterbox_widget_key_down(overlay_theme * theme,widget * w,SDL_Keycod
             if(w->enterbox.selection_begin > w->enterbox.selection_end) w->enterbox.selection_begin-=w->enterbox.selection_end-s;
             else if(w->enterbox.selection_begin > s) w->enterbox.selection_begin=s;
 
-            enterbox_delete_selection(w,s,w->enterbox.selection_end);
+            enterbox_delete_selection(theme,w,s,w->enterbox.selection_end);
 
             w->enterbox.selection_end=s;
         }
         else
         {
             if(s_begin==s_end) s_begin=cvm_overlay_utf8_get_previous_glyph(w->enterbox.text,s_begin);
-            enterbox_delete_selection(w,s_begin,s_end);
+            enterbox_delete_selection(theme,w,s_begin,s_end);
             w->enterbox.selection_begin = w->enterbox.selection_end = s_begin;
         }
         break;
@@ -184,12 +193,12 @@ static bool enterbox_widget_key_down(overlay_theme * theme,widget * w,SDL_Keycod
                 else w->enterbox.selection_begin = w->enterbox.selection_end;
             }
 
-            enterbox_delete_selection(w,w->enterbox.selection_end,s);
+            enterbox_delete_selection(theme,w,w->enterbox.selection_end,s);
         }
         else
         {
             if(s_begin==s_end) s_end=cvm_overlay_utf8_get_next_glyph(s_end);
-            enterbox_delete_selection(w,s_begin,s_end);
+            enterbox_delete_selection(theme,w,s_begin,s_end);
             w->enterbox.selection_begin = w->enterbox.selection_end = s_begin;
         }
         break;
@@ -284,7 +293,7 @@ static void enterbox_widget_mouse_movement(overlay_theme * theme,widget * w,int 
 
 static bool enterbox_widget_text_input(overlay_theme * theme,widget * w,char * text)
 {
-    enterbox_enter_text(w,text);
+    enterbox_enter_text(theme,w,text);
     enterbox_check_visible_offset(w,theme);
     return true;
 }
@@ -299,7 +308,7 @@ static bool enterbox_widget_text_edit(overlay_theme * theme,widget * w,char * te
 
     text_space=w->base.r.x2-w->base.r.x1-2*theme->h_bar_text_offset-1;
 
-    current_offset=overlay_size_text_simple(&theme->font_,w->enterbox.composition_text);
+    current_offset=overlay_text_single_line_get_pixel_length(&theme->font_,w->enterbox.composition_text);
 
     if(w->enterbox.composition_visible_offset>current_offset) w->enterbox.composition_visible_offset=current_offset;
     if(w->enterbox.composition_visible_offset+text_space<current_offset) w->enterbox.composition_visible_offset=current_offset-text_space;
@@ -343,51 +352,83 @@ static widget_behaviour_function_set enterbox_behaviour_functions=
     .wid_delete     =   enterbox_widget_delete
 };
 
-
 static void enterbox_widget_render(overlay_theme * theme,widget * w,int x_off,int y_off,cvm_overlay_element_render_buffer * erb,rectangle bounds)
 {
     if(w->enterbox.update_contents_func && !is_currently_active_widget(w))w->enterbox.update_contents_func(w);
 
-	overlay_colour_ colour=OVERLAY_TEXT_COLOUR_0_;
-	char *text,*sb,*se;
-	int visible_offset;
+    if(w->enterbox.recalculate_text_size)
+    {
+        w->enterbox.text_pixel_length=overlay_text_single_line_get_pixel_length(&theme->font_,w->enterbox.text);
+        w->enterbox.recalculate_text_size=false;
+    }
 
-    text=w->enterbox.text;
+    overlay_text_single_line_render_data otslrd;
+    otslrd.flags=OVERLAY_TEXT_NORMAL_RENDER;
+    otslrd.erb=erb;
+    otslrd.theme=theme;
+    otslrd.bounds=bounds;
 
-    if(w->enterbox.selection_end > w->enterbox.selection_begin) sb=w->enterbox.selection_begin, se=w->enterbox.selection_end;
-    else sb=w->enterbox.selection_end, se=w->enterbox.selection_begin;
 
 	if(*w->enterbox.composition_text)
     {
-        colour=OVERLAY_TEXT_COMPOSITION_COLOUR_0_;
-        text=w->enterbox.composition_text;
-        sb=se=text+strlen(text);
-        visible_offset=w->enterbox.composition_visible_offset;
+        otslrd.colour=OVERLAY_TEXT_COMPOSITION_COLOUR_0_;
+        otslrd.text=w->enterbox.composition_text;
+        otslrd.selection_begin=otslrd.selection_end=otslrd.text+strlen(otslrd.text);
+        otslrd.x=-w->enterbox.composition_visible_offset;
     }
-    else visible_offset=w->enterbox.visible_offset;
+    else
+    {
+        otslrd.colour=OVERLAY_TEXT_COLOUR_0_;
+        otslrd.text=w->enterbox.text;
+        if(w->enterbox.selection_end > w->enterbox.selection_begin) otslrd.selection_begin=w->enterbox.selection_begin, otslrd.selection_end=w->enterbox.selection_end;
+        else otslrd.selection_begin=w->enterbox.selection_end, otslrd.selection_end=w->enterbox.selection_begin;
+        otslrd.x=-w->enterbox.visible_offset;
+    }
 
 	rectangle r=rectangle_add_offset(w->base.r,x_off,y_off);
 	theme->h_bar_render(erb,theme,bounds,r,w->base.status,OVERLAY_MAIN_COLOUR_);
 
-    r=overlay_simple_text_rectangle(r,theme->font_.glyph_size,theme->h_bar_text_offset);
-    rectangle b=get_rectangle_overlap(r,bounds);
-    if(rectangle_has_positive_area(b))
+    r=overlay_text_single_line_get_text_area(r,theme->font_.glyph_size,theme->h_bar_text_offset);
+    otslrd.x+=r.x1;
+    otslrd.y=r.y1;
+
+    #warning make is_currently_active_widget effectively part of w->base.status, would require setting flags in slightly painful manner but w/e
+    if(is_currently_active_widget(w))
     {
-        #warning make is_currently_active_widget effectively part of w->base.status, would require setting flags in slightly painful manner but w/e
-        if(is_currently_active_widget(w))overlay_text_single_line_render_selection(erb,&theme->font_,text,r.x1-visible_offset,r.y1,b,colour,sb,se);
-        else overlay_text_single_line_render(erb,&theme->font_,b,text,r.x1-visible_offset,r.y1,colour);
+        otslrd.flags|=OVERLAY_TEXT_SELECTED_RENDER;
     }
+
+    if(w->enterbox.min_glyphs_visible<w->enterbox.max_glyphs)
+    {
+        otslrd.flags|=OVERLAY_TEXT_FADING_RENDER;
+        otslrd.text_area=r;
+        otslrd.text_length=w->enterbox.text_pixel_length;
+    }
+
+    overlay_text_single_line_render(&otslrd);
+
+//    if(w->enterbox.min_glyphs_visible<w->enterbox.max_glyphs)
+//    {
+//        if(is_currently_active_widget(w))overlay_text_single_line_fading_selection_render(erb,&theme->font_,bounds,text,r.x1-visible_offset,r.y1,colour,r,theme->h_text_fade_range,w->enterbox.text_pixel_length,sb,se);
+//        else overlay_text_single_line_fading_render(erb,&theme->font_,bounds,text,r.x1-visible_offset,r.y1,colour,r,theme->h_text_fade_range,w->enterbox.text_pixel_length);
+//    }
+//    else
+//    {
+//        if(is_currently_active_widget(w))overlay_text_single_line_selection_render(erb,&theme->font_,bounds,text,r.x1-visible_offset,r.y1,colour,sb,se);
+//        else overlay_text_single_line_render(erb,&theme->font_,bounds,text,r.x1-visible_offset,r.y1,colour);
+//    }
 }
 
 static widget * enterbox_widget_select(overlay_theme * theme,widget * w,int x_in,int y_in)
 {
-    if(theme,theme->h_bar_select(theme,rectangle_subtract_offset(w->base.r,x_in,y_in),w->base.status))return w;
+    if(theme->h_bar_select(theme,rectangle_subtract_offset(w->base.r,x_in,y_in),w->base.status))return w;
 
     return NULL;
 }
 
 static void enterbox_widget_min_w(overlay_theme * theme,widget * w)
 {
+    w->enterbox.text_pixel_length=overlay_text_single_line_get_pixel_length(&theme->font_,w->enterbox.text);
     w->base.min_w = 2*theme->h_bar_text_offset+theme->font_.max_advance*w->enterbox.min_glyphs_visible+1;///+1 for caret, only necessary when bearingX is 0
 }
 
@@ -462,6 +503,7 @@ void set_enterbox_text(widget * w,char * text)
     w->enterbox.visible_offset=0;
     w->enterbox.selection_begin=w->enterbox.text;
     w->enterbox.selection_end=w->enterbox.text;
+    w->enterbox.recalculate_text_size=true;
 }
 
 void set_enterbox_action_upon_input(widget * w,widget_function func)

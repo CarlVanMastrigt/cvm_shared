@@ -1,15 +1,13 @@
 #version 450
 
 layout (location=0) in uvec4 data0;
-layout (location=1) in uvec4 data1;
+layout (location=1) in uvec2 data1;
 layout (location=2) in uvec4 data2;
 
 
 layout(location=0) flat out uvec4 d0;
-layout(location=1) flat out uvec4 d1;
+layout(location=1) flat out uvec2 d1;
 layout(location=2) flat out uvec4 d2;
-
-//layout(location=3) out vec4 c_out;
 
 layout (push_constant) uniform screen_dimensions
 {
@@ -32,6 +30,4 @@ void main()
     d0=data0;
     d1=data1;
     d2=data2;
-
-    //c_out=vec4(0.2,0.3,0.7,0.8);
 }

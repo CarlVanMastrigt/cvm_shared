@@ -379,7 +379,7 @@ bool get_ancestor_contiguous_box_data(widget * w,rectangle * r,uint32_t * status
         }
     }
 
-    fprintf(stderr,"SEARCHING FOR NONEXISTANT ANCESTOR CONTIGUOUS BOX\n");
+    fprintf(stderr,"SEARCHING FOR NONEXISTANT ANCESTOR CONTIGUOUS BOX\n");///do we even want this??? should return false be an acceptable way to test?
     exit(-1);
 
     return false;

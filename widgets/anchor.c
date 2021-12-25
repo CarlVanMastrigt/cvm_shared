@@ -98,9 +98,17 @@ static void text_anchor_widget_render(overlay_theme * theme,widget * w,int x_off
 	rectangle r=rectangle_add_offset(w->base.r,x_off,y_off);
 	theme->h_bar_render(erb,theme,bounds,r,w->base.status,OVERLAY_ALTERNATE_MAIN_COLOUR_);
 
-    r=overlay_simple_text_rectangle(r,theme->font_.glyph_size,theme->h_bar_text_offset);
-    rectangle b=get_rectangle_overlap(r,bounds);
-    if(rectangle_has_positive_area(b))overlay_text_single_line_render(erb,&theme->font_,b,w->anchor.text,r.x1,r.y1,OVERLAY_TEXT_COLOUR_0_);
+	overlay_text_single_line_render_data otslrd;
+    otslrd.flags=OVERLAY_TEXT_NORMAL_RENDER;
+    otslrd.erb=erb;
+    otslrd.theme=theme;
+    otslrd.bounds=bounds;
+    otslrd.text=w->anchor.text;
+    otslrd.x=r.x1+theme->h_bar_text_offset;
+    otslrd.y=(r.y1+r.y2-theme->font_.glyph_size)>>1;
+    otslrd.colour=OVERLAY_TEXT_COLOUR_0_;
+
+    overlay_text_single_line_render(&otslrd);
 }
 
 static widget * text_anchor_widget_select(overlay_theme * theme,widget * w,int x_in,int y_in)
@@ -112,7 +120,7 @@ static widget * text_anchor_widget_select(overlay_theme * theme,widget * w,int x
 
 static void text_anchor_widget_min_w(overlay_theme * theme,widget * w)
 {
-	w->base.min_w = overlay_size_text_simple(&theme->font_,w->anchor.text)+2*theme->h_bar_text_offset;
+	w->base.min_w = overlay_text_single_line_get_pixel_length(&theme->font_,w->anchor.text)+2*theme->h_bar_text_offset;
 }
 
 static void text_anchor_widget_min_h(overlay_theme * theme,widget * w)

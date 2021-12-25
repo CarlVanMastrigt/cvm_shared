@@ -235,19 +235,35 @@ static inline vec2i v2i_rs(vec2i v,int32_t right_shift)
 }
 static inline vec2i v2i_min(vec2i v1,vec2i v2)
 {
-    return (vec2i){ .x= v1.x+(((v2.x-v1.x)>>31)&(v2.x-v1.x)),
-                    .y= v1.y+(((v2.y-v1.y)>>31)&(v2.y-v1.y))};
+    return (vec2i){ .x= (v1.x<v2.x) ? v1.x : v2.x,
+                    .y= (v1.y<v2.y) ? v1.y : v2.y };
 }
 static inline vec2i v2i_max(vec2i v1,vec2i v2)
 {
-    return (vec2i){ .x= v1.x-(((v1.x-v2.x)>>31)&(v1.x-v2.x)),
-                    .y= v1.y-(((v1.y-v2.y)>>31)&(v1.y-v2.y))};
+    return (vec2i){ .x= (v1.x>v2.x) ? v1.x : v2.x,
+                    .y= (v1.y>v2.y) ? v1.y : v2.y };
 }
 static inline vec2i v2i_clamp(vec2i v,vec2i min,vec2i max)
 {
-    return (vec2i){ .x= v.x-(((v.x-min.x)>>31)&(v.x-min.x))+(((max.x-v.x)>>31)&(max.x-v.x)),
-                    .y= v.y-(((v.y-min.y)>>31)&(v.y-min.y))+(((max.y-v.y)>>31)&(max.y-v.y))};
+    return (vec2i){ .x= (v.x<min.x)?min.x:(v.x>max.x)?max.x:v.x,
+                    .y= (v.y<min.y)?min.y:(v.y>max.y)?max.y:v.y };
 }
+
+//static inline vec2i v2i_min(vec2i v1,vec2i v2)
+//{
+//    return (vec2i){ .x= v1.x+(((v2.x-v1.x)>>31)&(v2.x-v1.x)),
+//                    .y= v1.y+(((v2.y-v1.y)>>31)&(v2.y-v1.y))};
+//}
+//static inline vec2i v2i_max(vec2i v1,vec2i v2)
+//{
+//    return (vec2i){ .x= v1.x-(((v1.x-v2.x)>>31)&(v1.x-v2.x)),
+//                    .y= v1.y-(((v1.y-v2.y)>>31)&(v1.y-v2.y))};
+//}
+//static inline vec2i v2i_clamp(vec2i v,vec2i min,vec2i max)
+//{
+//    return (vec2i){ .x= v.x-(((v.x-min.x)>>31)&(v.x-min.x))+(((max.x-v.x)>>31)&(max.x-v.x)),
+//                    .y= v.y-(((v.y-min.y)>>31)&(v.y-min.y))+(((max.y-v.y)>>31)&(max.y-v.y))};
+//}
 
 
 

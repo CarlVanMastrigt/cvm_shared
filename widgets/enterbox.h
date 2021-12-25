@@ -33,6 +33,7 @@ typedef struct widget_enterbox
     int max_glyphs;
     int min_glyphs_visible;
     int visible_offset;
+    int text_pixel_length;
     widget_function activation_func;
     widget_function update_contents_func;
     widget_function upon_input;
@@ -47,6 +48,7 @@ typedef struct widget_enterbox
     uint32_t delete_all_when_first_selected:1;
     uint32_t activate_upon_deselect:1;
     uint32_t free_data:1;
+    uint32_t recalculate_text_size:1;
 }
 widget_enterbox;
 

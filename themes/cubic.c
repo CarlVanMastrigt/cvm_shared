@@ -178,7 +178,7 @@ static void cubic_create_shape(cvm_overlay_element_render_buffer * erb,cvm_vk_im
     }
 }
 
-static void cubic_shaded_element_over_box_render(cvm_overlay_element_render_buffer * erb,overlay_theme * theme,rectangle bounds,rectangle r,overlay_colour_ colour,rectangle box_r,uint32_t box_status,int x_off,int y_off)
+static void cubic_shaded_element_over_box_render(cvm_overlay_element_render_buffer * erb,overlay_theme * theme,rectangle bounds,rectangle r,overlay_colour_ colour,int x_off,int y_off,rectangle box_r,uint32_t box_status)
 {
     cubic_theme_data * cubic;
 
@@ -230,7 +230,7 @@ static void cubic_shaded_element_over_box_render(cvm_overlay_element_render_buff
         {
             if(y2_p>r.y2)y2_p=r.y2;
 
-            cvm_render_shaded_overlap_min_overlay_element(erb,bounds,((rectangle){.x1=r.x1,.y1=y1_p,.x2=x2_p,.y2=y2_p}),x_off,y_off_p,tile_x_pos-box_r.x1,tile_y_pos-box_r.y1,colour);
+            cvm_render_shaded_overlap_min_overlay_element(erb,bounds,((rectangle){.x1=r.x1,.y1=y1_p,.x2=x2_p,.y2=y2_p}),colour,x_off,y_off_p,tile_x_pos-box_r.x1,tile_y_pos-box_r.y1);
 
             y_off_p+=y2_p-y1_p;
             y1_p=y2_p;
@@ -241,7 +241,7 @@ static void cubic_shaded_element_over_box_render(cvm_overlay_element_render_buff
         {
             if(y2_p>r.y2)y2_p=r.y2;
 
-            cvm_render_shaded_overlay_element(erb,bounds,((rectangle){.x1=r.x1,.y1=y1_p,.x2=x2_p,.y2=y2_p}),x_off,y_off_p,colour);
+            cvm_render_shaded_overlay_element(erb,bounds,((rectangle){.x1=r.x1,.y1=y1_p,.x2=x2_p,.y2=y2_p}),colour,x_off,y_off_p);
 
             y_off_p+=y2_p-y1_p;
             y1_p=y2_p;
@@ -249,7 +249,7 @@ static void cubic_shaded_element_over_box_render(cvm_overlay_element_render_buff
 
         if(r.y2>box_r.y2-radius)
         {
-            cvm_render_shaded_overlap_min_overlay_element(erb,bounds,((rectangle){.x1=r.x1,.y1=y1_p,.x2=x2_p,.y2=r.y2}),x_off,y_off_p,tile_x_pos-box_r.x1,tile_y_pos+diameter-box_r.y2,colour);
+            cvm_render_shaded_overlap_min_overlay_element(erb,bounds,((rectangle){.x1=r.x1,.y1=y1_p,.x2=x2_p,.y2=r.y2}),colour,x_off,y_off_p,tile_x_pos-box_r.x1,tile_y_pos+diameter-box_r.y2);
         }
 
         x_off+=x2_p-r.x1;///move to end?
@@ -261,7 +261,7 @@ static void cubic_shaded_element_over_box_render(cvm_overlay_element_render_buff
     {
         if(x2_p>r.x2)x2_p=r.x2;
 
-        cvm_render_shaded_overlay_element(erb,bounds,((rectangle){.x1=r.x1,.y1=r.y1,.x2=x2_p,.y2=r.y2}),x_off,y_off,colour);
+        cvm_render_shaded_overlay_element(erb,bounds,((rectangle){.x1=r.x1,.y1=r.y1,.x2=x2_p,.y2=r.y2}),colour,x_off,y_off);
 
         x_off+=x2_p-r.x1;
         r.x1=x2_p;
@@ -274,7 +274,7 @@ static void cubic_shaded_element_over_box_render(cvm_overlay_element_render_buff
         {
             if(y2_p>r.y2)y2_p=r.y2;
 
-            cvm_render_shaded_overlap_min_overlay_element(erb,bounds,((rectangle){.x1=r.x1,.y1=r.y1,.x2=r.x2,.y2=y2_p}),x_off,y_off,tile_x_pos+diameter-box_r.x2,tile_y_pos-box_r.y1,colour);
+            cvm_render_shaded_overlap_min_overlay_element(erb,bounds,((rectangle){.x1=r.x1,.y1=r.y1,.x2=r.x2,.y2=y2_p}),colour,x_off,y_off,tile_x_pos+diameter-box_r.x2,tile_y_pos-box_r.y1);
 
             y_off+=y2_p-r.y1;
             r.y1=y2_p;
@@ -285,7 +285,7 @@ static void cubic_shaded_element_over_box_render(cvm_overlay_element_render_buff
         {
             if(y2_p>r.y2)y2_p=r.y2;
 
-            cvm_render_shaded_overlay_element(erb,bounds,((rectangle){.x1=r.x1,.y1=r.y1,.x2=r.x2,.y2=y2_p}),x_off,y_off,colour);
+            cvm_render_shaded_overlay_element(erb,bounds,((rectangle){.x1=r.x1,.y1=r.y1,.x2=r.x2,.y2=y2_p}),colour,x_off,y_off);
 
             y_off+=y2_p-r.y1;
             r.y1=y2_p;
@@ -293,7 +293,128 @@ static void cubic_shaded_element_over_box_render(cvm_overlay_element_render_buff
 
         if(r.y2>box_r.y2-radius)
         {
-            cvm_render_shaded_overlap_min_overlay_element(erb,bounds,r,x_off,y_off,tile_x_pos+diameter-box_r.x2,tile_y_pos+diameter-box_r.y2,colour);
+            cvm_render_shaded_overlap_min_overlay_element(erb,bounds,r,colour,x_off,y_off,tile_x_pos+diameter-box_r.x2,tile_y_pos+diameter-box_r.y2);
+        }
+    }
+}
+
+static void cubic_shaded_element_fading_over_box_render(cvm_overlay_element_render_buffer * erb,overlay_theme * theme,rectangle bounds,rectangle r,overlay_colour_ colour,int x_off,int y_off,
+                                                        rectangle fade_bound,rectangle fade_range,rectangle box_r,uint32_t box_status)
+{
+    cubic_theme_data * cubic;
+
+    cubic=theme->other_data;
+
+    if(!cubic->foreground_image_tile)cubic_create_shape(erb,&cubic->foreground_image_tile,&cubic->foreground_selection_grid,cubic->foreground_r);
+    if(!cubic->foreground_image_tile)return;
+
+    int radius=cubic->foreground_r;
+    int diameter=cubic->foreground_d;
+    int tile_x_pos=cubic->foreground_image_tile->x_pos<<2;
+    int tile_y_pos=cubic->foreground_image_tile->y_pos<<2;
+
+    int y_off_p,x2_p,y1_p,y2_p;
+
+    box_r.x1+=cubic->foreground_offset_x * !(box_status&WIDGET_H_FIRST);
+    box_r.x2-=cubic->foreground_offset_x * !(box_status&WIDGET_H_LAST);
+    box_r.y1+=cubic->foreground_offset_y;
+    box_r.y2-=cubic->foreground_offset_y;
+
+    if( !rectangles_overlap(r,box_r) || !rectangles_overlap(r,bounds))return;///early exit, no overlap
+
+    if(r.x1<box_r.x1)
+    {
+        x_off+=box_r.x1-r.x1;
+        r.x1=box_r.x1;
+    }
+
+    if(r.y1<box_r.y1)
+    {
+        y_off+=box_r.y1-r.y1;
+        r.y1=box_r.y1;
+    }
+
+    if(r.x2>box_r.x2)r.x2=box_r.x2;
+
+    if(r.y2>box_r.y2)r.y2=box_r.y2;
+
+    if(r.x1<box_r.x1+radius && !(box_status&WIDGET_H_FIRST))///left applicable
+    {
+        y1_p=r.y1;
+        y_off_p=y_off;
+        x2_p=box_r.x1+radius;
+        if(x2_p>r.x2)x2_p=r.x2;
+
+        ///make the single part that changes some tracked variable??
+        y2_p=box_r.y1+radius;
+        if(r.y1<y2_p)
+        {
+            if(y2_p>r.y2)y2_p=r.y2;
+
+            cvm_render_shaded_fading_overlap_min_overlay_element(erb,bounds,((rectangle){.x1=r.x1,.y1=y1_p,.x2=x2_p,.y2=y2_p}),colour,x_off,y_off_p,fade_bound,fade_range,tile_x_pos-box_r.x1,tile_y_pos-box_r.y1);
+
+            y_off_p+=y2_p-y1_p;
+            y1_p=y2_p;
+        }
+
+        y2_p=box_r.y2-radius;
+        if(r.y2 > y1_p && y2_p > r.y1)///render middle section normally
+        {
+            if(y2_p>r.y2)y2_p=r.y2;
+
+            cvm_render_shaded_fading_overlay_element(erb,bounds,((rectangle){.x1=r.x1,.y1=y1_p,.x2=x2_p,.y2=y2_p}),colour,x_off,y_off_p,fade_bound,fade_range);
+
+            y_off_p+=y2_p-y1_p;
+            y1_p=y2_p;
+        }
+
+        if(r.y2>box_r.y2-radius)
+        {
+            cvm_render_shaded_fading_overlap_min_overlay_element(erb,bounds,((rectangle){.x1=r.x1,.y1=y1_p,.x2=x2_p,.y2=r.y2}),colour,x_off,y_off_p,fade_bound,fade_range,tile_x_pos-box_r.x1,tile_y_pos+diameter-box_r.y2);
+        }
+
+        x_off+=x2_p-r.x1;///move to end?
+        r.x1=x2_p;///only happens if less, should be fine
+    }
+
+    x2_p=box_r.x2-radius * !(box_status&WIDGET_H_LAST);
+    if(r.x2 > r.x1 && x2_p > r.x1)///render middle section normally
+    {
+        if(x2_p>r.x2)x2_p=r.x2;
+
+        cvm_render_shaded_fading_overlay_element(erb,bounds,((rectangle){.x1=r.x1,.y1=r.y1,.x2=x2_p,.y2=r.y2}),colour,x_off,y_off,fade_bound,fade_range);
+
+        x_off+=x2_p-r.x1;
+        r.x1=x2_p;
+    }
+
+    if(r.x2>box_r.x2-radius && !(box_status&WIDGET_H_LAST))
+    {
+        y2_p=box_r.y1+radius;
+        if(r.y1<y2_p)
+        {
+            if(y2_p>r.y2)y2_p=r.y2;
+
+            cvm_render_shaded_fading_overlap_min_overlay_element(erb,bounds,((rectangle){.x1=r.x1,.y1=r.y1,.x2=r.x2,.y2=y2_p}),colour,x_off,y_off,fade_bound,fade_range,tile_x_pos+diameter-box_r.x2,tile_y_pos-box_r.y1);
+
+            y_off+=y2_p-r.y1;
+            r.y1=y2_p;
+        }
+
+        y2_p=box_r.y2-radius;
+        if(r.y2 > r.y1 && y2_p > r.y1)///render middle section normally
+        {
+            if(y2_p>r.y2)y2_p=r.y2;
+
+            cvm_render_shaded_fading_overlay_element(erb,bounds,((rectangle){.x1=r.x1,.y1=r.y1,.x2=r.x2,.y2=y2_p}),colour,x_off,y_off,fade_bound,fade_range);
+
+            y_off+=y2_p-r.y1;
+            r.y1=y2_p;
+        }
+
+        if(r.y2>box_r.y2-radius)
+        {
+            cvm_render_shaded_fading_overlap_min_overlay_element(erb,bounds,r,colour,x_off,y_off,fade_bound,fade_range,tile_x_pos+diameter-box_r.x2,tile_y_pos+diameter-box_r.y2);
         }
     }
 }
@@ -335,7 +456,7 @@ static void cubic_fill_element_over_box_render(cvm_overlay_element_render_buffer
         {
             if(y2_p>r.y2)y2_p=r.y2;
 
-            cvm_render_shaded_overlay_element(erb,bounds,((rectangle){.x1=r.x1,.y1=y1_p,.x2=x2_p,.y2=y2_p}),x_off+r.x1-box_r.x1,y_off+y1_p-box_r.y1,colour);
+            cvm_render_shaded_overlay_element(erb,bounds,((rectangle){.x1=r.x1,.y1=y1_p,.x2=x2_p,.y2=y2_p}),colour,x_off+r.x1-box_r.x1,y_off+y1_p-box_r.y1);
 
             y1_p=y2_p;
         }
@@ -352,7 +473,7 @@ static void cubic_fill_element_over_box_render(cvm_overlay_element_render_buffer
 
         if(r.y2>box_r.y2-radius)
         {
-            cvm_render_shaded_overlay_element(erb,bounds,((rectangle){.x1=r.x1,.y1=y1_p,.x2=x2_p,.y2=r.y2}),x_off+r.x1-box_r.x1,y_off+y1_p-box_r.y2+diameter,colour);
+            cvm_render_shaded_overlay_element(erb,bounds,((rectangle){.x1=r.x1,.y1=y1_p,.x2=x2_p,.y2=r.y2}),colour,x_off+r.x1-box_r.x1,y_off+y1_p-box_r.y2+diameter);
         }
 
         r.x1=x2_p;///only happens if less, should be fine
@@ -375,7 +496,7 @@ static void cubic_fill_element_over_box_render(cvm_overlay_element_render_buffer
         {
             if(y2_p>r.y2)y2_p=r.y2;
 
-            cvm_render_shaded_overlay_element(erb,bounds,(rectangle){.x1=r.x1,.y1=r.y1,.x2=r.x2,.y2=y2_p},x_off+r.x1-box_r.x2+diameter,y_off+r.y1-box_r.y1,colour);
+            cvm_render_shaded_overlay_element(erb,bounds,(rectangle){.x1=r.x1,.y1=r.y1,.x2=r.x2,.y2=y2_p},colour,x_off+r.x1-box_r.x2+diameter,y_off+r.y1-box_r.y1);
 
             r.y1=y2_p;
         }
@@ -392,7 +513,107 @@ static void cubic_fill_element_over_box_render(cvm_overlay_element_render_buffer
 
         if(r.y2>box_r.y2-radius)
         {
-            cvm_render_shaded_overlay_element(erb,bounds,r,x_off+r.x1-box_r.x2+diameter,y_off+r.y1-box_r.y2+diameter,colour);
+            cvm_render_shaded_overlay_element(erb,bounds,r,colour,x_off+r.x1-box_r.x2+diameter,y_off+r.y1-box_r.y2+diameter);
+        }
+    }
+}
+
+static void cubic_fill_element_fading_over_box_render(cvm_overlay_element_render_buffer * erb,overlay_theme * theme,rectangle bounds,rectangle r,overlay_colour_ colour,
+                                                      rectangle fade_bound,rectangle fade_range,rectangle box_r,uint32_t box_status)
+{
+    cubic_theme_data * cubic;
+
+    cubic=theme->other_data;
+
+    if(!cubic->foreground_image_tile)cubic_create_shape(erb,&cubic->foreground_image_tile,&cubic->foreground_selection_grid,cubic->foreground_r);
+    if(!cubic->foreground_image_tile)return;
+
+    int radius=cubic->foreground_r;
+    int diameter=cubic->foreground_d;
+    int x_off=cubic->foreground_image_tile->x_pos<<2;
+    int y_off=cubic->foreground_image_tile->y_pos<<2;
+
+    int y1_p,y2_p,x2_p;
+
+    box_r.x1+=cubic->foreground_offset_x * !(box_status&WIDGET_H_FIRST);
+    box_r.x2-=cubic->foreground_offset_x * !(box_status&WIDGET_H_LAST);
+    box_r.y1+=cubic->foreground_offset_y;
+    box_r.y2-=cubic->foreground_offset_y;
+
+    r=get_rectangle_overlap(r,box_r);
+
+    if( !rectangle_has_positive_area(r) || !rectangles_overlap(r,bounds))return;///early exit, no overlap
+
+    if(r.x1<box_r.x1+radius && !(box_status&WIDGET_H_FIRST))///left applicable
+    {
+        y1_p=r.y1;
+        x2_p=box_r.x1+radius;
+        if(x2_p>r.x2)x2_p=r.x2;
+
+        ///make the single part that changes some tracked variable??
+        y2_p=box_r.y1+radius;
+        if(r.y1<y2_p)
+        {
+            if(y2_p>r.y2)y2_p=r.y2;
+
+            cvm_render_shaded_fading_overlay_element(erb,bounds,((rectangle){.x1=r.x1,.y1=y1_p,.x2=x2_p,.y2=y2_p}),colour,x_off+r.x1-box_r.x1,y_off+y1_p-box_r.y1,fade_bound,fade_range);
+
+            y1_p=y2_p;
+        }
+
+        y2_p=box_r.y2-radius;
+        if(r.y2 > y1_p && y2_p > r.y1)///render middle section normally
+        {
+            if(y2_p>r.y2)y2_p=r.y2;
+
+            cvm_render_fill_fading_overlay_element(erb,bounds,((rectangle){.x1=r.x1,.y1=y1_p,.x2=x2_p,.y2=y2_p}),colour,fade_bound,fade_range);
+
+            y1_p=y2_p;
+        }
+
+        if(r.y2>box_r.y2-radius)
+        {
+            cvm_render_shaded_fading_overlay_element(erb,bounds,((rectangle){.x1=r.x1,.y1=y1_p,.x2=x2_p,.y2=r.y2}),colour,x_off+r.x1-box_r.x1,y_off+y1_p-box_r.y2+diameter,fade_bound,fade_range);
+        }
+
+        r.x1=x2_p;///only happens if less, should be fine
+    }
+
+    x2_p=box_r.x2-radius * !(box_status&WIDGET_H_LAST);
+    if(r.x2 > r.x1 && x2_p > r.x1)///render middle section normally
+    {
+        if(x2_p>r.x2)x2_p=r.x2;
+
+        cvm_render_fill_fading_overlay_element(erb,bounds,((rectangle){.x1=r.x1,.y1=r.y1,.x2=x2_p,.y2=r.y2}),colour,fade_bound,fade_range);
+
+        r.x1=x2_p;
+    }
+
+    if(r.x2>box_r.x2-radius && !(box_status&WIDGET_H_LAST))
+    {
+        y2_p=box_r.y1+radius;
+        if(r.y1<y2_p)
+        {
+            if(y2_p>r.y2)y2_p=r.y2;
+
+            cvm_render_shaded_fading_overlay_element(erb,bounds,(rectangle){.x1=r.x1,.y1=r.y1,.x2=r.x2,.y2=y2_p},colour,x_off+r.x1-box_r.x2+diameter,y_off+r.y1-box_r.y1,fade_bound,fade_range);
+
+            r.y1=y2_p;
+        }
+
+        y2_p=box_r.y2-radius;
+        if(r.y2 > r.y1 && y2_p > r.y1)///render middle section normally
+        {
+            if(y2_p>r.y2)y2_p=r.y2;
+
+            cvm_render_fill_fading_overlay_element(erb,bounds,((rectangle){.x1=r.x1,.y1=r.y1,.x2=r.x2,.y2=y2_p}),colour,fade_bound,fade_range);
+
+            r.y1=y2_p;
+        }
+
+        if(r.y2>box_r.y2-radius)
+        {
+            cvm_render_shaded_fading_overlay_element(erb,bounds,r,colour,x_off+r.x1-box_r.x2+diameter,y_off+r.y1-box_r.y2+diameter,fade_bound,fade_range);
         }
     }
 }
@@ -668,13 +889,13 @@ static void cubic_square_render(cvm_overlay_element_render_buffer * erb,overlay_
 
     if(!(status&WIDGET_H_FIRST))
     {
-        cvm_render_shaded_overlay_element(erb,bounds,((rectangle){.x1=m-radius,.y1=r.y1,.x2=m,.y2=r.y2}),x_off,y_off,colour);
+        cvm_render_shaded_overlay_element(erb,bounds,((rectangle){.x1=m-radius,.y1=r.y1,.x2=m,.y2=r.y2}),colour,x_off,y_off);
         r.x1=m;
     }
 
     if(!(status&WIDGET_H_LAST))
     {
-        cvm_render_shaded_overlay_element(erb,bounds,((rectangle){.x1=m,.y1=r.y1,.x2=m+radius,.y2=r.y2}),x_off+radius,y_off,colour);
+        cvm_render_shaded_overlay_element(erb,bounds,((rectangle){.x1=m,.y1=r.y1,.x2=m+radius,.y2=r.y2}),colour,x_off+radius,y_off);
         r.x2=m;
     }
 
@@ -699,14 +920,14 @@ static void cubic_h_bar_render(cvm_overlay_element_render_buffer * erb,overlay_t
     if(!(status&WIDGET_H_FIRST))
     {
         r.x1+= cubic->foreground_offset_x;
-        cvm_render_shaded_overlay_element(erb,bounds,((rectangle){.x1=r.x1,.y1=r.y1,.x2=r.x1+radius,.y2=r.y2}),x_off,y_off,colour);
+        cvm_render_shaded_overlay_element(erb,bounds,((rectangle){.x1=r.x1,.y1=r.y1,.x2=r.x1+radius,.y2=r.y2}),colour,x_off,y_off);
         r.x1+=radius;
     }
 
     if(!(status&WIDGET_H_LAST))
     {
         r.x2-= cubic->foreground_offset_x;
-        cvm_render_shaded_overlay_element(erb,bounds,((rectangle){.x1=r.x2-radius,.y1=r.y1,.x2=r.x2,.y2=r.y2}),x_off+radius,y_off,colour);
+        cvm_render_shaded_overlay_element(erb,bounds,((rectangle){.x1=r.x2-radius,.y1=r.y1,.x2=r.x2,.y2=r.y2}),colour,x_off+radius,y_off);
         r.x2-=radius;
     }
 
@@ -743,11 +964,9 @@ static void cubic_h_bar_slider_render(cvm_overlay_element_render_buffer * erb,ov
         r.x2-=((r.x2-r.x1)*(range-value))/(range+bar);
     }
 
-    cvm_render_shaded_overlay_element(erb,bounds,((rectangle){.x1=r.x1-cubic->internal_r,.y1=r.y1,.x2=r.x1,.y2=r.y2}),
-            (cubic->internal_image_tile->x_pos<<2),(cubic->internal_image_tile->y_pos<<2),colour);
+    cvm_render_shaded_overlay_element(erb,bounds,((rectangle){.x1=r.x1-cubic->internal_r,.y1=r.y1,.x2=r.x1,.y2=r.y2}),colour,(cubic->internal_image_tile->x_pos<<2),(cubic->internal_image_tile->y_pos<<2));
 
-    cvm_render_shaded_overlay_element(erb,bounds,((rectangle){.x1=r.x2,.y1=r.y1,.x2=r.x2+cubic->internal_r,.y2=r.y2}),
-            (cubic->internal_image_tile->x_pos<<2)+cubic->internal_r,(cubic->internal_image_tile->y_pos<<2),colour);
+    cvm_render_shaded_overlay_element(erb,bounds,((rectangle){.x1=r.x2,.y1=r.y1,.x2=r.x2+cubic->internal_r,.y2=r.y2}),colour,(cubic->internal_image_tile->x_pos<<2)+cubic->internal_r,(cubic->internal_image_tile->y_pos<<2));
 
     cvm_render_fill_overlay_element(erb,bounds,r,colour);
 }
@@ -777,10 +996,10 @@ static void cubic_box_render(cvm_overlay_element_render_buffer * erb,overlay_the
         rv=r;
         rv.x2=r.x1+=radius;
 
-        cvm_render_shaded_overlay_element(erb,bounds,((rectangle){.x1=rv.x1,.y1=rv.y1,.x2=rv.x2,.y2=rv.y1+radius}),x_off,y_off,colour);
+        cvm_render_shaded_overlay_element(erb,bounds,((rectangle){.x1=rv.x1,.y1=rv.y1,.x2=rv.x2,.y2=rv.y1+radius}),colour,x_off,y_off);
         rv.y1+=radius;
 
-        cvm_render_shaded_overlay_element(erb,bounds,((rectangle){.x1=rv.x1,.y1=rv.y2-radius,.x2=rv.x2,.y2=rv.y2}),x_off,y_off+radius,colour);
+        cvm_render_shaded_overlay_element(erb,bounds,((rectangle){.x1=rv.x1,.y1=rv.y2-radius,.x2=rv.x2,.y2=rv.y2}),colour,x_off,y_off+radius);
         rv.y2-=radius;
 
         cvm_render_fill_overlay_element(erb,bounds,rv,colour);
@@ -792,10 +1011,10 @@ static void cubic_box_render(cvm_overlay_element_render_buffer * erb,overlay_the
         rv=r;
         rv.x1=r.x2-=radius;
 
-        cvm_render_shaded_overlay_element(erb,bounds,((rectangle){.x1=rv.x1,.y1=rv.y1,.x2=rv.x2,.y2=rv.y1+radius}),x_off+radius,y_off,colour);
+        cvm_render_shaded_overlay_element(erb,bounds,((rectangle){.x1=rv.x1,.y1=rv.y1,.x2=rv.x2,.y2=rv.y1+radius}),colour,x_off+radius,y_off);
         rv.y1+=radius;
 
-        cvm_render_shaded_overlay_element(erb,bounds,((rectangle){.x1=rv.x1,.y1=rv.y2-radius,.x2=rv.x2,.y2=rv.y2}),x_off+radius,y_off+radius,colour);
+        cvm_render_shaded_overlay_element(erb,bounds,((rectangle){.x1=rv.x1,.y1=rv.y2-radius,.x2=rv.x2,.y2=rv.y2}),colour,x_off+radius,y_off+radius);
         rv.y2-=radius;
 
         cvm_render_fill_overlay_element(erb,bounds,rv,colour);
@@ -827,14 +1046,14 @@ static void cubic_panel_render(cvm_overlay_element_render_buffer * erb,overlay_t
 
         if(!(status&WIDGET_V_FIRST))
         {
-            cvm_render_shaded_overlay_element(erb,bounds,((rectangle){.x1=rv.x1,.y1=rv.y1,.x2=rv.x2,.y2=rv.y1+radius}),x_off,y_off,colour);
+            cvm_render_shaded_overlay_element(erb,bounds,((rectangle){.x1=rv.x1,.y1=rv.y1,.x2=rv.x2,.y2=rv.y1+radius}),colour,x_off,y_off);
 
             rv.y1+=radius;
         }
 
         if(!(status&WIDGET_V_LAST))
         {
-            cvm_render_shaded_overlay_element(erb,bounds,((rectangle){.x1=rv.x1,.y1=rv.y2-radius,.x2=rv.x2,.y2=rv.y2}),x_off,y_off+radius,colour);
+            cvm_render_shaded_overlay_element(erb,bounds,((rectangle){.x1=rv.x1,.y1=rv.y2-radius,.x2=rv.x2,.y2=rv.y2}),colour,x_off,y_off+radius);
 
             rv.y2-=radius;
         }
@@ -849,14 +1068,14 @@ static void cubic_panel_render(cvm_overlay_element_render_buffer * erb,overlay_t
 
         if(!(status&WIDGET_V_FIRST))
         {
-            cvm_render_shaded_overlay_element(erb,bounds,((rectangle){.x1=rv.x1,.y1=rv.y1,.x2=rv.x2,.y2=rv.y1+radius}),x_off+radius,y_off,colour);
+            cvm_render_shaded_overlay_element(erb,bounds,((rectangle){.x1=rv.x1,.y1=rv.y1,.x2=rv.x2,.y2=rv.y1+radius}),colour,x_off+radius,y_off);
 
             rv.y1+=radius;
         }
 
         if(!(status&WIDGET_V_LAST))
         {
-            cvm_render_shaded_overlay_element(erb,bounds,((rectangle){.x1=rv.x1,.y1=rv.y2-radius,.x2=rv.x2,.y2=rv.y2}),x_off+radius,y_off+radius,colour);
+            cvm_render_shaded_overlay_element(erb,bounds,((rectangle){.x1=rv.x1,.y1=rv.y2-radius,.x2=rv.x2,.y2=rv.y2}),colour,x_off+radius,y_off+radius);
 
             rv.y2-=radius;
         }
@@ -885,13 +1104,13 @@ static void cubic_square_over_box_render(cvm_overlay_element_render_buffer * erb
 
     if(!(status&WIDGET_H_FIRST))
     {
-        cubic_shaded_element_over_box_render(erb,theme,bounds,((rectangle){.x1=m-radius,.y1=r.y1,.x2=m,.y2=r.y2}),colour,box_r,box_status,x_off,y_off);
+        cubic_shaded_element_over_box_render(erb,theme,bounds,((rectangle){.x1=m-radius,.y1=r.y1,.x2=m,.y2=r.y2}),colour,x_off,y_off,box_r,box_status);
         r.x1=m;
     }
 
     if(!(status&WIDGET_H_LAST))
     {
-        cubic_shaded_element_over_box_render(erb,theme,bounds,((rectangle){.x1=m,.y1=r.y1,.x2=m+radius,.y2=r.y2}),colour,box_r,box_status,x_off+radius,y_off);
+        cubic_shaded_element_over_box_render(erb,theme,bounds,((rectangle){.x1=m,.y1=r.y1,.x2=m+radius,.y2=r.y2}),colour,x_off+radius,y_off,box_r,box_status);
         r.x2=m;
     }
 
@@ -917,14 +1136,14 @@ static void cubic_h_bar_over_box_render(cvm_overlay_element_render_buffer * erb,
     if(!(status&WIDGET_H_FIRST))
     {
         r.x1+= cubic->foreground_offset_x;
-        cubic_shaded_element_over_box_render(erb,theme,bounds,((rectangle){.x1=r.x1,.y1=r.y1,.x2=r.x1+radius,.y2=r.y2}),colour,box_r,box_status,x_off,y_off);
+        cubic_shaded_element_over_box_render(erb,theme,bounds,((rectangle){.x1=r.x1,.y1=r.y1,.x2=r.x1+radius,.y2=r.y2}),colour,x_off,y_off,box_r,box_status);
         r.x1+=radius;
     }
 
     if(!(status&WIDGET_H_LAST))
     {
         r.x2-= cubic->foreground_offset_x;
-        cubic_shaded_element_over_box_render(erb,theme,bounds,((rectangle){.x1=r.x2-radius,.y1=r.y1,.x2=r.x2,.y2=r.y2}),colour,box_r,box_status,x_off+radius,y_off);
+        cubic_shaded_element_over_box_render(erb,theme,bounds,((rectangle){.x1=r.x2-radius,.y1=r.y1,.x2=r.x2,.y2=r.y2}),colour,x_off+radius,y_off,box_r,box_status);
         r.x2-=radius;
     }
 
@@ -956,10 +1175,10 @@ static void cubic_box_over_box_render(cvm_overlay_element_render_buffer * erb,ov
         rv=r;
         rv.x2=r.x1+=radius;
 
-        cubic_shaded_element_over_box_render(erb,theme,bounds,((rectangle){.x1=rv.x1,.y1=rv.y1,.x2=rv.x2,.y2=rv.y1+radius}),colour,box_r,box_status,x_off,y_off);
+        cubic_shaded_element_over_box_render(erb,theme,bounds,((rectangle){.x1=rv.x1,.y1=rv.y1,.x2=rv.x2,.y2=rv.y1+radius}),colour,x_off,y_off,box_r,box_status);
         rv.y1+=radius;
 
-        cubic_shaded_element_over_box_render(erb,theme,bounds,((rectangle){.x1=rv.x1,.y1=rv.y2-radius,.x2=rv.x2,.y2=rv.y2}),colour,box_r,box_status,x_off,y_off+radius);
+        cubic_shaded_element_over_box_render(erb,theme,bounds,((rectangle){.x1=rv.x1,.y1=rv.y2-radius,.x2=rv.x2,.y2=rv.y2}),colour,x_off,y_off+radius,box_r,box_status);
         rv.y2-=radius;
 
         cubic_fill_element_over_box_render(erb,theme,bounds,rv,colour,box_r,box_status);
@@ -971,10 +1190,10 @@ static void cubic_box_over_box_render(cvm_overlay_element_render_buffer * erb,ov
         rv=r;
         rv.x1=r.x2-=radius;
 
-        cubic_shaded_element_over_box_render(erb,theme,bounds,((rectangle){.x1=rv.x1,.y1=rv.y1,.x2=rv.x2,.y2=rv.y1+radius}),colour,box_r,box_status,x_off+radius,y_off);
+        cubic_shaded_element_over_box_render(erb,theme,bounds,((rectangle){.x1=rv.x1,.y1=rv.y1,.x2=rv.x2,.y2=rv.y1+radius}),colour,x_off+radius,y_off,box_r,box_status);
         rv.y1+=radius;
 
-        cubic_shaded_element_over_box_render(erb,theme,bounds,((rectangle){.x1=rv.x1,.y1=rv.y2-radius,.x2=rv.x2,.y2=rv.y2}),colour,box_r,box_status,x_off+radius,y_off+radius);
+        cubic_shaded_element_over_box_render(erb,theme,bounds,((rectangle){.x1=rv.x1,.y1=rv.y2-radius,.x2=rv.x2,.y2=rv.y2}),colour,x_off+radius,y_off+radius,box_r,box_status);
         rv.y2-=radius;
 
         cubic_fill_element_over_box_render(erb,theme,bounds,rv,colour,box_r,box_status);
@@ -1001,6 +1220,12 @@ overlay_theme * create_cubic_theme(void)
 
     theme->h_bar_text_offset=16;
 
+    #warning try only updating overlay when something in it changes!
+
+    #warning when possible ensure offset from end of at least the fade distance
+    theme->h_text_fade_range=16;///24?
+    theme->v_text_fade_range=8;///8? 6? 12??
+
     theme->h_slider_bar_lost_w=24;
 
     theme->x_box_offset=16;/// for now only text offset? any other uses?
@@ -1021,19 +1246,9 @@ overlay_theme * create_cubic_theme(void)
     /// have contiguous box scroll (when appropriate) when clicked in some range of end, click range should probably match fade range
     /// need horizontal and vertical fade variants and either to actually use offset info or to allow an absolute fade point with negative values (potentially off screen)
 
-    /// !! fade wont work for contiguous boxes, as shape could be centre of box, fading but over the top of rounded edge!
-    /// specialised bounding box considerate rendering with text fade? - wont work (well/easily?) for vertical contiguous boxes... -- probably best option though....
-    /// easy(er) approach of just applying colour over some range (render box with adjusted bounds) ??
-    /// implementation specific approach?
-    /// ditch contiguous boxes?
-    /// enforce offset on selected item? (difficult and ugly)
-
     /// better to render non- specialised elements (foreground/background) and make efficient as possible (everything just a box) with contiguous variant?
     /// have theme based variations to size based on other factors though? sizing flags to prevent horizontal/vertical component where desired?
 
-
-    /// contiguous could instead have 2 texture lookups, 1 for alpha, 1 for lerp?
-    ///     ^ mix should be relative to other sample (alpha's) value to avoid discolouration when overlapping
 
     theme->contiguous_some_box_y_offset=1;///possibly 1 ??
     theme->contiguous_horizintal_bar_h=20;
@@ -1048,9 +1263,10 @@ overlay_theme * create_cubic_theme(void)
     theme->h_bar_over_box_render=cubic_h_bar_over_box_render;
     theme->box_over_box_render=cubic_box_over_box_render;
 
-    theme->shaded_over_box_render=cubic_shaded_element_over_box_render;
     theme->fill_over_box_render=cubic_fill_element_over_box_render;
-
+    theme->fill_fading_over_box_render=cubic_fill_element_fading_over_box_render;
+    theme->shaded_over_box_render=cubic_shaded_element_over_box_render;
+    theme->shaded_fading_over_box_render=cubic_shaded_element_fading_over_box_render;
 
     theme->square_select=cubic_square_select;
     theme->h_bar_select=cubic_h_bar_select;

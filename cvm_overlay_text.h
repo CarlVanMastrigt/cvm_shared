@@ -96,16 +96,39 @@ char * cvm_overlay_utf8_get_previous_word(char * base,char * t);
 char * cvm_overlay_utf8_get_next_word(char * t);
 
 
-//rename these to be single line
-///returns the required width of a string
-int overlay_size_text_simple(cvm_overlay_font * font,char * text);
+#define OVERLAY_TEXT_NORMAL_RENDER      0x00000000
+#define OVERLAY_TEXT_CONSTRAINED_RENDER 0x00000001
+#define OVERLAY_TEXT_FADING_RENDER      0x00000002
+#define OVERLAY_TEXT_SELECTED_RENDER    0x00000004
 
-void overlay_text_single_line_render(cvm_overlay_element_render_buffer * erb,cvm_overlay_font * font,rectangle bounds,char * text,int x,int y,overlay_colour_ colour);
-void overlay_text_single_line_selection_render(cvm_overlay_element_render_buffer * erb,cvm_overlay_font * font,rectangle bounds,char * text,int x,int y,overlay_colour_ colour,char * selection_start,char * selection_end);
 
-void overlay_text_single_line_box_constrained_render(cvm_overlay_element_render_buffer * erb,overlay_theme * theme,rectangle bounds,char * text,int x,int y,overlay_colour_ colour,rectangle box_r,uint32_t box_status);
-void overlay_text_single_line_box_constrained_selection_render(cvm_overlay_element_render_buffer * erb,overlay_theme * theme,rectangle bounds,char * text,int x,int y,overlay_colour_ colour,char * selection_start,char * selection_end,rectangle box_r,uint32_t box_status);
 
+typedef struct overlay_text_single_line_render_data
+{
+    cvm_overlay_element_render_buffer * erb;
+    overlay_theme * theme;
+    rectangle bounds;
+    char * text;
+    int x;
+    int y;
+    overlay_colour_ colour;
+
+    uint32_t box_status;
+    rectangle box_r;
+
+    rectangle text_area;
+    int text_length;
+
+    char * selection_begin;
+    char * selection_end;
+
+    uint32_t flags;///selection,fade,constrained
+}
+overlay_text_single_line_render_data;
+
+void overlay_text_single_line_render(overlay_text_single_line_render_data* restrict data);
+
+int overlay_text_single_line_get_pixel_length(cvm_overlay_font * font,char * text);
 char * overlay_text_single_line_find_offset(cvm_overlay_font * font,char * text,int relative_x);
 
 
@@ -119,7 +142,7 @@ void overlay_text_multiline_selection_render(cvm_overlay_element_render_buffer *
 char * overlay_text_multiline_find_offset(cvm_overlay_font * font,cvm_overlay_text_block * block,int relative_x,int relative_y);
 
 
-static inline rectangle overlay_simple_text_rectangle(rectangle r,int glyph_size,int x_border)
+static inline rectangle overlay_text_single_line_get_text_area(rectangle r,int glyph_size,int x_border)
 {
     r.y1=(r.y1+r.y2-glyph_size)>>1;
     r.y2=r.y1+glyph_size;

@@ -45,7 +45,7 @@ void adjuster_pair_enterbox_function(widget * w)
 {
     /// could put contained data in some external structure, e.g. one to handle ints, one to handle floats?
     int r;
-    if(sscanf(w->enterbox.text,"%d",&r))
+    if(sscanf(w->enterbox.text,"%d",&r)==1)
     {
         set_slider_bar_value(w->enterbox.data,r);
     }

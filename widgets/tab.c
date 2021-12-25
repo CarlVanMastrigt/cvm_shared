@@ -30,28 +30,68 @@ static void tab_button_func(widget * button)
     page->base.parent->tab_folder.current_tab_page=page;
 }
 
-
+//
+//static void tab_button_widget_render(overlay_theme * theme,widget * w,int x_off,int y_off,cvm_overlay_element_render_buffer * erb,rectangle bounds)
+//{
+//    widget * page=w->button.data;
+//
+//    if(widget_active(page))
+//    {
+//        rectangle r=rectangle_add_offset(w->base.r,x_off,y_off);
+//
+//        rectangle box_r;
+//        uint32_t box_status;
+//
+//        if(get_ancestor_contiguous_box_data(w,&box_r,&box_status))
+//        {
+//            if(page->base.parent->tab_folder.current_tab_page==page)
+//            {
+//                theme->h_bar_over_box_render(erb,theme,bounds,r,w->base.status,OVERLAY_HIGHLIGHTING_COLOUR_,box_r,box_status);
+//            }
+//
+//            r=overlay_simple_text_rectangle(r,theme->font_.glyph_size,theme->h_bar_text_offset);
+//            rectangle b=get_rectangle_overlap(r,bounds);
+//            if(rectangle_has_positive_area(b))overlay_text_single_line_box_constrained_render(erb,theme,b,w->button.text,r.x1,r.y1,OVERLAY_TEXT_COLOUR_0_,box_r,box_status);
+//        }
+//        else
+//        {
+//            if(page->base.parent->tab_folder.current_tab_page==page)
+//            {
+//                theme->h_bar_render(erb,theme,bounds,r,w->base.status,OVERLAY_HIGHLIGHTING_COLOUR_);
+//            }
+//
+//            r=overlay_simple_text_rectangle(r,theme->font_.glyph_size,theme->h_bar_text_offset);
+//            rectangle b=get_rectangle_overlap(r,bounds);
+//            if(rectangle_has_positive_area(b))overlay_text_single_line_render(erb,&theme->font_,b,w->button.text,r.x1,r.y1,OVERLAY_TEXT_COLOUR_0_);
+//        }
+//    }
+//}
 static void tab_button_widget_render(overlay_theme * theme,widget * w,int x_off,int y_off,cvm_overlay_element_render_buffer * erb,rectangle bounds)
 {
     widget * page=w->button.data;
 
     if(widget_active(page))
     {
-        rectangle r=rectangle_add_offset(w->base.r,x_off,y_off-10);
+        rectangle r=rectangle_add_offset(w->base.r,x_off,y_off);
 
-        rectangle box_r;
-        uint32_t box_status;
+        overlay_text_single_line_render_data otslrd;
+        otslrd.erb=erb;
+        otslrd.theme=theme;
+        otslrd.bounds=bounds;
+        otslrd.text=w->button.text;
+        otslrd.x=r.x1+theme->h_bar_text_offset;
+        otslrd.y=(r.y1+r.y2-theme->font_.glyph_size)>>1;
+        otslrd.colour=OVERLAY_TEXT_COLOUR_0_;
 
-        if(get_ancestor_contiguous_box_data(w,&box_r,&box_status))
+        #warning need better check here, mainly is contiguous box "all" or "some"
+        if(get_ancestor_contiguous_box_data(w,&otslrd.box_r,&otslrd.box_status))
         {
             if(page->base.parent->tab_folder.current_tab_page==page)
             {
-                theme->h_bar_over_box_render(erb,theme,bounds,r,w->base.status,OVERLAY_HIGHLIGHTING_COLOUR_,box_r,box_status);
+                theme->h_bar_over_box_render(erb,theme,bounds,r,w->base.status,OVERLAY_HIGHLIGHTING_COLOUR_,otslrd.box_r,otslrd.box_status);
             }
 
-            r=overlay_simple_text_rectangle(r,theme->font_.glyph_size,theme->h_bar_text_offset);
-            rectangle b=get_rectangle_overlap(r,bounds);
-            if(rectangle_has_positive_area(b))overlay_text_single_line_box_constrained_render(erb,theme,b,w->button.text,r.x1,r.y1,OVERLAY_TEXT_COLOUR_0_,box_r,box_status);
+            otslrd.flags=OVERLAY_TEXT_CONSTRAINED_RENDER;
         }
         else
         {
@@ -60,10 +100,10 @@ static void tab_button_widget_render(overlay_theme * theme,widget * w,int x_off,
                 theme->h_bar_render(erb,theme,bounds,r,w->base.status,OVERLAY_HIGHLIGHTING_COLOUR_);
             }
 
-            r=overlay_simple_text_rectangle(r,theme->font_.glyph_size,theme->h_bar_text_offset);
-            rectangle b=get_rectangle_overlap(r,bounds);
-            if(rectangle_has_positive_area(b))overlay_text_single_line_render(erb,&theme->font_,b,w->button.text,r.x1,r.y1,OVERLAY_TEXT_COLOUR_0_);
+            otslrd.flags=OVERLAY_TEXT_NORMAL_RENDER;
         }
+
+        overlay_text_single_line_render(&otslrd);
     }
 }
 
@@ -75,7 +115,7 @@ static widget * tab_button_widget_select(overlay_theme * theme,widget * w,int x_
 
 static void tab_button_widget_min_w(overlay_theme * theme,widget * w)
 {
-    if(widget_active(w->button.data))w->base.min_w = overlay_size_text_simple(&theme->font_,w->button.text)+2*theme->h_bar_text_offset;//calculate_text_length(theme,w->button.text,0)+2*theme->h_bar_text_offset;
+    if(widget_active(w->button.data))w->base.min_w = overlay_text_single_line_get_pixel_length(&theme->font_,w->button.text)+2*theme->h_bar_text_offset;//calculate_text_length(theme,w->button.text,0)+2*theme->h_bar_text_offset;
     else w->base.min_w = 0;
 }
 
@@ -342,7 +382,7 @@ widget * create_vertical_tab_pair_box(widget ** tab_folder)///if kept, also crea
     box_0=create_box(WIDGET_VERTICAL,WIDGET_LAST_DISTRIBUTED);
     box_1=add_child_to_parent(box_0,create_box(WIDGET_HORIZONTAL,WIDGET_LAST_DISTRIBUTED));
     add_child_to_parent(box_0,create_separator_widget());
-    *tab_folder=add_child_to_parent(box_0,create_tab_folder(&buttons,WIDGET_VERTICAL));
+    *tab_folder=add_child_to_parent(box_0,create_tab_folder(&buttons,WIDGET_HORIZONTAL));
     add_child_to_parent(box_1,buttons);
     add_child_to_parent(box_1,create_empty_widget(0,0));
 

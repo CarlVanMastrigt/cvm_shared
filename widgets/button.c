@@ -139,15 +139,26 @@ widget * create_button(void * data,widget_function func,bool free_data)
 
 static void text_button_widget_render(overlay_theme * theme,widget * w,int x_off,int y_off,cvm_overlay_element_render_buffer * erb,rectangle bounds)
 {
-    char * text=w->button.text;
+    rectangle r=rectangle_add_offset(w->base.r,x_off,y_off);
+
+    overlay_text_single_line_render_data otslrd;
+    otslrd.flags=OVERLAY_TEXT_NORMAL_RENDER;
+    otslrd.erb=erb;
+    otslrd.theme=theme;
+    otslrd.bounds=bounds;
+    otslrd.text=w->button.text;
+    otslrd.x=r.x1+theme->h_bar_text_offset;
+    otslrd.y=(r.y1+r.y2-theme->font_.glyph_size)>>1;
+    otslrd.colour=OVERLAY_TEXT_COLOUR_0_;
+
     overlay_colour c=OVERLAY_MAIN_COLOUR;
 
     if((w->button.toggle_status)&&(w->button.toggle_status(w)))
     {
-        if((w->button.variant_text)&&(text))
+        if((w->button.variant_text)&&(otslrd.text))
         {
-            while(*text)text++;
-            text++;
+            while(*otslrd.text)otslrd.text++;
+            otslrd.text++;
         }
 
         if(w->button.highlight)
@@ -156,12 +167,9 @@ static void text_button_widget_render(overlay_theme * theme,widget * w,int x_off
         }
     }
 
-    rectangle r=rectangle_add_offset(w->base.r,x_off,y_off);
-	theme->h_bar_render(erb,theme,bounds,r,w->base.status,c);
+    theme->h_bar_render(erb,theme,bounds,r,w->base.status,c);
 
-    r=overlay_simple_text_rectangle(r,theme->font_.glyph_size,theme->h_bar_text_offset);
-    rectangle b=get_rectangle_overlap(r,bounds);
-    if(rectangle_has_positive_area(b))overlay_text_single_line_render(erb,&theme->font_,b,text,r.x1,r.y1,OVERLAY_TEXT_COLOUR_0_);
+    overlay_text_single_line_render(&otslrd);
 }
 
 static widget * text_button_widget_select(overlay_theme * theme,widget * w,int x_in,int y_in)
@@ -173,7 +181,7 @@ static widget * text_button_widget_select(overlay_theme * theme,widget * w,int x
 
 static void text_button_widget_min_w(overlay_theme * theme,widget * w)
 {
-    w->base.min_w = overlay_size_text_simple(&theme->font_,w->button.text);//calculate_text_length(theme,w->button.text,0);
+    w->base.min_w = overlay_text_single_line_get_pixel_length(&theme->font_,w->button.text);
 
 	if((w->button.variant_text)&&(w->button.toggle_status))
     {
@@ -181,7 +189,7 @@ static void text_button_widget_min_w(overlay_theme * theme,widget * w)
         while(*text)text++;
         text++;
 
-        int min_w=overlay_size_text_simple(&theme->font_,text);//calculate_text_length(theme,t,0);
+        int min_w=overlay_text_single_line_get_pixel_length(&theme->font_,text);
         if(min_w>w->base.min_w)w->base.min_w=min_w;
     }
 
@@ -259,27 +267,43 @@ widget * create_text_highlight_toggle_button(char * text,void * data,bool free_d
 
 static void contiguous_text_button_widget_render(overlay_theme * theme,widget * w,int x_off,int y_off,cvm_overlay_element_render_buffer * erb,rectangle bounds)
 {
-    char * text=w->button.text;
-
     rectangle r=rectangle_add_offset(w->base.r,x_off,y_off);
+
+    overlay_text_single_line_render_data otslrd;
+    otslrd.flags=OVERLAY_TEXT_CONSTRAINED_RENDER;
+    otslrd.erb=erb;
+    otslrd.theme=theme;
+    otslrd.bounds=bounds;
+    otslrd.text=w->button.text;
+    otslrd.x=r.x1+theme->h_bar_text_offset;
+    otslrd.y=(r.y1+r.y2-theme->font_.glyph_size)>>1;
+    otslrd.colour=OVERLAY_TEXT_COLOUR_0_;
+
+    #warning re-evaluate how this is done, perhaps all widgets in a contiguous box inherit that property and become "contiguous buttons" automatically?
+
+    bool valid=get_ancestor_contiguous_box_data(w,&otslrd.box_r,&otslrd.box_status);
+
+    if(!valid)
+    {
+        fprintf(stderr,"CONTIGUOUS BUTTON SHOULD BE IN CONTIGUOUS BOX\n");
+        exit(-1);
+    }
 
     if((w->button.toggle_status)&&(w->button.toggle_status(w)))
     {
-        if((w->button.variant_text)&&(text))
+        if((w->button.variant_text)&&(otslrd.text))
         {
-            while(*text)text++;
-            text++;
+            while(*otslrd.text)otslrd.text++;
+            otslrd.text++;
         }
 
         if(w->button.highlight)
         {
-            theme->h_bar_render(erb,theme,bounds,r,w->base.status,OVERLAY_HIGHLIGHTING_COLOUR);
+            theme->h_bar_over_box_render(erb,theme,bounds,r,w->base.status,OVERLAY_HIGHLIGHTING_COLOUR_,otslrd.box_r,otslrd.box_status);
         }
     }
 
-    r=overlay_simple_text_rectangle(r,theme->font_.glyph_size,theme->h_bar_text_offset);
-    rectangle b=get_rectangle_overlap(r,bounds);
-    if(rectangle_has_positive_area(b))overlay_text_single_line_render(erb,&theme->font_,b,text,r.x1,r.y1,OVERLAY_TEXT_COLOUR_0_);
+    overlay_text_single_line_render(&otslrd);
 }
 
 static void contiguous_text_button_widget_min_h(overlay_theme * theme,widget * w)

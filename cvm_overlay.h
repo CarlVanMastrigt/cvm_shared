@@ -24,12 +24,13 @@ along with cvm_shared.  If not, see <https://www.gnu.org/licenses/>.
 #ifndef CVM_OVERLAY_H
 #define CVM_OVERLAY_H
 
-#define CVM_OVERLAY_ELEMENT_FILL        0x0000
-#define CVM_OVERLAY_ELEMENT_SHADED      0x1000
-#define CVM_OVERLAY_ELEMENT_COLOURED    0x2000
+#define CVM_OVERLAY_ELEMENT_FILL        0x00000000
+#define CVM_OVERLAY_ELEMENT_SHADED      0x10000000
+#define CVM_OVERLAY_ELEMENT_COLOURED    0x20000000
 ///having both set could signify something??
-#define CVM_OVERLAY_ELEMENT_OVERLAP_MIN 0x4000
-#define CVM_OVERLAY_ELEMENT_OVERLAP_MUL 0x8000
+#define CVM_OVERLAY_ELEMENT_OVERLAP_MIN 0x40000000
+#define CVM_OVERLAY_ELEMENT_OVERLAP_MUL 0x80000000
+///#define CVM_OVERLAY_ELEMENT_FADE        0x0800///on by default until i can performance test (could even just check fade dist anyway...), need to alter colour mask if using
 //typedef enum
 //{
 //    CVM_OVERLAY_ELEMENT_FILL,
@@ -79,8 +80,9 @@ overlay_colour_;
 typedef struct cvm_overlay_render_data
 {
     uint16_t data0[4];///position
-    uint16_t data1[4];///int data: type|colour_id, tex_lookup.xy, fade_offset|fade_speed(for glyphs) can be known based on contents (calculated at sizing step and applied at render based on current x)
-    uint16_t data2[4];/// ? ? ? ?
+    //uint16_t data1[4];///metadata|colour_id , tex_lookup.xy , fade_dist_x|fade_dist_y
+    uint32_t data1[2];
+    uint16_t data2[4];/// overap_tex_lookup.xy , fade_off_left|fade_off_right , fade_off_top|fade_off_bot
 }
 cvm_overlay_render_data;
 
@@ -173,6 +175,9 @@ struct overlay_theme
 
     int h_bar_text_offset;
 
+    int h_text_fade_range;
+    int v_text_fade_range;
+
     int h_slider_bar_lost_w;///horizontal space tied up in visual elements (not part of range)
     //int v_slider_bar_lost_h;///vertical space tied up in visual elements (not part of range)
     ///int slider_bar_bar_fraction;
@@ -212,9 +217,14 @@ struct overlay_theme
     void    (*square_over_box_render)   (cvm_overlay_element_render_buffer * erb,overlay_theme * theme,rectangle bounds,rectangle r,uint32_t status,overlay_colour_ colour,rectangle box_r,uint32_t box_status);
     void    (*h_bar_over_box_render)    (cvm_overlay_element_render_buffer * erb,overlay_theme * theme,rectangle bounds,rectangle r,uint32_t status,overlay_colour_ colour,rectangle box_r,uint32_t box_status);
     void    (*box_over_box_render)      (cvm_overlay_element_render_buffer * erb,overlay_theme * theme,rectangle bounds,rectangle r,uint32_t status,overlay_colour_ colour,rectangle box_r,uint32_t box_status);
+    /// need h_bar_slider_over_box_render as well
 
-    void    (*shaded_over_box_render)   (cvm_overlay_element_render_buffer * erb,overlay_theme * theme,rectangle bounds,rectangle r,overlay_colour_ colour,rectangle box_r,uint32_t box_status,int x_off,int y_off);
-    void    (*fill_over_box_render)     (cvm_overlay_element_render_buffer * erb,overlay_theme * theme,rectangle bounds,rectangle r,overlay_colour_ colour,rectangle box_r,uint32_t box_status);
+    void    (*fill_over_box_render)             (cvm_overlay_element_render_buffer * erb,overlay_theme * theme,rectangle bounds,rectangle r,overlay_colour_ colour,rectangle box_r,uint32_t box_status);
+    void    (*fill_fading_over_box_render)      (cvm_overlay_element_render_buffer * erb,overlay_theme * theme,rectangle bounds,rectangle r,overlay_colour_ colour,
+                                                 rectangle fade_bound,rectangle fade_range,rectangle box_r,uint32_t box_status);
+    void    (*shaded_over_box_render)           (cvm_overlay_element_render_buffer * erb,overlay_theme * theme,rectangle bounds,rectangle r,overlay_colour_ colour,int x_off,int y_off,rectangle box_r,uint32_t box_status);
+    void    (*shaded_fading_over_box_render)    (cvm_overlay_element_render_buffer * erb,overlay_theme * theme,rectangle bounds,rectangle r,overlay_colour_ colour,int x_off,int y_off,
+                                                 rectangle fade_bound,rectangle fade_range,rectangle box_r,uint32_t box_status);
 
     bool    (*square_select)            (overlay_theme * theme,rectangle r,uint32_t status);
     bool    (*h_bar_select)             (overlay_theme * theme,rectangle r,uint32_t status);
@@ -223,7 +233,7 @@ struct overlay_theme
 };
 
 /// x/y_off are the texture space coordinates to read data from at position r, i.e. at r the texture coordinates looked up would be x_off,y_off
-static inline void cvm_render_shaded_overlay_element(cvm_overlay_element_render_buffer * erb,rectangle b,rectangle r,int x_off,int y_off,overlay_colour_ colour)
+static inline void cvm_render_shaded_overlay_element(cvm_overlay_element_render_buffer * erb,rectangle b,rectangle r,overlay_colour_ colour,int x_off,int y_off)
 {
     b=get_rectangle_overlap(r,b);
 
@@ -231,13 +241,52 @@ static inline void cvm_render_shaded_overlay_element(cvm_overlay_element_render_
         erb->buffer[erb->count++]=(cvm_overlay_render_data)
         {
             {b.x1,b.y1,b.x2,b.y2},
-            {CVM_OVERLAY_ELEMENT_SHADED|(colour&0x0FFF),b.x1-r.x1+x_off,b.y1-r.y1+y_off,0/*unused*/},
-            {0,0,0,0}
+            {CVM_OVERLAY_ELEMENT_SHADED,colour<<24},
+            {b.x1-r.x1+x_off,b.y1-r.y1+y_off,0,0}
+        };
+}
+
+static inline void cvm_render_shaded_fading_overlay_element(cvm_overlay_element_render_buffer * erb,rectangle b,rectangle r,overlay_colour_ colour,int x_off,int y_off,rectangle fade_bound,rectangle fade_range)
+{
+    if(r.x1<fade_bound.x1)///beyond this opacity is 0 (completely transparent)
+    {
+        x_off+=fade_bound.x1-r.x1;
+        r.x1=fade_bound.x1;
+    }
+    fade_bound.x1=r.x1-fade_bound.x1;///convert bound to distance from side
+    if(fade_bound.x1>fade_range.x1) fade_bound.x1=fade_range.x1=0;
+
+    if(r.x2>fade_bound.x2) r.x2=fade_bound.x2;
+    fade_bound.x2=fade_bound.x2-r.x2;///convert bound to distance from side
+    if(fade_bound.x2>fade_range.x2) fade_bound.x2=fade_range.x2=0;
+
+
+    if(r.y1<fade_bound.y1)
+    {
+        y_off+=fade_bound.y1-r.y1;
+        r.y1=fade_bound.y1;
+    }
+    fade_bound.y1=r.y1-fade_bound.y1;///convert bound to distance from side
+    if(fade_bound.y1>fade_range.y1) fade_bound.y1=fade_range.y1=0;
+
+    if(r.y2>fade_bound.y2)r.y2=fade_bound.y2;///beyond this opacity is 0 (completely transparent)
+    fade_bound.y2=fade_bound.y2-r.y2;///convert bound to distance from side
+    if(fade_bound.y2>fade_range.y2) fade_bound.y2=fade_range.y2=0;
+
+
+    b=get_rectangle_overlap(r,b);
+
+    if(erb->count != erb->space && rectangle_has_positive_area(b))
+        erb->buffer[erb->count++]=(cvm_overlay_render_data)
+        {
+            {b.x1,b.y1,b.x2,b.y2},
+            {CVM_OVERLAY_ELEMENT_SHADED | fade_bound.x1<<18 | fade_bound.y1<<12 | fade_bound.x2<<6 | fade_bound.y2 , colour<<24 | fade_range.x1<<18 | fade_range.y1<<12 | fade_range.x2<<6 | fade_range.y2},
+            {b.x1-r.x1+x_off,b.y1-r.y1+y_off,0,0}
         };
 }
 
 /// x/y_over_b equates to combination of, screen space coordinates of base of "overlap" element (negative) with texture coordinates of the tile the "overlap" element uses
-static inline void cvm_render_shaded_overlap_min_overlay_element(cvm_overlay_element_render_buffer * erb,rectangle b,rectangle r,int x_off,int y_off,int x_over_b,int y_over_b,overlay_colour_ colour)
+static inline void cvm_render_shaded_overlap_min_overlay_element(cvm_overlay_element_render_buffer * erb,rectangle b,rectangle r,overlay_colour_ colour,int x_off,int y_off,int x_over_b,int y_over_b)
 {
     b=get_rectangle_overlap(r,b);
 
@@ -245,8 +294,48 @@ static inline void cvm_render_shaded_overlap_min_overlay_element(cvm_overlay_ele
         erb->buffer[erb->count++]=(cvm_overlay_render_data)
         {
             {b.x1,b.y1,b.x2,b.y2},
-            {CVM_OVERLAY_ELEMENT_SHADED|CVM_OVERLAY_ELEMENT_OVERLAP_MIN|(colour&0x0FFF),b.x1-r.x1+x_off,b.y1-r.y1+y_off,0/*unused*/},
-            {b.x1+x_over_b,b.y1+y_over_b,0,0}
+            {CVM_OVERLAY_ELEMENT_SHADED|CVM_OVERLAY_ELEMENT_OVERLAP_MIN,colour<<24},
+            {b.x1-r.x1+x_off,b.y1-r.y1+y_off , b.x1+x_over_b,b.y1+y_over_b}
+        };
+}
+
+static inline void cvm_render_shaded_fading_overlap_min_overlay_element(cvm_overlay_element_render_buffer * erb,rectangle b,rectangle r,overlay_colour_ colour,int x_off,int y_off,
+                                                                        rectangle fade_bound,rectangle fade_range,int x_over_b,int y_over_b)
+{
+    if(r.x1<fade_bound.x1)///beyond this opacity is 0 (completely transparent)
+    {
+        x_off+=fade_bound.x1-r.x1;
+        r.x1=fade_bound.x1;
+    }
+    fade_bound.x1=r.x1-fade_bound.x1;///convert bound to distance from side
+    if(fade_bound.x1>fade_range.x1) fade_bound.x1=fade_range.x1=0;
+
+    if(r.x2>fade_bound.x2) r.x2=fade_bound.x2;
+    fade_bound.x2=fade_bound.x2-r.x2;///convert bound to distance from side
+    if(fade_bound.x2>fade_range.x2) fade_bound.x2=fade_range.x2=0;
+
+
+    if(r.y1<fade_bound.y1)
+    {
+        y_off+=fade_bound.y1-r.y1;
+        r.y1=fade_bound.y1;
+    }
+    fade_bound.y1=r.y1-fade_bound.y1;///convert bound to distance from side
+    if(fade_bound.y1>fade_range.y1) fade_bound.y1=fade_range.y1=0;
+
+    if(r.y2>fade_bound.y2)r.y2=fade_bound.y2;///beyond this opacity is 0 (completely transparent)
+    fade_bound.y2=fade_bound.y2-r.y2;///convert bound to distance from side
+    if(fade_bound.y2>fade_range.y2) fade_bound.y2=fade_range.y2=0;
+
+
+    b=get_rectangle_overlap(r,b);
+
+    if(erb->count != erb->space && rectangle_has_positive_area(b))
+        erb->buffer[erb->count++]=(cvm_overlay_render_data)
+        {
+            {b.x1,b.y1,b.x2,b.y2},
+            {CVM_OVERLAY_ELEMENT_SHADED|CVM_OVERLAY_ELEMENT_OVERLAP_MIN | fade_bound.x1<<18 | fade_bound.y1<<12 | fade_bound.x2<<6 | fade_bound.y2 , colour<<24 | fade_range.x1<<18 | fade_range.y1<<12 | fade_range.x2<<6 | fade_range.y2},
+            {b.x1-r.x1+x_off,b.y1-r.y1+y_off , b.x1+x_over_b,b.y1+y_over_b}
         };
 }
 
@@ -258,7 +347,38 @@ static inline void cvm_render_fill_overlay_element(cvm_overlay_element_render_bu
         erb->buffer[erb->count++]=(cvm_overlay_render_data)
         {
             {b.x1,b.y1,b.x2,b.y2},
-            {CVM_OVERLAY_ELEMENT_FILL|(colour&0x0FFF),0,0,0/*unused*/},
+            {CVM_OVERLAY_ELEMENT_FILL,colour<<24},
+            {0,0,0,0}
+        };
+}
+
+static inline void cvm_render_fill_fading_overlay_element(cvm_overlay_element_render_buffer * erb,rectangle b,rectangle r,overlay_colour_ colour,rectangle fade_bound,rectangle fade_range)
+{
+    if(r.x1<fade_bound.x1)r.x1=fade_bound.x1;///beyond this opacity is 0 (completely transparent)
+    fade_bound.x1=r.x1-fade_bound.x1;///convert bound to distance from side
+    if(fade_bound.x1>fade_range.x1) fade_bound.x1=fade_range.x1=0;
+
+    if(r.x2>fade_bound.x2) r.x2=fade_bound.x2;
+    fade_bound.x2=fade_bound.x2-r.x2;///convert bound to distance from side
+    if(fade_bound.x2>fade_range.x2) fade_bound.x2=fade_range.x2=0;
+
+
+    if(r.y1<fade_bound.y1) r.y1=fade_bound.y1;
+    fade_bound.y1=r.y1-fade_bound.y1;///convert bound to distance from side
+    if(fade_bound.y1>fade_range.y1) fade_bound.y1=fade_range.y1=0;
+
+    if(r.y2>fade_bound.y2)r.y2=fade_bound.y2;///beyond this opacity is 0 (completely transparent)
+    fade_bound.y2=fade_bound.y2-r.y2;///convert bound to distance from side
+    if(fade_bound.y2>fade_range.y2) fade_bound.y2=fade_range.y2=0;
+
+
+    b=get_rectangle_overlap(r,b);
+
+    if(erb->count != erb->space && rectangle_has_positive_area(b))
+        erb->buffer[erb->count++]=(cvm_overlay_render_data)
+        {
+            {b.x1,b.y1,b.x2,b.y2},
+            {CVM_OVERLAY_ELEMENT_FILL | fade_bound.x1<<18 | fade_bound.y1<<12 | fade_bound.x2<<6 | fade_bound.y2 , colour<<24 | fade_range.x1<<18 | fade_range.y1<<12 | fade_range.x2<<6 | fade_range.y2},
             {0,0,0,0}
         };
 }
