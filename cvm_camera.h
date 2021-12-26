@@ -1,5 +1,5 @@
 /**
-Copyright 2020 Carl van Mastrigt
+Copyright 2020,2021 Carl van Mastrigt
 
 This file is part of cvm_shared.
 
@@ -34,7 +34,7 @@ typedef enum
 }
 frustrum_bound_names;
 
-typedef struct camera
+typedef struct cvm_camera
 {
     vec3f position;
 
@@ -63,30 +63,30 @@ typedef struct camera
     GLfloat inverse_screen_dimensions[2];///x,y
     GLfloat position_buffer[3];
 }
-camera;
+cvm_camera;
 
-void change_camera_azimuthal_angle(float delta,camera * c);
-void change_camera_zenith_angle(float delta,camera * c);
-void change_camera_zoom(int delta,camera * c);
-
-
-void initialise_camera(int screen_w,int screen_h,float fov,float near,int zoom_steps,camera * c);
-
-void update_camera(int screen_w,int screen_h,camera * c);
+void change_camera_azimuthal_angle(float delta,cvm_camera * c);
+void change_camera_zenith_angle(float delta,cvm_camera * c);
+void change_camera_zoom(int delta,cvm_camera * c);
 
 
-static inline matrix4f * get_view_matrix_pointer(camera * c)
+void initialise_camera(int screen_w,int screen_h,float fov,float near,int zoom_steps,cvm_camera * c);
+
+void update_camera(int screen_w,int screen_h,cvm_camera * c);
+
+
+static inline matrix4f * get_view_matrix_pointer(cvm_camera * c)
 {
     return &c->view_matrix;
 }
-static inline matrix4f * get_view_matrix_inverse_pointer(camera * c)
+static inline matrix4f * get_view_matrix_inverse_pointer(cvm_camera * c)
 {
     return &c->view_matrix_inverse;
 }
-matrix4f get_view_matrix(camera * c);
-matrix4f get_view_matrix_inverse(camera * c);
+matrix4f get_view_matrix(cvm_camera * c);
+matrix4f get_view_matrix_inverse(cvm_camera * c);
 
-bool test_in_camera_bounds(vec3f position,float radius,camera * c);
+bool test_in_camera_bounds(vec3f position,float radius,cvm_camera * c);
 
 
 

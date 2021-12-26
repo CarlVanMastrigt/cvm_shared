@@ -1,5 +1,5 @@
 /**
-Copyright 2020 Carl van Mastrigt
+Copyright 2020,2021 Carl van Mastrigt
 
 This file is part of cvm_shared.
 
@@ -53,14 +53,11 @@ typedef union widget widget;
 #include "cvm_math.h"
 #include "cvm_data_structures.h"
 #include "cvm_random.h"
-#include "cvm_gl_functions.h"
 #include "cvm_vk.h"
-#include "cvm_shader.h"
 #include "cvm_overlay.h"
 #include "cvm_widget.h"
 #include "cvm_view.h"
 #include "cvm_camera.h"
-#include "cvm_managed_buffer.h"
 #include "cvm_mesh.h"
 #include "cvm_thread.h"
 

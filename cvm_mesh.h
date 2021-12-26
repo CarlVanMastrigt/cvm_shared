@@ -24,131 +24,49 @@ along with cvm_shared.  If not, see <https://www.gnu.org/licenses/>.
 #ifndef CVM_MESH_H
 #define CVM_MESH_H
 
-int generate_mesh_from_objs(const char * name,float scale);
-int generate_mesh_with_adjacent_from_objs(const char * name,float scale);
-int generate_mesh_from_objs_(const char * name,uint32_t flags);
 
-typedef enum
-{
-    SHADOW_MESH_GROUP=0,
-    COLOUR_MESH_GROUP,
-    TRANSPARENT_SHADOW_MESH_GROUP,
-    TRANSPARENT_COLOUR_MESH_GROUP,
-//    STICKER_BASIC_MESH_GROUP,
-    STICKER_CIRCLE_MESH_GROUP,
-    STICKER_CONSTRAINED_CIRCLE_MESH_GROUP,
-    NUM_MESH_GROUPS
-}
-mesh_group;
 
-typedef struct mesh
-{
-    uint32_t index;
-    uint32_t colour_offset;
-}
-mesh;
-
-typedef struct draw_elements_indirect_command_data///Should probably be put in another file, but here is fine for now
-{
-    GLuint  count;
-    GLuint  instance_count;
-    GLuint  first_index;
-    GLuint  base_vertex;
-    GLuint  base_instance;
-}
-draw_elements_indirect_command_data;
-
-#define MESH_GROUP_SIMPLE           0x00000000
-#define MESH_GROUP_ADGACENCY        0x00000001
-#define MESH_GROUP_PER_FACE_COLOUR  0x00000002
+#define CVM_MESH_SIMPLE             0x00000000
+#define CVM_MESH_ADGACENCY          0x00000001
+#define CVM_MESH_PER_FACE_COLOUR    0x00000002
 //#define MESH_GROUP_VERTEX_NORMS     0x00000004
 //#define MESH_GROUP_UV               0x00000008
 
-typedef struct mesh_group_
+int cvm_mesh_generate_file_from_objs(const char * name,uint32_t flags);
+
+
+typedef struct cvm_mesh
 {
-    GLuint dcbo;
-    GLuint adj_dcbo;
-    GLuint ibo;
-    GLuint adj_ibo;
-    GLuint vbo;
-    GLuint cbo;///colour buffer
-    GLuint cto;///colour texture
-//    GLuint nbo;
-//    GLuint uvbo;
-
-    uint32_t flags;
-
-    draw_elements_indirect_command_data * adjacent_draw_command_buffer;
-    draw_elements_indirect_command_data * draw_command_buffer;
-    uint32_t mesh_count;
-    uint32_t mesh_space;
-
-    ///per face data
-    GLshort * index_buffer;
-    GLshort * adjacent_index_buffer;
-    GLshort * colour_buffer;
-    uint32_t face_count;
-    uint32_t face_space;
-
-    ///per vertex data
-    GLfloat * vertex_buffer;
-    GLfloat * normal_buffer;
-    GLfloat * uv_buffer;
-    uint32_t vertex_count;
-    uint32_t vertex_space;
+//    uint32_t index;
+//    uint32_t colour_offset;
 }
-mesh_group_;
-
-uint32_t get_mesh_group_count(mesh_group group);
-
-void initialise_mesh_buffers(void);
-void transfer_mesh_draw_data(gl_functions * glf);
-
-mesh load_mesh_file(char * filename,mesh_group group);
-mesh load_mesh_adjacency_file(char * filename);
-mesh load_mesh_transparent_adjacency_file(char * filename);
-
-draw_elements_indirect_command_data * map_mesh_dcbo_for_writing(gl_functions * glf,mesh_group group);
-void unmap_mesh_dcbo(gl_functions * glf);
-
-void render_meshes(gl_functions * glf,mesh_group group_to_render);
-void bind_mesh_buffers_for_vao(gl_functions * glf);
-
-
-void initialise_assorted_meshes(gl_functions * glf);
-
-void bind_assorted_for_vao_vec3(gl_functions * glf);
-void bind_assorted_for_vao_vec2(gl_functions * glf);
-
-void render_octahedron_colour(gl_functions * glf,uint32_t count);
-void render_octahedron_shadow(gl_functions * glf,uint32_t count);
-
-void render_triangular_antiprism_colour(gl_functions * glf,uint32_t count);
-void render_triangular_antiprism_shadow(gl_functions * glf,uint32_t count);
-
-void render_square(gl_functions * glf,uint32_t count);
-
-void render_circle_lines(gl_functions * glf,uint32_t count);
-void render_cross_lines(gl_functions * glf,uint32_t count);
-void render_square_lines(gl_functions * glf,uint32_t count);
+cvm_mesh;
 
 
 
 
+cvm_mesh cvm_mesh_load_file(char * filename);
 
 
-
-void initialise_mesh_group(gl_functions * glf,mesh_group_ * mg,uint32_t flags);
-mesh load_mesh_file_to_group(mesh_group_ * mg,const char * filename);///type specifier in mesh file (for adjacency &c.)?
-
-void bind_mesh_group_vertex_buffer(gl_functions * glf,mesh_group_ * mg,GLuint attribute_index);
-void bind_mesh_group_adjacent_vertex_buffer(gl_functions * glf,mesh_group_ * mg,GLuint attribute_index);
-void bind_mesh_group_normal_buffer(gl_functions * glf,mesh_group_ * mg,GLuint attribute_index);
-void bind_mesh_group_uv_buffer(gl_functions * glf,mesh_group_ * mg,GLuint attribute_index);
-
-void transfer_mesh_group_buffer_data(gl_functions * glf,mesh_group_ * mg);
-void transfer_mesh_group_draw_commands(gl_functions * glf,mesh_group_ * mg);
-void delete_mesh_group(gl_functions * glf,mesh_group_ * mg);
+//void initialise_assorted_meshes(gl_functions * glf);
+//
+//
+//
+//
+//
+//
+//
+//void initialise_mesh_group(gl_functions * glf,mesh_group_ * mg,uint32_t flags);
+//mesh load_mesh_file_to_group(mesh_group_ * mg,const char * filename);///type specifier in mesh file (for adjacency &c.)?
+//
+//void bind_mesh_group_vertex_buffer(gl_functions * glf,mesh_group_ * mg,GLuint attribute_index);
+//void bind_mesh_group_adjacent_vertex_buffer(gl_functions * glf,mesh_group_ * mg,GLuint attribute_index);
+//void bind_mesh_group_normal_buffer(gl_functions * glf,mesh_group_ * mg,GLuint attribute_index);
+//void bind_mesh_group_uv_buffer(gl_functions * glf,mesh_group_ * mg,GLuint attribute_index);
+//
+//void transfer_mesh_group_buffer_data(gl_functions * glf,mesh_group_ * mg);
+//void transfer_mesh_group_draw_commands(gl_functions * glf,mesh_group_ * mg);
+//void delete_mesh_group(gl_functions * glf,mesh_group_ * mg);
 
 
 

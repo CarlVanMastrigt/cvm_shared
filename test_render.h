@@ -1,5 +1,5 @@
 /**
-Copyright 2020 Carl van Mastrigt
+Copyright 2020,2021 Carl van Mastrigt
 
 This file is part of cvm_shared.
 
@@ -42,7 +42,7 @@ void terminate_test_render_data(void);
 void initialise_test_swapchain_dependencies(void);
 void terminate_test_swapchain_dependencies(void);
 
-cvm_vk_module_work_block * test_render_frame(camera * c);
+cvm_vk_module_work_block * test_render_frame(cvm_camera * c);
 void test_frame_cleanup(uint32_t swapchain_image_index);
 
 #endif

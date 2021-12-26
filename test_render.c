@@ -1,5 +1,5 @@
 /**
-Copyright 2020 Carl van Mastrigt
+Copyright 2020,2021 Carl van Mastrigt
 
 This file is part of cvm_shared.
 
@@ -730,12 +730,7 @@ void terminate_test_swapchain_dependencies()
 
     cvm_vk_destroy_pipeline(test_pipeline);
 
-    for(i=0;i<swapchain_image_count;i++)
-    {
-        for(j=0;j<TEST_FRAMEBUFFER_CYCLES;j++) cvm_vk_destroy_framebuffer(test_framebuffers[j][i]);
-
-//        cvm_vk_relinquish_staging_buffer_space(&test_uniform_buffer,swapchain_image_count);
-    }
+    for(i=0;i<swapchain_image_count;i++) for(j=0;j<TEST_FRAMEBUFFER_CYCLES;j++) cvm_vk_destroy_framebuffer(test_framebuffers[j][i]);
 
     for(i=0;i<TEST_FRAMEBUFFER_CYCLES;i++)
     {
@@ -755,7 +750,7 @@ void terminate_test_swapchain_dependencies()
 //    free(test_staging_buffer_acquisitions);
 }
 
-cvm_vk_module_work_block * test_render_frame(camera * c)
+cvm_vk_module_work_block * test_render_frame(cvm_camera * c)
 {
     cvm_vk_module_work_block * work_block;
     uint32_t swapchain_image_index;

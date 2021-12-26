@@ -1,5 +1,5 @@
 /**
-Copyright 2020 Carl van Mastrigt
+Copyright 2020,2021 Carl van Mastrigt
 
 This file is part of cvm_shared.
 
@@ -19,28 +19,28 @@ along with cvm_shared.  If not, see <https://www.gnu.org/licenses/>.
 
 #include "cvm_shared.h"
 
-void change_camera_azimuthal_angle(float delta,camera * c)
+void change_camera_azimuthal_angle(float delta,cvm_camera * c)
 {
     c->azimuthal_angle+=delta;
     if(c->azimuthal_angle>PI)c->azimuthal_angle-=2.0*PI;
     if(c->azimuthal_angle<-PI)c->azimuthal_angle+=2.0*PI;
 }
 
-void change_camera_zenith_angle(float delta,camera * c)
+void change_camera_zenith_angle(float delta,cvm_camera * c)
 {
     c->zenith_angle+=delta;
     if(c->zenith_angle>PI)c->zenith_angle=PI;
     if(c->zenith_angle<0.0)c->zenith_angle=0.0;
 }
 
-void change_camera_zoom(int delta,camera * c)
+void change_camera_zoom(int delta,cvm_camera * c)
 {
     c->current_zoom_step+=delta;
     if(c->current_zoom_step<0)c->current_zoom_step=0;
     if(c->current_zoom_step>c->max_zoom_step)c->current_zoom_step=c->max_zoom_step;
 }
 
-void initialise_camera(int screen_w,int screen_h,float fov, float near,int zoom_steps,camera * c)
+void initialise_camera(int screen_w,int screen_h,float fov, float near,int zoom_steps,cvm_camera * c)
 {
     c->min_focal_distance=3.0f;
     c->max_focal_distance=100.0f;
@@ -59,7 +59,7 @@ void initialise_camera(int screen_w,int screen_h,float fov, float near,int zoom_
 
 ///should probably move ops that use plane to their own function
 
-void update_camera(int screen_w,int screen_h,camera * c)
+void update_camera(int screen_w,int screen_h,cvm_camera * c)
 {
     matrix4f vm,vmi,rx,rz,z,proj;
     float ca,sa,ar,tan_half_fov;
@@ -128,7 +128,7 @@ void update_camera(int screen_w,int screen_h,camera * c)
     c->bounds[frus_face_r]=plane_from_normal_and_point(v3f_norm_cross(fbr,ftr),c->position);
 }
 
-bool test_in_camera_bounds(vec3f position,float radius,camera * c)
+bool test_in_camera_bounds(vec3f position,float radius,cvm_camera * c)
 {
     int i;
     for(i=0;i<num_frustrum_bounds;i++) if(plane_point_dist(c->bounds[i],position) > radius) return false;
