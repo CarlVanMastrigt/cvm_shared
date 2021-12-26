@@ -434,6 +434,11 @@ uint64_t cvm_vk_acquire_static_buffer_allocation(cvm_vk_managed_buffer * mb,uint
     return e-size;
 }
 
+uint64_t cvm_vk_get_dynamic_buffer_offset(cvm_vk_managed_buffer * mb,cvm_vk_dynamic_buffer_allocation * allocation)
+{
+    return allocation->offset<<mb->base_dynamic_allocation_size_factor;
+}
+
 void * cvm_vk_get_dynamic_buffer_allocation_mapping(cvm_vk_managed_buffer * mb,cvm_vk_dynamic_buffer_allocation * allocation)
 {
     return mb->mapping ? mb->mapping+(allocation->offset<<mb->base_dynamic_allocation_size_factor) : NULL;

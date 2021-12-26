@@ -99,7 +99,7 @@ typedef struct cvm_vk_managed_buffer
     uint32_t available_dynamic_allocation_bitmask;
     uint32_t base_dynamic_allocation_size_factor;
 
-    void * mapping;///used for device generic buffers on UMA platforms and staging/uniform buffers on all others
+    void * mapping;///used for device generic buffers on UMA platforms and staging/uniform buffers on all others (assuming you would event want this for those prposes...) also operates as flag as to whether staging is necessary
 }
 cvm_vk_managed_buffer;
 
@@ -110,6 +110,8 @@ cvm_vk_dynamic_buffer_allocation * cvm_vk_acquire_dynamic_buffer_allocation(cvm_
 void cvm_vk_relinquish_dynamic_buffer_allocation(cvm_vk_managed_buffer * mb,cvm_vk_dynamic_buffer_allocation * allocation);
 
 uint64_t cvm_vk_acquire_static_buffer_allocation(cvm_vk_managed_buffer * mb,uint64_t size,uint64_t alignment);
+
+uint64_t cvm_vk_get_dynamic_buffer_offset(cvm_vk_managed_buffer * mb,cvm_vk_dynamic_buffer_allocation * allocation);
 
 ///worth making these inline?
 void * cvm_vk_get_dynamic_buffer_allocation_mapping(cvm_vk_managed_buffer * mb,cvm_vk_dynamic_buffer_allocation * allocation);
@@ -227,9 +229,6 @@ typedef struct cvm_vk_staging_buffer
     atomic_uint_fast32_t space_remaining;
     uint32_t initial_space_remaining;
     ///need to test atomic version isn't (significatly) slower than non-atomic
-
-    ///instead have desired per frame upload space and per frame uniform space? no, that can be handled user side as desired
-
     uint32_t * acquisitions;
 
     void * mapping;
@@ -285,6 +284,18 @@ void cvm_vk_begin_transient_buffer(cvm_vk_transient_buffer * tb,uint32_t frame_i
 void cvm_vk_end_transient_buffer(cvm_vk_transient_buffer * tb);
 
 void * cvm_vk_get_transient_buffer_allocation(cvm_vk_transient_buffer * tb,uint32_t allocation_size,VkDeviceSize * acquired_offset);
+
+
+
+
+
+
+
+
+
+
+
+
 
 
 

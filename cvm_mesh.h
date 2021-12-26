@@ -1,5 +1,5 @@
 /**
-Copyright 2020 Carl van Mastrigt
+Copyright 2020,2021 Carl van Mastrigt
 
 This file is part of cvm_shared.
 
@@ -26,47 +26,48 @@ along with cvm_shared.  If not, see <https://www.gnu.org/licenses/>.
 
 
 
-#define CVM_MESH_SIMPLE             0x00000000
-#define CVM_MESH_ADGACENCY          0x00000001
-#define CVM_MESH_PER_FACE_COLOUR    0x00000002
-//#define MESH_GROUP_VERTEX_NORMS     0x00000004
-//#define MESH_GROUP_UV               0x00000008
+#define CVM_MESH_SIMPLE             0x0000
+#define CVM_MESH_ADGACENCY          0x0001
+#define CVM_MESH_PER_FACE_MATERIAL  0x0002
+#define CVM_MESH_VERTEX_NORMALS     0x0004
+#define CVM_MESH_TEXTURE_COORDS     0x0008
 
-int cvm_mesh_generate_file_from_objs(const char * name,uint32_t flags);
-
+int cvm_mesh_generate_file_from_objs(const char * name,uint16_t flags);
 
 typedef struct cvm_mesh
 {
-//    uint32_t index;
-//    uint32_t colour_offset;
+    uint16_t flags;
+    uint16_t vertex_count;
+    uint32_t face_count:20;///implicitly triangles
+    ///reserved 12 bits
+
+    ///precalculate following for speed of access/use
+    uint32_t index_offset;
+    uint32_t adjacency_offset;
+    uint32_t position_offset;
+    uint32_t material_offset;
+    ///uint32_t normal_offset;
+    ///uint32_t texture_coordinate_offset;
+
+    cvm_vk_dynamic_buffer_allocation * allocation;///store so that this can be deleted quickly, will be null if static allocation
 }
 cvm_mesh;
 
 
+#define CVM_MESH_FAIL_STAGING_INSUFFICIENT          1
+#define CVM_MESH_FAIL_STAGING_TOTAL_INSUFFICIENT    2
+#define CVM_MESH_FAIL_DESTINATION_INSUFFICIENT      3
+#define CVM_MESH_FAIL_FLAGS_MISMATCH                4
+#define CVM_MESH_FAIL_FILE_INVALID                  5
+#define CVM_MESH_FAIL_VERSION_MISMATCH              6
+#define CVM_MESH_FAIL_FILE_MISSING                  7
+
+int cvm_mesh_load_file_header(FILE * f,cvm_mesh * mesh);
+int cvm_mesh_load_file_body(FILE * f,cvm_mesh * mesh,uint16_t * indices,uint16_t * adjacency,uint16_t * materials,float * positions/*,float * normals,uint16_t * texture_uvs*/);
+
+int cvm_mesh_load_file_to_buffer(cvm_mesh * mesh,char * filename,uint16_t flags,bool dynamic,cvm_vk_managed_buffer * mb,cvm_vk_staging_buffer * sb,VkCommandBuffer transfer_cb);
 
 
-cvm_mesh cvm_mesh_load_file(char * filename);
-
-
-//void initialise_assorted_meshes(gl_functions * glf);
-//
-//
-//
-//
-//
-//
-//
-//void initialise_mesh_group(gl_functions * glf,mesh_group_ * mg,uint32_t flags);
-//mesh load_mesh_file_to_group(mesh_group_ * mg,const char * filename);///type specifier in mesh file (for adjacency &c.)?
-//
-//void bind_mesh_group_vertex_buffer(gl_functions * glf,mesh_group_ * mg,GLuint attribute_index);
-//void bind_mesh_group_adjacent_vertex_buffer(gl_functions * glf,mesh_group_ * mg,GLuint attribute_index);
-//void bind_mesh_group_normal_buffer(gl_functions * glf,mesh_group_ * mg,GLuint attribute_index);
-//void bind_mesh_group_uv_buffer(gl_functions * glf,mesh_group_ * mg,GLuint attribute_index);
-//
-//void transfer_mesh_group_buffer_data(gl_functions * glf,mesh_group_ * mg);
-//void transfer_mesh_group_draw_commands(gl_functions * glf,mesh_group_ * mg);
-//void delete_mesh_group(gl_functions * glf,mesh_group_ * mg);
 
 
 

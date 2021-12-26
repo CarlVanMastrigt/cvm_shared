@@ -1065,6 +1065,9 @@ cvm_vk_image_atlas_tile * overlay_create_transparent_image_tile_with_staging(cvm
                 }
             };
 
+            #warning could build up regions to copy then execute all at once rather than using this paradigm, would also mean command buffer doesnt need to get passed around
+            /// ^ would also mean there's no longer a reason to keep the image inside the image atlas struct... (but probably want to keep that anyway)
+
             vkCmdCopyBufferToImage(erb->upload_command_buffer,erb->staging_buffer->buffer,overlay_transparent_image,VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,1,&copy_info);
         }
     }

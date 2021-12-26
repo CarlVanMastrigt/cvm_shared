@@ -817,14 +817,21 @@ cvm_vk_module_work_block * test_render_frame(cvm_camera * c)
         vkCmdBindPipeline(work_block->graphics_work,VK_PIPELINE_BIND_POINT_GRAPHICS,test_pipeline);
 
 
-        ///put following in a function?
-        //VkDeviceSize offset=test_vertex_allocation->offset<<test_buffer.base_dynamic_allocation_size_factor;
-        //vkCmdBindVertexBuffers(work_block->graphics_work,0,1,&test_buffer.buffer,&offset);
         cvm_vk_bind_dymanic_allocation_index(work_block->graphics_work,&test_buffer,test_index_allocation,VK_INDEX_TYPE_UINT16);
         cvm_vk_bind_dymanic_allocation_vertex(work_block->graphics_work,&test_buffer,test_vertex_allocation,0);
 
-        //vkCmdDraw(command_buffer,4,1,0,0);
         vkCmdDrawIndexed(work_block->graphics_work,36,1,0,0,0);
+
+
+//        vkCmdBindIndexBuffer(work_block->graphics_work,test_buffer.buffer,0,VK_INDEX_TYPE_UINT16);
+//        VkDeviceSize offset;
+//        offset=0;
+//        vkCmdBindVertexBuffers(work_block->graphics_work,0,1,&test_buffer.buffer,&offset);
+//        uint32_t index_offset=(test_index_allocation->offset << test_buffer.base_dynamic_allocation_size_factor)/sizeof(uint16_t);
+//        uint32_t vertex_offset=(test_vertex_allocation->offset << test_buffer.base_dynamic_allocation_size_factor)/sizeof(test_render_data);
+//
+//
+//        vkCmdDrawIndexed(work_block->graphics_work,36,1,index_offset,vertex_offset,0);
 
         vkCmdEndRenderPass(work_block->graphics_work);///================
 

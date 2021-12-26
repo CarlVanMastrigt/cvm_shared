@@ -1,5 +1,5 @@
 /**
-Copyright 2020 Carl van Mastrigt
+Copyright 2020,2021 Carl van Mastrigt
 
 This file is part of cvm_shared.
 
@@ -19,98 +19,224 @@ along with cvm_shared.  If not, see <https://www.gnu.org/licenses/>.
 
 #include "cvm_shared.h"
 
+static uint16_t cvm_mesh_file_signiature=0x53FF;
+static uint16_t cvm_mesh_version_number=0x0001;
 
-int cvm_mesh_generate_file_from_objs(const char * name,uint32_t flags)
+int cvm_mesh_generate_file_from_objs(const char * name,uint16_t flags)
 {
-    uint32_t num_verts,num_faces;
+    uint16_t num_verts,num_positions,num_normals,num_tex_coords,current_matreial,k,pm,pa,n,adj_count;
+    uint32_t num_faces,i,j;
 
+    bool has_normals,has_tex_coords;
 
-    uint16_t * indices;
-    float * verts;
-    uint16_t * adj_indices;
-    uint16_t * colours;
+    uint16_t * v_indices;///indices_0
+    //uint16_t * normal_indices;
+    //uint16_t * tex_coord_indices;
+    uint16_t * indices;///final/resultant
+    float * positions;
+    uint16_t * adjacency;
+    uint16_t * materials;
     //float * norms;
-    //float * uvs;
+    //float * tex_coords;//male uint16_t (unorm coordinates) ??
 
-    FILE *f_in,*f_out;
-
-    uint32_t i,j,k,current_colour,pm,pa,n,adj_count;
-
-    char c;
+    FILE * f;
 
     char buffer[1024];
+    uint16_t vb[3];///support for up to 12
+    uint16_t vnb[3];///support for up to 12
+    uint16_t vtb[3];///support for up to 12
+
+
+    if(flags&CVM_MESH_VERTEX_NORMALS)
+    {
+        fprintf(stderr,"MESH NORMAL SUPPORT NYI\n");
+        return -1;
+    }
+    if(flags&CVM_MESH_TEXTURE_COORDS)
+    {
+        fprintf(stderr,"MESH TEXTURE COORDINATE SUPPORT NYI\n");
+        return -1;
+    }
 
     strcpy(buffer,name);
     strcat(buffer,".obj");
 
     printf("converting to mesh file: %s\n",buffer);
 
-    num_verts=num_faces=0;
+    num_tex_coords=num_normals=num_positions=0;
+    num_faces=0;
 
-    f_in=fopen(buffer,"r");
+    f=fopen(buffer,"r");
 
-    if(f_in==NULL)
+    if(!f)
     {
-        puts("UNABLE TO LOAD OBJ FILE");
+        fprintf(stderr,"UNABLE TO LOAD OBJ FILE: %s\n",buffer);
         return -1;
     }
 
-
-    for(c='a';c !=EOF;c=fgetc(f_in))
+    while(fgets(buffer,1024,f))
     {
-        if (c=='\n')
+        if(buffer[0]=='f' && buffer[1]==' ' && num_faces++ ==0x000FFFFF)
         {
-            c=fgetc(f_in);
-            num_verts+=(c=='v');
-            num_faces+=(c=='f');
+            fprintf(stderr,"TOO MANY FACES IN OBJ: %s\n",name);
+            return -1;
+        }
+        else if(buffer[0]=='v')
+        {
+            if(buffer[1]==' ' && num_positions++ ==0xFFFF)
+            {
+                fprintf(stderr,"TOO MANY VERTS IN OBJ: %s\n",name);
+                return -1;
+            }
+            else if(buffer[1]=='n' && buffer[2]==' ' && num_normals++ ==0xFFFF)
+            {
+                fprintf(stderr,"TOO MANY VERT NORMALS IN OBJ: %s\n",name);
+                return -1;
+            }
+            else if(buffer[1]=='t' && buffer[2]==' ' && num_tex_coords++ ==0xFFFF)
+            {
+                fprintf(stderr,"TOO MANY TEXTURE COORDINATES IN OBJ: %s\n",name);
+                return -1;
+            }
         }
     }
 
-    fclose(f_in);
+    fclose(f);
 
-    printf("num_verts: %d\nnum_faces: %d\n",num_verts,num_faces);
-
-    indices=malloc(sizeof(uint16_t)*num_faces*3);
-    verts=malloc(sizeof(float)*num_verts*3);
-    adj_indices=malloc(sizeof(uint16_t)*num_faces*6);
-    colours=malloc(sizeof(uint16_t)*num_faces);
-
-
-    num_verts=num_faces=0;
-    current_colour=0;
-
-    f_in=fopen(buffer,"r");
-
-    for(c='a';c!=EOF;c=fgetc(f_in))
+    if(!num_faces)
     {
-        #warning could really do with error checking here, use switch statement deviate behaviour??
-        if (c=='\n')
-        {
-            c=fgetc(f_in);
-            if(c=='v')
-            {
-                if(fscanf(f_in,"%f %f %f",verts+num_verts*3,verts+num_verts*3+1,verts+num_verts*3+2)!=3)puts("FAILED LOADING FACE INDICES");
-                num_verts++;
-            }
-            else if(c=='f')
-            {
-                if(fscanf(f_in,"%hu %hu %hu",indices+num_faces*3,indices+num_faces*3+1,indices+num_faces*3+2)!=3)puts("FAILED LOADING VERTEXES");
-                colours[num_faces]=current_colour;
-                num_faces++;
-            }
-            else if(c=='u') if(fscanf(f_in,"semtl %u",&current_colour)!=1)puts("FAILED LOADING MATERIAL (COLOUR)");
-        }
+        fprintf(stderr,"NO FACES FOUND IN OBJ %s\n",name);
+        return -1;
+    }
+    if(!num_positions)
+    {
+        fprintf(stderr,"NO VERTS FOUND IN OBJ %s\n",name);
+        return -1;
+    }
+    if(flags&CVM_MESH_VERTEX_NORMALS && !num_normals)
+    {
+        fprintf(stderr,"NO NORMALS FOUND IN OBJ %s\n",name);
+        return -1;
+    }
+    if(flags&CVM_MESH_TEXTURE_COORDS && !num_tex_coords)
+    {
+        fprintf(stderr,"NO TEXTURE COORDINATES FOUND IN OBJ %s\n",name);
+        return -1;
     }
 
-    fclose(f_in);
+    printf("num_faces: %u\nnum_positions: %hu\nnum_normals: %hu\nnum_texture_coordinates: %hu\n",num_faces,num_positions,num_normals,num_tex_coords);
+
+    has_normals=num_normals>0;
+    has_tex_coords=num_tex_coords>0;
+
+
+    v_indices=malloc(sizeof(uint16_t)*num_faces*3);
+
+    positions=malloc(sizeof(float)*num_positions*3);
+
+    if(flags&CVM_MESH_ADGACENCY)
+    {
+        adjacency=malloc(sizeof(uint16_t)*num_faces*6);
+    }
+    else adjacency=NULL;
+
+    if(flags&CVM_MESH_PER_FACE_MATERIAL)
+    {
+        materials=malloc(sizeof(uint16_t)*num_faces);
+    }
+    else materials=NULL;
+
+
+    num_tex_coords=num_normals=num_positions=num_faces=0;
+    current_matreial=0;
+
+    strcpy(buffer,name);
+    strcat(buffer,".obj");
+
+    f=fopen(buffer,"r");
+
+    while(fgets(buffer,1024,f))
+    {
+        if(buffer[0]=='f' && buffer[1]==' ')
+        {
+            if(has_normals && has_tex_coords)
+            {
+                if(sscanf(buffer+2,"%hu/%hu/%hu %hu/%hu/%hu %hu/%hu/%hu",vb+0,vtb+0,vnb+0,vb+1,vtb+1,vnb+1,vb+2,vtb+2,vnb+2) != 9)
+                {
+                    fprintf(stderr,"FAILED LOADING INDICES VTN: %s : %s\n",name,buffer);
+                    return -1;
+                }
+            }
+            else if(has_tex_coords)
+            {
+                if(sscanf(buffer+2,"%hu/%hu %hu/%hu %hu/%hu",vb+0,vtb+0,vb+1,vtb+1,vb+2,vtb+2) != 6)
+                {
+                    fprintf(stderr,"FAILED LOADING INDICES VT: %s : %s\n",name,buffer);
+                    return -1;
+                }
+            }
+            else if(has_normals)
+            {
+                if(sscanf(buffer+2,"%hu//%hu %hu//%hu %hu//%hu",vb+0,vnb+0,vb+1,vnb+1,vb+2,vnb+2) != 6)
+                {
+                    fprintf(stderr,"FAILED LOADING INDICES VN: %s : %s\n",name,buffer);
+                    return -1;
+                }
+            }
+            else if(sscanf(buffer+2,"%hu %hu %hu",vb+0,vb+1,vb+2) != 3)
+            {
+                fprintf(stderr,"FAILED LOADING INDICES V: %s : %s\n",name,buffer);
+                return -1;
+            }
+
+            v_indices[num_faces*3+0]=vb[0];
+            v_indices[num_faces*3+1]=vb[1];
+            v_indices[num_faces*3+2]=vb[2];
+
+            if(flags&CVM_MESH_PER_FACE_MATERIAL) materials[num_faces]=current_matreial;
+            num_faces++;
+        }
+        else if(buffer[0]=='v')
+        {
+            if(buffer[1]==' ')
+            {
+                if(sscanf(buffer+2,"%f %f %f",positions+num_positions*3,positions+num_positions*3+1,positions+num_positions*3+2) != 3)
+                {
+                    fprintf(stderr,"FAILED LOADING VERTICES : %s : %s\n",name,buffer);
+                    return -1;
+                }
+                num_positions++;
+            }
+            else if(buffer[1]=='t' && buffer[2]==' ')
+            {
+                /// texture_coords
+            }
+            else if(buffer[1]=='n' && buffer[2]==' ')
+            {
+                /// vertex_normals
+            }
+        }
+        ///check material here!
+    }
+
+    ///if handling tex_coords and normals will need to duplicate resources here so that verts match up (NYI)
+    ///must be handled before touching adjacency
+
+    ///need to free vertex, normal and texture coordinate indices here
+
+    ///following are hack for now as above is NYI (which would decide size of this buffer)
+    indices=v_indices;
+    num_verts=num_positions;
+
+    fclose(f);
 
     for(i=0;i<num_faces;i++) indices[i*3+0]-=1,indices[i*3+1]-=1,indices[i*3+2]-=1;
 
     if(flags & CVM_MESH_ADGACENCY) for(i=0;i<num_faces;i++)
     {
-        adj_indices[i*6+0]=indices[i*3+0];
-        adj_indices[i*6+2]=indices[i*3+1];
-        adj_indices[i*6+4]=indices[i*3+2];
+        adjacency[i*6+0]=indices[i*3+0];
+        adjacency[i*6+2]=indices[i*3+1];
+        adjacency[i*6+4]=indices[i*3+2];
 
         adj_count=0;
 
@@ -126,46 +252,202 @@ int cvm_mesh_generate_file_from_objs(const char * name,uint32_t flags)
             if(n==2)
             {
                 adj_count+=pm;
-                adj_indices[i*6+pm-1]=indices[j*3+pa];
+                adjacency[i*6+pm-1]=indices[j*3+pa];
             }
         }
 
         if(adj_count!=12)puts("UNABLE TO CONSTRUCT ADJACENCY MESH FROM MODEL (IS IT NON-MANIFOLD ?)");
     }
 
+
+
     strcpy(buffer,name);
     strcat(buffer,".mesh");
-    printf("%s\n",buffer);
 
+    f=fopen(buffer,"wb");
 
-
-    f_out=fopen(buffer,"wb");
-
-    if(f_out==NULL)
+    if(!f)
     {
         printf("UNABLE TO CREATE MESH FILE");
         return -1;
     }
 
-    printf("%zu\n",fwrite(&flags,sizeof(uint32_t),1,f_out));
-    printf("%zu\n",fwrite(&num_faces,sizeof(uint32_t),1,f_out));
-    printf("%zu\n",fwrite(&num_verts,sizeof(uint32_t),1,f_out));
+    ///header/metadta
+    printf("%zu\n",fwrite(&cvm_mesh_file_signiature,sizeof(uint16_t),1,f));
+    printf("%zu\n",fwrite(&cvm_mesh_version_number,sizeof(uint16_t),1,f));
+    printf("%zu\n",fwrite(&flags,sizeof(uint16_t),1,f));
+    printf("%zu\n",fwrite(&num_verts,sizeof(uint16_t),1,f));
+    printf("%zu\n",fwrite(&num_faces,sizeof(uint32_t),1,f));
 
-    ///required elements
-    printf("%zu\n",fwrite(indices,sizeof(uint16_t),num_faces*3,f_out));
-    printf("%zu\n",fwrite(verts,sizeof(float),num_verts*3,f_out));
-    ///conditional elements
-    if(flags & CVM_MESH_ADGACENCY) printf("%zu\n",fwrite(adj_indices,sizeof(uint16_t),num_faces*6,f_out));
-    if(flags & CVM_MESH_PER_FACE_COLOUR) printf("%zu\n",fwrite(colours,sizeof(uint16_t),num_faces,f_out));
+    ///contents
+    printf("%zu\n",fwrite(indices,sizeof(uint16_t),num_faces*3,f));
+    if(flags & CVM_MESH_ADGACENCY) printf("%zu\n",fwrite(adjacency,sizeof(uint16_t),num_faces*6,f));
+    if(flags & CVM_MESH_PER_FACE_MATERIAL) printf("%zu\n",fwrite(materials,sizeof(uint16_t),num_faces,f));
+    printf("%zu\n",fwrite(positions,sizeof(float),num_verts*3,f));
     ///write norms
-    ///write uvs
+    ///write texture coordinates
 
-    fclose(f_out);
+    fclose(f);
 
-    free(verts);
+    free(positions);
     free(indices);
-    free(adj_indices);
-    free(colours);
+    free(adjacency);
+    free(materials);
+
+    return 0;
+}
+
+
+
+
+int cvm_mesh_load_file_header(FILE * f,cvm_mesh * mesh)
+{
+    uint32_t num_faces;
+    uint16_t tmp;
+
+    fread(&tmp,sizeof(uint16_t),1,f);
+    if(tmp!=cvm_mesh_file_signiature)return CVM_MESH_FAIL_FILE_INVALID;
+
+    fread(&tmp,sizeof(uint16_t),1,f);
+    if(tmp>cvm_mesh_version_number)return CVM_MESH_FAIL_VERSION_MISMATCH;
+
+    fread(&mesh->flags,sizeof(uint16_t),1,f);
+    fread(&mesh->vertex_count,sizeof(uint16_t),1,f);
+    fread(&num_faces,sizeof(uint32_t),1,f);
+    mesh->face_count=num_faces;
+
+    return 0;
+}
+
+int cvm_mesh_load_file_body(FILE * f,cvm_mesh * mesh,uint16_t * indices,uint16_t * adjacency,uint16_t * materials,float * positions/*,float * normals,uint16_t * texture_uvs*/)
+{
+    fread(indices,sizeof(uint16_t),mesh->face_count*3,f);
+    if(mesh->flags&CVM_MESH_ADGACENCY)fread(adjacency,sizeof(uint16_t),mesh->face_count*6,f);
+    if(mesh->flags&CVM_MESH_PER_FACE_MATERIAL)fread(materials,sizeof(uint16_t),mesh->face_count,f);
+    fread(positions,sizeof(float),mesh->vertex_count*3,f);
+
+    return 0;
+}
+
+int cvm_mesh_load_file_to_buffer(cvm_mesh * mesh,char * filename,uint16_t flags,bool dynamic,cvm_vk_managed_buffer * mb,cvm_vk_staging_buffer * sb,VkCommandBuffer transfer_cb)
+{
+    uint16_t *indices,*adjacency,*materials;
+    float * positions;
+    uint32_t size;
+    uint64_t base_offset,current_offset;
+    FILE * f;
+    char * ptr;
+    int r;
+    VkDeviceSize sb_offset;
+
+    f=fopen(filename,"rb");
+    if(!f) return CVM_MESH_FAIL_FILE_MISSING;
+
+    r=cvm_mesh_load_file_header(f,mesh);
+    if(r) return r;
+
+    #warning perhaps have way to just take all relevant flags from the mesh? (special mesh flag?)
+    if((mesh->flags&flags)!=flags) return CVM_MESH_FAIL_FLAGS_MISMATCH;
+    mesh->flags=flags;
+
+    ///size should be conservative, enough to accommodate regardless of alignment
+
+    size=mesh->face_count*3*sizeof(uint16_t);
+    if(mesh->flags&CVM_MESH_ADGACENCY)size+=mesh->face_count*6*sizeof(uint16_t);
+    if(mesh->flags&CVM_MESH_PER_FACE_MATERIAL)size+=mesh->face_count*sizeof(uint16_t);
+    size+=(mesh->vertex_count+1)*3*sizeof(float);///1 extra needed for alignment
+
+    #warning if non UMA, acquire staging space, otherwise return an error
+
+    if(sb)
+    {
+        if(size>sb->total_space) return CVM_MESH_FAIL_STAGING_TOTAL_INSUFFICIENT;
+        ptr=cvm_vk_get_staging_buffer_allocation(sb,size,&sb_offset);
+        if(!ptr)return CVM_MESH_FAIL_STAGING_INSUFFICIENT;
+    }
+    else if(!mb->mapping)
+    {
+        fprintf(stderr,"NO WAY TO UPLOAD DATA PROVIDED TO MESH LOADING\n");
+        exit(-1);
+    }
+
+    if(dynamic)
+    {
+        fprintf(stderr,"DYNAMIC MESH ALLOCATIONS_NYI");
+        mesh->allocation=cvm_vk_acquire_dynamic_buffer_allocation(mb,size);
+        if(!mesh->allocation) return CVM_MESH_FAIL_DESTINATION_INSUFFICIENT;
+        base_offset = current_offset = cvm_vk_get_dynamic_buffer_offset(mb,mesh->allocation);
+
+        if(!sb)ptr=cvm_vk_get_dynamic_buffer_allocation_mapping(mb,mesh->allocation);
+    }
+    else
+    {
+        mesh->allocation=NULL;
+        base_offset = current_offset = cvm_vk_acquire_static_buffer_allocation(mb,size,2);
+        if(!base_offset) return CVM_MESH_FAIL_DESTINATION_INSUFFICIENT;
+
+        if(!sb)ptr=cvm_vk_get_static_buffer_allocation_mapping(mb,base_offset);
+    }
+
+    mesh->index_offset=current_offset/sizeof(uint16_t);
+    indices=(uint16_t*)ptr;
+    current_offset+=mesh->face_count*3*sizeof(uint16_t);
+
+    if(mesh->flags&CVM_MESH_ADGACENCY)
+    {
+        mesh->adjacency_offset=current_offset/sizeof(uint16_t);
+        adjacency=(uint16_t*)(ptr + (current_offset-base_offset));
+        current_offset+=mesh->face_count*6*sizeof(uint16_t);
+    }
+    else adjacency=NULL;
+
+    if(mesh->flags&CVM_MESH_PER_FACE_MATERIAL)
+    {
+        mesh->material_offset=current_offset/sizeof(uint16_t);
+        materials=(uint16_t*)(ptr + (current_offset-base_offset));
+        current_offset+=mesh->face_count*sizeof(uint16_t);
+    }
+    else materials=NULL;
+
+    current_offset=(current_offset-1) / (3*sizeof(float)) + 1;
+    mesh->position_offset=current_offset;
+    current_offset*=3*sizeof(float);
+    positions=(float*)(ptr + (current_offset-base_offset));
+    current_offset+=3*mesh->vertex_count*sizeof(float);
+
+    cvm_mesh_load_file_body(f,mesh,indices,adjacency,materials,positions);
+
+    if(sb)
+    {
+        ///copy
+        #warning could instead add a region to the stack, perhaps as something that's built into staging buffer? requires linking staging buffer
+        /// ^ i ~VASTLY~ prefer this paradigm
+
+        ///buffer to buffer struct could perhaps link relevant structures? (staging buffer and managed buffer ?) idk if i like that paradigm though
+        VkBufferCopy copy_data=
+        {
+            .srcOffset=sb_offset,
+            .dstOffset=base_offset,
+            .size=size
+        };
+
+        vkCmdCopyBuffer(transfer_cb,sb->buffer,mb->buffer,1,&copy_data);
+    }
+    else
+    {
+        ///need to flush regions!
+        ///VkMappedMemoryRange
+        #warning need way to add vkFlushMappedMemoryRanges to per frame(?) stack/list for managed buffer, would need to happen in critical section and be atomically handled
+        ///perhaps do when requesting mapping, cvm_vk_get_dynamic_buffer_allocation_mapping/cvm_vk_get_static_buffer_allocation_mapping
+        ///would need lock, perhaps even a separate lock to creating allocations
+        /// static allocations can simply track start/end of acquired space and tack that on the end of fushes to be perfprmed as necessary (inside critical section)
+
+
+        /// flushes should be handled/scheduled by struct that owns them (either managed buffer on UMA or staging buffer elsewhere)
+        /// transfers should be handled/scheduled by destination structure, means this destination will need to know the staging buffer its using
+        ///     ^ could even have staging buffer linked for quick/automatic access as part of acquiring space !! (will then need different/better fail state handling rather than just null pointer return)
+        ///         ^ need to set/associate staging after creation as it's probably unknown at creation time if system is UMA
+    }
 
     return 0;
 }
@@ -177,902 +459,6 @@ int cvm_mesh_generate_file_from_objs(const char * name,uint32_t flags)
 
 
 
-
-
-
-
-
-
-
-//mesh load_mesh_file(char * filename,mesh_group group)
-//{
-//    mesh rtrn=(mesh){0,0};
-//
-//    char * tmp=filename;
-//
-//    while(*tmp!='.')
-//    {
-//        if(*tmp=='\0')
-//        {
-//            puts("error loading mesh file: not of correct type");
-//            return rtrn;
-//        }
-//        tmp++;
-//    }
-//
-//    if(strcmp(tmp,".cvm_mesh"))
-//    {
-//        puts("error loading mesh file: not of correct type");
-//        return rtrn;
-//    }
-//
-//
-//
-//    FILE * f_in;
-//    f_in=fopen(filename,"rb");
-//    uint32_t num_verts,num_faces,num_parts,i,j,k;
-//    uint32_t *part_ids,*part_face_counts;
-//
-//
-//    num_verts=num_faces=num_parts=0;
-//
-//    if(group==SHADOW_MESH_GROUP)
-//    {
-//        puts("error loading mesh file: cannot load regular mesh file to shadow group");
-//        return rtrn;
-//    }
-//
-//    if(group==COLOUR_MESH_GROUP)
-//    {
-//        puts("error loading mesh file: cannot load regular mesh file to colour group as this group shares data with the shadow group");
-//        return rtrn;
-//    }
-//
-//
-//
-//    if (f_in!=NULL)
-//    {
-//        if(mesh_draw_data_count[group]==mesh_draw_data_space[group])
-//        {
-//            mesh_draw_data_space[group]*=2;
-//            mesh_draw_data[group]=realloc(mesh_draw_data[group],sizeof(draw_elements_indirect_command_data)*mesh_draw_data_space[group]);
-//        }
-//
-//        fread(&num_faces, sizeof(uint32_t), 1, f_in);
-//        fread(&num_verts, sizeof(uint32_t), 1, f_in);
-//        fread(&num_parts, sizeof(uint32_t), 1, f_in);
-//
-//        if((mesh_index_count+num_faces*3) >= mesh_index_space)
-//        {
-//            while((mesh_index_count+num_faces*3) >= mesh_index_space)mesh_index_space*=2;
-//
-//            mesh_indices=realloc(mesh_indices,sizeof(uint16_t)*mesh_index_space);
-//        }
-//
-//        if((mesh_vertex_count+num_verts) >= mesh_vertex_space)
-//        {
-//            while((mesh_vertex_count+num_verts) >= mesh_vertex_space)mesh_vertex_space*=2;
-//
-//            mesh_vertices=realloc(mesh_vertices,sizeof(float)*mesh_vertex_space*3);
-//        }
-//
-//        if((mesh_colour_count+num_faces) >= mesh_colour_space)
-//        {
-//            while((mesh_colour_count+num_faces) >= mesh_colour_space)mesh_colour_space*=2;
-//
-//            mesh_colours=realloc(mesh_colours,sizeof(uint16_t)*mesh_colour_space);
-//        }
-//
-//
-//
-//
-//        part_ids=malloc(sizeof(uint32_t)*num_parts);
-//        part_face_counts=malloc(sizeof(uint32_t)*num_parts);
-//
-//        fread(part_ids, sizeof(uint32_t), num_parts, f_in);
-//        fread(part_face_counts, sizeof(uint32_t), num_parts, f_in);
-//
-//        k=0;
-//        for(i=0;i<num_parts;i++)
-//        {
-//            for(j=0;j<part_face_counts[i];j++)
-//            {
-//                mesh_colours[mesh_colour_count+k]=part_ids[i];
-//                k++;
-//            }
-//        }
-//
-//        free(part_ids);
-//        free(part_face_counts);
-//
-//
-//
-//        fread(mesh_indices+mesh_index_count, sizeof(uint16_t), num_faces*3, f_in);
-//        fread(mesh_vertices+(mesh_vertex_count*3), sizeof(float), num_verts*3, f_in);
-//
-//
-//        mesh_draw_data[group][mesh_draw_data_count[group]].base_instance=0;///set_elsewhere
-//        mesh_draw_data[group][mesh_draw_data_count[group]].instance_count=0;///set_elsewhere
-//
-//        mesh_draw_data[group][mesh_draw_data_count[group]].base_vertex=mesh_vertex_count;
-//        mesh_draw_data[group][mesh_draw_data_count[group]].count=num_faces*3;
-//        mesh_draw_data[group][mesh_draw_data_count[group]].first_index=mesh_index_count;
-//
-//
-//        rtrn.index=mesh_draw_data_count[group];
-//        rtrn.colour_offset=mesh_colour_count;
-//
-//        mesh_draw_data_count[group]++;
-//        mesh_vertex_count+=num_verts;
-//        mesh_index_count+=num_faces*3;
-//        mesh_colour_count+=num_faces;
-//    }
-//
-//    fclose(f_in);
-//
-//    return rtrn;
-//}
-//
-//
-//mesh load_mesh_adjacency_file(char * filename)
-//{
-//    mesh rtrn=(mesh){0,0};
-//    char * tmp=filename;
-//
-//    while(*tmp!='.')
-//    {
-//        if(*tmp=='\0')
-//        {
-//            puts("error loading mesh file: not of correct type (no extension)");
-//            return rtrn;
-//        }
-//        tmp++;
-//    }
-//
-//    if(strcmp(tmp,".cvm_mesh_adj"))
-//    {
-//        printf("error loading mesh file: not of correct type (wrong extension) %s",tmp);
-//        return rtrn;
-//    }
-//
-//
-//
-//    FILE * f_in;
-//    f_in=fopen(filename,"rb");
-//    uint32_t num_verts,num_faces,num_parts,i,j,k;
-//    uint32_t *part_ids,*part_face_counts;
-//
-//
-//    num_verts=num_faces=num_parts=0;
-//
-//
-//
-//    if (f_in==NULL)
-//    {
-//        printf("error mesh file not found: %s\n",filename);
-//    }
-//    else
-//    {
-//        if(mesh_draw_data_count[SHADOW_MESH_GROUP]==mesh_draw_data_space[SHADOW_MESH_GROUP])
-//        {
-//            mesh_draw_data_space[SHADOW_MESH_GROUP]*=2;
-//            mesh_draw_data[SHADOW_MESH_GROUP]=realloc(mesh_draw_data[SHADOW_MESH_GROUP],sizeof(draw_elements_indirect_command_data)*mesh_draw_data_space[SHADOW_MESH_GROUP]);
-//        }
-//
-//        if(mesh_draw_data_count[COLOUR_MESH_GROUP]==mesh_draw_data_space[COLOUR_MESH_GROUP])
-//        {
-//            mesh_draw_data_space[COLOUR_MESH_GROUP]*=2;
-//            mesh_draw_data[COLOUR_MESH_GROUP]=realloc(mesh_draw_data[COLOUR_MESH_GROUP],sizeof(draw_elements_indirect_command_data)*mesh_draw_data_space[COLOUR_MESH_GROUP]);
-//        }
-//
-//        fread(&num_faces, sizeof(uint32_t), 1, f_in);
-//        fread(&num_verts, sizeof(uint32_t), 1, f_in);
-//        fread(&num_parts, sizeof(uint32_t), 1, f_in);
-//
-//        if((mesh_index_count+num_faces*9) >= mesh_index_space)
-//        {
-//            while((mesh_index_count+num_faces*9) >= mesh_index_space)mesh_index_space*=2;
-//
-//            mesh_indices=realloc(mesh_indices,sizeof(uint16_t)*mesh_index_space);
-//        }
-//
-//        if((mesh_vertex_count+num_verts) >= mesh_vertex_space)
-//        {
-//            while((mesh_vertex_count+num_verts) >= mesh_vertex_space)mesh_vertex_space*=2;
-//
-//            mesh_vertices=realloc(mesh_vertices,sizeof(float)*mesh_vertex_space*3);
-//        }
-//
-//        if((mesh_colour_count+num_faces) >= mesh_colour_space)
-//        {
-//            while((mesh_colour_count+num_faces) >= mesh_colour_space)mesh_colour_space*=2;
-//
-//            mesh_colours=realloc(mesh_colours,sizeof(uint16_t)*mesh_colour_space);
-//        }
-//
-//
-//
-//
-//        part_ids=malloc(sizeof(uint32_t)*num_parts);
-//        part_face_counts=malloc(sizeof(uint32_t)*num_parts);
-//
-//        fread(part_ids, sizeof(uint32_t), num_parts, f_in);
-//        fread(part_face_counts, sizeof(uint32_t), num_parts, f_in);
-//
-//        k=0;
-//        for(i=0;i<num_parts;i++)
-//        {
-//            for(j=0;j<part_face_counts[i];j++)
-//            {
-//                mesh_colours[mesh_colour_count+k]=part_ids[i];
-//                k++;
-//            }
-//        }
-//
-//        free(part_ids);
-//        free(part_face_counts);
-//
-//
-//
-//        fread(mesh_indices+mesh_index_count, sizeof(uint16_t), num_faces*6, f_in);
-//        fread(mesh_vertices+(mesh_vertex_count*3), sizeof(float), num_verts*3, f_in);
-//
-//
-//        for(i=0;i<num_faces;i++)
-//        {
-//            mesh_indices[mesh_index_count+num_faces*6+i*3+0]=mesh_indices[mesh_index_count+i*6+0];
-//            mesh_indices[mesh_index_count+num_faces*6+i*3+1]=mesh_indices[mesh_index_count+i*6+2];
-//            mesh_indices[mesh_index_count+num_faces*6+i*3+2]=mesh_indices[mesh_index_count+i*6+4];
-//        }
-//
-//        mesh_draw_data[SHADOW_MESH_GROUP][mesh_draw_data_count[SHADOW_MESH_GROUP]].base_instance=0;///set_elsewhere
-//        mesh_draw_data[SHADOW_MESH_GROUP][mesh_draw_data_count[SHADOW_MESH_GROUP]].instance_count=0;///set_elsewhere
-//
-//        mesh_draw_data[SHADOW_MESH_GROUP][mesh_draw_data_count[SHADOW_MESH_GROUP]].base_vertex=mesh_vertex_count;
-//        mesh_draw_data[SHADOW_MESH_GROUP][mesh_draw_data_count[SHADOW_MESH_GROUP]].count=num_faces*6;
-//        mesh_draw_data[SHADOW_MESH_GROUP][mesh_draw_data_count[SHADOW_MESH_GROUP]].first_index=mesh_index_count;
-//
-//        mesh_draw_data_count[SHADOW_MESH_GROUP]++;
-//        mesh_index_count+=num_faces*6;
-//
-//
-//
-//        mesh_draw_data[COLOUR_MESH_GROUP][mesh_draw_data_count[COLOUR_MESH_GROUP]].base_instance=0;///set_elsewhere
-//        mesh_draw_data[COLOUR_MESH_GROUP][mesh_draw_data_count[COLOUR_MESH_GROUP]].instance_count=0;///set_elsewhere
-//
-//        mesh_draw_data[COLOUR_MESH_GROUP][mesh_draw_data_count[COLOUR_MESH_GROUP]].base_vertex=mesh_vertex_count;
-//        mesh_draw_data[COLOUR_MESH_GROUP][mesh_draw_data_count[COLOUR_MESH_GROUP]].count=num_faces*3;
-//        mesh_draw_data[COLOUR_MESH_GROUP][mesh_draw_data_count[COLOUR_MESH_GROUP]].first_index=mesh_index_count;
-//
-//        rtrn.index=mesh_draw_data_count[COLOUR_MESH_GROUP];
-//        mesh_draw_data_count[COLOUR_MESH_GROUP]++;
-//        mesh_index_count+=num_faces*3;
-//
-//
-//
-//        rtrn.colour_offset=mesh_colour_count;
-//
-//        mesh_vertex_count+=num_verts;
-//        mesh_colour_count+=num_faces;
-//
-//        if(mesh_draw_data_count[COLOUR_MESH_GROUP]!=mesh_draw_data_count[SHADOW_MESH_GROUP])
-//        {
-//            puts("error somehow loaded to colour or shadow mesh group without also loading to the other");
-//        }
-//    }
-//
-//    fclose(f_in);
-//
-//    return rtrn;
-//}
-//
-//mesh load_mesh_transparent_adjacency_file(char * filename)
-//{
-//    mesh rtrn=(mesh){0,0};
-//    char * tmp=filename;
-//
-//    while(*tmp!='.')
-//    {
-//        if(*tmp=='\0')
-//        {
-//            puts("error loading mesh file: not of correct type (no extension)");
-//            return rtrn;
-//        }
-//        tmp++;
-//    }
-//
-//    if(strcmp(tmp,".cvm_mesh_adj"))
-//    {
-//        printf("error loading mesh file: not of correct type (wrong extension) %s",tmp);
-//        return rtrn;
-//    }
-//
-//
-//
-//    FILE * f_in;
-//    f_in=fopen(filename,"rb");
-//    uint32_t num_verts,num_faces,num_parts,i;
-//    uint32_t *part_ids,*part_face_counts;
-//
-//
-//    num_verts=num_faces=num_parts=0;
-//
-//
-//
-//    if (f_in==NULL)
-//    {
-//        printf("error mesh file not found: %s\n",filename);
-//    }
-//    else
-//    {
-//        if(mesh_draw_data_count[TRANSPARENT_SHADOW_MESH_GROUP]==mesh_draw_data_space[TRANSPARENT_SHADOW_MESH_GROUP])
-//        {
-//            mesh_draw_data_space[TRANSPARENT_SHADOW_MESH_GROUP]*=2;
-//            mesh_draw_data[TRANSPARENT_SHADOW_MESH_GROUP]=realloc(mesh_draw_data[TRANSPARENT_SHADOW_MESH_GROUP],sizeof(draw_elements_indirect_command_data)*mesh_draw_data_space[TRANSPARENT_SHADOW_MESH_GROUP]);
-//        }
-//
-//        if(mesh_draw_data_count[TRANSPARENT_COLOUR_MESH_GROUP]==mesh_draw_data_space[TRANSPARENT_COLOUR_MESH_GROUP])
-//        {
-//            mesh_draw_data_space[TRANSPARENT_COLOUR_MESH_GROUP]*=2;
-//            mesh_draw_data[TRANSPARENT_COLOUR_MESH_GROUP]=realloc(mesh_draw_data[TRANSPARENT_COLOUR_MESH_GROUP],sizeof(draw_elements_indirect_command_data)*mesh_draw_data_space[TRANSPARENT_COLOUR_MESH_GROUP]);
-//        }
-//
-//        fread(&num_faces, sizeof(uint32_t), 1, f_in);
-//        fread(&num_verts, sizeof(uint32_t), 1, f_in);
-//        fread(&num_parts, sizeof(uint32_t), 1, f_in);
-//
-//        if((mesh_index_count+num_faces*9) >= mesh_index_space)
-//        {
-//            while((mesh_index_count+num_faces*9) >= mesh_index_space)mesh_index_space*=2;
-//
-//            mesh_indices=realloc(mesh_indices,sizeof(uint16_t)*mesh_index_space);
-//        }
-//
-//        if((mesh_vertex_count+num_verts) >= mesh_vertex_space)
-//        {
-//            while((mesh_vertex_count+num_verts) >= mesh_vertex_space)mesh_vertex_space*=2;
-//
-//            mesh_vertices=realloc(mesh_vertices,sizeof(float)*mesh_vertex_space*3);
-//        }
-//
-//
-//
-//
-//        part_ids=malloc(sizeof(uint32_t)*num_parts);
-//        part_face_counts=malloc(sizeof(uint32_t)*num_parts);
-//
-//        fread(part_ids, sizeof(uint32_t), num_parts, f_in);
-//        fread(part_face_counts, sizeof(uint32_t), num_parts, f_in);
-//
-//        free(part_ids);
-//        free(part_face_counts);
-//
-//
-//
-//        fread(mesh_indices+mesh_index_count, sizeof(uint16_t), num_faces*6, f_in);
-//        fread(mesh_vertices+(mesh_vertex_count*3), sizeof(float), num_verts*3, f_in);
-//
-//
-//        for(i=0;i<num_faces;i++)
-//        {
-//            mesh_indices[mesh_index_count+num_faces*6+i*3+0]=mesh_indices[mesh_index_count+i*6+0];
-//            mesh_indices[mesh_index_count+num_faces*6+i*3+1]=mesh_indices[mesh_index_count+i*6+2];
-//            mesh_indices[mesh_index_count+num_faces*6+i*3+2]=mesh_indices[mesh_index_count+i*6+4];
-//        }
-//
-//        mesh_draw_data[TRANSPARENT_SHADOW_MESH_GROUP][mesh_draw_data_count[TRANSPARENT_SHADOW_MESH_GROUP]].base_instance=0;///set_elsewhere
-//        mesh_draw_data[TRANSPARENT_SHADOW_MESH_GROUP][mesh_draw_data_count[TRANSPARENT_SHADOW_MESH_GROUP]].instance_count=0;///set_elsewhere
-//
-//        mesh_draw_data[TRANSPARENT_SHADOW_MESH_GROUP][mesh_draw_data_count[TRANSPARENT_SHADOW_MESH_GROUP]].base_vertex=mesh_vertex_count;
-//        mesh_draw_data[TRANSPARENT_SHADOW_MESH_GROUP][mesh_draw_data_count[TRANSPARENT_SHADOW_MESH_GROUP]].count=num_faces*6;
-//        mesh_draw_data[TRANSPARENT_SHADOW_MESH_GROUP][mesh_draw_data_count[TRANSPARENT_SHADOW_MESH_GROUP]].first_index=mesh_index_count;
-//
-//        mesh_draw_data_count[TRANSPARENT_SHADOW_MESH_GROUP]++;
-//        mesh_index_count+=num_faces*6;
-//
-//
-//
-//        mesh_draw_data[TRANSPARENT_COLOUR_MESH_GROUP][mesh_draw_data_count[TRANSPARENT_COLOUR_MESH_GROUP]].base_instance=0;///set_elsewhere
-//        mesh_draw_data[TRANSPARENT_COLOUR_MESH_GROUP][mesh_draw_data_count[TRANSPARENT_COLOUR_MESH_GROUP]].instance_count=0;///set_elsewhere
-//
-//        mesh_draw_data[TRANSPARENT_COLOUR_MESH_GROUP][mesh_draw_data_count[TRANSPARENT_COLOUR_MESH_GROUP]].base_vertex=mesh_vertex_count;
-//        mesh_draw_data[TRANSPARENT_COLOUR_MESH_GROUP][mesh_draw_data_count[TRANSPARENT_COLOUR_MESH_GROUP]].count=num_faces*3;
-//        mesh_draw_data[TRANSPARENT_COLOUR_MESH_GROUP][mesh_draw_data_count[TRANSPARENT_COLOUR_MESH_GROUP]].first_index=mesh_index_count;
-//
-//        rtrn.index=mesh_draw_data_count[TRANSPARENT_COLOUR_MESH_GROUP];
-//        mesh_draw_data_count[TRANSPARENT_COLOUR_MESH_GROUP]++;
-//        mesh_index_count+=num_faces*3;
-//
-//
-//
-//        rtrn.colour_offset=0;
-//
-//        mesh_vertex_count+=num_verts;
-//
-//        if(mesh_draw_data_count[TRANSPARENT_COLOUR_MESH_GROUP]!=mesh_draw_data_count[TRANSPARENT_SHADOW_MESH_GROUP])
-//        {
-//            puts("error somehow loaded to colour or shadow mesh group without also loading to the other");
-//        }
-//    }
-//
-//    fclose(f_in);
-//
-//    return rtrn;
-//}
-//
-//
-//
-//
-//
-//
-//
-//
-//static GLuint mesh_ibo=0;
-//static GLuint mesh_vbo=0;
-//static GLuint mesh_cbo=0;
-//static GLuint mesh_dcbo=0;
-//
-//void transfer_mesh_draw_data(gl_functions * glf)
-//{
-//    glf->glGenBuffers(1,&mesh_ibo);
-//    glf->glBindBuffer(GL_ELEMENT_ARRAY_BUFFER,mesh_ibo);
-//    glf->glBufferData(GL_ELEMENT_ARRAY_BUFFER,sizeof(uint16_t)*mesh_index_count,mesh_indices,GL_STATIC_DRAW);
-//    glf->glBindBuffer(GL_ELEMENT_ARRAY_BUFFER,0);
-//
-//    glf->glGenBuffers(1,&mesh_vbo);
-//    glf->glBindBuffer(GL_ARRAY_BUFFER,mesh_vbo);
-//    glf->glBufferData(GL_ARRAY_BUFFER,sizeof(float)*mesh_vertex_count*3,mesh_vertices,GL_STATIC_DRAW);
-//    glf->glBindBuffer(GL_ARRAY_BUFFER,0);
-//
-//    glf->glGenTextures(1,&mesh_cbo);
-//    glf->glBindTexture(GL_TEXTURE_1D,mesh_cbo);
-//    glf->glTexImage1D(GL_TEXTURE_1D,0,GL_R16UI,mesh_colour_count,0,GL_RED_INTEGER,GL_UNSIGNED_SHORT,mesh_colours);
-//    glf->glTexParameteri(GL_TEXTURE_1D, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
-//    glf->glTexParameteri(GL_TEXTURE_1D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
-//    glf->glBindTexture(GL_TEXTURE_1D,0);
-//
-//
-//
-//    int i;
-//    uint32_t total_size=0;
-//
-//    for(i=0;i<NUM_MESH_GROUPS;i++)
-//    {
-//        mesh_draw_data_offset[i]=total_size;
-//        total_size+=mesh_draw_data_count[i];
-//    }
-//    total_size*=sizeof(draw_elements_indirect_command_data);
-//
-//    glf->glGenBuffers(1,&mesh_dcbo);
-//    glf->glBindBuffer(GL_DRAW_INDIRECT_BUFFER,mesh_dcbo);
-//    glf->glBufferStorage(GL_DRAW_INDIRECT_BUFFER,total_size,NULL,GL_MAP_WRITE_BIT);
-//    draw_elements_indirect_command_data * dcd=glf->glMapBufferRange(GL_DRAW_INDIRECT_BUFFER,0,total_size,GL_MAP_WRITE_BIT);
-//
-//    for(i=0;i<NUM_MESH_GROUPS;i++)
-//    {
-//        memcpy(dcd,mesh_draw_data[i],mesh_draw_data_count[i]*sizeof(draw_elements_indirect_command_data));
-//        dcd+=mesh_draw_data_count[i];
-//    }
-//
-//    glf->glUnmapBuffer(GL_DRAW_INDIRECT_BUFFER);
-//    glf->glBindBuffer(GL_DRAW_INDIRECT_BUFFER,0);
-//
-//
-//
-//    for(i=0;i<NUM_MESH_GROUPS;i++)
-//    {
-//        free(mesh_draw_data[i]);
-//    }
-//    free(mesh_indices);
-//    free(mesh_vertices);
-//    free(mesh_colours);
-//}
-//
-//draw_elements_indirect_command_data * map_mesh_dcbo_for_writing(gl_functions * glf,mesh_group group)
-//{
-//    glf->glBindBuffer(GL_DRAW_INDIRECT_BUFFER, mesh_dcbo);
-//    draw_elements_indirect_command_data * dcd=glf->glMapBufferRange(GL_DRAW_INDIRECT_BUFFER,
-//        mesh_draw_data_offset[group]*sizeof(draw_elements_indirect_command_data),
-//        mesh_draw_data_count[group]*sizeof(draw_elements_indirect_command_data),GL_MAP_WRITE_BIT);
-//    glf->glBindBuffer(GL_DRAW_INDIRECT_BUFFER, 0);
-//    return dcd;
-//}
-//
-//void unmap_mesh_dcbo(gl_functions * glf)
-//{
-//    glf->glBindBuffer(GL_DRAW_INDIRECT_BUFFER, mesh_dcbo);
-//    glf->glUnmapBuffer(GL_DRAW_INDIRECT_BUFFER);
-//    glf->glBindBuffer(GL_DRAW_INDIRECT_BUFFER,0);
-//}
-//
-//
-//void render_meshes(gl_functions * glf,mesh_group group_to_render)
-//{
-//    glf->glBindBuffer(GL_DRAW_INDIRECT_BUFFER,mesh_dcbo);
-//
-//    if((group_to_render==SHADOW_MESH_GROUP)||(group_to_render==TRANSPARENT_SHADOW_MESH_GROUP))
-//    {
-//        glf->glMultiDrawElementsIndirect(GL_TRIANGLES_ADJACENCY,GL_UNSIGNED_SHORT,(const void*)(mesh_draw_data_offset[group_to_render]*sizeof(draw_elements_indirect_command_data)),mesh_draw_data_count[group_to_render],0);
-//    }
-//    else
-//    {
-//        glf->glActiveTexture(GL_TEXTURE0);
-//        glf->glBindTexture(GL_TEXTURE_1D,mesh_cbo);
-//
-//        glf->glMultiDrawElementsIndirect(GL_TRIANGLES,GL_UNSIGNED_SHORT,(const void*)(mesh_draw_data_offset[group_to_render]*sizeof(draw_elements_indirect_command_data)),mesh_draw_data_count[group_to_render],0);
-//    }
-//
-//    glf->glBindBuffer(GL_DRAW_INDIRECT_BUFFER,0);
-//}
-//
-//void bind_mesh_buffers_for_vao(gl_functions * glf)
-//{
-//    glf->glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, mesh_ibo);
-//
-//    glf->glBindBuffer(GL_ARRAY_BUFFER, mesh_vbo);
-//    glf->glEnableVertexAttribArray(0);
-//    glf->glVertexAttribPointer(0,3,GL_FLOAT,GL_FALSE,0,0);
-//}
-//
-//
-//
-//
-//
-//
-//
-//
-//
-//
-//
-//void initialise_mesh_group(gl_functions * glf,mesh_group_ * mg,uint32_t flags)
-//{
-//    mg->flags=flags;
-//
-//
-//    mg->mesh_count=0;
-//    mg->mesh_space=1;
-//
-//    mg->face_count=0;
-//    mg->face_space=1;
-//
-//    mg->vertex_count=0;
-//    mg->vertex_space=1;
-//
-//    mg->draw_command_buffer=malloc(sizeof(draw_elements_indirect_command_data)*mg->mesh_space);
-//    glf->glGenBuffers(1,&mg->dcbo);
-//    glf->glBindBuffer(GL_DRAW_INDIRECT_BUFFER,mg->dcbo);
-//    glf->glBindBuffer(GL_DRAW_INDIRECT_BUFFER,0);
-//
-//    mg->index_buffer=malloc(sizeof(GLshort)*3*mg->face_space);
-//    glf->glGenBuffers(1,&mg->ibo);
-//    glf->glBindBuffer(GL_ELEMENT_ARRAY_BUFFER,mg->ibo);
-//    glf->glBindBuffer(GL_ELEMENT_ARRAY_BUFFER,0);
-//
-//    mg->vertex_buffer=malloc(sizeof(GLfloat)*3*mg->vertex_space);
-//    glf->glGenBuffers(1,&mg->vbo);
-//    glf->glBindBuffer(GL_ARRAY_BUFFER,mg->vbo);
-//    glf->glBindBuffer(GL_ARRAY_BUFFER,0);
-//
-//    if(mg->flags&MESH_GROUP_ADGACENCY)
-//    {
-//        mg->adjacent_draw_command_buffer=malloc(sizeof(draw_elements_indirect_command_data)*mg->mesh_space);
-//        glf->glGenBuffers(1,&mg->adj_dcbo);
-//        glf->glBindBuffer(GL_DRAW_INDIRECT_BUFFER,mg->adj_dcbo);
-//        glf->glBindBuffer(GL_DRAW_INDIRECT_BUFFER,0);
-//
-//        mg->adjacent_index_buffer=malloc(sizeof(GLshort)*6*mg->face_space);
-//        glf->glGenBuffers(1,&mg->adj_ibo);
-//        glf->glBindBuffer(GL_ELEMENT_ARRAY_BUFFER,mg->adj_ibo);
-//        glf->glBindBuffer(GL_ELEMENT_ARRAY_BUFFER,0);
-//    }
-//
-//    if(mg->flags&MESH_GROUP_PER_FACE_COLOUR)
-//    {
-//        mg->colour_buffer=malloc(sizeof(GLshort)*mg->face_space);
-//
-//        glf->glGenBuffers(1,&mg->cbo);
-//        glf->glBindBuffer(GL_TEXTURE_BUFFER,mg->cbo);///bind the name to a buffer object (why tf is this necessary)
-//        glf->glBindBuffer(GL_TEXTURE_BUFFER,0);
-//
-//        glf->glGenTextures(1,&mg->cto);
-//
-//        /// use glTextureBuffer instead
-//
-//        glf->glBindTexture(GL_TEXTURE_BUFFER,mg->cto);
-//        glf->glTexBuffer(GL_TEXTURE_BUFFER,GL_R16UI,mg->cbo);
-//        glf->glBindTexture(GL_TEXTURE_BUFFER,0);
-//    }
-//
-////    if(mg->flags&MESH_GROUP_VERTEX_NORMS)
-////    {
-////        mg->normal_buffer=malloc(sizeof(GLfloat)*3*mg->vertex_space);
-////        glf->glGenBuffers(1,&mg->nbo);
-////    }
-////
-////    if(mg->flags&MESH_GROUP_UV)
-////    {
-////        mg->uv_buffer=malloc(sizeof(GLfloat)*2*mg->vertex_space);
-////        glf->glGenBuffers(1,&mg->uvbo);
-////    }
-//}
-//
-//mesh load_mesh_file_to_group(mesh_group_ * mg,const char * filename)
-//{
-//    uint32_t i,num_verts,num_faces,flags;
-//
-//    uint16_t * indices=NULL;
-//    float * verts=NULL;
-//    uint16_t * adj_indices=NULL;
-//    uint16_t * colours=NULL;
-//
-//
-//    FILE * f_in;
-//    f_in=fopen(filename,"rb");
-//
-//    if(f_in==NULL)
-//    {
-//        puts("MESH FILE DOES NOT EXIST");
-//        goto MESH_FILE_INVALID;
-//    }
-//
-//    if(fread(&flags,sizeof(uint32_t),1,f_in) != 1) goto MESH_FILE_INVALID;
-//    if(fread(&num_faces,sizeof(uint32_t),1,f_in)!=1) goto MESH_FILE_INVALID;
-//    if(fread(&num_verts,sizeof(uint32_t),1,f_in)!=1) goto MESH_FILE_INVALID;
-//
-//    indices=malloc(sizeof(uint16_t)*num_faces*3);
-//    verts=malloc(sizeof(float)*num_verts*3);
-//    adj_indices=malloc(sizeof(uint16_t)*num_faces*6);
-//    colours=malloc(sizeof(uint16_t)*num_faces);
-//
-//    ///required elements
-//    if(fread(indices,sizeof(uint16_t),num_faces*3,f_in)!=num_faces*3) goto MESH_FILE_INVALID;
-//    if(fread(verts,sizeof(float),num_verts*3,f_in)!=num_verts*3) goto MESH_FILE_INVALID;
-//    ///conditional elements
-//    if((flags & MESH_GROUP_ADGACENCY)&&(fread(adj_indices,sizeof(uint16_t),num_faces*6,f_in)!=num_faces*6)) goto MESH_FILE_INVALID;
-//    if((flags & MESH_GROUP_PER_FACE_COLOUR)&&(fread(colours,sizeof(uint16_t),num_faces,f_in)!=num_faces)) goto MESH_FILE_INVALID;
-//    ///read norms
-//    ///read uvs
-//
-//    ///check that all needed mesh components are present in loaded mesh
-//    if((mg->flags&MESH_GROUP_ADGACENCY) && (!(flags&MESH_GROUP_ADGACENCY)))
-//    {
-//        puts("TRYING TO LOAD MESH LACKING ADGACENCY TO MESH GROUP THAT REQUIRES IT");
-//        goto MESH_FILE_INVALID;
-//    }
-//    if((mg->flags&MESH_GROUP_PER_FACE_COLOUR) && (!(flags&MESH_GROUP_PER_FACE_COLOUR)))
-//    {
-//        puts("TRYING TO LOAD MESH LACKING PER_FACE_COLOUR TO MESH GROUP THAT REQUIRES IT");
-//        goto MESH_FILE_INVALID;
-//    }
-//    ///check norms required
-//    ///check uvs required
-//
-//
-//    while(mg->vertex_count+num_verts > mg->vertex_space)
-//    {
-//        mg->vertex_space*=2;
-//        mg->vertex_buffer=realloc(mg->vertex_buffer,sizeof(GLfloat)*3*mg->vertex_space);
-//        ///conditional norm realloc here
-//        ///conditional uv realloc here
-//    }
-//
-//    while(mg->face_count+num_faces > mg->face_space)
-//    {
-//        mg->face_space*=2;
-//        mg->index_buffer=realloc(mg->index_buffer,sizeof(GLshort)*3*mg->face_space);
-//        if(mg->flags & MESH_GROUP_ADGACENCY) mg->adjacent_index_buffer=realloc(mg->adjacent_index_buffer,sizeof(GLshort)*6*mg->face_space);
-//        if(mg->flags & MESH_GROUP_PER_FACE_COLOUR) mg->colour_buffer=realloc(mg->colour_buffer,sizeof(GLshort)*mg->face_space);
-//    }
-//
-//    ///assign to GL-type buffers (type conversion happens here)
-//    ///required elements
-//    for(i=0;i<num_faces*3;i++) mg->index_buffer[mg->face_count*3+i]=indices[i];
-//    for(i=0;i<num_verts*3;i++) mg->vertex_buffer[mg->vertex_count*3+i]=verts[i];
-//    ///conditional elements
-//    if(mg->flags & MESH_GROUP_ADGACENCY) for(i=0;i<num_faces*6;i++) mg->adjacent_index_buffer[mg->face_count*6+i]=adj_indices[i];
-//    if(mg->flags & MESH_GROUP_PER_FACE_COLOUR) for(i=0;i<num_faces;i++) mg->colour_buffer[mg->face_count+i]=colours[i];
-//    ///conditional norm assignments here
-//    ///conditional uv assignments here
-//
-//
-//    ///set dcbo data here
-//    if(mg->mesh_count==mg->mesh_space)
-//    {
-//        mg->mesh_space*=2;
-//        mg->draw_command_buffer=realloc(mg->draw_command_buffer,sizeof(draw_elements_indirect_command_data)*mg->mesh_space);
-//        if(mg->flags & MESH_GROUP_ADGACENCY)mg->adjacent_draw_command_buffer=realloc(mg->adjacent_draw_command_buffer,sizeof(draw_elements_indirect_command_data)*mg->mesh_space);
-//    }
-//
-//    mg->draw_command_buffer[mg->mesh_count].base_vertex=mg->vertex_count;
-//    mg->draw_command_buffer[mg->mesh_count].count=num_faces*3;///check this is right
-//    mg->draw_command_buffer[mg->mesh_count].first_index=mg->face_count*3;
-//    mg->draw_command_buffer[mg->mesh_count].base_instance=0;
-//    mg->draw_command_buffer[mg->mesh_count].instance_count=0;
-//
-//    if(mg->flags & MESH_GROUP_ADGACENCY)
-//    {
-//        mg->adjacent_draw_command_buffer[mg->mesh_count].base_vertex=mg->vertex_count;
-//        mg->adjacent_draw_command_buffer[mg->mesh_count].count=num_faces*6;///check this is right
-//        mg->adjacent_draw_command_buffer[mg->mesh_count].first_index=mg->face_count*6;
-//        mg->adjacent_draw_command_buffer[mg->mesh_count].base_instance=0;
-//        mg->adjacent_draw_command_buffer[mg->mesh_count].instance_count=0;
-//    }
-//
-//    mesh m=(mesh){.index=mg->mesh_count,.colour_offset=mg->face_count};///face count used in rendering MESH_GROUP_PER_FACE_COLOUR
-//
-//    mg->mesh_count++;
-//    mg->vertex_count+=num_verts;
-//    mg->face_count+=num_faces;
-//
-//    free(verts);
-//    free(indices);
-//    free(adj_indices);
-//    free(colours);
-//
-//    return m;
-//
-//    MESH_FILE_INVALID:;
-//
-//    free(verts);
-//    free(indices);
-//    free(adj_indices);
-//    free(colours);
-//
-//    printf("MESH FILE INVALID  %s\n",filename);
-//    return (mesh){0,0};
-//}
-//
-//void transfer_mesh_group_buffer_data(gl_functions * glf,mesh_group_ * mg)
-//{
-//    glf->glBindBuffer(GL_DRAW_INDIRECT_BUFFER,mg->dcbo);
-//    glf->glBufferData(GL_DRAW_INDIRECT_BUFFER,sizeof(draw_elements_indirect_command_data)*mg->mesh_count,mg->draw_command_buffer,GL_DYNAMIC_DRAW);
-//    glf->glBindBuffer(GL_DRAW_INDIRECT_BUFFER,0);
-//
-//    glf->glBindBuffer(GL_ELEMENT_ARRAY_BUFFER,mg->ibo);
-//    glf->glBufferData(GL_ELEMENT_ARRAY_BUFFER,sizeof(GLshort)*mg->face_count*3,mg->index_buffer,GL_STATIC_DRAW);
-//    glf->glBindBuffer(GL_ELEMENT_ARRAY_BUFFER,0);
-//
-//    glf->glBindBuffer(GL_ARRAY_BUFFER,mg->vbo);
-//    glf->glBufferData(GL_ARRAY_BUFFER,sizeof(GLfloat)*mg->vertex_count*3,mg->vertex_buffer,GL_STATIC_DRAW);
-//    glf->glBindBuffer(GL_ARRAY_BUFFER,0);
-//
-//
-//    if(mg->flags&MESH_GROUP_ADGACENCY)
-//    {
-//        glf->glBindBuffer(GL_DRAW_INDIRECT_BUFFER,mg->adj_dcbo);
-//        glf->glBufferData(GL_DRAW_INDIRECT_BUFFER,sizeof(draw_elements_indirect_command_data)*mg->mesh_count,mg->adjacent_draw_command_buffer,GL_DYNAMIC_DRAW);
-//        glf->glBindBuffer(GL_DRAW_INDIRECT_BUFFER,0);
-//
-//        glf->glBindBuffer(GL_ELEMENT_ARRAY_BUFFER,mg->adj_ibo);
-//        glf->glBufferData(GL_ELEMENT_ARRAY_BUFFER,sizeof(GLshort)*mg->face_count*6,mg->adjacent_index_buffer,GL_STATIC_DRAW);
-//        glf->glBindBuffer(GL_ELEMENT_ARRAY_BUFFER,0);
-//    }
-//
-//    if(mg->flags&MESH_GROUP_PER_FACE_COLOUR)
-//    {
-//        glf->glBindBuffer(GL_TEXTURE_BUFFER,mg->cbo);
-//        glf->glBufferData(GL_TEXTURE_BUFFER,sizeof(GLshort)*mg->face_count,mg->colour_buffer,GL_STATIC_DRAW);
-//        glf->glBindBuffer(GL_TEXTURE_BUFFER,0);
-//    }
-//
-////    if(mg->flags&MESH_GROUP_VERTEX_NORMS)
-////    {
-////        glf->glBindBuffer(GL_ARRAY_BUFFER,mg->nbo);
-////        glf->glBufferData(GL_ARRAY_BUFFER,sizeof(GLfloat)*mg->vertex_count*3,mg->normal_buffer,GL_STATIC_DRAW);
-////        glf->glBindBuffer(GL_ARRAY_BUFFER,0);
-////    }
-////
-////    if(mg->flags&MESH_GROUP_UV)
-////    {
-////        glf->glBindBuffer(GL_ARRAY_BUFFER,mg->uvbo);
-////        glf->glBufferData(GL_ARRAY_BUFFER,sizeof(GLfloat)*mg->vertex_count*2,mg->uv_buffer,GL_STATIC_DRAW);
-////        glf->glBindBuffer(GL_ARRAY_BUFFER,0);
-////    }
-//}
-//
-//
-//
-//void bind_mesh_group_vertex_buffer(gl_functions * glf,mesh_group_ * mg,GLuint attribute_index)
-//{
-//    glf->glBindBuffer(GL_ELEMENT_ARRAY_BUFFER,mg->ibo);
-//
-//    glf->glBindBuffer(GL_ARRAY_BUFFER,mg->vbo);
-//    glf->glEnableVertexAttribArray(attribute_index);
-//    glf->glVertexAttribPointer(attribute_index,3,GL_FLOAT,GL_FALSE,0,0);
-//}
-//
-//void bind_mesh_group_adjacent_vertex_buffer(gl_functions * glf,mesh_group_ * mg,GLuint attribute_index)
-//{
-//    if(!(mg->flags&MESH_GROUP_ADGACENCY))
-//    {
-//        puts("MESH GROUP ADJACENCY NOT PRESENT TO BIND");
-//        return;
-//    }
-//
-//    glf->glBindBuffer(GL_ELEMENT_ARRAY_BUFFER,mg->adj_ibo);
-//
-//    glf->glBindBuffer(GL_ARRAY_BUFFER,mg->vbo);
-//    glf->glEnableVertexAttribArray(attribute_index);
-//    glf->glVertexAttribPointer(attribute_index,3,GL_FLOAT,GL_FALSE,0,0);
-//}
-//
-//void bind_mesh_group_normal_buffer(gl_functions * glf,mesh_group_ * mg,GLuint attribute_index)
-//{
-////    if(mg->flags&MESH_GROUP_VERTEX_NORMS)
-////    {
-////        glf->glBindBuffer(GL_ARRAY_BUFFER,mg->nbo);
-////        glf->glEnableVertexAttribArray(attribute_index);
-////        glf->glVertexAttribPointer(attribute_index,3,GL_FLOAT,GL_FALSE,0,0);
-////    }
-////    else puts("MESH GROUP NORMAL BUFFER NOT PRESENT TO BIND");
-//}
-//
-//void bind_mesh_group_uv_buffer(gl_functions * glf,mesh_group_ * mg,GLuint attribute_index)
-//{
-////    if(mg->flags&MESH_GROUP_UV)
-////    {
-////        glf->glBindBuffer(GL_ARRAY_BUFFER,mg->uvbo);
-////        glf->glEnableVertexAttribArray(attribute_index);
-////        glf->glVertexAttribPointer(attribute_index,2,GL_FLOAT,GL_FALSE,0,0);
-////    }
-////    else puts("MESH GROUP NORMAL BUFFER NOT PRESENT TO BIND");
-//}
-//
-//
-//
-//void delete_mesh_group(gl_functions * glf,mesh_group_ * mg)
-//{
-//    free(mg->draw_command_buffer);
-//
-//    free(mg->index_buffer);
-//    glf->glDeleteBuffers(1,&mg->ibo);
-//
-//
-//    mg->vertex_buffer=malloc(sizeof(GLfloat)*3*mg->vertex_space);
-//    glf->glDeleteBuffers(1,&mg->vbo);
-//
-//    if(mg->flags&MESH_GROUP_ADGACENCY)
-//    {
-//        free(mg->adjacent_draw_command_buffer);
-//
-//        free(mg->adjacent_index_buffer);
-//        glf->glDeleteBuffers(1,&mg->adj_ibo);
-//    }
-//
-//    if(mg->flags&MESH_GROUP_PER_FACE_COLOUR)
-//    {
-//        free(mg->colour_buffer);
-//
-//        glf->glDeleteBuffers(1,&mg->cbo);
-//        glf->glDeleteTextures(1,&mg->cto);
-//    }
-//
-////    if(mg->flags&MESH_GROUP_VERTEX_NORMS)
-////    {
-////        free(mg->normal_buffer);
-////        glf->glDeleteBuffers(1,&mg->nbo);
-////    }
-////
-////    if(mg->flags&MESH_GROUP_UV)
-////    {
-////        free(mg->uv_buffer);
-////        glf->glDeleteBuffers(1,&mg->uvbo);
-////    }
-//}
-//
-//
-//
-//
-//
-//
-//
-//
-//
-//
-//
-//
-//
-//
 //static GLuint assorted_ibo;
 //static GLuint assorted_vbo;
 //
