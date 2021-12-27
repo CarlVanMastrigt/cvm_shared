@@ -118,7 +118,7 @@ along with cvm_shared.  If not, see <https://www.gnu.org/licenses/>.
 //}
 
 
-static void cubic_create_shape(cvm_overlay_element_render_buffer * erb,cvm_vk_image_atlas_tile ** tile,uint16_t ** selection_grid,uint32_t r)///change ri & r0 as 16ths of a pixel??
+static void cubic_create_shape(cvm_vk_image_atlas_tile ** tile,uint16_t ** selection_grid,uint32_t r)///change ri & r0 as 16ths of a pixel??
 {
     uint32_t i,rt,threshold,x,y,xc,yc,xm,ym,t,rm;
     uint8_t * data;
@@ -130,7 +130,7 @@ static void cubic_create_shape(cvm_overlay_element_render_buffer * erb,cvm_vk_im
         exit(-1);
     }
 
-    *tile=overlay_create_transparent_image_tile_with_staging(erb,(void*)(&data),r*2,r*2);
+    *tile=overlay_create_transparent_image_tile_with_staging((void**)(&data),r*2,r*2);
 
     if(*tile)
     {
@@ -184,7 +184,7 @@ static void cubic_shaded_element_over_box_render(cvm_overlay_element_render_buff
 
     cubic=theme->other_data;
 
-    if(!cubic->foreground_image_tile)cubic_create_shape(erb,&cubic->foreground_image_tile,&cubic->foreground_selection_grid,cubic->foreground_r);
+    if(!cubic->foreground_image_tile)cubic_create_shape(&cubic->foreground_image_tile,&cubic->foreground_selection_grid,cubic->foreground_r);
     if(!cubic->foreground_image_tile)return;
 
     int radius=cubic->foreground_r;
@@ -305,7 +305,7 @@ static void cubic_shaded_element_fading_over_box_render(cvm_overlay_element_rend
 
     cubic=theme->other_data;
 
-    if(!cubic->foreground_image_tile)cubic_create_shape(erb,&cubic->foreground_image_tile,&cubic->foreground_selection_grid,cubic->foreground_r);
+    if(!cubic->foreground_image_tile)cubic_create_shape(&cubic->foreground_image_tile,&cubic->foreground_selection_grid,cubic->foreground_r);
     if(!cubic->foreground_image_tile)return;
 
     int radius=cubic->foreground_r;
@@ -425,7 +425,7 @@ static void cubic_fill_element_over_box_render(cvm_overlay_element_render_buffer
 
     cubic=theme->other_data;
 
-    if(!cubic->foreground_image_tile)cubic_create_shape(erb,&cubic->foreground_image_tile,&cubic->foreground_selection_grid,cubic->foreground_r);
+    if(!cubic->foreground_image_tile)cubic_create_shape(&cubic->foreground_image_tile,&cubic->foreground_selection_grid,cubic->foreground_r);
     if(!cubic->foreground_image_tile)return;
 
     int radius=cubic->foreground_r;
@@ -525,7 +525,7 @@ static void cubic_fill_element_fading_over_box_render(cvm_overlay_element_render
 
     cubic=theme->other_data;
 
-    if(!cubic->foreground_image_tile)cubic_create_shape(erb,&cubic->foreground_image_tile,&cubic->foreground_selection_grid,cubic->foreground_r);
+    if(!cubic->foreground_image_tile)cubic_create_shape(&cubic->foreground_image_tile,&cubic->foreground_selection_grid,cubic->foreground_r);
     if(!cubic->foreground_image_tile)return;
 
     int radius=cubic->foreground_r;
@@ -877,7 +877,7 @@ static void cubic_square_render(cvm_overlay_element_render_buffer * erb,overlay_
 
     int radius=cubic->foreground_r;
 
-    if(!cubic->foreground_image_tile)cubic_create_shape(erb,&cubic->foreground_image_tile,&cubic->foreground_selection_grid,radius);
+    if(!cubic->foreground_image_tile)cubic_create_shape(&cubic->foreground_image_tile,&cubic->foreground_selection_grid,radius);
     if(!cubic->foreground_image_tile)return;
 
     int x_off=cubic->foreground_image_tile->x_pos<<2;
@@ -908,7 +908,7 @@ static void cubic_h_bar_render(cvm_overlay_element_render_buffer * erb,overlay_t
 
     int radius=cubic->foreground_r;
 
-    if(!cubic->foreground_image_tile)cubic_create_shape(erb,&cubic->foreground_image_tile,&cubic->foreground_selection_grid,radius);
+    if(!cubic->foreground_image_tile)cubic_create_shape(&cubic->foreground_image_tile,&cubic->foreground_selection_grid,radius);
     if(!cubic->foreground_image_tile)return;
 
     int x_off=cubic->foreground_image_tile->x_pos<<2;
@@ -940,7 +940,7 @@ static void cubic_h_bar_slider_render(cvm_overlay_element_render_buffer * erb,ov
 
     cubic=theme->other_data;
 
-    if(!cubic->internal_image_tile)cubic_create_shape(erb,&cubic->internal_image_tile,NULL,cubic->internal_r);
+    if(!cubic->internal_image_tile)cubic_create_shape(&cubic->internal_image_tile,NULL,cubic->internal_r);
     if(!cubic->internal_image_tile)return;
 
     r.x1+= cubic->foreground_offset_x * !(status&WIDGET_H_FIRST);
@@ -979,7 +979,7 @@ static void cubic_box_render(cvm_overlay_element_render_buffer * erb,overlay_the
 
     int radius=cubic->foreground_r;
 
-    if(!cubic->foreground_image_tile)cubic_create_shape(erb,&cubic->foreground_image_tile,&cubic->foreground_selection_grid,radius);
+    if(!cubic->foreground_image_tile)cubic_create_shape(&cubic->foreground_image_tile,&cubic->foreground_selection_grid,radius);
     if(!cubic->foreground_image_tile)return;
 
     int x_off=cubic->foreground_image_tile->x_pos<<2;
@@ -1031,7 +1031,7 @@ static void cubic_panel_render(cvm_overlay_element_render_buffer * erb,overlay_t
 
     int radius=cubic->background_r;
 
-    if(!cubic->background_image_tile)cubic_create_shape(erb,&cubic->background_image_tile,&cubic->background_selection_grid,radius);
+    if(!cubic->background_image_tile)cubic_create_shape(&cubic->background_image_tile,&cubic->background_selection_grid,radius);
     if(!cubic->background_image_tile)return;
 
     int x_off=cubic->background_image_tile->x_pos<<2;
@@ -1092,7 +1092,7 @@ static void cubic_square_over_box_render(cvm_overlay_element_render_buffer * erb
 
     int radius=cubic->foreground_r;
 
-    if(!cubic->foreground_image_tile)cubic_create_shape(erb,&cubic->foreground_image_tile,&cubic->foreground_selection_grid,radius);
+    if(!cubic->foreground_image_tile)cubic_create_shape(&cubic->foreground_image_tile,&cubic->foreground_selection_grid,radius);
     if(!cubic->foreground_image_tile)return;
 
     int x_off=cubic->foreground_image_tile->x_pos<<2;
@@ -1124,7 +1124,7 @@ static void cubic_h_bar_over_box_render(cvm_overlay_element_render_buffer * erb,
 
     int radius=cubic->foreground_r;
 
-    if(!cubic->foreground_image_tile)cubic_create_shape(erb,&cubic->foreground_image_tile,&cubic->foreground_selection_grid,radius);
+    if(!cubic->foreground_image_tile)cubic_create_shape(&cubic->foreground_image_tile,&cubic->foreground_selection_grid,radius);
     if(!cubic->foreground_image_tile)return;
 
     int x_off=cubic->foreground_image_tile->x_pos<<2;
@@ -1158,7 +1158,7 @@ static void cubic_box_over_box_render(cvm_overlay_element_render_buffer * erb,ov
 
     int radius=cubic->foreground_r;
 
-    if(!cubic->foreground_image_tile)cubic_create_shape(erb,&cubic->foreground_image_tile,&cubic->foreground_selection_grid,radius);
+    if(!cubic->foreground_image_tile)cubic_create_shape(&cubic->foreground_image_tile,&cubic->foreground_selection_grid,radius);
     if(!cubic->foreground_image_tile)return;
 
     int x_off=cubic->foreground_image_tile->x_pos<<2;

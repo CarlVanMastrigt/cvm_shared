@@ -661,8 +661,15 @@ static void create_overlay_images(uint32_t t_w,uint32_t t_h,uint32_t c_w,uint32_
     cvm_vk_create_image_view(&overlay_colour_image_view,&view_creation_info);
 
 
-    cvm_vk_create_image_atlas(&overlay_transparent_image_atlas,overlay_transparent_image,overlay_transparent_image_view,t_w,t_h,false);
-    cvm_vk_create_image_atlas(&overlay_colour_image_atlas,overlay_colour_image,overlay_colour_image_view,c_w,c_h,false);
+    cvm_vk_create_image_atlas(&overlay_transparent_image_atlas,overlay_transparent_image,overlay_transparent_image_view,sizeof(uint8_t),t_w,t_h,false);
+    cvm_vk_create_image_atlas(&overlay_colour_image_atlas,overlay_colour_image,overlay_colour_image_view,sizeof(uint8_t)*4,c_w,c_h,false);
+
+    overlay_transparent_image_atlas.staging_buffer=&overlay_staging_buffer;
+    overlay_colour_image_atlas.staging_buffer=&overlay_staging_buffer;
+
+    #warning as images ALWAYS need staging (even on uma) could make staging a creation parameter??
+    ///perhaps not as it limits the ability to use it for a more generalised purpose...
+    ///could move general section out and use a meta structure encompassing the generalised image atlas?
 }
 
 static void create_overlay_barriers()
@@ -848,13 +855,12 @@ void initialise_overlay_swapchain_dependencies(void)
 
     cvm_vk_resize_module_graphics_data(&overlay_module_data,0);
 
-    ///set these properly at some point
     uint32_t uniform_size=0;
     uniform_size+=cvm_vk_transient_buffer_get_rounded_allocation_size(&overlay_transient_buffer,sizeof(float)*4*OVERLAY_NUM_COLOURS_);
     uniform_size+=cvm_vk_transient_buffer_get_rounded_allocation_size(&overlay_transient_buffer,max_overlay_elements*sizeof(cvm_overlay_render_data));
-    uint32_t staging_size=65536;
-
     cvm_vk_update_transient_buffer(&overlay_transient_buffer,uniform_size,swapchain_image_count);
+
+    uint32_t staging_size=1024;///arbitrary
     cvm_vk_update_staging_buffer(&overlay_staging_buffer,staging_size,swapchain_image_count);
 }
 
@@ -950,21 +956,15 @@ cvm_vk_module_work_block * overlay_render_frame(int screen_w,int screen_h,widget
         element_render_buffer.buffer=cvm_vk_get_transient_buffer_allocation(&overlay_transient_buffer,max_overlay_elements*sizeof(cvm_overlay_render_data),&vertex_offset);
         element_render_buffer.space=max_overlay_elements;
         element_render_buffer.count=0;
-        element_render_buffer.staging_buffer= &overlay_staging_buffer;
-        element_render_buffer.upload_command_buffer= work_block->graphics_work;///if ever using a dedicated transfer queue (probably don't want tbh) use this
 
-        //str="The attempt to impose upon man, a creature of growth and capable of sweetness, to ooze juicily at the last round the bearded lips of God, to attempt to impose, I say, laws and conditions appropriate to a mechanical creation, against this I raise my sword-pen.";
-        //str="This planet has - or rather had - a problem, which was this: most of the people living on it were unhappy for pretty much of the time. Many solutions were suggested for this problem, but most of these were largely concerned with the movement of small green pieces of paper, which was odd because on the whole it wasn't the small green pieces of paper that were unhappy.";
-//        test_timing(true,NULL);
         render_widget_overlay(&element_render_buffer,menu_widget);
-//        test_timing(false,"overlay");
+
+        /// upload all staged resources needed by this frame
+        ///if ever using a dedicated transfer queue (probably don't want tbh) change command buffers in these
+        cvm_vk_image_atlas_submit_all_pending_copy_actions(&overlay_transparent_image_atlas,work_block->graphics_work);
+        cvm_vk_image_atlas_submit_all_pending_copy_actions(&overlay_colour_image_atlas,work_block->graphics_work);
 
         CVM_TMP_vkCmdPipelineBarrier2KHR(work_block->graphics_work,&overlay_transfer_to_graphics_dependencies);
-
-
-
-
-
 
 
         float * colours = cvm_vk_get_transient_buffer_allocation(&overlay_transient_buffer,sizeof(float)*4*OVERLAY_NUM_COLOURS_,&uniform_offset);
@@ -1025,54 +1025,9 @@ void overlay_frame_cleanup(uint32_t swapchain_image_index)
 
 
 
-cvm_vk_image_atlas_tile * overlay_create_transparent_image_tile_with_staging(cvm_overlay_element_render_buffer * erb,void ** staging,uint32_t w, uint32_t h)
+cvm_vk_image_atlas_tile * overlay_create_transparent_image_tile_with_staging(void ** staging,uint32_t w, uint32_t h)
 {
-    VkDeviceSize upload_offset;
-    cvm_vk_image_atlas_tile * tile;
-
-    tile=NULL;
-    *staging = cvm_vk_get_staging_buffer_allocation(erb->staging_buffer,sizeof(uint8_t)*w*h,&upload_offset);
-
-    if(*staging)
-    {
-        tile=cvm_vk_acquire_image_atlas_tile(&overlay_transparent_image_atlas,w,h);
-
-        if(tile)
-        {
-            VkBufferImageCopy copy_info=
-            {
-                .bufferOffset=upload_offset,
-                .bufferRowLength=w,
-                .bufferImageHeight=h,
-                .imageSubresource=(VkImageSubresourceLayers)
-                {
-                    .aspectMask=VK_IMAGE_ASPECT_COLOR_BIT,
-                    .mipLevel=0,
-                    .baseArrayLayer=0,
-                    .layerCount=1
-                },
-                .imageOffset=(VkOffset3D)
-                {
-                    .x=tile->x_pos<<CVM_VK_BASE_TILE_SIZE_FACTOR,
-                    .y=tile->y_pos<<CVM_VK_BASE_TILE_SIZE_FACTOR,
-                    .z=0
-                },
-                .imageExtent=(VkExtent3D)
-                {
-                    .width=w,
-                    .height=h,
-                    .depth=1,
-                }
-            };
-
-            #warning could build up regions to copy then execute all at once rather than using this paradigm, would also mean command buffer doesnt need to get passed around
-            /// ^ would also mean there's no longer a reason to keep the image inside the image atlas struct... (but probably want to keep that anyway)
-
-            vkCmdCopyBufferToImage(erb->upload_command_buffer,erb->staging_buffer->buffer,overlay_transparent_image,VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,1,&copy_info);
-        }
-    }
-
-    return tile;
+    return cvm_vk_acquire_image_atlas_tile_with_staging(&overlay_transparent_image_atlas,w,h,staging);
 }
 
 void overlay_destroy_transparent_image_tile(cvm_vk_image_atlas_tile * tile)
@@ -1080,7 +1035,7 @@ void overlay_destroy_transparent_image_tile(cvm_vk_image_atlas_tile * tile)
     cvm_vk_relinquish_image_atlas_tile(&overlay_transparent_image_atlas,tile);
 }
 
-cvm_vk_image_atlas_tile * overlay_create_colour_image_tile_with_staging(cvm_overlay_element_render_buffer * erb,void ** staging,uint32_t w, uint32_t h)
+cvm_vk_image_atlas_tile * overlay_create_colour_image_tile_with_staging(void ** staging,uint32_t w, uint32_t h)
 {
     return NULL;
 }

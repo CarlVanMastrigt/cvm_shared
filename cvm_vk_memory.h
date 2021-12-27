@@ -28,8 +28,40 @@ along with cvm_shared.  If not, see <https://www.gnu.org/licenses/>.
 #define CVM_VK_RESERVED_DYNAMIC_BUFFER_ALLOCATION_COUNT 256
 
 
+typedef struct cvm_vk_staging_buffer
+{
+    VkBuffer buffer;
+    VkDeviceMemory memory;
 
-/// consider making sized types that represent offsets VkDeviceSize ?? (but then cannot make assumptions about their size...)
+    VkBufferUsageFlags usage;
+
+    uint32_t total_space;///round to PO2
+    uint32_t max_offset;///fence, should be updated before multithreading becomes applicable this frame
+    uint32_t alignment_size_factor;
+    atomic_uint_fast32_t space_remaining;
+    uint32_t initial_space_remaining;
+    ///need to test atomic version isn't (significatly) slower than non-atomic
+    uint32_t * acquisitions;
+
+    void * mapping;
+}
+cvm_vk_staging_buffer;
+
+void cvm_vk_create_staging_buffer(cvm_vk_staging_buffer * sb,VkBufferUsageFlags usage);
+void cvm_vk_update_staging_buffer(cvm_vk_staging_buffer * sb,uint32_t space_per_frame, uint32_t frame_count);
+void cvm_vk_destroy_staging_buffer(cvm_vk_staging_buffer * sb);
+
+uint32_t cvm_vk_staging_buffer_get_rounded_allocation_size(cvm_vk_staging_buffer * sb,uint32_t allocation_size);
+
+void cvm_vk_begin_staging_buffer(cvm_vk_staging_buffer * sb);
+void cvm_vk_end_staging_buffer(cvm_vk_staging_buffer * sb,uint32_t frame_index);
+
+void * cvm_vk_get_staging_buffer_allocation(cvm_vk_staging_buffer * sb,uint32_t allocation_size,VkDeviceSize * acquired_offset);
+
+void cvm_vk_relinquish_staging_buffer_space(cvm_vk_staging_buffer * sb,uint32_t frame_index);
+
+
+
 
 
 /// could use more complicated allocator that can recombine sections of arbatrary size with no power of 2 superstructure, may work reasonably well, especially if memory is grouped by expected lifetime
@@ -39,16 +71,7 @@ along with cvm_shared.  If not, see <https://www.gnu.org/licenses/>.
 ///     ^ require all chunks to meet the largest supported types alignment requirements
 
 
-
-
-
-
-
-///pointer approach was at best very marginally better at the cost of extra allocation complexity and extra storage space :sob:
-/// may want to try optimising both this and old approach
-
 typedef struct cvm_vk_dynamic_buffer_allocation cvm_vk_dynamic_buffer_allocation;
-
 
 struct cvm_vk_dynamic_buffer_allocation/// (dont ref this by pointer, only store index)
 {
@@ -100,6 +123,12 @@ typedef struct cvm_vk_managed_buffer
     uint32_t base_dynamic_allocation_size_factor;
 
     void * mapping;///used for device generic buffers on UMA platforms and staging/uniform buffers on all others (assuming you would event want this for those prposes...) also operates as flag as to whether staging is necessary
+
+    ///NEEDS LOCK!
+    cvm_vk_staging_buffer * staging_buffer;///for when mapping is not available
+    VkBufferCopy * pending_copy_actions;
+    uint32_t pending_copy_space;
+    uint32_t pending_copy_count;
 }
 cvm_vk_managed_buffer;
 
@@ -108,80 +137,27 @@ void cvm_vk_destroy_managed_buffer(cvm_vk_managed_buffer * mb);
 
 cvm_vk_dynamic_buffer_allocation * cvm_vk_acquire_dynamic_buffer_allocation(cvm_vk_managed_buffer * mb,uint64_t size);
 void cvm_vk_relinquish_dynamic_buffer_allocation(cvm_vk_managed_buffer * mb,cvm_vk_dynamic_buffer_allocation * allocation);
+static inline uint64_t cvm_vk_get_dynamic_buffer_offset(cvm_vk_managed_buffer * mb,cvm_vk_dynamic_buffer_allocation * allocation)
+{
+    return allocation->offset<<mb->base_dynamic_allocation_size_factor;
+}
 
-uint64_t cvm_vk_acquire_static_buffer_allocation(cvm_vk_managed_buffer * mb,uint64_t size,uint64_t alignment);
-
-uint64_t cvm_vk_get_dynamic_buffer_offset(cvm_vk_managed_buffer * mb,cvm_vk_dynamic_buffer_allocation * allocation);
+uint64_t cvm_vk_acquire_static_buffer_allocation(cvm_vk_managed_buffer * mb,uint64_t size,uint64_t alignment);///cannot be relinquished, exists until
 
 ///worth making these inline?
-void * cvm_vk_get_dynamic_buffer_allocation_mapping(cvm_vk_managed_buffer * mb,cvm_vk_dynamic_buffer_allocation * allocation);
-void * cvm_vk_get_static_buffer_allocation_mapping(cvm_vk_managed_buffer * mb,uint64_t offset);
+void * cvm_vk_get_dynamic_buffer_allocation_mapping(cvm_vk_managed_buffer * mb,cvm_vk_dynamic_buffer_allocation * allocation,uint64_t size);///if size==0 returns full allocation
+void * cvm_vk_get_static_buffer_allocation_mapping(cvm_vk_managed_buffer * mb,uint64_t offset,uint64_t size);
 
-void cvm_vk_bind_dymanic_allocation_vertex(VkCommandBuffer cmd_buf,cvm_vk_managed_buffer * mb,cvm_vk_dynamic_buffer_allocation * allocation,uint32_t binding);
-void cvm_vk_bind_dymanic_allocation_index(VkCommandBuffer cmd_buf,cvm_vk_managed_buffer * mb,cvm_vk_dynamic_buffer_allocation * allocation,VkIndexType type);
+void cvm_vk_managed_buffer_submit_all_pending_copy_actions(cvm_vk_managed_buffer * mb,VkCommandBuffer transfer_cb);
 
-void cvm_vk_flush_buffer_allocation_mapping(cvm_vk_managed_buffer * mb,cvm_vk_dynamic_buffer_allocation * allocation);
-//void cvm_vk_get_flush_buffer_allocation_mapping(cvm_vk_managed_buffer * mb,uint64_t offset);
-///static allocations have no means to know their size so would have to collectively flush ALL static allocations, which will need profiling
+/// instead of these probably want to bind whole buffer and build offsets into created draw calls...
+//void cvm_vk_bind_dymanic_allocation_vertex(VkCommandBuffer cmd_buf,cvm_vk_managed_buffer * mb,cvm_vk_dynamic_buffer_allocation * allocation,uint32_t binding);
+//void cvm_vk_bind_dymanic_allocation_index(VkCommandBuffer cmd_buf,cvm_vk_managed_buffer * mb,cvm_vk_dynamic_buffer_allocation * allocation,VkIndexType type);
+void cvm_vk_bind_managed_buffer_vertex(VkCommandBuffer cmd_buf,cvm_vk_managed_buffer * mb,uint32_t binding);
+void cvm_vk_bind_managed_buffer_index(VkCommandBuffer cmd_buf,cvm_vk_managed_buffer * mb,VkIndexType type);
 
-void cvm_vk_flush_managed_buffer(cvm_vk_managed_buffer * mb);
-
-
-
-
-
-
-///probably want to use pointers for all of these
-
-///can reasonably easily combine the node and the allocation list
-
-/// allocate the exact required size (rounded to multiple of largest targeted alignment) and recombine sections as necessary, trying to best fit any new allocations (does require defragger quite badly)
-
-//typedef struct cvm_vk_dynamic_buffer_allocation_3 cvm_vk_dynamic_buffer_allocation_3;
-//
-///// *just* fits in one cache line
-//struct cvm_vk_dynamic_buffer_allocation_3/// (dont ref this by pointer, only store index)
-//{
-//    ///horizontal structure
-//    cvm_vk_dynamic_buffer_allocation_3 * left;
-//    cvm_vk_dynamic_buffer_allocation_3 * right;
-//
-//    ///
-//    cvm_vk_dynamic_buffer_allocation_3 * l_child;
-//    cvm_vk_dynamic_buffer_allocation_3 * r_child;
-//    cvm_vk_dynamic_buffer_allocation_3 * parent;///also used in singly linked list
-//
-//    uint64_t offset;
-//    uint32_t size;
-//    int8_t bias;
-//    uint8_t free;///if copying contents of 2 allocations as part of defragger then DO NOT copy this variable
-//};
-//
-/////no distinction between static and dynamic allocations
-//typedef struct cvm_vk_managed_buffer_3
-//{
-//    VkBuffer buffer;
-//    VkDeviceMemory memory;
-//
-//    void * mapping;///for use on UMA platforms
-//
-//    uint64_t total_space;
-//    uint64_t used_space;
-//    uint64_t base_alignment;
-//
-//    cvm_vk_dynamic_buffer_allocation_3 * first_unused_allocation;///singly linked list of allocations to assign space to, will only ever require a single new allocation at a time
-//    cvm_vk_dynamic_buffer_allocation_3 * rightmost_allocation;///used for setting left/right of new allocations
-//
-//    uint32_t reserved_allocation_count;/// max allocations expected to be made per frame (amount to expand by when reallocing?)
-//    uint32_t unused_allocation_count;
-//}
-//cvm_vk_managed_buffer_3;
-//
-//void cvm_vk_create_managed_buffer_3(cvm_vk_managed_buffer_3 * buffer,uint64_t buffer_size,uint32_t reserved_allocation_count,VkBufferUsageFlags usage);///determine alignment from usage flags and round size up to multiple
-//void cvm_vk_destroy_managed_buffer_3(cvm_vk_managed_buffer_3 * mb);
-//
-//uint32_t cvm_vk_acquire_dynamic_buffer_allocation_3(cvm_vk_managed_buffer_3 * mb,uint64_t size);
-//void cvm_vk_relinquish_dynamic_buffer_allocation_3(cvm_vk_managed_buffer_3 * mb,uint32_t index);
+///dont flush individual regions, instead every frame flush enture buffer (may want to profile?)
+//void cvm_vk_flush_managed_buffer(cvm_vk_managed_buffer * mb);
 
 
 
@@ -213,45 +189,6 @@ instance data is somewhat problematic anyway, as it potentially varies a lot fra
 
     by having error handling (unable to allocate space) and sufficient reserves having just 1 buffer to switch to when deciding to resize should be sufficient
 */
-
-
-///want to be able to pack staging and ring buffer int same memory at least (possibly same buffer as well (using offsets) need to adjust this struct to accomodate OR separate buffer/memory from buffer itself
-typedef struct cvm_vk_staging_buffer
-{
-    VkBuffer buffer;
-    VkDeviceMemory memory;
-
-    VkBufferUsageFlags usage;
-
-    uint32_t total_space;///round to PO2
-    uint32_t max_offset;///fence, should be updated before multithreading becomes applicable this frame
-    uint32_t alignment_size_factor;
-    atomic_uint_fast32_t space_remaining;
-    uint32_t initial_space_remaining;
-    ///need to test atomic version isn't (significatly) slower than non-atomic
-    uint32_t * acquisitions;
-
-    void * mapping;
-}
-cvm_vk_staging_buffer;
-
-void cvm_vk_create_staging_buffer(cvm_vk_staging_buffer * sb,VkBufferUsageFlags usage);
-void cvm_vk_update_staging_buffer(cvm_vk_staging_buffer * sb,uint32_t space_per_frame, uint32_t frame_count);
-void cvm_vk_destroy_staging_buffer(cvm_vk_staging_buffer * sb);
-
-uint32_t cvm_vk_staging_buffer_get_rounded_allocation_size(cvm_vk_staging_buffer * sb,uint32_t allocation_size);
-
-void cvm_vk_begin_staging_buffer(cvm_vk_staging_buffer * sb);
-void cvm_vk_end_staging_buffer(cvm_vk_staging_buffer * sb,uint32_t frame_index);
-
-void * cvm_vk_get_staging_buffer_allocation(cvm_vk_staging_buffer * sb,uint32_t allocation_size,VkDeviceSize * acquired_offset);
-
-void cvm_vk_relinquish_staging_buffer_space(cvm_vk_staging_buffer * sb,uint32_t frame_index);
-
-/// function to copy from staging buffer to both managed buffer and texture/image here??
-
-///upload buffer paradigm works well for staging (duh) but not as well for uploading rendering data (instance and uniform) may want separate design with fixed maximum sizes?
-
 
 
 

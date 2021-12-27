@@ -80,7 +80,6 @@ overlay_colour_;
 typedef struct cvm_overlay_render_data
 {
     uint16_t data0[4];///position
-    //uint16_t data1[4];///metadata|colour_id , tex_lookup.xy , fade_dist_x|fade_dist_y
     uint32_t data1[2];
     uint16_t data2[4];/// overap_tex_lookup.xy , fade_off_left|fade_off_right , fade_off_top|fade_off_bot
 }
@@ -90,27 +89,9 @@ typedef struct cvm_overlay_element_render_buffer
 {
     ///could fill buffer in reverse to make render order match input order, but not sure how that would affect write combining of data so will avoid for now;
     cvm_overlay_render_data * buffer;
-    uint32_t count,space;//,xm,ym;
-
-    ///better to pass this around (with images that it uses too!) rather than having static allocation or  some split paradigm
-    VkCommandBuffer upload_command_buffer;
-
-    cvm_vk_staging_buffer * staging_buffer;
-
-    //cvm_vk_image_atlas * transparent_image_atlas;
-    //cvm_vk_image_atlas * colour_image_atlas;
+    uint32_t count,space;
 }
 cvm_overlay_element_render_buffer;
-
-/*
-#define CVM_OVERLAY_SCREEN_COORDINATES(xm,ym,x1,y1,x2,y2){\
-((uint16_t)(((uint32_t)(x1)*xm+((uint32_t)(x1)>>1)+0x00008000)>>16)),\
-((uint16_t)(((uint32_t)(y1)*ym+((uint32_t)(y1)>>1)+0x00008000)>>16)),\
-((uint16_t)(((uint32_t)(x2)*xm+((uint32_t)(x2)>>1)+0x00008000)>>16)),\
-((uint16_t)(((uint32_t)(y2)*ym+((uint32_t)(y2)>>1)+0x00008000)>>16))}
-#define CVM_OVERLAY_SCREEN_MULTIPLIER(s) (0xFFFF0000/(uint32_t)s);
-*/
-
 
 void initialise_overlay_render_data(void);
 void terminate_overlay_render_data(void);
@@ -122,10 +103,10 @@ cvm_vk_module_work_block * overlay_render_frame(int screen_w,int screen_h,widget
 
 void overlay_frame_cleanup(uint32_t swapchain_image_index);
 
-cvm_vk_image_atlas_tile * overlay_create_transparent_image_tile_with_staging(cvm_overlay_element_render_buffer * erb,void ** staging,uint32_t w, uint32_t h);
+cvm_vk_image_atlas_tile * overlay_create_transparent_image_tile_with_staging(void ** staging,uint32_t w, uint32_t h);
 void overlay_destroy_transparent_image_tile(cvm_vk_image_atlas_tile * tile);
 
-cvm_vk_image_atlas_tile * overlay_create_colour_image_tile_with_staging(cvm_overlay_element_render_buffer * erb,void ** staging,uint32_t w, uint32_t h);
+cvm_vk_image_atlas_tile * overlay_create_colour_image_tile_with_staging(void ** staging,uint32_t w, uint32_t h);
 void overlay_destroy_colour_image_tile(cvm_vk_image_atlas_tile * tile);
 
 //bool check_click_on_interactable_element(cvm_overlay_interactable_element * element,int x,int y);

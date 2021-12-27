@@ -19,7 +19,7 @@ along with cvm_shared.  If not, see <https://www.gnu.org/licenses/>.
 
 #include "cvm_shared.h"
 
-void cvm_vk_create_image_atlas(cvm_vk_image_atlas * ia,VkImage image,VkImageView image_view,uint32_t width,uint32_t height,bool multithreaded)
+void cvm_vk_create_image_atlas(cvm_vk_image_atlas * ia,VkImage image,VkImageView image_view,size_t bytes_per_pixel,uint32_t width,uint32_t height,bool multithreaded)
 {
     uint32_t i,j;
 
@@ -31,6 +31,7 @@ void cvm_vk_create_image_atlas(cvm_vk_image_atlas * ia,VkImage image,VkImageView
 
     ia->image=image;
     ia->image_view=image_view;
+    ia->bytes_per_pixel=bytes_per_pixel;
 
     if(width & (width-1) || height & (height-1))
     {
@@ -102,6 +103,11 @@ void cvm_vk_create_image_atlas(cvm_vk_image_atlas * ia,VkImage image,VkImageView
     ia->available_tiles[t->size_factor_h][t->size_factor_v].count=1;
 
     ia->available_tiles_bitmasks[t->size_factor_h]=1<<t->size_factor_v;
+
+    ia->staging_buffer=NULL;
+    ia->pending_copy_actions=malloc(sizeof(VkBufferImageCopy)*16);
+    ia->pending_copy_space=16;
+    ia->pending_copy_count=0;
 }
 
 void cvm_vk_destroy_image_atlas(cvm_vk_image_atlas * ia)
@@ -150,6 +156,8 @@ void cvm_vk_destroy_image_atlas(cvm_vk_image_atlas * ia)
         next=current->next_h;
         free(current);///free all base allocations (to mathch appropriate allocs)
     }
+
+    free(ia->pending_copy_actions);
 }
 
 ///probably worth having this as function, allows calling from branches
@@ -637,3 +645,135 @@ void cvm_vk_relinquish_image_atlas_tile(cvm_vk_image_atlas * ia,cvm_vk_image_atl
 
     ia->available_tiles_bitmasks[base->size_factor_h]|=1<<base->size_factor_v;///partner was last available tile of this size
 }
+
+cvm_vk_image_atlas_tile * cvm_vk_acquire_image_atlas_tile_with_staging(cvm_vk_image_atlas * ia,uint32_t width,uint32_t height,void ** staging)
+{
+    VkDeviceSize upload_offset;
+    cvm_vk_image_atlas_tile * tile;
+
+    if(!ia->staging_buffer)
+    {
+        fprintf(stderr,"IMAGE ATLAS STAGING BUFFER NOT SET\n");
+        exit(-1);
+    }
+
+    if(ia->bytes_per_pixel*width*height > ia->staging_buffer->total_space)
+    {
+        fprintf(stderr,"ATTEMPTED TO ACQUIRE STAGING SPACE FOR IMAGE GREATER THAN STAGING BUFFER TOTAL\n");
+        exit(-1);
+    }
+
+    *staging = cvm_vk_get_staging_buffer_allocation(ia->staging_buffer,ia->bytes_per_pixel*width*height,&upload_offset);
+
+    if(!*staging) return NULL;
+
+    tile=cvm_vk_acquire_image_atlas_tile(ia,width,height);
+
+    if(!tile)
+    {
+        fprintf(stderr,"NO SPACE LEFT IN IMAGE ATLAS\n");
+        exit(-1);
+    }
+
+    if(ia->pending_copy_count==ia->pending_copy_space)
+    {
+        ia->pending_copy_actions=realloc(ia->pending_copy_actions,sizeof(VkBufferImageCopy)*(ia->pending_copy_space*=2));
+    }
+
+    ia->pending_copy_actions[ia->pending_copy_count++]=(VkBufferImageCopy)
+    {
+        .bufferOffset=upload_offset,
+        .bufferRowLength=width,
+        .bufferImageHeight=height,
+        .imageSubresource=(VkImageSubresourceLayers)
+        {
+            .aspectMask=VK_IMAGE_ASPECT_COLOR_BIT,
+            .mipLevel=0,
+            .baseArrayLayer=0,
+            .layerCount=1
+        },
+        .imageOffset=(VkOffset3D)
+        {
+            .x=tile->x_pos<<CVM_VK_BASE_TILE_SIZE_FACTOR,
+            .y=tile->y_pos<<CVM_VK_BASE_TILE_SIZE_FACTOR,
+            .z=0
+        },
+        .imageExtent=(VkExtent3D)
+        {
+            .width=width,
+            .height=height,
+            .depth=1,
+        }
+    };
+
+    return tile;
+}
+
+void * cvm_vk_acquire_staging_for_image_atlas_tile(cvm_vk_image_atlas * ia,cvm_vk_image_atlas_tile * t,uint32_t width,uint32_t height)
+{
+    VkDeviceSize upload_offset;
+    void * staging;
+
+    if(!ia->staging_buffer)
+    {
+        fprintf(stderr,"IMAGE ATLAS STAGING BUFFER NOT SET\n");
+        exit(-1);
+    }
+
+    if(ia->bytes_per_pixel*width*height > ia->staging_buffer->total_space)
+    {
+        fprintf(stderr,"ATTEMPTED TO ACQUIRE STAGING SPACE FOR IMAGE GREATER THAN STAGING BUFFER TOTAL\n");
+        exit(-1);
+    }
+
+    staging = cvm_vk_get_staging_buffer_allocation(ia->staging_buffer,ia->bytes_per_pixel*width*height,&upload_offset);
+
+    if(!staging) return NULL;
+
+    if(ia->pending_copy_count==ia->pending_copy_space)
+    {
+        ia->pending_copy_actions=realloc(ia->pending_copy_actions,sizeof(VkBufferImageCopy)*(ia->pending_copy_space*=2));
+    }
+
+    ia->pending_copy_actions[ia->pending_copy_count++]=(VkBufferImageCopy)
+    {
+        .bufferOffset=upload_offset,
+        .bufferRowLength=width,
+        .bufferImageHeight=height,
+        .imageSubresource=(VkImageSubresourceLayers)
+        {
+            .aspectMask=VK_IMAGE_ASPECT_COLOR_BIT,
+            .mipLevel=0,
+            .baseArrayLayer=0,
+            .layerCount=1
+        },
+        .imageOffset=(VkOffset3D)
+        {
+            .x=t->x_pos<<CVM_VK_BASE_TILE_SIZE_FACTOR,
+            .y=t->y_pos<<CVM_VK_BASE_TILE_SIZE_FACTOR,
+            .z=0
+        },
+        .imageExtent=(VkExtent3D)
+        {
+            .width=width,
+            .height=height,
+            .depth=1,
+        }
+    };
+
+    return staging;
+}
+
+void cvm_vk_image_atlas_submit_all_pending_copy_actions(cvm_vk_image_atlas * ia,VkCommandBuffer transfer_cb)
+{
+    if(ia->pending_copy_count)
+    {
+        vkCmdCopyBufferToImage(transfer_cb,ia->staging_buffer->buffer,ia->image,VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,ia->pending_copy_count,ia->pending_copy_actions);
+        ia->pending_copy_count=0;
+    }
+}
+
+
+
+
+

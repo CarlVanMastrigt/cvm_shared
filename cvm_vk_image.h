@@ -29,9 +29,6 @@ along with cvm_shared.  If not, see <https://www.gnu.org/licenses/>.
 #define CVM_VK_BASE_TILE_SIZE_FACTOR 2
 #define CVM_VK_RESERVED_IMAGE_ATLAS_TILE_COUNT 256
 
-//#define CVM_VK_GET_IMAGE_ATLAS_POS_X(O) (O>>16)
-//#define CVM_VK_GET_IMAGE_ATLAS_POS_Y(O) (O&0x0000FFFF)
-//#define CVM_VK_SET_IMAGE_ATLAS_POS(X,Y) (X<<16|Y&0x0000FFFF)
 
 ///probably want to use a base tile size of 4 by default? yeah, i think i should use this
 
@@ -85,6 +82,8 @@ typedef struct cvm_vk_image_atlas
     VkImage image;
     VkImageView image_view;
 
+    size_t bytes_per_pixel;
+
     uint32_t width;
     uint32_t height;
 
@@ -100,16 +99,27 @@ typedef struct cvm_vk_image_atlas
     cvm_vk_available_atlas_tile_heap ** available_tiles;
 
     uint16_t available_tiles_bitmasks[16];///h based
+
+    ///NEEDS LOCK!
+    cvm_vk_staging_buffer * staging_buffer;
+    VkBufferImageCopy * pending_copy_actions;
+    uint32_t pending_copy_space;
+    uint32_t pending_copy_count;
 }
 cvm_vk_image_atlas;
 ///probably just going to use simple 2d version of PO2 allocator used in memory...
 
 
-void cvm_vk_create_image_atlas(cvm_vk_image_atlas * ia,VkImage image,VkImageView image_view,uint32_t width,uint32_t height,bool multithreaded);
+void cvm_vk_create_image_atlas(cvm_vk_image_atlas * ia,VkImage image,VkImageView image_view,size_t bytes_per_pixel,uint32_t width,uint32_t height,bool multithreaded);
 void cvm_vk_destroy_image_atlas(cvm_vk_image_atlas * ia);
 
 cvm_vk_image_atlas_tile * cvm_vk_acquire_image_atlas_tile(cvm_vk_image_atlas * ia,uint32_t width,uint32_t height);
 void cvm_vk_relinquish_image_atlas_tile(cvm_vk_image_atlas * ia,cvm_vk_image_atlas_tile * t);
+
+cvm_vk_image_atlas_tile * cvm_vk_acquire_image_atlas_tile_with_staging(cvm_vk_image_atlas * ia,uint32_t width,uint32_t height,void ** staging);
+void * cvm_vk_acquire_staging_for_image_atlas_tile(cvm_vk_image_atlas * ia,cvm_vk_image_atlas_tile * t,uint32_t width,uint32_t height);
+
+void cvm_vk_image_atlas_submit_all_pending_copy_actions(cvm_vk_image_atlas * ia,VkCommandBuffer transfer_cb);
 
 #endif
 

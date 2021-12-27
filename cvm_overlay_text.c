@@ -326,7 +326,7 @@ static inline cvm_overlay_glyph * cvm_overlay_find_glpyh(cvm_overlay_font * font
     return font->glyphs+i;
 }
 
-static inline void cvm_overlay_prepare_glyph_render_data(cvm_overlay_element_render_buffer * erb,cvm_overlay_font * font,cvm_overlay_glyph * g)
+static inline void cvm_overlay_prepare_glyph_render_data(cvm_overlay_font * font,cvm_overlay_glyph * g)
 {
     uint32_t w,h;
     FT_GlyphSlot gs;
@@ -340,7 +340,7 @@ static inline void cvm_overlay_prepare_glyph_render_data(cvm_overlay_element_ren
             w=gs->bitmap.width;
             h=gs->bitmap.rows;
 
-            g->tile=overlay_create_transparent_image_tile_with_staging(erb,&staging,w,h);
+            g->tile=overlay_create_transparent_image_tile_with_staging(&staging,w,h);
 
             if(g->tile)
             {
@@ -403,7 +403,7 @@ while(*text)\
     }\
     gi=cvm_overlay_get_utf8_glyph_index(data->theme->font_.face,(uint8_t*)text,&incr);\
     g=cvm_overlay_find_glpyh(&data->theme->font_,gi);\
-    cvm_overlay_prepare_glyph_render_data(data->erb,&data->theme->font_,g);\
+    cvm_overlay_prepare_glyph_render_data(&data->theme->font_,g);\
     if(prev_gi && !FT_Get_Kerning(data->theme->font_.face,prev_gi,gi,0,&kern))\
     {\
         if(SINGLE_LINE_SELECTED)\
@@ -418,12 +418,15 @@ while(*text)\
         else x+=kern.x>>6;\
     }\
     prev_gi=gi;\
-    if(SINGLE_LINE_CONSTRAINED)\
-        if(SINGLE_LINE_FADING) data->theme->shaded_fading_over_box_render(data->erb,data->theme,data->bounds,rectangle_add_offset(g->pos,x,data->y),data->colour,g->tile->x_pos<<2,g->tile->y_pos<<2,data->text_area,fade_r,data->box_r,data->box_status);\
-        else data->theme->shaded_over_box_render(data->erb,data->theme,data->bounds,rectangle_add_offset(g->pos,x,data->y),data->colour,g->tile->x_pos<<2,g->tile->y_pos<<2,data->box_r,data->box_status);\
-    else\
-        if(SINGLE_LINE_FADING) cvm_render_shaded_fading_overlay_element(data->erb,data->bounds,rectangle_add_offset(g->pos,x,data->y),data->colour,g->tile->x_pos<<2,g->tile->y_pos<<2,data->text_area,fade_r);\
-        else cvm_render_shaded_overlay_element(data->erb,data->bounds,rectangle_add_offset(g->pos,x,data->y),data->colour,g->tile->x_pos<<2,g->tile->y_pos<<2);\
+    if(g->tile)\
+    {\
+        if(SINGLE_LINE_CONSTRAINED)\
+            if(SINGLE_LINE_FADING) data->theme->shaded_fading_over_box_render(data->erb,data->theme,data->bounds,rectangle_add_offset(g->pos,x,data->y),data->colour,g->tile->x_pos<<2,g->tile->y_pos<<2,data->text_area,fade_r,data->box_r,data->box_status);\
+            else data->theme->shaded_over_box_render(data->erb,data->theme,data->bounds,rectangle_add_offset(g->pos,x,data->y),data->colour,g->tile->x_pos<<2,g->tile->y_pos<<2,data->box_r,data->box_status);\
+        else\
+            if(SINGLE_LINE_FADING) cvm_render_shaded_fading_overlay_element(data->erb,data->bounds,rectangle_add_offset(g->pos,x,data->y),data->colour,g->tile->x_pos<<2,g->tile->y_pos<<2,data->text_area,fade_r);\
+            else cvm_render_shaded_overlay_element(data->erb,data->bounds,rectangle_add_offset(g->pos,x,data->y),data->colour,g->tile->x_pos<<2,g->tile->y_pos<<2);\
+    }\
     x+=cvm_overlay_get_glyph_advance(&data->theme->font_,g);\
     text+=incr;\
 }\
@@ -696,13 +699,13 @@ void overlay_text_multiline_render(cvm_overlay_element_render_buffer * erb,cvm_o
 
             g=cvm_overlay_find_glpyh(font,gi);
 
-            cvm_overlay_prepare_glyph_render_data(erb,font,g);
+            cvm_overlay_prepare_glyph_render_data(font,g);
 
             if(prev_gi && !FT_Get_Kerning(font->face,prev_gi,gi,0,&kern)) x+=kern.x>>6;
 
             prev_gi=gi;
 
-            cvm_render_shaded_overlay_element(erb,bounds,rectangle_add_offset(g->pos,x,y),colour,g->tile->x_pos<<2,g->tile->y_pos<<2);
+            if(g->tile)cvm_render_shaded_overlay_element(erb,bounds,rectangle_add_offset(g->pos,x,y),colour,g->tile->x_pos<<2,g->tile->y_pos<<2);
 
             x+=cvm_overlay_get_glyph_advance(font,g);
         }
@@ -748,7 +751,7 @@ void overlay_text_multiline_selection_render(cvm_overlay_element_render_buffer *
 
             g=cvm_overlay_find_glpyh(font,gi);
 
-            cvm_overlay_prepare_glyph_render_data(erb,font,g);
+            cvm_overlay_prepare_glyph_render_data(font,g);
 
             if(prev_gi && !FT_Get_Kerning(font->face,prev_gi,gi,0,&kern))
             {
@@ -762,7 +765,7 @@ void overlay_text_multiline_selection_render(cvm_overlay_element_render_buffer *
 
             prev_gi=gi;
 
-            cvm_render_shaded_overlay_element(erb,bounds,rectangle_add_offset(g->pos,x,y),colour,g->tile->x_pos<<2,g->tile->y_pos<<2);
+            if(g->tile)cvm_render_shaded_overlay_element(erb,bounds,rectangle_add_offset(g->pos,x,y),colour,g->tile->x_pos<<2,g->tile->y_pos<<2);
 
             x+=cvm_overlay_get_glyph_advance(font,g);
         }
@@ -829,7 +832,7 @@ char * overlay_text_multiline_find_offset(cvm_overlay_font * font,cvm_overlay_te
 
 
 
-cvm_overlay_glyph * overlay_get_glyph(cvm_overlay_element_render_buffer * erb,cvm_overlay_font * font,char * text)
+cvm_overlay_glyph * overlay_get_glyph(cvm_overlay_font * font,char * text)
 {
     uint32_t gi,incr;
     cvm_overlay_glyph * g;
@@ -842,7 +845,7 @@ cvm_overlay_glyph * overlay_get_glyph(cvm_overlay_element_render_buffer * erb,cv
 
         g=cvm_overlay_find_glpyh(font,gi);
 
-        cvm_overlay_prepare_glyph_render_data(erb,font,g);
+        cvm_overlay_prepare_glyph_render_data(font,g);
 
         if(text[incr])
         {
@@ -857,7 +860,7 @@ void overlay_text_centred_glyph_render(cvm_overlay_element_render_buffer * erb,c
 {
     cvm_overlay_glyph * g;
 
-    g=overlay_get_glyph(erb,font,icon_glyph);
+    g=overlay_get_glyph(font,icon_glyph);
 
     if(!g->tile)return;
 
@@ -873,7 +876,7 @@ void overlay_text_centred_glyph_box_constrained_render(cvm_overlay_element_rende
 {
     cvm_overlay_glyph * g;
 
-    g=overlay_get_glyph(erb,&theme->font_,icon_glyph);
+    g=overlay_get_glyph(&theme->font_,icon_glyph);
 
     if(!g->tile)return;
 

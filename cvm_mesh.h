@@ -39,6 +39,8 @@ typedef struct cvm_mesh
     uint16_t flags;
     uint16_t vertex_count;
     uint32_t face_count:20;///implicitly triangles
+    uint32_t initialised:1;///implicitly triangles
+    uint32_t dynamic:1;///implicitly triangles
     ///reserved 12 bits
 
     ///precalculate following for speed of access/use
@@ -49,25 +51,25 @@ typedef struct cvm_mesh
     ///uint32_t normal_offset;
     ///uint32_t texture_coordinate_offset;
 
-    cvm_vk_dynamic_buffer_allocation * allocation;///store so that this can be deleted quickly, will be null if static allocation
+    union
+    {
+        cvm_vk_dynamic_buffer_allocation * dynamic_allocation;///store so that this can be deleted quickly, will be null if static allocation
+        uint64_t static_offset;
+    };
 }
 cvm_mesh;
 
+void cvm_mesh_load_file_header(FILE * f,cvm_mesh * mesh);
+void cvm_mesh_load_file_body(FILE * f,cvm_mesh * mesh,uint16_t * indices,uint16_t * adjacency,uint16_t * materials,float * positions);
 
-#define CVM_MESH_FAIL_STAGING_INSUFFICIENT          1
-#define CVM_MESH_FAIL_STAGING_TOTAL_INSUFFICIENT    2
-#define CVM_MESH_FAIL_DESTINATION_INSUFFICIENT      3
-#define CVM_MESH_FAIL_FLAGS_MISMATCH                4
-#define CVM_MESH_FAIL_FILE_INVALID                  5
-#define CVM_MESH_FAIL_VERSION_MISMATCH              6
-#define CVM_MESH_FAIL_FILE_MISSING                  7
+bool cvm_mesh_load_file(cvm_mesh * mesh,char * filename,uint16_t flags,bool dynamic,cvm_vk_managed_buffer * mb);
+bool cvm_mesh_load_file_retry(cvm_mesh * mesh,char * filename,uint16_t flags,bool dynamic,cvm_vk_managed_buffer * mb);
 
-int cvm_mesh_load_file_header(FILE * f,cvm_mesh * mesh);
-int cvm_mesh_load_file_body(FILE * f,cvm_mesh * mesh,uint16_t * indices,uint16_t * adjacency,uint16_t * materials,float * positions/*,float * normals,uint16_t * texture_uvs*/);
+void cvm_mesh_relinquish(cvm_mesh * mesh,cvm_vk_managed_buffer * mb);
 
-int cvm_mesh_load_file_to_buffer(cvm_mesh * mesh,char * filename,uint16_t flags,bool dynamic,cvm_vk_managed_buffer * mb,cvm_vk_staging_buffer * sb,VkCommandBuffer transfer_cb);
+void cvm_mesh_initialise(cvm_mesh * mesh);
 
-
+void cvm_mesh_render(cvm_mesh * mesh,VkCommandBuffer graphics_cb,uint32_t instance_count);///assumes managed buffer used in creation was bound to appropriate points
 
 
 

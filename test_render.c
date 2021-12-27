@@ -54,11 +54,16 @@ static VkImageView test_framebuffer_colour_views[TEST_FRAMEBUFFER_CYCLES];///vie
 
 
 static cvm_vk_managed_buffer test_buffer;
-static cvm_vk_dynamic_buffer_allocation * test_index_allocation;
-static cvm_vk_dynamic_buffer_allocation * test_vertex_allocation;
+//static cvm_vk_dynamic_buffer_allocation * test_index_allocation;
+//static cvm_vk_dynamic_buffer_allocation * test_vertex_allocation;
+
+static cvm_mesh test_stellated_octahedron_mesh;
+static cvm_mesh test_cube_mesh;
 
 /// actually we want a way to handle uploads from here, and as dynamics are the same as instance data its probably worth having a dedicated buffer for them and uniforms AND upload/transfers
-static cvm_vk_staging_buffer test_uniform_buffer;
+static cvm_vk_staging_buffer test_staging_buffer;
+
+static cvm_vk_transient_buffer test_transient_buffer;
 
 static void create_test_descriptor_set_layouts(void)
 {
@@ -137,7 +142,7 @@ static void update_and_bind_test_uniforms(uint32_t swapchain_image,VkDeviceSize 
         .pBufferInfo=(VkDescriptorBufferInfo[1])
         {
             {
-                .buffer=test_uniform_buffer.buffer,
+                .buffer=test_transient_buffer.buffer,
                 .offset=offset,
                 .range=sizeof(float)*4
             }
@@ -309,12 +314,12 @@ static void create_test_pipelines(VkRect2D screen_rectangle,VkSampleCountFlagBit
                 {
                     {
                         .binding=0,
-                        .stride=sizeof(test_render_data),
+                        .stride=sizeof(float)*3,
                         .inputRate=VK_VERTEX_INPUT_RATE_VERTEX
                     }
                 },
-                .vertexAttributeDescriptionCount=2,
-                .pVertexAttributeDescriptions=(VkVertexInputAttributeDescription[2])
+                .vertexAttributeDescriptionCount=1,
+                .pVertexAttributeDescriptions=(VkVertexInputAttributeDescription[1])
                 {
                     {
                         .location=0,
@@ -322,12 +327,12 @@ static void create_test_pipelines(VkRect2D screen_rectangle,VkSampleCountFlagBit
                         .format=VK_FORMAT_R32G32B32_SFLOAT,
                         .offset=offsetof(test_render_data,pos)
                     },
-                    {
-                        .location=1,
-                        .binding=0,
-                        .format=VK_FORMAT_R8G8B8A8_UNORM,
-                        .offset=offsetof(test_render_data,col)
-                    }
+//                    {
+//                        .location=1,
+//                        .binding=0,
+//                        .format=VK_FORMAT_R8G8B8A8_UNORM,
+//                        .offset=offsetof(test_render_data,col)
+//                    }
                 }
             }
         },
@@ -374,7 +379,7 @@ static void create_test_pipelines(VkRect2D screen_rectangle,VkSampleCountFlagBit
                 .rasterizerDiscardEnable=VK_FALSE,
                 .polygonMode=VK_POLYGON_MODE_FILL,
                 .cullMode=VK_CULL_MODE_BACK_BIT,
-                .frontFace=VK_FRONT_FACE_CLOCKWISE,
+                .frontFace=VK_FRONT_FACE_COUNTER_CLOCKWISE,
                 .depthBiasEnable=VK_FALSE,
                 .depthBiasConstantFactor=0.0,
                 .depthBiasClamp=0.0,
@@ -514,47 +519,49 @@ static void create_test_framebuffers(VkRect2D screen_rectangle,uint32_t swapchai
 
 ///put initialisation of transitory/mutable data inside init, then only alter as part of update
 
-static void create_test_vertex_buffer(void)
-{
-    int i,j;
-    test_render_data * vertex_data;
-
-    uint16_t index_data[36]=
-    {
-        0,1,3,
-        0,3,2,
-        0,4,5,
-        0,5,1,
-        1,5,7,
-        1,7,3,
-        2,6,4,
-        2,4,0,
-        3,7,6,
-        3,6,2,
-        4,6,7,
-        4,7,5
-    };
-
-    test_index_allocation=cvm_vk_acquire_dynamic_buffer_allocation(&test_buffer,sizeof(uint16_t)*36);
-
-    memcpy(cvm_vk_get_dynamic_buffer_allocation_mapping(&test_buffer,test_index_allocation),index_data,sizeof(uint16_t)*36);
-
-
-    test_vertex_allocation=cvm_vk_acquire_dynamic_buffer_allocation(&test_buffer,sizeof(test_render_data)*8);
-
-    vertex_data=cvm_vk_get_dynamic_buffer_allocation_mapping(&test_buffer,test_vertex_allocation);
-
-    for(i=0;i<8;i++)
-    {
-        for(j=0;j<3;j++)
-        {
-            vertex_data[i].col[j]=!!(i&1<<j)*255;
-            vertex_data[i].pos[j]=(float)(!!(i&1<<j)*2-1);
-        }
-    }
-
-    cvm_vk_flush_managed_buffer(&test_buffer);
-}
+//static void create_test_vertex_buffer(void)
+//{
+//    int i,j;
+//    test_render_data * vertex_data;
+//    uint16_t * index_data;
+//
+//    uint16_t indeces[36]=
+//    {
+//        0,1,3,
+//        0,3,2,
+//        0,4,5,
+//        0,5,1,
+//        1,5,7,
+//        1,7,3,
+//        2,6,4,
+//        2,4,0,
+//        3,7,6,
+//        3,6,2,
+//        4,6,7,
+//        4,7,5
+//    };
+//
+//    test_index_allocation=cvm_vk_acquire_dynamic_buffer_allocation(&test_buffer,sizeof(uint16_t)*36);
+//
+//    index_data=cvm_vk_get_dynamic_buffer_allocation_mapping(&test_buffer,test_index_allocation,sizeof(uint16_t)*36);
+//    memcpy(index_data,indeces,sizeof(uint16_t)*36);
+//
+//
+//    test_vertex_allocation=cvm_vk_acquire_dynamic_buffer_allocation(&test_buffer,sizeof(test_render_data)*8);
+//
+//    vertex_data=cvm_vk_get_dynamic_buffer_allocation_mapping(&test_buffer,test_vertex_allocation,sizeof(test_render_data)*8);
+//
+//    for(i=0;i<8;i++)
+//    {
+//        for(j=0;j<3;j++)
+//        {
+//            vertex_data[i].col[j]=!!(i&1<<j)*255;
+//            vertex_data[i].pos[j]=(float)(!!(i&1<<j)*2-1);
+//        }
+//    }
+//
+//    #warning cvm_vk_flush_managed_buffer(&test_buffer);
+//}
 
 /// these need to be recreated whenever swapchain image changes size
 /// unless we allocate at max and alter with image views... investigate potential of this, use max size, let user set max_size from startup options?
@@ -675,9 +682,13 @@ void initialise_test_render_data()
 
     cvm_vk_create_managed_buffer(&test_buffer,65536,10,16,VK_BUFFER_USAGE_VERTEX_BUFFER_BIT|VK_BUFFER_USAGE_INDEX_BUFFER_BIT,false,true);
 
-    cvm_vk_create_staging_buffer(&test_uniform_buffer,VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT);
+    cvm_vk_create_transient_buffer(&test_transient_buffer,VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT);
 
-    create_test_vertex_buffer();
+    cvm_vk_create_staging_buffer(&test_staging_buffer,VK_BUFFER_USAGE_TRANSFER_SRC_BIT);
+
+    //create_test_vertex_buffer();
+    cvm_mesh_initialise(&test_stellated_octahedron_mesh);
+    cvm_mesh_initialise(&test_cube_mesh);
 }
 
 void terminate_test_render_data()
@@ -693,13 +704,16 @@ void terminate_test_render_data()
 
     cvm_vk_destroy_module_data(&test_module_data,false);
 
-
-    cvm_vk_relinquish_dynamic_buffer_allocation(&test_buffer,test_vertex_allocation);
-    cvm_vk_relinquish_dynamic_buffer_allocation(&test_buffer,test_index_allocation);
+    cvm_mesh_relinquish(&test_stellated_octahedron_mesh,&test_buffer);
+    cvm_mesh_relinquish(&test_cube_mesh,&test_buffer);
+    //cvm_vk_relinquish_dynamic_buffer_allocation(&test_buffer,test_vertex_allocation);
+    //cvm_vk_relinquish_dynamic_buffer_allocation(&test_buffer,test_index_allocation);
 
     cvm_vk_destroy_managed_buffer(&test_buffer);
 
-    cvm_vk_destroy_staging_buffer(&test_uniform_buffer);
+    cvm_vk_destroy_transient_buffer(&test_transient_buffer);
+
+    cvm_vk_destroy_staging_buffer(&test_staging_buffer);
 }
 
 
@@ -718,9 +732,12 @@ void initialise_test_swapchain_dependencies(void)
 
     cvm_vk_resize_module_graphics_data(&test_module_data,0);
 
-    cvm_vk_update_staging_buffer(&test_uniform_buffer,512,swapchain_image_count);
+    uint32_t uniform_size=0;
+    uniform_size+=cvm_vk_transient_buffer_get_rounded_allocation_size(&test_transient_buffer,sizeof(float)*4);
+    cvm_vk_update_transient_buffer(&test_transient_buffer,uniform_size,swapchain_image_count);
 
-    //test_staging_buffer_acquisitions=calloc(swapchain_image_count,sizeof(uint32_t));
+    uint32_t staging_size=1024;
+    cvm_vk_update_staging_buffer(&test_staging_buffer,staging_size,swapchain_image_count);
 }
 
 void terminate_test_swapchain_dependencies()
@@ -771,17 +788,27 @@ cvm_vk_module_work_block * test_render_frame(cvm_camera * c)
 
     if(swapchain_image_index!=CVM_VK_INVALID_IMAGE_INDEX)
     {
-        cvm_vk_begin_staging_buffer(&test_uniform_buffer);
+        #warning sort out naming scheme on memory / image stuff
+        cvm_vk_begin_transient_buffer(&test_transient_buffer,swapchain_image_index);
+        cvm_vk_begin_staging_buffer(&test_staging_buffer);
+
+        if(!test_stellated_octahedron_mesh.initialised)
+        {
+            if(!cvm_mesh_load_file(&test_stellated_octahedron_mesh,"cvm_shared/resources/stellated_octahedron.mesh",CVM_MESH_ADGACENCY|CVM_MESH_PER_FACE_MATERIAL,false,&test_buffer))
+            {
+                puts("load mesh failed!!!");
+            }
+        }
+
+        cvm_vk_end_staging_buffer(&test_staging_buffer,swapchain_image_index);
+        #warning need to incorporate memory / image locks to make compatible w/ MT environment, either use extant spinlock or add secondary pending copy spinlock
+        cvm_vk_managed_buffer_submit_all_pending_copy_actions(&test_buffer,work_block->graphics_work);///must go AFTER used staging buffer gets flushed, needs external synchronisation when being used in MT environment
 
         VkDeviceSize uniforms_offset;
-        float * uniforms = cvm_vk_get_staging_buffer_allocation(&test_uniform_buffer,sizeof(float)*4,&uniforms_offset);
-        //printf("C %u\n",atomic_load(&test_uniform_buffer.space_remaining));
+        float * uniforms = cvm_vk_get_transient_buffer_allocation(&test_transient_buffer,sizeof(float)*4,&uniforms_offset);
         if(uniforms==NULL)puts("FAILED");
 
-//        uniforms[0]=0.2*sin(SDL_GetTicks()*0.001);
-//        uniforms[1]=0.2*cos(SDL_GetTicks()*0.001);
-//        uniforms[2]=0.0;
-//        uniforms[3]=0.0;
+        #warning move projection matrix into uniform buffer
 
         uniforms[0]=0.7+0.3*cos(SDL_GetTicks()*0.005);
         uniforms[1]=0.7+0.3*cos(SDL_GetTicks()*0.007);
@@ -817,10 +844,12 @@ cvm_vk_module_work_block * test_render_frame(cvm_camera * c)
         vkCmdBindPipeline(work_block->graphics_work,VK_PIPELINE_BIND_POINT_GRAPHICS,test_pipeline);
 
 
-        cvm_vk_bind_dymanic_allocation_index(work_block->graphics_work,&test_buffer,test_index_allocation,VK_INDEX_TYPE_UINT16);
-        cvm_vk_bind_dymanic_allocation_vertex(work_block->graphics_work,&test_buffer,test_vertex_allocation,0);
+        cvm_vk_bind_managed_buffer_index(work_block->graphics_work,&test_buffer,VK_INDEX_TYPE_UINT16);
+        cvm_vk_bind_managed_buffer_vertex(work_block->graphics_work,&test_buffer,0);
 
-        vkCmdDrawIndexed(work_block->graphics_work,36,1,0,0,0);
+        cvm_mesh_render(&test_stellated_octahedron_mesh,work_block->graphics_work,1);
+
+        //vkCmdDrawIndexed(work_block->graphics_work,36,1,0,0,0);
 
 
 //        vkCmdBindIndexBuffer(work_block->graphics_work,test_buffer.buffer,0,VK_INDEX_TYPE_UINT16);
@@ -835,7 +864,7 @@ cvm_vk_module_work_block * test_render_frame(cvm_camera * c)
 
         vkCmdEndRenderPass(work_block->graphics_work);///================
 
-        cvm_vk_end_staging_buffer(&test_uniform_buffer,swapchain_image_index);
+        cvm_vk_end_transient_buffer(&test_transient_buffer);
 
         test_current_framebuffer_index++;
         test_current_framebuffer_index*= test_current_framebuffer_index<TEST_FRAMEBUFFER_CYCLES;
@@ -848,7 +877,7 @@ void test_frame_cleanup(uint32_t swapchain_image_index)
 {
     if(swapchain_image_index!=CVM_VK_INVALID_IMAGE_INDEX)
     {
-        cvm_vk_relinquish_staging_buffer_space(&test_uniform_buffer,swapchain_image_index);
+        ///cvm_vk_relinquish_staging_buffer_space();
     }
 }
 

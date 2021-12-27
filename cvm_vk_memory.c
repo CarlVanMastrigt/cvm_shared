@@ -71,6 +71,11 @@ void cvm_vk_create_managed_buffer(cvm_vk_managed_buffer * mb,uint32_t buffer_siz
     atomic_init(&mb->spinlock,0);
 
     mb->mapping=cvm_vk_create_buffer(&mb->buffer,&mb->memory,usage,buffer_size,host_visible);///if this is non-null then probably UMA and thus can circumvent staging buffer
+
+    mb->staging_buffer=NULL;
+    mb->pending_copy_actions=malloc(sizeof(VkBufferCopy)*16);
+    mb->pending_copy_space=16;
+    mb->pending_copy_count=0;
 }
 
 void cvm_vk_destroy_managed_buffer(cvm_vk_managed_buffer * mb)
@@ -85,7 +90,7 @@ void cvm_vk_destroy_managed_buffer(cvm_vk_managed_buffer * mb)
     ///all dynamic allocations should be freed at this point
     if(mb->last_used_allocation)
     {
-        fprintf(stderr,"TRYING TO DESTROY A BUFFER WITH ACTIVE ELEMENTS\n");
+        fprintf(stderr,"ATTEMPTED TO DESTROY A BUFFER WITH ACTIVE ELEMENTS\n");
         exit(-1);
         ///could instead just rightmost to offload all active buffers to the unused linked list
     }
@@ -109,6 +114,8 @@ void cvm_vk_destroy_managed_buffer(cvm_vk_managed_buffer * mb)
         next=current->next;
         free(current);///free all base allocations (to mathch appropriate allocs)
     }
+
+    free(mb->pending_copy_actions);
 }
 
 cvm_vk_dynamic_buffer_allocation * cvm_vk_acquire_dynamic_buffer_allocation(cvm_vk_managed_buffer * mb,uint64_t size)
@@ -434,60 +441,116 @@ uint64_t cvm_vk_acquire_static_buffer_allocation(cvm_vk_managed_buffer * mb,uint
     return e-size;
 }
 
-uint64_t cvm_vk_get_dynamic_buffer_offset(cvm_vk_managed_buffer * mb,cvm_vk_dynamic_buffer_allocation * allocation)
+static inline void * stage_copy_action(cvm_vk_managed_buffer * mb,uint64_t offset,uint64_t size)
 {
-    return allocation->offset<<mb->base_dynamic_allocation_size_factor;
+    VkDeviceSize staging_offset;
+    void * ptr;
+
+    if(!mb->staging_buffer)
+    {
+        fprintf(stderr,"ATTEMPTED TO MAP DEVICE LOCAL MEMORY WITHOUT SETTING A STAGING BUFFER\n");
+        exit(-1);
+    }
+
+    if(size>mb->staging_buffer->total_space)
+    {
+        fprintf(stderr,"ATTEMPTED TO UPLOAD MORE DATA THEN ASSIGNED STAGING BUFFER CAN ACCOMODATE\n");
+        exit(-1);
+    }
+
+    ptr=cvm_vk_get_staging_buffer_allocation(mb->staging_buffer,size,&staging_offset);
+
+    if(!ptr) return NULL;
+
+    if(mb->pending_copy_count==mb->pending_copy_space)mb->pending_copy_actions=realloc(mb->pending_copy_actions,sizeof(VkBufferCopy)*(mb->pending_copy_space*=2));
+
+    mb->pending_copy_actions[mb->pending_copy_count++]=(VkBufferCopy)
+    {
+        .srcOffset=staging_offset,
+        .dstOffset=offset,
+        .size=size
+    };
+
+    return ptr;
 }
 
-void * cvm_vk_get_dynamic_buffer_allocation_mapping(cvm_vk_managed_buffer * mb,cvm_vk_dynamic_buffer_allocation * allocation)
+void * cvm_vk_get_dynamic_buffer_allocation_mapping(cvm_vk_managed_buffer * mb,cvm_vk_dynamic_buffer_allocation * allocation,uint64_t size)
 {
-    return mb->mapping ? mb->mapping+(allocation->offset<<mb->base_dynamic_allocation_size_factor) : NULL;
+    uint64_t offset=allocation->offset<<mb->base_dynamic_allocation_size_factor;
+    if(mb->mapping) return mb->mapping+offset;///on UMA can access memory directly!
+
+    if(!size) size=1<<(allocation->size_factor+mb->base_dynamic_allocation_size_factor);
+
+    return stage_copy_action(mb,offset,size);
 }
 
-void * cvm_vk_get_static_buffer_allocation_mapping(cvm_vk_managed_buffer * mb,uint64_t offset)
+void * cvm_vk_get_static_buffer_allocation_mapping(cvm_vk_managed_buffer * mb,uint64_t offset,uint64_t size)
 {
-    return mb->mapping ? mb->mapping+offset : NULL;
+    if(mb->mapping) return mb->mapping+offset;///on UMA can access memory directly!
+
+    return stage_copy_action(mb,offset,size);
 }
 
-void cvm_vk_bind_dymanic_allocation_vertex(VkCommandBuffer cmd_buf,cvm_vk_managed_buffer * mb,cvm_vk_dynamic_buffer_allocation * allocation,uint32_t binding)
+void cvm_vk_managed_buffer_submit_all_pending_copy_actions(cvm_vk_managed_buffer * mb,VkCommandBuffer transfer_cb)
 {
-    VkDeviceSize offset=allocation->offset << mb->base_dynamic_allocation_size_factor;
+    if(mb->mapping)/// is UMA system, no staging copies necessary
+    {
+        VkMappedMemoryRange flush_range=(VkMappedMemoryRange)
+        {
+            .sType=VK_STRUCTURE_TYPE_MAPPED_MEMORY_RANGE,
+            .pNext=NULL,
+            .memory=mb->memory,
+            .offset=0,
+            .size=VK_WHOLE_SIZE
+        };
+
+        cvm_vk_flush_buffer_memory_range(&flush_range);
+    }
+    else if(mb->pending_copy_count)
+    {
+        vkCmdCopyBuffer(transfer_cb,mb->staging_buffer->buffer,mb->buffer,mb->pending_copy_count,mb->pending_copy_actions);
+        mb->pending_copy_count=0;
+    }
+}
+
+//void cvm_vk_bind_dymanic_allocation_vertex(VkCommandBuffer cmd_buf,cvm_vk_managed_buffer * mb,cvm_vk_dynamic_buffer_allocation * allocation,uint32_t binding)
+//{
+//    VkDeviceSize offset=allocation->offset << mb->base_dynamic_allocation_size_factor;
+//    vkCmdBindVertexBuffers(cmd_buf,binding,1,&mb->buffer,&offset);
+//}
+//
+//void cvm_vk_bind_dymanic_allocation_index(VkCommandBuffer cmd_buf,cvm_vk_managed_buffer * mb,cvm_vk_dynamic_buffer_allocation * allocation,VkIndexType type)
+//{
+//    VkDeviceSize offset=allocation->offset << mb->base_dynamic_allocation_size_factor;
+//    vkCmdBindIndexBuffer(cmd_buf,mb->buffer,offset,type);
+//}
+
+void cvm_vk_bind_managed_buffer_vertex(VkCommandBuffer cmd_buf,cvm_vk_managed_buffer * mb,uint32_t binding)
+{
+//    uint32_t i;
+//    VkDeviceSize offsets[binding_count];
+//    VkBuffer buffers[binding_count];
+//    for(i=0;i<binding_count;i++)
+//    {
+//        offsets[i]=0;
+//        buffers[i]=mb->buffer;
+//    }
+//    vkCmdBindVertexBuffers(cmd_buf,binding_offset,binding_count,buffers,offsets);
+
+    /// vertex offset in draw assumes all verts have same offset, so it makes no sense in this paradigm to have multiple binding points from a single buffer!
+    #warning the above offset issue may become a MASSIVE hassle when isntance data gets involved, base-indexed vertex offsets may not be viable anymore
+    ///     ^ actually does have instanceOffset...
+
+    VkDeviceSize offset=0;
     vkCmdBindVertexBuffers(cmd_buf,binding,1,&mb->buffer,&offset);
 }
 
-void cvm_vk_bind_dymanic_allocation_index(VkCommandBuffer cmd_buf,cvm_vk_managed_buffer * mb,cvm_vk_dynamic_buffer_allocation * allocation,VkIndexType type)
+void cvm_vk_bind_managed_buffer_index(VkCommandBuffer cmd_buf,cvm_vk_managed_buffer * mb,VkIndexType type)
 {
-    VkDeviceSize offset=allocation->offset << mb->base_dynamic_allocation_size_factor;
-    vkCmdBindIndexBuffer(cmd_buf,mb->buffer,offset,type);
+    vkCmdBindIndexBuffer(cmd_buf,mb->buffer,0,type);
 }
 
-void cvm_vk_flush_buffer_allocation_mapping(cvm_vk_managed_buffer * mb,cvm_vk_dynamic_buffer_allocation * allocation)
-{
-    VkMappedMemoryRange flush_range=(VkMappedMemoryRange)
-    {
-        .sType=VK_STRUCTURE_TYPE_MAPPED_MEMORY_RANGE,
-        .pNext=NULL,
-        .memory=mb->memory,
-        .offset=allocation->offset,
-        .size=1<<(mb->base_dynamic_allocation_size_factor+allocation->size_factor)
-    };
 
-    cvm_vk_flush_buffer_memory_range(&flush_range);
-}
-
-void cvm_vk_flush_managed_buffer(cvm_vk_managed_buffer * mb)
-{
-    VkMappedMemoryRange flush_range=(VkMappedMemoryRange)
-    {
-        .sType=VK_STRUCTURE_TYPE_MAPPED_MEMORY_RANGE,
-        .pNext=NULL,
-        .memory=mb->memory,
-        .offset=0,
-        .size=VK_WHOLE_SIZE
-    };
-
-    cvm_vk_flush_buffer_memory_range(&flush_range);
-}
 
 
 

@@ -297,97 +297,74 @@ int cvm_mesh_generate_file_from_objs(const char * name,uint16_t flags)
     return 0;
 }
 
+static inline uint32_t calculate_mesh_size(cvm_mesh * mesh)
+{
+    uint32_t size=0;
+    size+=mesh->face_count*3*sizeof(uint16_t);
+    if(mesh->flags&CVM_MESH_ADGACENCY)size+=mesh->face_count*6*sizeof(uint16_t);
+    if(mesh->flags&CVM_MESH_PER_FACE_MATERIAL)size+=mesh->face_count*sizeof(uint16_t);
+    size+=(mesh->vertex_count+1)*3*sizeof(float);///1 extra needed for alignment
+    return size;
+}
 
 
-
-int cvm_mesh_load_file_header(FILE * f,cvm_mesh * mesh)
+void cvm_mesh_load_file_header(FILE * f,cvm_mesh * mesh)
 {
     uint32_t num_faces;
     uint16_t tmp;
 
     fread(&tmp,sizeof(uint16_t),1,f);
-    if(tmp!=cvm_mesh_file_signiature)return CVM_MESH_FAIL_FILE_INVALID;
+    if(tmp!=cvm_mesh_file_signiature)
+    {
+        fprintf(stderr,"ATTEMPTED TO LOAD NON MESH FILE AS MESH FILE (SIGNIATURE MISMATCH)\n");
+        exit(-1);
+    }
 
     fread(&tmp,sizeof(uint16_t),1,f);
-    if(tmp>cvm_mesh_version_number)return CVM_MESH_FAIL_VERSION_MISMATCH;
+    if(tmp>cvm_mesh_version_number)
+    {
+        fprintf(stderr,"MESH FILE VERSION MISMATCH\n");
+        exit(-1);
+    }
 
     fread(&mesh->flags,sizeof(uint16_t),1,f);
     fread(&mesh->vertex_count,sizeof(uint16_t),1,f);
     fread(&num_faces,sizeof(uint32_t),1,f);
     mesh->face_count=num_faces;
-
-    return 0;
 }
 
-int cvm_mesh_load_file_body(FILE * f,cvm_mesh * mesh,uint16_t * indices,uint16_t * adjacency,uint16_t * materials,float * positions/*,float * normals,uint16_t * texture_uvs*/)
+void cvm_mesh_load_file_body(FILE * f,cvm_mesh * mesh,uint16_t * indices,uint16_t * adjacency,uint16_t * materials,float * positions)
 {
     fread(indices,sizeof(uint16_t),mesh->face_count*3,f);
     if(mesh->flags&CVM_MESH_ADGACENCY)fread(adjacency,sizeof(uint16_t),mesh->face_count*6,f);
     if(mesh->flags&CVM_MESH_PER_FACE_MATERIAL)fread(materials,sizeof(uint16_t),mesh->face_count,f);
     fread(positions,sizeof(float),mesh->vertex_count*3,f);
-
-    return 0;
 }
 
-int cvm_mesh_load_file_to_buffer(cvm_mesh * mesh,char * filename,uint16_t flags,bool dynamic,cvm_vk_managed_buffer * mb,cvm_vk_staging_buffer * sb,VkCommandBuffer transfer_cb)
+
+static bool load_mesh_to_managed_buffer(FILE * f,cvm_mesh * mesh,cvm_vk_managed_buffer * mb)
 {
     uint16_t *indices,*adjacency,*materials;
     float * positions;
-    uint32_t size;
     uint64_t base_offset,current_offset;
-    FILE * f;
+    uint32_t size;
     char * ptr;
-    int r;
-    VkDeviceSize sb_offset;
 
-    f=fopen(filename,"rb");
-    if(!f) return CVM_MESH_FAIL_FILE_MISSING;
+    size=calculate_mesh_size(mesh);
 
-    r=cvm_mesh_load_file_header(f,mesh);
-    if(r) return r;
-
-    #warning perhaps have way to just take all relevant flags from the mesh? (special mesh flag?)
-    if((mesh->flags&flags)!=flags) return CVM_MESH_FAIL_FLAGS_MISMATCH;
-    mesh->flags=flags;
-
-    ///size should be conservative, enough to accommodate regardless of alignment
-
-    size=mesh->face_count*3*sizeof(uint16_t);
-    if(mesh->flags&CVM_MESH_ADGACENCY)size+=mesh->face_count*6*sizeof(uint16_t);
-    if(mesh->flags&CVM_MESH_PER_FACE_MATERIAL)size+=mesh->face_count*sizeof(uint16_t);
-    size+=(mesh->vertex_count+1)*3*sizeof(float);///1 extra needed for alignment
-
-    #warning if non UMA, acquire staging space, otherwise return an error
-
-    if(sb)
+    if(mesh->dynamic)
     {
-        if(size>sb->total_space) return CVM_MESH_FAIL_STAGING_TOTAL_INSUFFICIENT;
-        ptr=cvm_vk_get_staging_buffer_allocation(sb,size,&sb_offset);
-        if(!ptr)return CVM_MESH_FAIL_STAGING_INSUFFICIENT;
-    }
-    else if(!mb->mapping)
-    {
-        fprintf(stderr,"NO WAY TO UPLOAD DATA PROVIDED TO MESH LOADING\n");
-        exit(-1);
-    }
-
-    if(dynamic)
-    {
-        fprintf(stderr,"DYNAMIC MESH ALLOCATIONS_NYI");
-        mesh->allocation=cvm_vk_acquire_dynamic_buffer_allocation(mb,size);
-        if(!mesh->allocation) return CVM_MESH_FAIL_DESTINATION_INSUFFICIENT;
-        base_offset = current_offset = cvm_vk_get_dynamic_buffer_offset(mb,mesh->allocation);
-
-        if(!sb)ptr=cvm_vk_get_dynamic_buffer_allocation_mapping(mb,mesh->allocation);
+        ptr=cvm_vk_get_dynamic_buffer_allocation_mapping(mb,mesh->dynamic_allocation,size);
+        if(!ptr)return false;
+        base_offset = current_offset = cvm_vk_get_dynamic_buffer_offset(mb,mesh->dynamic_allocation);
     }
     else
     {
-        mesh->allocation=NULL;
-        base_offset = current_offset = cvm_vk_acquire_static_buffer_allocation(mb,size,2);
-        if(!base_offset) return CVM_MESH_FAIL_DESTINATION_INSUFFICIENT;
-
-        if(!sb)ptr=cvm_vk_get_static_buffer_allocation_mapping(mb,base_offset);
+        ptr=cvm_vk_get_static_buffer_allocation_mapping(mb,mesh->static_offset,size);
+        if(!ptr)return false;
+        base_offset = current_offset = mesh->static_offset;
     }
+
 
     mesh->index_offset=current_offset/sizeof(uint16_t);
     indices=(uint16_t*)ptr;
@@ -417,24 +394,63 @@ int cvm_mesh_load_file_to_buffer(cvm_mesh * mesh,char * filename,uint16_t flags,
 
     cvm_mesh_load_file_body(f,mesh,indices,adjacency,materials,positions);
 
-    if(sb)
+    mesh->initialised=true;
+
+    return true;
+}
+
+bool cvm_mesh_load_file(cvm_mesh * mesh,char * filename,uint16_t flags,bool dynamic,cvm_vk_managed_buffer * mb)
+{
+    uint32_t size;
+    FILE * f;
+    VkDeviceSize sb_offset;
+
+    mesh->initialised=false;
+    mesh->dynamic=dynamic;
+
+    f=fopen(filename,"rb");
+    if(!f)
     {
-        ///copy
-        #warning could instead add a region to the stack, perhaps as something that's built into staging buffer? requires linking staging buffer
-        /// ^ i ~VASTLY~ prefer this paradigm
+        fprintf(stderr,"MESH FILE MISSING: %s\n",filename);
+        exit(-1);
+    }
 
-        ///buffer to buffer struct could perhaps link relevant structures? (staging buffer and managed buffer ?) idk if i like that paradigm though
-        VkBufferCopy copy_data=
+    cvm_mesh_load_file_header(f,mesh);
+
+    #warning perhaps have way to just take all relevant flags from the mesh? (special mesh flag?)
+    if((mesh->flags&flags)!=flags)
+    {
+        fprintf(stderr,"ATTEMPTED TO LOAD MESH WITH FLAGS IT WAS NOT CREATED WITH\n");
+        exit(-1);
+    }
+
+    mesh->flags=flags;
+
+    size=calculate_mesh_size(mesh);
+
+    if(dynamic)
+    {
+        mesh->dynamic_allocation=cvm_vk_acquire_dynamic_buffer_allocation(mb,size);
+        if(!mesh->dynamic_allocation)
         {
-            .srcOffset=sb_offset,
-            .dstOffset=base_offset,
-            .size=size
-        };
-
-        vkCmdCopyBuffer(transfer_cb,sb->buffer,mb->buffer,1,&copy_data);
+            fprintf(stderr,"INSUFFICIENT SPACE REMAINING IN BUFFER FOR MESH: %s\n",filename);
+            exit(-1);
+        }
     }
     else
     {
+        mesh->static_offset = cvm_vk_acquire_static_buffer_allocation(mb,size,2);
+        if(!mesh->static_offset)
+        {
+            fprintf(stderr,"INSUFFICIENT SPACE REMAINING IN BUFFER FOR MESH: %s\n",filename);
+            exit(-1);
+        }
+    }
+
+    return load_mesh_to_managed_buffer(f,mesh,mb);
+
+
+
         ///need to flush regions!
         ///VkMappedMemoryRange
         #warning need way to add vkFlushMappedMemoryRanges to per frame(?) stack/list for managed buffer, would need to happen in critical section and be atomically handled
@@ -447,17 +463,66 @@ int cvm_mesh_load_file_to_buffer(cvm_mesh * mesh,char * filename,uint16_t flags,
         /// transfers should be handled/scheduled by destination structure, means this destination will need to know the staging buffer its using
         ///     ^ could even have staging buffer linked for quick/automatic access as part of acquiring space !! (will then need different/better fail state handling rather than just null pointer return)
         ///         ^ need to set/associate staging after creation as it's probably unknown at creation time if system is UMA
-    }
 
-    return 0;
+        #warning flush range vs flush whole buffer?
+
+
+
 }
 
+#warning retry seems like bad paradigm, incorporate retry behaviour into cvm_mesh_load_file ??
+bool cvm_mesh_load_file_retry(cvm_mesh * mesh,char * filename,uint16_t flags,bool dynamic,cvm_vk_managed_buffer * mb)
+{
+    uint32_t size;
+    FILE * f;
+    VkDeviceSize sb_offset;
+    cvm_mesh dummy_mesh;
 
+    if(mesh->initialised)
+    {
+        fprintf(stderr,"RETRYING TO LOAD ALREADY LOADED MESH\n");
+        exit(-1);
+    }
 
+    f=fopen(filename,"rb");
+    if(!f)
+    {
+        fprintf(stderr,"RETRYING MESH FILE MISSING: %s\n",filename);
+        exit(-1);
+    }
 
+    cvm_mesh_load_file_header(f,&dummy_mesh);///load mesh header to skip over that part and validate data
 
+    if(dummy_mesh.dynamic!=mesh->dynamic || dummy_mesh.flags!=mesh->flags || dummy_mesh.vertex_count!=mesh->vertex_count || dummy_mesh.face_count!=mesh->face_count)
+    {
+        fprintf(stderr,"MESH FILE HEADER MISMATCH UPON RETRY\n");
+        exit(-1);
+    }
 
+    return load_mesh_to_managed_buffer(f,mesh,mb);
+}
 
+void cvm_mesh_relinquish(cvm_mesh * mesh,cvm_vk_managed_buffer * mb)
+{
+    if(mesh->initialised)
+    {
+        if(mesh->dynamic)
+        {
+            cvm_vk_relinquish_dynamic_buffer_allocation(mb,mesh->dynamic_allocation);
+        }
+    }
+}
+
+void cvm_mesh_initialise(cvm_mesh * mesh)
+{
+    mesh->initialised=false;
+}
+
+void cvm_mesh_render(cvm_mesh * mesh,VkCommandBuffer graphics_cb,uint32_t instance_count)///assumes managed buffer used in creation was bound to appropriate points
+{
+    ///fuuuck, vertexoffset assumes data is tightly packed... craaap
+    if(mesh->initialised)vkCmdDrawIndexed(graphics_cb,mesh->face_count*3,instance_count,mesh->index_offset,mesh->position_offset,0);
+}
 
 //static GLuint assorted_ibo;
 //static GLuint assorted_vbo;
