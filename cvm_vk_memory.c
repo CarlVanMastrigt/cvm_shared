@@ -31,7 +31,7 @@ along with cvm_shared.  If not, see <https://www.gnu.org/licenses/>.
 
 
 
-void cvm_vk_create_managed_buffer(cvm_vk_managed_buffer * mb,uint32_t buffer_size,uint32_t min_size_factor,uint32_t max_size_factor,VkBufferUsageFlags usage,bool multithreaded,bool host_visible)
+void cvm_vk_managed_buffer_create(cvm_vk_managed_buffer * mb,uint32_t buffer_size,uint32_t min_size_factor,uint32_t max_size_factor,VkBufferUsageFlags usage,bool multithreaded,bool host_visible)
 {
     uint32_t i;
     buffer_size=(((buffer_size-1) >> min_size_factor)+1) << min_size_factor;///round to multiple (complier warns about what i want as needing braces, lol)
@@ -68,17 +68,18 @@ void cvm_vk_create_managed_buffer(cvm_vk_managed_buffer * mb,uint32_t buffer_siz
     mb->base_dynamic_allocation_size_factor=min_size_factor;
 
     mb->multithreaded=multithreaded;
-    atomic_init(&mb->spinlock,0);
+    atomic_init(&mb->acquire_spinlock,0);
 
     mb->mapping=cvm_vk_create_buffer(&mb->buffer,&mb->memory,usage,buffer_size,host_visible);///if this is non-null then probably UMA and thus can circumvent staging buffer
 
+    atomic_init(&mb->copy_spinlock,0);
     mb->staging_buffer=NULL;
     mb->pending_copy_actions=malloc(sizeof(VkBufferCopy)*16);
     mb->pending_copy_space=16;
     mb->pending_copy_count=0;
 }
 
-void cvm_vk_destroy_managed_buffer(cvm_vk_managed_buffer * mb)
+void cvm_vk_managed_buffer_destroy(cvm_vk_managed_buffer * mb)
 {
     cvm_vk_destroy_buffer(mb->buffer,mb->memory,mb->mapping);
     uint32_t i;
@@ -118,7 +119,7 @@ void cvm_vk_destroy_managed_buffer(cvm_vk_managed_buffer * mb)
     free(mb->pending_copy_actions);
 }
 
-cvm_vk_dynamic_buffer_allocation * cvm_vk_acquire_dynamic_buffer_allocation(cvm_vk_managed_buffer * mb,uint64_t size)
+cvm_vk_dynamic_buffer_allocation * cvm_vk_managed_buffer_acquire_dynamic_allocation(cvm_vk_managed_buffer * mb,uint64_t size)
 {
     uint32_t i,o,m,u,d,c,size_factor,available_bitmask;
     cvm_vk_dynamic_buffer_allocation ** heap;
@@ -132,8 +133,8 @@ cvm_vk_dynamic_buffer_allocation * cvm_vk_acquire_dynamic_buffer_allocation(cvm_
 
     if(size_factor>=mb->num_dynamic_allocation_sizes)return NULL;
 
-    if(mb->multithreaded)do lock=atomic_load(&mb->spinlock);
-    while(lock!=0 || !atomic_compare_exchange_weak(&mb->spinlock,&lock,1));
+    if(mb->multithreaded)do lock=atomic_load(&mb->acquire_spinlock);
+    while(lock!=0 || !atomic_compare_exchange_weak(&mb->acquire_spinlock,&lock,1));
 
     /// okay, seeing as this function must be as fast and light as possible, we should track unused allocation count to determine if there are enough unused allocations left (with allowance for inaccuracy)
     if(mb->unused_allocation_count < mb->num_dynamic_allocation_sizes)
@@ -212,7 +213,7 @@ cvm_vk_dynamic_buffer_allocation * cvm_vk_acquire_dynamic_buffer_allocation(cvm_
 
         mb->available_dynamic_allocation_bitmask=available_bitmask;
 
-        if(mb->multithreaded) atomic_store(&mb->spinlock,0);
+        if(mb->multithreaded) atomic_store(&mb->acquire_spinlock,0);
 
         return p;
     }
@@ -224,7 +225,7 @@ cvm_vk_dynamic_buffer_allocation * cvm_vk_acquire_dynamic_buffer_allocation(cvm_
 
         if( ((uint64_t)((((o+m)>>size_factor)<<size_factor) + (1<<size_factor))) << mb->base_dynamic_allocation_size_factor > mb->static_offset)
         {
-            if(mb->multithreaded) atomic_store(&mb->spinlock,0);
+            if(mb->multithreaded) atomic_store(&mb->acquire_spinlock,0);
             return NULL;///not enough memory left
         }
         /// ^ extra brackets to make compiler shut up :sob:
@@ -275,21 +276,21 @@ cvm_vk_dynamic_buffer_allocation * cvm_vk_acquire_dynamic_buffer_allocation(cvm_
         mb->dynamic_offset=o+(1<<size_factor);
         mb->available_dynamic_allocation_bitmask=available_bitmask;
 
-        if(mb->multithreaded) atomic_store(&mb->spinlock,0);
+        if(mb->multithreaded) atomic_store(&mb->acquire_spinlock,0);
 
         return n;
     }
 }
 
-void cvm_vk_relinquish_dynamic_buffer_allocation(cvm_vk_managed_buffer * mb,cvm_vk_dynamic_buffer_allocation * a)
+void cvm_vk_managed_buffer_relinquish_dynamic_allocation(cvm_vk_managed_buffer * mb,cvm_vk_dynamic_buffer_allocation * a)
 {
     uint32_t u,d,c;
     cvm_vk_dynamic_buffer_allocation ** heap;
     cvm_vk_dynamic_buffer_allocation *n;///represents next or neighbour
     uint_fast32_t lock;
 
-    if(mb->multithreaded)do lock=atomic_load(&mb->spinlock);
-    while(lock!=0 || !atomic_compare_exchange_weak(&mb->spinlock,&lock,1));
+    if(mb->multithreaded)do lock=atomic_load(&mb->acquire_spinlock);
+    while(lock!=0 || !atomic_compare_exchange_weak(&mb->acquire_spinlock,&lock,1));
 
     if(a==mb->last_used_allocation)///could also check a->right==NULL
     {
@@ -412,31 +413,31 @@ void cvm_vk_relinquish_dynamic_buffer_allocation(cvm_vk_managed_buffer * mb,cvm_
         mb->available_dynamic_allocation_bitmask|=1<<a->size_factor;
     }
 
-    if(mb->multithreaded) atomic_store(&mb->spinlock,0);
+    if(mb->multithreaded) atomic_store(&mb->acquire_spinlock,0);
 }
 
-uint64_t cvm_vk_acquire_static_buffer_allocation(cvm_vk_managed_buffer * mb,uint64_t size,uint64_t alignment)///it is assumed alignment is power of 2, may want to ensure this is the case
+uint64_t cvm_vk_managed_buffer_acquire_static_allocation(cvm_vk_managed_buffer * mb,uint64_t size,uint64_t alignment)///it is assumed alignment is power of 2, may want to ensure this is the case
 {
     uint64_t s,e;
     uint_fast32_t lock;
 
     size=((size+(alignment-1))& ~(alignment-1));///round up size t multiple of alignment (not strictly necessary but w/e), assumes alignment is power of 2, should really check this is the case before using
 
-    if(mb->multithreaded)do lock=atomic_load(&mb->spinlock);
-    while(lock!=0 || !atomic_compare_exchange_weak(&mb->spinlock,&lock,1));
+    if(mb->multithreaded)do lock=atomic_load(&mb->acquire_spinlock);
+    while(lock!=0 || !atomic_compare_exchange_weak(&mb->acquire_spinlock,&lock,1));
 
     e=mb->static_offset& ~(alignment-1);
     s=((uint64_t)mb->dynamic_offset)<<mb->base_dynamic_allocation_size_factor;
 
     if(s+size > e || e==size)///must have enough space and cannot use whole buffer for static allocations (returning 0 is reserved for errors)
     {
-        if(mb->multithreaded) atomic_store(&mb->spinlock,0);
+        if(mb->multithreaded) atomic_store(&mb->acquire_spinlock,0);
         return 0;
     }
 
     mb->static_offset=e-size;
 
-    if(mb->multithreaded) atomic_store(&mb->spinlock,0);
+    if(mb->multithreaded) atomic_store(&mb->acquire_spinlock,0);
 
     return e-size;
 }
@@ -444,6 +445,7 @@ uint64_t cvm_vk_acquire_static_buffer_allocation(cvm_vk_managed_buffer * mb,uint
 static inline void * stage_copy_action(cvm_vk_managed_buffer * mb,uint64_t offset,uint64_t size)
 {
     VkDeviceSize staging_offset;
+    uint_fast32_t lock;
     void * ptr;
 
     if(!mb->staging_buffer)
@@ -458,9 +460,12 @@ static inline void * stage_copy_action(cvm_vk_managed_buffer * mb,uint64_t offse
         exit(-1);
     }
 
-    ptr=cvm_vk_get_staging_buffer_allocation(mb->staging_buffer,size,&staging_offset);
+    ptr=cvm_vk_staging_buffer_get_allocation(mb->staging_buffer,size,&staging_offset);
 
     if(!ptr) return NULL;
+
+    if(mb->multithreaded)do lock=atomic_load(&mb->copy_spinlock);
+    while(lock!=0 || !atomic_compare_exchange_weak(&mb->copy_spinlock,&lock,1));
 
     if(mb->pending_copy_count==mb->pending_copy_space)mb->pending_copy_actions=realloc(mb->pending_copy_actions,sizeof(VkBufferCopy)*(mb->pending_copy_space*=2));
 
@@ -471,10 +476,12 @@ static inline void * stage_copy_action(cvm_vk_managed_buffer * mb,uint64_t offse
         .size=size
     };
 
+    if(mb->multithreaded) atomic_store(&mb->copy_spinlock,0);
+
     return ptr;
 }
 
-void * cvm_vk_get_dynamic_buffer_allocation_mapping(cvm_vk_managed_buffer * mb,cvm_vk_dynamic_buffer_allocation * allocation,uint64_t size)
+void * cvm_vk_managed_buffer_get_dynamic_allocation_mapping(cvm_vk_managed_buffer * mb,cvm_vk_dynamic_buffer_allocation * allocation,uint64_t size)
 {
     uint64_t offset=allocation->offset<<mb->base_dynamic_allocation_size_factor;
     if(mb->mapping) return mb->mapping+offset;///on UMA can access memory directly!
@@ -484,7 +491,7 @@ void * cvm_vk_get_dynamic_buffer_allocation_mapping(cvm_vk_managed_buffer * mb,c
     return stage_copy_action(mb,offset,size);
 }
 
-void * cvm_vk_get_static_buffer_allocation_mapping(cvm_vk_managed_buffer * mb,uint64_t offset,uint64_t size)
+void * cvm_vk_managed_buffer_get_static_allocation_mapping(cvm_vk_managed_buffer * mb,uint64_t offset,uint64_t size)
 {
     if(mb->mapping) return mb->mapping+offset;///on UMA can access memory directly!
 
@@ -493,6 +500,8 @@ void * cvm_vk_get_static_buffer_allocation_mapping(cvm_vk_managed_buffer * mb,ui
 
 void cvm_vk_managed_buffer_submit_all_pending_copy_actions(cvm_vk_managed_buffer * mb,VkCommandBuffer transfer_cb)
 {
+    uint_fast32_t lock;
+
     if(mb->mapping)/// is UMA system, no staging copies necessary
     {
         VkMappedMemoryRange flush_range=(VkMappedMemoryRange)
@@ -508,35 +517,20 @@ void cvm_vk_managed_buffer_submit_all_pending_copy_actions(cvm_vk_managed_buffer
     }
     else if(mb->pending_copy_count)
     {
+        if(mb->multithreaded)do lock=atomic_load(&mb->copy_spinlock);
+        while(lock!=0 || !atomic_compare_exchange_weak(&mb->copy_spinlock,&lock,1));
+
         vkCmdCopyBuffer(transfer_cb,mb->staging_buffer->buffer,mb->buffer,mb->pending_copy_count,mb->pending_copy_actions);
         mb->pending_copy_count=0;
+
+        if(mb->multithreaded) atomic_store(&mb->copy_spinlock,0);
     }
 }
 
-//void cvm_vk_bind_dymanic_allocation_vertex(VkCommandBuffer cmd_buf,cvm_vk_managed_buffer * mb,cvm_vk_dynamic_buffer_allocation * allocation,uint32_t binding)
-//{
-//    VkDeviceSize offset=allocation->offset << mb->base_dynamic_allocation_size_factor;
-//    vkCmdBindVertexBuffers(cmd_buf,binding,1,&mb->buffer,&offset);
-//}
-//
-//void cvm_vk_bind_dymanic_allocation_index(VkCommandBuffer cmd_buf,cvm_vk_managed_buffer * mb,cvm_vk_dynamic_buffer_allocation * allocation,VkIndexType type)
-//{
-//    VkDeviceSize offset=allocation->offset << mb->base_dynamic_allocation_size_factor;
-//    vkCmdBindIndexBuffer(cmd_buf,mb->buffer,offset,type);
-//}
 
-void cvm_vk_bind_managed_buffer_vertex(VkCommandBuffer cmd_buf,cvm_vk_managed_buffer * mb,uint32_t binding)
+
+void cvm_vk_managed_buffer_bind_as_vertex(VkCommandBuffer cmd_buf,cvm_vk_managed_buffer * mb,uint32_t binding)
 {
-//    uint32_t i;
-//    VkDeviceSize offsets[binding_count];
-//    VkBuffer buffers[binding_count];
-//    for(i=0;i<binding_count;i++)
-//    {
-//        offsets[i]=0;
-//        buffers[i]=mb->buffer;
-//    }
-//    vkCmdBindVertexBuffers(cmd_buf,binding_offset,binding_count,buffers,offsets);
-
     /// vertex offset in draw assumes all verts have same offset, so it makes no sense in this paradigm to have multiple binding points from a single buffer!
     #warning the above offset issue may become a MASSIVE hassle when isntance data gets involved, base-indexed vertex offsets may not be viable anymore
     ///     ^ actually does have instanceOffset...
@@ -545,7 +539,7 @@ void cvm_vk_bind_managed_buffer_vertex(VkCommandBuffer cmd_buf,cvm_vk_managed_bu
     vkCmdBindVertexBuffers(cmd_buf,binding,1,&mb->buffer,&offset);
 }
 
-void cvm_vk_bind_managed_buffer_index(VkCommandBuffer cmd_buf,cvm_vk_managed_buffer * mb,VkIndexType type)
+void cvm_vk_managed_buffer_bind_as_index(VkCommandBuffer cmd_buf,cvm_vk_managed_buffer * mb,VkIndexType type)
 {
     vkCmdBindIndexBuffer(cmd_buf,mb->buffer,0,type);
 }
@@ -560,7 +554,7 @@ void cvm_vk_bind_managed_buffer_index(VkCommandBuffer cmd_buf,cvm_vk_managed_buf
 
 
 
-void cvm_vk_create_staging_buffer(cvm_vk_staging_buffer * sb,VkBufferUsageFlags usage)
+void cvm_vk_staging_buffer_create(cvm_vk_staging_buffer * sb,VkBufferUsageFlags usage)
 {
     ///size really needn't be a PO2, when overrunning we need to detect that anyway, ergo can probably just allocate exact amount desired
     /// if taking above approach probably want to round everything in buffer to some base allocation offset to make amount of mem available constant across acquisition order
@@ -588,7 +582,7 @@ void cvm_vk_create_staging_buffer(cvm_vk_staging_buffer * sb,VkBufferUsageFlags 
     }
 }
 
-void cvm_vk_update_staging_buffer(cvm_vk_staging_buffer * sb,uint32_t space_per_frame, uint32_t frame_count)
+void cvm_vk_staging_buffer_update(cvm_vk_staging_buffer * sb,uint32_t space_per_frame, uint32_t frame_count)
 {
     if(atomic_load(&sb->space_remaining)!=sb->total_space)
     {
@@ -626,7 +620,7 @@ void cvm_vk_update_staging_buffer(cvm_vk_staging_buffer * sb,uint32_t space_per_
     }
 }
 
-void cvm_vk_destroy_staging_buffer(cvm_vk_staging_buffer * sb)
+void cvm_vk_staging_buffer_destroy(cvm_vk_staging_buffer * sb)
 {
     if(atomic_load(&sb->space_remaining)!=sb->total_space)
     {
@@ -644,12 +638,12 @@ uint32_t cvm_vk_staging_buffer_get_rounded_allocation_size(cvm_vk_staging_buffer
     return (((allocation_size-1)>>sb->alignment_size_factor)+1)<<sb->alignment_size_factor;
 }
 
-void cvm_vk_begin_staging_buffer(cvm_vk_staging_buffer * sb)
+void cvm_vk_staging_buffer_begin(cvm_vk_staging_buffer * sb)
 {
     sb->initial_space_remaining=atomic_load(&sb->space_remaining);
 }
 
-void cvm_vk_end_staging_buffer(cvm_vk_staging_buffer * sb,uint32_t frame_index)
+void cvm_vk_staging_buffer_end(cvm_vk_staging_buffer * sb,uint32_t frame_index)
 {
     uint32_t acquired_space,offset;
 
@@ -690,7 +684,7 @@ void cvm_vk_end_staging_buffer(cvm_vk_staging_buffer * sb,uint32_t frame_index)
     }
 }
 
-void * cvm_vk_get_staging_buffer_allocation(cvm_vk_staging_buffer * sb,uint32_t allocation_size,VkDeviceSize * acquired_offset)
+void * cvm_vk_staging_buffer_get_allocation(cvm_vk_staging_buffer * sb,uint32_t allocation_size,VkDeviceSize * acquired_offset)
 {
     allocation_size=(((allocation_size-1)>>sb->alignment_size_factor)+1)<<sb->alignment_size_factor;///round as required
 
@@ -723,7 +717,7 @@ void * cvm_vk_get_staging_buffer_allocation(cvm_vk_staging_buffer * sb,uint32_t 
 }
 
 ///should only ever be called during cleanup, not thread safe
-void cvm_vk_relinquish_staging_buffer_space(cvm_vk_staging_buffer * sb,uint32_t frame_index)
+void cvm_vk_staging_buffer_relinquish_space(cvm_vk_staging_buffer * sb,uint32_t frame_index)
 {
     sb->max_offset+=sb->acquisitions[frame_index];
     sb->max_offset-=sb->total_space*(sb->max_offset>=sb->total_space);
@@ -738,7 +732,7 @@ void cvm_vk_relinquish_staging_buffer_space(cvm_vk_staging_buffer * sb,uint32_t 
 
 
 
-void cvm_vk_create_transient_buffer(cvm_vk_transient_buffer * tb,VkBufferUsageFlags usage)
+void cvm_vk_transient_buffer_create(cvm_vk_transient_buffer * tb,VkBufferUsageFlags usage)
 {
     atomic_init(&tb->space_remaining,0);
     tb->total_space=0;
@@ -761,7 +755,7 @@ void cvm_vk_create_transient_buffer(cvm_vk_transient_buffer * tb,VkBufferUsageFl
     }
 }
 
-void cvm_vk_update_transient_buffer(cvm_vk_transient_buffer * tb,uint32_t space_per_frame, uint32_t frame_count)
+void cvm_vk_transient_buffer_update(cvm_vk_transient_buffer * tb,uint32_t space_per_frame, uint32_t frame_count)
 {
     uint32_t total_space=space_per_frame*frame_count;
 
@@ -797,7 +791,7 @@ void cvm_vk_update_transient_buffer(cvm_vk_transient_buffer * tb,uint32_t space_
     tb->max_offset=0;
 }
 
-void cvm_vk_destroy_transient_buffer(cvm_vk_transient_buffer * tb)
+void cvm_vk_transient_buffer_destroy(cvm_vk_transient_buffer * tb)
 {
     if(tb->max_offset)
     {
@@ -813,13 +807,13 @@ uint32_t cvm_vk_transient_buffer_get_rounded_allocation_size(cvm_vk_transient_bu
     return (((allocation_size-1)>>tb->alignment_size_factor)+1)<<tb->alignment_size_factor;
 }
 
-void cvm_vk_begin_transient_buffer(cvm_vk_transient_buffer * tb,uint32_t frame_index)
+void cvm_vk_transient_buffer_begin(cvm_vk_transient_buffer * tb,uint32_t frame_index)
 {
     tb->max_offset=(frame_index+1)*tb->space_per_frame;
     atomic_store(&tb->space_remaining,tb->space_per_frame);
 }
 
-void cvm_vk_end_transient_buffer(cvm_vk_transient_buffer * tb)
+void cvm_vk_transient_buffer_end(cvm_vk_transient_buffer * tb)
 {
     uint32_t acquired_space=tb->space_per_frame-atomic_load(&tb->space_remaining);
     if(acquired_space)
@@ -840,7 +834,7 @@ void cvm_vk_end_transient_buffer(cvm_vk_transient_buffer * tb)
     tb->max_offset=0;
 }
 
-void * cvm_vk_get_transient_buffer_allocation(cvm_vk_transient_buffer * tb,uint32_t allocation_size,VkDeviceSize * acquired_offset)
+void * cvm_vk_transient_buffer_get_allocation(cvm_vk_transient_buffer * tb,uint32_t allocation_size,VkDeviceSize * acquired_offset)
 {
     allocation_size=(((allocation_size-1)>>tb->alignment_size_factor)+1)<<tb->alignment_size_factor;///round as required
 

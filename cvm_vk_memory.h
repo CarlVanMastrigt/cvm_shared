@@ -47,18 +47,18 @@ typedef struct cvm_vk_staging_buffer
 }
 cvm_vk_staging_buffer;
 
-void cvm_vk_create_staging_buffer(cvm_vk_staging_buffer * sb,VkBufferUsageFlags usage);
-void cvm_vk_update_staging_buffer(cvm_vk_staging_buffer * sb,uint32_t space_per_frame, uint32_t frame_count);
-void cvm_vk_destroy_staging_buffer(cvm_vk_staging_buffer * sb);
+void cvm_vk_staging_buffer_create(cvm_vk_staging_buffer * sb,VkBufferUsageFlags usage);
+void cvm_vk_staging_buffer_update(cvm_vk_staging_buffer * sb,uint32_t space_per_frame, uint32_t frame_count);
+void cvm_vk_staging_buffer_destroy(cvm_vk_staging_buffer * sb);
 
 uint32_t cvm_vk_staging_buffer_get_rounded_allocation_size(cvm_vk_staging_buffer * sb,uint32_t allocation_size);
 
-void cvm_vk_begin_staging_buffer(cvm_vk_staging_buffer * sb);
-void cvm_vk_end_staging_buffer(cvm_vk_staging_buffer * sb,uint32_t frame_index);
+void cvm_vk_staging_buffer_begin(cvm_vk_staging_buffer * sb);
+void cvm_vk_staging_buffer_end(cvm_vk_staging_buffer * sb,uint32_t frame_index);
 
-void * cvm_vk_get_staging_buffer_allocation(cvm_vk_staging_buffer * sb,uint32_t allocation_size,VkDeviceSize * acquired_offset);
+void * cvm_vk_staging_buffer_get_allocation(cvm_vk_staging_buffer * sb,uint32_t allocation_size,VkDeviceSize * acquired_offset);
 
-void cvm_vk_relinquish_staging_buffer_space(cvm_vk_staging_buffer * sb,uint32_t frame_index);
+void cvm_vk_staging_buffer_relinquish_space(cvm_vk_staging_buffer * sb,uint32_t frame_index);
 
 
 
@@ -108,7 +108,7 @@ typedef struct cvm_vk_managed_buffer
     ///recursively free dynamic allocations (if they are the last allocation) when making available
     ///give error if dynamic_offset would become greater than static_offset
     bool multithreaded;
-    atomic_uint_fast32_t spinlock;
+    atomic_uint_fast32_t acquire_spinlock;
 
     cvm_vk_dynamic_buffer_allocation * first_unused_allocation;///singly linked list of allocations to assign space to
     uint32_t unused_allocation_count;
@@ -124,7 +124,7 @@ typedef struct cvm_vk_managed_buffer
 
     void * mapping;///used for device generic buffers on UMA platforms and staging/uniform buffers on all others (assuming you would event want this for those prposes...) also operates as flag as to whether staging is necessary
 
-    ///NEEDS LOCK!
+    atomic_uint_fast32_t copy_spinlock;/// could really do with padding between this and other spinlock...
     cvm_vk_staging_buffer * staging_buffer;///for when mapping is not available
     VkBufferCopy * pending_copy_actions;
     uint32_t pending_copy_space;
@@ -132,31 +132,27 @@ typedef struct cvm_vk_managed_buffer
 }
 cvm_vk_managed_buffer;
 
-void cvm_vk_create_managed_buffer(cvm_vk_managed_buffer * buffer,uint32_t buffer_size,uint32_t min_size_factor,uint32_t max_size_factor,VkBufferUsageFlags usage,bool multithreaded,bool host_visible);
-void cvm_vk_destroy_managed_buffer(cvm_vk_managed_buffer * mb);
+void cvm_vk_managed_buffer_create(cvm_vk_managed_buffer * buffer,uint32_t buffer_size,uint32_t min_size_factor,uint32_t max_size_factor,VkBufferUsageFlags usage,bool multithreaded,bool host_visible);
+void cvm_vk_managed_buffer_destroy(cvm_vk_managed_buffer * mb);
 
-cvm_vk_dynamic_buffer_allocation * cvm_vk_acquire_dynamic_buffer_allocation(cvm_vk_managed_buffer * mb,uint64_t size);
-void cvm_vk_relinquish_dynamic_buffer_allocation(cvm_vk_managed_buffer * mb,cvm_vk_dynamic_buffer_allocation * allocation);
-static inline uint64_t cvm_vk_get_dynamic_buffer_offset(cvm_vk_managed_buffer * mb,cvm_vk_dynamic_buffer_allocation * allocation)
+cvm_vk_dynamic_buffer_allocation * cvm_vk_managed_buffer_acquire_dynamic_allocation(cvm_vk_managed_buffer * mb,uint64_t size);
+void cvm_vk_managed_buffer_relinquish_dynamic_allocation(cvm_vk_managed_buffer * mb,cvm_vk_dynamic_buffer_allocation * allocation);
+static inline uint64_t cvm_vk_managed_buffer_get_dynamic_allocation_offset(cvm_vk_managed_buffer * mb,cvm_vk_dynamic_buffer_allocation * allocation)
 {
     return allocation->offset<<mb->base_dynamic_allocation_size_factor;
 }
 
-uint64_t cvm_vk_acquire_static_buffer_allocation(cvm_vk_managed_buffer * mb,uint64_t size,uint64_t alignment);///cannot be relinquished, exists until
+uint64_t cvm_vk_managed_buffer_acquire_static_allocation(cvm_vk_managed_buffer * mb,uint64_t size,uint64_t alignment);///cannot be relinquished, exists until
 
-///worth making these inline?
-void * cvm_vk_get_dynamic_buffer_allocation_mapping(cvm_vk_managed_buffer * mb,cvm_vk_dynamic_buffer_allocation * allocation,uint64_t size);///if size==0 returns full allocation
-void * cvm_vk_get_static_buffer_allocation_mapping(cvm_vk_managed_buffer * mb,uint64_t offset,uint64_t size);
+void * cvm_vk_managed_buffer_get_dynamic_allocation_mapping(cvm_vk_managed_buffer * mb,cvm_vk_dynamic_buffer_allocation * allocation,uint64_t size);///if size==0 returns full allocation
+void * cvm_vk_managed_buffer_get_static_allocation_mapping(cvm_vk_managed_buffer * mb,uint64_t offset,uint64_t size);
 
 void cvm_vk_managed_buffer_submit_all_pending_copy_actions(cvm_vk_managed_buffer * mb,VkCommandBuffer transfer_cb);
 
-/// instead of these probably want to bind whole buffer and build offsets into created draw calls...
-//void cvm_vk_bind_dymanic_allocation_vertex(VkCommandBuffer cmd_buf,cvm_vk_managed_buffer * mb,cvm_vk_dynamic_buffer_allocation * allocation,uint32_t binding);
-//void cvm_vk_bind_dymanic_allocation_index(VkCommandBuffer cmd_buf,cvm_vk_managed_buffer * mb,cvm_vk_dynamic_buffer_allocation * allocation,VkIndexType type);
-void cvm_vk_bind_managed_buffer_vertex(VkCommandBuffer cmd_buf,cvm_vk_managed_buffer * mb,uint32_t binding);
-void cvm_vk_bind_managed_buffer_index(VkCommandBuffer cmd_buf,cvm_vk_managed_buffer * mb,VkIndexType type);
+void cvm_vk_managed_buffer_bind_as_vertex(VkCommandBuffer cmd_buf,cvm_vk_managed_buffer * mb,uint32_t binding);
+void cvm_vk_managed_buffer_bind_as_index(VkCommandBuffer cmd_buf,cvm_vk_managed_buffer * mb,VkIndexType type);
 
-///dont flush individual regions, instead every frame flush enture buffer (may want to profile?)
+///on UMA don't flush individual regions, instead every frame flush enture buffer (may want to profile?)
 //void cvm_vk_flush_managed_buffer(cvm_vk_managed_buffer * mb);
 
 
@@ -211,16 +207,16 @@ typedef struct cvm_vk_transient_buffer
 }
 cvm_vk_transient_buffer;
 
-void cvm_vk_create_transient_buffer(cvm_vk_transient_buffer * tb,VkBufferUsageFlags usage);
-void cvm_vk_update_transient_buffer(cvm_vk_transient_buffer * tb,uint32_t space_per_frame, uint32_t frame_count);
-void cvm_vk_destroy_transient_buffer(cvm_vk_transient_buffer * tb);
+void cvm_vk_transient_buffer_create(cvm_vk_transient_buffer * tb,VkBufferUsageFlags usage);
+void cvm_vk_transient_buffer_update(cvm_vk_transient_buffer * tb,uint32_t space_per_frame, uint32_t frame_count);
+void cvm_vk_transient_buffer_destroy(cvm_vk_transient_buffer * tb);
 
 uint32_t cvm_vk_transient_buffer_get_rounded_allocation_size(cvm_vk_transient_buffer * tb,uint32_t allocation_size);
 
-void cvm_vk_begin_transient_buffer(cvm_vk_transient_buffer * tb,uint32_t frame_index);
-void cvm_vk_end_transient_buffer(cvm_vk_transient_buffer * tb);
+void cvm_vk_transient_buffer_begin(cvm_vk_transient_buffer * tb,uint32_t frame_index);
+void cvm_vk_transient_buffer_end(cvm_vk_transient_buffer * tb);
 
-void * cvm_vk_get_transient_buffer_allocation(cvm_vk_transient_buffer * tb,uint32_t allocation_size,VkDeviceSize * acquired_offset);
+void * cvm_vk_transient_buffer_get_allocation(cvm_vk_transient_buffer * tb,uint32_t allocation_size,VkDeviceSize * acquired_offset);
 
 
 

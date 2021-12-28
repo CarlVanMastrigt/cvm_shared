@@ -91,7 +91,7 @@ typedef struct cvm_vk_image_atlas
     uint32_t num_tile_sizes_v;
 
     bool multithreaded;
-    atomic_uint_fast32_t spinlock;
+    atomic_uint_fast32_t acquire_spinlock;
 
     cvm_vk_image_atlas_tile * first_unused_tile;
     uint32_t unused_tile_count;
@@ -100,7 +100,7 @@ typedef struct cvm_vk_image_atlas
 
     uint16_t available_tiles_bitmasks[16];///h based
 
-    ///NEEDS LOCK!
+    atomic_uint_fast32_t copy_spinlock;/// could really do with padding between this and other spinlock...
     cvm_vk_staging_buffer * staging_buffer;
     VkBufferImageCopy * pending_copy_actions;
     uint32_t pending_copy_space;

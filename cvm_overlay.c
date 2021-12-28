@@ -661,7 +661,7 @@ static void create_overlay_images(uint32_t t_w,uint32_t t_h,uint32_t c_w,uint32_
     cvm_vk_create_image_view(&overlay_colour_image_view,&view_creation_info);
 
 
-    cvm_vk_create_image_atlas(&overlay_transparent_image_atlas,overlay_transparent_image,overlay_transparent_image_view,sizeof(uint8_t),t_w,t_h,false);
+    cvm_vk_create_image_atlas(&overlay_transparent_image_atlas,overlay_transparent_image,overlay_transparent_image_view,sizeof(uint8_t),t_w,t_h,true);
     cvm_vk_create_image_atlas(&overlay_colour_image_atlas,overlay_colour_image,overlay_colour_image_view,sizeof(uint8_t)*4,c_w,c_h,false);
 
     overlay_transparent_image_atlas.staging_buffer=&overlay_staging_buffer;
@@ -792,11 +792,11 @@ void initialise_overlay_render_data(void)
 
     cvm_vk_create_module_data(&overlay_module_data,false);
 
-    cvm_vk_create_transient_buffer(&overlay_transient_buffer,VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT | VK_BUFFER_USAGE_VERTEX_BUFFER_BIT);
-    cvm_vk_create_staging_buffer(&overlay_staging_buffer,VK_BUFFER_USAGE_TRANSFER_SRC_BIT);
+    cvm_vk_transient_buffer_create(&overlay_transient_buffer,VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT | VK_BUFFER_USAGE_VERTEX_BUFFER_BIT);
+    cvm_vk_staging_buffer_create(&overlay_staging_buffer,VK_BUFFER_USAGE_TRANSFER_SRC_BIT);
 
     create_overlay_images(1024,1024,1024,1024);
-    create_overlay_barriers();///must go after creation of all resources these barriers act upon
+    create_overlay_barriers();///must go after creation of all resources these barriers act upon, if those resources change will need to be called again
 
     create_overlay_consistent_descriptors();
 
@@ -837,8 +837,8 @@ void terminate_overlay_render_data(void)
 
     cvm_vk_destroy_module_data(&overlay_module_data,false);
 
-    cvm_vk_destroy_transient_buffer(&overlay_transient_buffer);
-    cvm_vk_destroy_staging_buffer(&overlay_staging_buffer);
+    cvm_vk_transient_buffer_destroy(&overlay_transient_buffer);
+    cvm_vk_staging_buffer_destroy(&overlay_staging_buffer);
 }
 
 
@@ -858,10 +858,10 @@ void initialise_overlay_swapchain_dependencies(void)
     uint32_t uniform_size=0;
     uniform_size+=cvm_vk_transient_buffer_get_rounded_allocation_size(&overlay_transient_buffer,sizeof(float)*4*OVERLAY_NUM_COLOURS_);
     uniform_size+=cvm_vk_transient_buffer_get_rounded_allocation_size(&overlay_transient_buffer,max_overlay_elements*sizeof(cvm_overlay_render_data));
-    cvm_vk_update_transient_buffer(&overlay_transient_buffer,uniform_size,swapchain_image_count);
+    cvm_vk_transient_buffer_update(&overlay_transient_buffer,uniform_size,swapchain_image_count);
 
-    uint32_t staging_size=1024;///arbitrary
-    cvm_vk_update_staging_buffer(&overlay_staging_buffer,staging_size,swapchain_image_count);
+    uint32_t staging_size=65536;///arbitrary
+    cvm_vk_staging_buffer_update(&overlay_staging_buffer,staging_size,swapchain_image_count);
 }
 
 void terminate_overlay_swapchain_dependencies(void)
@@ -935,9 +935,9 @@ cvm_vk_module_work_block * overlay_render_frame(int screen_w,int screen_h,widget
     {
 //        overlay_upload_command_buffer=work_block->graphics_work;
 
-        cvm_vk_begin_staging_buffer(&overlay_staging_buffer);///build barriers into begin/end paradigm maybe???
+        cvm_vk_staging_buffer_begin(&overlay_staging_buffer);///build barriers into begin/end paradigm maybe???
 
-        cvm_vk_begin_transient_buffer(&overlay_transient_buffer,swapchain_image_index);
+        cvm_vk_transient_buffer_begin(&overlay_transient_buffer,swapchain_image_index);
         #warning need to use the appropriate queue for all following transfer ops
         ///     ^ possibly detect when they're different and use gfx directly to avoid double submission?
         ///         ^ have cvm_vk_begin_module_work_block return same command buffer?
@@ -953,7 +953,7 @@ cvm_vk_module_work_block * overlay_render_frame(int screen_w,int screen_h,widget
             CVM_TMP_vkCmdPipelineBarrier2KHR(work_block->graphics_work,&overlay_graphics_to_transfer_dependencies);
         }
 
-        element_render_buffer.buffer=cvm_vk_get_transient_buffer_allocation(&overlay_transient_buffer,max_overlay_elements*sizeof(cvm_overlay_render_data),&vertex_offset);
+        element_render_buffer.buffer=cvm_vk_transient_buffer_get_allocation(&overlay_transient_buffer,max_overlay_elements*sizeof(cvm_overlay_render_data),&vertex_offset);
         element_render_buffer.space=max_overlay_elements;
         element_render_buffer.count=0;
 
@@ -964,10 +964,15 @@ cvm_vk_module_work_block * overlay_render_frame(int screen_w,int screen_h,widget
         cvm_vk_image_atlas_submit_all_pending_copy_actions(&overlay_transparent_image_atlas,work_block->graphics_work);
         cvm_vk_image_atlas_submit_all_pending_copy_actions(&overlay_colour_image_atlas,work_block->graphics_work);
 
+        ///end of transfer
+
         CVM_TMP_vkCmdPipelineBarrier2KHR(work_block->graphics_work,&overlay_transfer_to_graphics_dependencies);
 
+        ///start of graphics
 
-        float * colours = cvm_vk_get_transient_buffer_allocation(&overlay_transient_buffer,sizeof(float)*4*OVERLAY_NUM_COLOURS_,&uniform_offset);
+
+
+        float * colours = cvm_vk_transient_buffer_get_allocation(&overlay_transient_buffer,sizeof(float)*4*OVERLAY_NUM_COLOURS_,&uniform_offset);
 
         memcpy(colours,overlay_colours,sizeof(float)*4*OVERLAY_NUM_COLOURS_);
 
@@ -1006,8 +1011,8 @@ cvm_vk_module_work_block * overlay_render_frame(int screen_w,int screen_h,widget
         vkCmdEndRenderPass(work_block->graphics_work);///================
 
         ///huh, could store this in buffer maybe as it occurrs once per frame...
-        cvm_vk_end_transient_buffer(&overlay_transient_buffer);
-        cvm_vk_end_staging_buffer(&overlay_staging_buffer,swapchain_image_index);
+        cvm_vk_transient_buffer_end(&overlay_transient_buffer);
+        cvm_vk_staging_buffer_end(&overlay_staging_buffer,swapchain_image_index);
 
 //        overlay_upload_command_buffer=VK_NULL_HANDLE;
     }
@@ -1019,7 +1024,7 @@ void overlay_frame_cleanup(uint32_t swapchain_image_index)
 {
     if(swapchain_image_index!=CVM_VK_INVALID_IMAGE_INDEX)
     {
-        cvm_vk_relinquish_staging_buffer_space(&overlay_staging_buffer,swapchain_image_index);
+        cvm_vk_staging_buffer_relinquish_space(&overlay_staging_buffer,swapchain_image_index);
     }
 }
 

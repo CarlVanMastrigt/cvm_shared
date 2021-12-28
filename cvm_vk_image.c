@@ -46,7 +46,7 @@ void cvm_vk_create_image_atlas(cvm_vk_image_atlas * ia,VkImage image,VkImageView
     ia->num_tile_sizes_v=i-CVM_VK_BASE_TILE_SIZE_FACTOR+1;
 
     ia->multithreaded=multithreaded;
-    atomic_init(&ia->spinlock,0);
+    atomic_init(&ia->acquire_spinlock,0);
 
     cvm_vk_image_atlas_tile * tiles=malloc(CVM_VK_RESERVED_IMAGE_ATLAS_TILE_COUNT*sizeof(cvm_vk_image_atlas_tile));
 
@@ -104,6 +104,7 @@ void cvm_vk_create_image_atlas(cvm_vk_image_atlas * ia,VkImage image,VkImageView
 
     ia->available_tiles_bitmasks[t->size_factor_h]=1<<t->size_factor_v;
 
+    atomic_init(&ia->copy_spinlock,0);
     ia->staging_buffer=NULL;
     ia->pending_copy_actions=malloc(sizeof(VkBufferImageCopy)*16);
     ia->pending_copy_space=16;
@@ -176,8 +177,8 @@ cvm_vk_image_atlas_tile * cvm_vk_acquire_image_atlas_tile(cvm_vk_image_atlas * i
 
     if(size_h>=ia->num_tile_sizes_h || size_v>=ia->num_tile_sizes_v)return NULL;///i dont expect this to get hit so dont bother doing earlier easier test
 
-    if(ia->multithreaded)do lock=atomic_load(&ia->spinlock);
-    while(lock!=0 || !atomic_compare_exchange_weak(&ia->spinlock,&lock,1));
+    if(ia->multithreaded)do lock=atomic_load(&ia->acquire_spinlock);
+    while(lock!=0 || !atomic_compare_exchange_weak(&ia->acquire_spinlock,&lock,1));
 
     if(ia->unused_tile_count < ia->num_tile_sizes_h+ ia->num_tile_sizes_v)
     {
@@ -213,7 +214,7 @@ cvm_vk_image_atlas_tile * cvm_vk_acquire_image_atlas_tile(cvm_vk_image_atlas * i
 
     if(!base)///a tile to split was not found!
     {
-        if(ia->multithreaded) atomic_store(&ia->spinlock,0);
+        if(ia->multithreaded) atomic_store(&ia->acquire_spinlock,0);
         return NULL;///no tile large enough exists
     }
 
@@ -361,7 +362,8 @@ cvm_vk_image_atlas_tile * cvm_vk_acquire_image_atlas_tile(cvm_vk_image_atlas * i
 
     base->available=false;
 
-    if(ia->multithreaded) atomic_store(&ia->spinlock,0);
+    if(ia->multithreaded) atomic_store(&ia->acquire_spinlock,0);
+
     return base;
 }
 
@@ -415,8 +417,8 @@ void cvm_vk_relinquish_image_atlas_tile(cvm_vk_image_atlas * ia,cvm_vk_image_atl
 
     ///base,partner,test
 
-    if(ia->multithreaded)do lock=atomic_load(&ia->spinlock);
-    while(lock!=0 || !atomic_compare_exchange_weak(&ia->spinlock,&lock,1));
+    if(ia->multithreaded)do lock=atomic_load(&ia->acquire_spinlock);
+    while(lock!=0 || !atomic_compare_exchange_weak(&ia->acquire_spinlock,&lock,1));
 
     finished_h=finished_v=false;
 
@@ -644,11 +646,14 @@ void cvm_vk_relinquish_image_atlas_tile(cvm_vk_image_atlas * ia,cvm_vk_image_atl
     heap[d]=base;
 
     ia->available_tiles_bitmasks[base->size_factor_h]|=1<<base->size_factor_v;///partner was last available tile of this size
+
+    if(ia->multithreaded) atomic_store(&ia->acquire_spinlock,0);
 }
 
 cvm_vk_image_atlas_tile * cvm_vk_acquire_image_atlas_tile_with_staging(cvm_vk_image_atlas * ia,uint32_t width,uint32_t height,void ** staging)
 {
     VkDeviceSize upload_offset;
+    uint_fast32_t lock;
     cvm_vk_image_atlas_tile * tile;
 
     if(!ia->staging_buffer)
@@ -663,7 +668,7 @@ cvm_vk_image_atlas_tile * cvm_vk_acquire_image_atlas_tile_with_staging(cvm_vk_im
         exit(-1);
     }
 
-    *staging = cvm_vk_get_staging_buffer_allocation(ia->staging_buffer,ia->bytes_per_pixel*width*height,&upload_offset);
+    *staging = cvm_vk_staging_buffer_get_allocation(ia->staging_buffer,ia->bytes_per_pixel*width*height,&upload_offset);
 
     if(!*staging) return NULL;
 
@@ -674,6 +679,9 @@ cvm_vk_image_atlas_tile * cvm_vk_acquire_image_atlas_tile_with_staging(cvm_vk_im
         fprintf(stderr,"NO SPACE LEFT IN IMAGE ATLAS\n");
         exit(-1);
     }
+
+    if(ia->multithreaded)do lock=atomic_load(&ia->copy_spinlock);
+    while(lock!=0 || !atomic_compare_exchange_weak(&ia->copy_spinlock,&lock,1));
 
     if(ia->pending_copy_count==ia->pending_copy_space)
     {
@@ -706,12 +714,15 @@ cvm_vk_image_atlas_tile * cvm_vk_acquire_image_atlas_tile_with_staging(cvm_vk_im
         }
     };
 
+    if(ia->multithreaded) atomic_store(&ia->copy_spinlock,0);
+
     return tile;
 }
 
 void * cvm_vk_acquire_staging_for_image_atlas_tile(cvm_vk_image_atlas * ia,cvm_vk_image_atlas_tile * t,uint32_t width,uint32_t height)
 {
     VkDeviceSize upload_offset;
+    uint_fast32_t lock;
     void * staging;
 
     if(!ia->staging_buffer)
@@ -726,9 +737,12 @@ void * cvm_vk_acquire_staging_for_image_atlas_tile(cvm_vk_image_atlas * ia,cvm_v
         exit(-1);
     }
 
-    staging = cvm_vk_get_staging_buffer_allocation(ia->staging_buffer,ia->bytes_per_pixel*width*height,&upload_offset);
+    staging = cvm_vk_staging_buffer_get_allocation(ia->staging_buffer,ia->bytes_per_pixel*width*height,&upload_offset);
 
     if(!staging) return NULL;
+
+    if(ia->multithreaded)do lock=atomic_load(&ia->copy_spinlock);
+    while(lock!=0 || !atomic_compare_exchange_weak(&ia->copy_spinlock,&lock,1));
 
     if(ia->pending_copy_count==ia->pending_copy_space)
     {
@@ -761,16 +775,25 @@ void * cvm_vk_acquire_staging_for_image_atlas_tile(cvm_vk_image_atlas * ia,cvm_v
         }
     };
 
+    if(ia->multithreaded) atomic_store(&ia->copy_spinlock,0);
+
     return staging;
 }
 
 void cvm_vk_image_atlas_submit_all_pending_copy_actions(cvm_vk_image_atlas * ia,VkCommandBuffer transfer_cb)
 {
+    uint_fast32_t lock;
+
+    if(ia->multithreaded)do lock=atomic_load(&ia->copy_spinlock);
+    while(lock!=0 || !atomic_compare_exchange_weak(&ia->copy_spinlock,&lock,1));
+
     if(ia->pending_copy_count)
     {
         vkCmdCopyBufferToImage(transfer_cb,ia->staging_buffer->buffer,ia->image,VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,ia->pending_copy_count,ia->pending_copy_actions);
         ia->pending_copy_count=0;
     }
+
+    if(ia->multithreaded) atomic_store(&ia->copy_spinlock,0);
 }
 
 

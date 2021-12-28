@@ -6,13 +6,15 @@ layout (location = 0) out vec3 lpos;
 
 layout (binding=0) uniform test_uniforms
 {
-    vec4 colour_multiplier;
+    mat4 projection_matrix;
+    vec3 colour_offsets;
+    vec3 colour_multipliers;
 };
 
-layout (push_constant) uniform test_push_constants
-{
-	layout(offset=0)mat4 projection_matrix;
-};
+//layout (push_constant) uniform test_push_constants
+//{
+//	layout(offset=0)mat4 projection_matrix;
+//};
 
 void main()
 {

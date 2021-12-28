@@ -39,17 +39,17 @@ typedef struct cvm_mesh
     uint16_t flags;
     uint16_t vertex_count;
     uint32_t face_count:20;///implicitly triangles
-    uint32_t initialised:1;///implicitly triangles
-    uint32_t dynamic:1;///implicitly triangles
-    ///reserved 12 bits
+    uint32_t dynamic:1;
+    ///staged of creation
+    uint32_t started:1;///must be set false earlier
+    uint32_t allocated:1;
+    uint32_t ready:1;
 
     ///precalculate following for speed of access/use
     uint32_t index_offset;
     uint32_t adjacency_offset;
-    uint32_t position_offset;
     uint32_t material_offset;
-    ///uint32_t normal_offset;
-    ///uint32_t texture_coordinate_offset;
+    uint32_t vertex_offset;
 
     union
     {
@@ -60,16 +60,15 @@ typedef struct cvm_mesh
 cvm_mesh;
 
 void cvm_mesh_load_file_header(FILE * f,cvm_mesh * mesh);
-void cvm_mesh_load_file_body(FILE * f,cvm_mesh * mesh,uint16_t * indices,uint16_t * adjacency,uint16_t * materials,float * positions);
+void cvm_mesh_load_file_body(FILE * f,cvm_mesh * mesh,uint16_t * indices,uint16_t * adjacency,uint16_t * materials,void * vertex_data);
+
+size_t cvm_mesh_get_vertex_data_size(cvm_mesh * mesh);
 
 bool cvm_mesh_load_file(cvm_mesh * mesh,char * filename,uint16_t flags,bool dynamic,cvm_vk_managed_buffer * mb);
-bool cvm_mesh_load_file_retry(cvm_mesh * mesh,char * filename,uint16_t flags,bool dynamic,cvm_vk_managed_buffer * mb);
 
 void cvm_mesh_relinquish(cvm_mesh * mesh,cvm_vk_managed_buffer * mb);
 
-void cvm_mesh_initialise(cvm_mesh * mesh);
-
-void cvm_mesh_render(cvm_mesh * mesh,VkCommandBuffer graphics_cb,uint32_t instance_count);///assumes managed buffer used in creation was bound to appropriate points
+void cvm_mesh_render(cvm_mesh * mesh,VkCommandBuffer graphics_cb,uint32_t instance_count,uint32_t instance_offset);///assumes managed buffer used in creation was bound to appropriate points
 
 
 

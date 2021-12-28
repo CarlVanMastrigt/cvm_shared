@@ -26,6 +26,7 @@ int cvm_mesh_generate_file_from_objs(const char * name,uint16_t flags)
 {
     uint16_t num_verts,num_positions,num_normals,num_tex_coords,current_matreial,k,pm,pa,n,adj_count;
     uint32_t num_faces,i,j;
+    size_t interleaved_vertex_data_size;
 
     bool has_normals,has_tex_coords;
 
@@ -33,11 +34,15 @@ int cvm_mesh_generate_file_from_objs(const char * name,uint16_t flags)
     //uint16_t * normal_indices;
     //uint16_t * tex_coord_indices;
     uint16_t * indices;///final/resultant
-    float * positions;
     uint16_t * adjacency;
+
     uint16_t * materials;
+
+    float * positions;
     //float * norms;
     //float * tex_coords;//male uint16_t (unorm coordinates) ??
+
+    void * interleaved_vertex_data;
 
     FILE * f;
 
@@ -227,6 +232,8 @@ int cvm_mesh_generate_file_from_objs(const char * name,uint16_t flags)
     ///following are hack for now as above is NYI (which would decide size of this buffer)
     indices=v_indices;
     num_verts=num_positions;
+    interleaved_vertex_data_size=sizeof(float)*3;
+    interleaved_vertex_data=positions;
 
     fclose(f);
 
@@ -283,13 +290,13 @@ int cvm_mesh_generate_file_from_objs(const char * name,uint16_t flags)
     printf("%zu\n",fwrite(indices,sizeof(uint16_t),num_faces*3,f));
     if(flags & CVM_MESH_ADGACENCY) printf("%zu\n",fwrite(adjacency,sizeof(uint16_t),num_faces*6,f));
     if(flags & CVM_MESH_PER_FACE_MATERIAL) printf("%zu\n",fwrite(materials,sizeof(uint16_t),num_faces,f));
-    printf("%zu\n",fwrite(positions,sizeof(float),num_verts*3,f));
+    printf("%zu\n",fwrite(interleaved_vertex_data,interleaved_vertex_data_size,num_verts,f));
     ///write norms
     ///write texture coordinates
 
     fclose(f);
 
-    free(positions);
+    free(interleaved_vertex_data);
     free(indices);
     free(adjacency);
     free(materials);
@@ -297,14 +304,10 @@ int cvm_mesh_generate_file_from_objs(const char * name,uint16_t flags)
     return 0;
 }
 
-static inline uint32_t calculate_mesh_size(cvm_mesh * mesh)
+size_t cvm_mesh_get_vertex_data_size(cvm_mesh * mesh)
 {
-    uint32_t size=0;
-    size+=mesh->face_count*3*sizeof(uint16_t);
-    if(mesh->flags&CVM_MESH_ADGACENCY)size+=mesh->face_count*6*sizeof(uint16_t);
-    if(mesh->flags&CVM_MESH_PER_FACE_MATERIAL)size+=mesh->face_count*sizeof(uint16_t);
-    size+=(mesh->vertex_count+1)*3*sizeof(float);///1 extra needed for alignment
-    return size;
+    ///will (conditionally) change when texture coordinates and normals are implemented
+    return 3*sizeof(float);
 }
 
 
@@ -333,35 +336,100 @@ void cvm_mesh_load_file_header(FILE * f,cvm_mesh * mesh)
     mesh->face_count=num_faces;
 }
 
-void cvm_mesh_load_file_body(FILE * f,cvm_mesh * mesh,uint16_t * indices,uint16_t * adjacency,uint16_t * materials,float * positions)
+void cvm_mesh_load_file_body(FILE * f,cvm_mesh * mesh,uint16_t * indices,uint16_t * adjacency,uint16_t * materials,void * vertex_data)
 {
     fread(indices,sizeof(uint16_t),mesh->face_count*3,f);
     if(mesh->flags&CVM_MESH_ADGACENCY)fread(adjacency,sizeof(uint16_t),mesh->face_count*6,f);
     if(mesh->flags&CVM_MESH_PER_FACE_MATERIAL)fread(materials,sizeof(uint16_t),mesh->face_count,f);
-    fread(positions,sizeof(float),mesh->vertex_count*3,f);
+    fread(vertex_data,cvm_mesh_get_vertex_data_size(mesh),mesh->vertex_count,f);
 }
 
 
-static bool load_mesh_to_managed_buffer(FILE * f,cvm_mesh * mesh,cvm_vk_managed_buffer * mb)
+bool cvm_mesh_load_file(cvm_mesh * mesh,char * filename,uint16_t flags,bool dynamic,cvm_vk_managed_buffer * mb)
 {
     uint16_t *indices,*adjacency,*materials;
-    float * positions;
+    void * vertex_data;
     uint64_t base_offset,current_offset;
-    uint32_t size;
     char * ptr;
+    size_t vertex_data_size;
+    uint32_t size;
+    FILE * f;
+    VkDeviceSize sb_offset;
 
-    size=calculate_mesh_size(mesh);
-
-    if(mesh->dynamic)
+    if(!mesh->started)
     {
-        ptr=cvm_vk_get_dynamic_buffer_allocation_mapping(mb,mesh->dynamic_allocation,size);
-        if(!ptr)return false;
-        base_offset = current_offset = cvm_vk_get_dynamic_buffer_offset(mb,mesh->dynamic_allocation);
+        mesh->started=true;
+        mesh->allocated=false;
+        mesh->ready=false;
+        mesh->dynamic=dynamic;
+    }
+    else if(dynamic!=mesh->dynamic)
+    {
+        fprintf(stderr,"TRIED TO CREATE MESH WITH DIFFERENT DYNAMIC SETTING TO WHEN MESH STARTED CREATION\n");
+        exit(-1);
+    }
+
+    f=fopen(filename,"rb");
+    if(!f)
+    {
+        fprintf(stderr,"MESH FILE MISSING: %s\n",filename);
+        exit(-1);
+    }
+
+    cvm_mesh_load_file_header(f,mesh);
+
+    #warning perhaps have way to just take all relevant flags from the mesh? (special mesh flag?)
+    if((mesh->flags&flags)!=flags)
+    {
+        fprintf(stderr,"ATTEMPTED TO LOAD MESH WITH FLAGS IT WAS NOT CREATED WITH\n");
+        exit(-1);
+    }
+
+    mesh->flags=flags;
+
+    vertex_data_size=cvm_mesh_get_vertex_data_size(mesh);
+
+    size=mesh->face_count*3*sizeof(uint16_t);
+    if(mesh->flags&CVM_MESH_ADGACENCY)size+=mesh->face_count*6*sizeof(uint16_t);
+    if(mesh->flags&CVM_MESH_PER_FACE_MATERIAL)size+=mesh->face_count*sizeof(uint16_t);
+    size+=(mesh->vertex_count+1)*vertex_data_size;///1 extra needed for alignment
+
+    if(dynamic)
+    {
+        if(!mesh->allocated)
+        {
+            mesh->dynamic_allocation=cvm_vk_managed_buffer_acquire_dynamic_allocation(mb,size);
+
+            if(!mesh->dynamic_allocation)
+            {
+                fprintf(stderr,"INSUFFICIENT SPACE REMAINING IN BUFFER FOR MESH: %s\n",filename);
+                exit(-1);
+            }
+
+            mesh->allocated=true;
+        }
+
+        ptr=cvm_vk_managed_buffer_get_dynamic_allocation_mapping(mb,mesh->dynamic_allocation,size);
+        if(!ptr)return false;///could not allocate staging space!
+        base_offset = current_offset = cvm_vk_managed_buffer_get_dynamic_allocation_offset(mb,mesh->dynamic_allocation);
     }
     else
     {
-        ptr=cvm_vk_get_static_buffer_allocation_mapping(mb,mesh->static_offset,size);
-        if(!ptr)return false;
+        if(!mesh->allocated)
+        {
+            mesh->static_offset = cvm_vk_managed_buffer_acquire_static_allocation(mb,size,2);
+
+            if(!mesh->static_offset)
+            {
+                fprintf(stderr,"INSUFFICIENT SPACE REMAINING IN BUFFER FOR MESH: %s\n",filename);
+                exit(-1);
+            }
+
+            mesh->allocated=true;
+        }
+
+        ptr=cvm_vk_managed_buffer_get_static_allocation_mapping(mb,mesh->static_offset,size);
+        if(!ptr)return false;///could not allocate staging space!
         base_offset = current_offset = mesh->static_offset;
     }
 
@@ -386,142 +454,33 @@ static bool load_mesh_to_managed_buffer(FILE * f,cvm_mesh * mesh,cvm_vk_managed_
     }
     else materials=NULL;
 
-    current_offset=(current_offset-1) / (3*sizeof(float)) + 1;
-    mesh->position_offset=current_offset;
-    current_offset*=3*sizeof(float);
-    positions=(float*)(ptr + (current_offset-base_offset));
-    current_offset+=3*mesh->vertex_count*sizeof(float);
+    current_offset=(current_offset-1) / vertex_data_size + 1;
+    mesh->vertex_offset=current_offset;
+    current_offset*=vertex_data_size;
+    vertex_data=(ptr + (current_offset-base_offset));
+    current_offset+=mesh->vertex_count*vertex_data_size;
 
-    cvm_mesh_load_file_body(f,mesh,indices,adjacency,materials,positions);
+    cvm_mesh_load_file_body(f,mesh,indices,adjacency,materials,vertex_data);
 
-    mesh->initialised=true;
+    mesh->ready=true;
 
     return true;
 }
 
-bool cvm_mesh_load_file(cvm_mesh * mesh,char * filename,uint16_t flags,bool dynamic,cvm_vk_managed_buffer * mb)
-{
-    uint32_t size;
-    FILE * f;
-    VkDeviceSize sb_offset;
-
-    mesh->initialised=false;
-    mesh->dynamic=dynamic;
-
-    f=fopen(filename,"rb");
-    if(!f)
-    {
-        fprintf(stderr,"MESH FILE MISSING: %s\n",filename);
-        exit(-1);
-    }
-
-    cvm_mesh_load_file_header(f,mesh);
-
-    #warning perhaps have way to just take all relevant flags from the mesh? (special mesh flag?)
-    if((mesh->flags&flags)!=flags)
-    {
-        fprintf(stderr,"ATTEMPTED TO LOAD MESH WITH FLAGS IT WAS NOT CREATED WITH\n");
-        exit(-1);
-    }
-
-    mesh->flags=flags;
-
-    size=calculate_mesh_size(mesh);
-
-    if(dynamic)
-    {
-        mesh->dynamic_allocation=cvm_vk_acquire_dynamic_buffer_allocation(mb,size);
-        if(!mesh->dynamic_allocation)
-        {
-            fprintf(stderr,"INSUFFICIENT SPACE REMAINING IN BUFFER FOR MESH: %s\n",filename);
-            exit(-1);
-        }
-    }
-    else
-    {
-        mesh->static_offset = cvm_vk_acquire_static_buffer_allocation(mb,size,2);
-        if(!mesh->static_offset)
-        {
-            fprintf(stderr,"INSUFFICIENT SPACE REMAINING IN BUFFER FOR MESH: %s\n",filename);
-            exit(-1);
-        }
-    }
-
-    return load_mesh_to_managed_buffer(f,mesh,mb);
-
-
-
-        ///need to flush regions!
-        ///VkMappedMemoryRange
-        #warning need way to add vkFlushMappedMemoryRanges to per frame(?) stack/list for managed buffer, would need to happen in critical section and be atomically handled
-        ///perhaps do when requesting mapping, cvm_vk_get_dynamic_buffer_allocation_mapping/cvm_vk_get_static_buffer_allocation_mapping
-        ///would need lock, perhaps even a separate lock to creating allocations
-        /// static allocations can simply track start/end of acquired space and tack that on the end of fushes to be perfprmed as necessary (inside critical section)
-
-
-        /// flushes should be handled/scheduled by struct that owns them (either managed buffer on UMA or staging buffer elsewhere)
-        /// transfers should be handled/scheduled by destination structure, means this destination will need to know the staging buffer its using
-        ///     ^ could even have staging buffer linked for quick/automatic access as part of acquiring space !! (will then need different/better fail state handling rather than just null pointer return)
-        ///         ^ need to set/associate staging after creation as it's probably unknown at creation time if system is UMA
-
-        #warning flush range vs flush whole buffer?
-
-
-
-}
-
-#warning retry seems like bad paradigm, incorporate retry behaviour into cvm_mesh_load_file ??
-bool cvm_mesh_load_file_retry(cvm_mesh * mesh,char * filename,uint16_t flags,bool dynamic,cvm_vk_managed_buffer * mb)
-{
-    uint32_t size;
-    FILE * f;
-    VkDeviceSize sb_offset;
-    cvm_mesh dummy_mesh;
-
-    if(mesh->initialised)
-    {
-        fprintf(stderr,"RETRYING TO LOAD ALREADY LOADED MESH\n");
-        exit(-1);
-    }
-
-    f=fopen(filename,"rb");
-    if(!f)
-    {
-        fprintf(stderr,"RETRYING MESH FILE MISSING: %s\n",filename);
-        exit(-1);
-    }
-
-    cvm_mesh_load_file_header(f,&dummy_mesh);///load mesh header to skip over that part and validate data
-
-    if(dummy_mesh.dynamic!=mesh->dynamic || dummy_mesh.flags!=mesh->flags || dummy_mesh.vertex_count!=mesh->vertex_count || dummy_mesh.face_count!=mesh->face_count)
-    {
-        fprintf(stderr,"MESH FILE HEADER MISMATCH UPON RETRY\n");
-        exit(-1);
-    }
-
-    return load_mesh_to_managed_buffer(f,mesh,mb);
-}
-
 void cvm_mesh_relinquish(cvm_mesh * mesh,cvm_vk_managed_buffer * mb)
 {
-    if(mesh->initialised)
+    if(mesh->allocated)
     {
         if(mesh->dynamic)
         {
-            cvm_vk_relinquish_dynamic_buffer_allocation(mb,mesh->dynamic_allocation);
+            cvm_vk_managed_buffer_relinquish_dynamic_allocation(mb,mesh->dynamic_allocation);
         }
     }
 }
 
-void cvm_mesh_initialise(cvm_mesh * mesh)
+void cvm_mesh_render(cvm_mesh * mesh,VkCommandBuffer graphics_cb,uint32_t instance_count,uint32_t instance_offset)///assumes managed buffer used in creation was bound to appropriate points
 {
-    mesh->initialised=false;
-}
-
-void cvm_mesh_render(cvm_mesh * mesh,VkCommandBuffer graphics_cb,uint32_t instance_count)///assumes managed buffer used in creation was bound to appropriate points
-{
-    ///fuuuck, vertexoffset assumes data is tightly packed... craaap
-    if(mesh->initialised)vkCmdDrawIndexed(graphics_cb,mesh->face_count*3,instance_count,mesh->index_offset,mesh->position_offset,0);
+    if(mesh->ready)vkCmdDrawIndexed(graphics_cb,mesh->face_count*3,instance_count,mesh->index_offset,mesh->vertex_offset,instance_offset);
 }
 
 //static GLuint assorted_ibo;

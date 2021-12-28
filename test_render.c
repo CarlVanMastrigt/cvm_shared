@@ -53,17 +53,26 @@ static VkImage test_framebuffer_colour;
 static VkImageView test_framebuffer_colour_views[TEST_FRAMEBUFFER_CYCLES];///views of single array slice from image
 
 
-static cvm_vk_managed_buffer test_buffer;
-//static cvm_vk_dynamic_buffer_allocation * test_index_allocation;
-//static cvm_vk_dynamic_buffer_allocation * test_vertex_allocation;
+static cvm_vk_managed_buffer test_managed_buffer;
 
-static cvm_mesh test_stellated_octahedron_mesh;
-static cvm_mesh test_cube_mesh;
-
-/// actually we want a way to handle uploads from here, and as dynamics are the same as instance data its probably worth having a dedicated buffer for them and uniforms AND upload/transfers
 static cvm_vk_staging_buffer test_staging_buffer;
 
 static cvm_vk_transient_buffer test_transient_buffer;
+
+///dont think these barriers are really neceessary
+//static VkDependencyInfoKHR overlay_uninitialised_to_transfer_dependencies;
+//static VkImageMemoryBarrier2KHR overlay_uninitialised_to_transfer_image_barriers[2];
+
+static VkDependencyInfoKHR test_transfer_to_graphics_dependencies;
+static VkBufferMemoryBarrier2KHR test_transfer_to_graphics_buffer_barriers[1];
+
+static VkDependencyInfoKHR test_graphics_to_transfer_dependencies;
+static VkBufferMemoryBarrier2KHR test_graphics_to_transfer_buffer_barriers[1];
+
+
+
+static cvm_mesh test_stellated_octahedron_mesh;
+static cvm_mesh test_cube_mesh;
 
 static void create_test_descriptor_set_layouts(void)
 {
@@ -79,7 +88,7 @@ static void create_test_descriptor_set_layouts(void)
                 .binding=0,
                 .descriptorType=VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER,
                 .descriptorCount=1,
-                .stageFlags=VK_SHADER_STAGE_VERTEX_BIT,
+                .stageFlags=VK_SHADER_STAGE_VERTEX_BIT|VK_SHADER_STAGE_FRAGMENT_BIT,
                 .pImmutableSamplers=NULL
             }
         }
@@ -144,7 +153,7 @@ static void update_and_bind_test_uniforms(uint32_t swapchain_image,VkDeviceSize 
             {
                 .buffer=test_transient_buffer.buffer,
                 .offset=offset,
-                .range=sizeof(float)*4
+                .range=sizeof(matrix4f)+sizeof(float)*8
             }
         },
         .pTexelBufferView=NULL
@@ -162,15 +171,16 @@ static void create_test_pipeline_layouts(void)
         .flags=0,
         .setLayoutCount=1,
         .pSetLayouts=&test_descriptor_set_layout,
-        .pushConstantRangeCount=1,
-        .pPushConstantRanges=(VkPushConstantRange[1])
-        {
-            {
-                .stageFlags=VK_SHADER_STAGE_VERTEX_BIT,
-                .offset=0,
-                .size=sizeof(matrix4f)
-            }
-        }
+        .pushConstantRangeCount=0,
+        .pPushConstantRanges=NULL
+//        (VkPushConstantRange[1])
+//        {
+//            {
+//                .stageFlags=VK_SHADER_STAGE_VERTEX_BIT,
+//                .offset=0,
+//                .size=sizeof(matrix4f)
+//            }
+//        }
     };
 
     cvm_vk_create_pipeline_layout(&test_pipeline_layout,&pipeline_create_info);
@@ -513,56 +523,6 @@ static void create_test_framebuffers(VkRect2D screen_rectangle,uint32_t swapchai
 
 
 
-
-
-
-
-///put initialisation of transitory/mutable data inside init, then only alter as part of update
-
-//static void create_test_vertex_buffer(void)
-//{
-//    int i,j;
-//    test_render_data * vertex_data;
-//    uint16_t * index_data;
-//
-//    uint16_t indeces[36]=
-//    {
-//        0,1,3,
-//        0,3,2,
-//        0,4,5,
-//        0,5,1,
-//        1,5,7,
-//        1,7,3,
-//        2,6,4,
-//        2,4,0,
-//        3,7,6,
-//        3,6,2,
-//        4,6,7,
-//        4,7,5
-//    };
-//
-//    test_index_allocation=cvm_vk_acquire_dynamic_buffer_allocation(&test_buffer,sizeof(uint16_t)*36);
-//
-//    index_data=cvm_vk_get_dynamic_buffer_allocation_mapping(&test_buffer,test_index_allocation,sizeof(uint16_t)*36);
-//    memcpy(index_data,indeces,sizeof(uint16_t)*36);
-//
-//
-//    test_vertex_allocation=cvm_vk_acquire_dynamic_buffer_allocation(&test_buffer,sizeof(test_render_data)*8);
-//
-//    vertex_data=cvm_vk_get_dynamic_buffer_allocation_mapping(&test_buffer,test_vertex_allocation,sizeof(test_render_data)*8);
-//
-//    for(i=0;i<8;i++)
-//    {
-//        for(j=0;j<3;j++)
-//        {
-//            vertex_data[i].col[j]=!!(i&1<<j)*255;
-//            vertex_data[i].pos[j]=(float)(!!(i&1<<j)*2-1);
-//        }
-//    }
-//
-//    #warning cvm_vk_flush_managed_buffer(&test_buffer);
-//}
-
 /// these need to be recreated whenever swapchain image changes size
 /// unless we allocate at max and alter with image views... investigate potential of this, use max size, let user set max_size from startup options?
 static void create_test_framebuffer_images(VkRect2D screen_rect,VkSampleCountFlagBits sample_count)
@@ -667,6 +627,68 @@ static void create_test_framebuffer_images(VkRect2D screen_rect,VkSampleCountFla
 
 }
 
+static void create_test_barriers()
+{
+    //overlay_graphics_transfer_ownership_changes = cvm_vk_get_transfer_queue_family()==cvm_vk_get_graphics_queue_family();
+    ///put back queue ownership transfers as soon as its possible to test and profile, also needs backing structure to handle it
+
+    VkBufferMemoryBarrier2KHR memory_barrier=(VkBufferMemoryBarrier2KHR)///initialise all shared values;
+    {
+        .sType=VK_STRUCTURE_TYPE_BUFFER_MEMORY_BARRIER_2_KHR,
+        .pNext=NULL,
+        .offset=0,
+        .size=VK_WHOLE_SIZE
+    };
+
+
+    ///transfer to graphics
+    memory_barrier.srcStageMask=VK_PIPELINE_STAGE_TRANSFER_BIT;//VK_PIPELINE_STAGE_2_COPY_BIT_KHR;
+    memory_barrier.srcAccessMask=VK_ACCESS_2_TRANSFER_WRITE_BIT_KHR;
+    memory_barrier.dstStageMask=VK_PIPELINE_STAGE_2_ALL_GRAPHICS_BIT_KHR;
+    memory_barrier.dstAccessMask=VK_ACCESS_2_INDEX_READ_BIT_KHR;
+    ///VK_ACCESS_2_INDEX_READ_BIT_KHR to test:  VK_ACCESS_2_MEMORY_READ_BIT_KHR // not sure about need for VK_ACCESS_2_MEMORY_WRITE_BIT_KHR... (could possibly write some buffer contents...)
+    memory_barrier.buffer=test_managed_buffer.buffer;
+
+    test_transfer_to_graphics_buffer_barriers[0]=memory_barrier;
+
+    test_transfer_to_graphics_dependencies=(VkDependencyInfoKHR)
+    {
+        .sType=VK_STRUCTURE_TYPE_DEPENDENCY_INFO_KHR,
+        .pNext=NULL,
+        .dependencyFlags=0,
+        .memoryBarrierCount=0,
+        .pMemoryBarriers=NULL,
+        .bufferMemoryBarrierCount=1,
+        .pBufferMemoryBarriers=test_transfer_to_graphics_buffer_barriers,
+        .imageMemoryBarrierCount=0,
+        .pImageMemoryBarriers=NULL
+    };
+
+    ///graphics to transfer
+    memory_barrier.srcStageMask=VK_PIPELINE_STAGE_2_ALL_GRAPHICS_BIT_KHR;
+    memory_barrier.srcAccessMask=VK_ACCESS_2_INDEX_READ_BIT_KHR;
+    ///VK_ACCESS_2_INDEX_READ_BIT_KHR to test:  VK_ACCESS_2_MEMORY_READ_BIT_KHR // not sure about need for VK_ACCESS_2_MEMORY_WRITE_BIT_KHR... (could possibly write some buffer contents...)
+    memory_barrier.dstStageMask=VK_PIPELINE_STAGE_TRANSFER_BIT;//VK_PIPELINE_STAGE_2_COPY_BIT_KHR;
+    memory_barrier.dstAccessMask=VK_ACCESS_2_TRANSFER_WRITE_BIT_KHR;
+    memory_barrier.buffer=test_managed_buffer.buffer;
+
+
+    test_graphics_to_transfer_buffer_barriers[0]=memory_barrier;
+
+    test_graphics_to_transfer_dependencies=(VkDependencyInfoKHR)
+    {
+        .sType=VK_STRUCTURE_TYPE_DEPENDENCY_INFO_KHR,
+        .pNext=NULL,
+        .dependencyFlags=0,
+        .memoryBarrierCount=0,
+        .pMemoryBarriers=NULL,
+        .bufferMemoryBarrierCount=1,
+        .pBufferMemoryBarriers=test_graphics_to_transfer_buffer_barriers,
+        .imageMemoryBarrierCount=0,
+        .pImageMemoryBarriers=NULL
+    };
+}
+
 void initialise_test_render_data()
 {
     create_test_render_pass(cvm_vk_get_screen_format(),VK_SAMPLE_COUNT_1_BIT);
@@ -680,15 +702,23 @@ void initialise_test_render_data()
 
     cvm_vk_create_module_data(&test_module_data,false);
 
-    cvm_vk_create_managed_buffer(&test_buffer,65536,10,16,VK_BUFFER_USAGE_VERTEX_BUFFER_BIT|VK_BUFFER_USAGE_INDEX_BUFFER_BIT,false,true);
+    cvm_vk_managed_buffer_create(&test_managed_buffer,65536,10,16,VK_BUFFER_USAGE_VERTEX_BUFFER_BIT|VK_BUFFER_USAGE_INDEX_BUFFER_BIT|VK_BUFFER_USAGE_TRANSFER_DST_BIT,false,false);
+    ///VK_BUFFER_USAGE_TRANSFER_DST_BIT only necessary if not UMA system, but is it even possible to set this before finding that out??
+    /// may need a pass where it ONLY looks for device only memory with VK_BUFFER_USAGE_TRANSFER_DST_BIT on by default
+    ///then, if that doesn't exist, removes the VK_BUFFER_USAGE_TRANSFER_DST_BIT flag and accepts host accessible memory
+    ///     ^ this will absolutely fuck with testing though, will need to add proper compile flag for simulating non-uma
 
-    cvm_vk_create_transient_buffer(&test_transient_buffer,VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT);
+    cvm_vk_transient_buffer_create(&test_transient_buffer,VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT);
 
-    cvm_vk_create_staging_buffer(&test_staging_buffer,VK_BUFFER_USAGE_TRANSFER_SRC_BIT);
+    cvm_vk_staging_buffer_create(&test_staging_buffer,VK_BUFFER_USAGE_TRANSFER_SRC_BIT);
+
+    create_test_barriers();///must go after creation of all resources these barriers act upon, if those resources change will need to be called again
+    /// ^ in this case only acts upon test_managed_buffer
 
     //create_test_vertex_buffer();
-    cvm_mesh_initialise(&test_stellated_octahedron_mesh);
-    cvm_mesh_initialise(&test_cube_mesh);
+    test_stellated_octahedron_mesh.started=false;
+    test_cube_mesh.started=false;
+
 }
 
 void terminate_test_render_data()
@@ -704,16 +734,14 @@ void terminate_test_render_data()
 
     cvm_vk_destroy_module_data(&test_module_data,false);
 
-    cvm_mesh_relinquish(&test_stellated_octahedron_mesh,&test_buffer);
-    cvm_mesh_relinquish(&test_cube_mesh,&test_buffer);
-    //cvm_vk_relinquish_dynamic_buffer_allocation(&test_buffer,test_vertex_allocation);
-    //cvm_vk_relinquish_dynamic_buffer_allocation(&test_buffer,test_index_allocation);
+    cvm_mesh_relinquish(&test_stellated_octahedron_mesh,&test_managed_buffer);
+    cvm_mesh_relinquish(&test_cube_mesh,&test_managed_buffer);
 
-    cvm_vk_destroy_managed_buffer(&test_buffer);
+    cvm_vk_managed_buffer_destroy(&test_managed_buffer);
 
-    cvm_vk_destroy_transient_buffer(&test_transient_buffer);
+    cvm_vk_transient_buffer_destroy(&test_transient_buffer);
 
-    cvm_vk_destroy_staging_buffer(&test_staging_buffer);
+    cvm_vk_staging_buffer_destroy(&test_staging_buffer);
 }
 
 
@@ -733,11 +761,13 @@ void initialise_test_swapchain_dependencies(void)
     cvm_vk_resize_module_graphics_data(&test_module_data,0);
 
     uint32_t uniform_size=0;
-    uniform_size+=cvm_vk_transient_buffer_get_rounded_allocation_size(&test_transient_buffer,sizeof(float)*4);
-    cvm_vk_update_transient_buffer(&test_transient_buffer,uniform_size,swapchain_image_count);
+    uniform_size+=cvm_vk_transient_buffer_get_rounded_allocation_size(&test_transient_buffer,sizeof(matrix4f)+sizeof(float)*8);
+    cvm_vk_transient_buffer_update(&test_transient_buffer,uniform_size,swapchain_image_count);
 
-    uint32_t staging_size=1024;
-    cvm_vk_update_staging_buffer(&test_staging_buffer,staging_size,swapchain_image_count);
+    uint32_t staging_size=65536;
+    cvm_vk_staging_buffer_update(&test_staging_buffer,staging_size,swapchain_image_count);
+
+    test_managed_buffer.staging_buffer=&test_staging_buffer;
 }
 
 void terminate_test_swapchain_dependencies()
@@ -764,7 +794,6 @@ void terminate_test_swapchain_dependencies()
 
     free(test_descriptor_sets);
     for(i=0;i<TEST_FRAMEBUFFER_CYCLES;i++)free(test_framebuffers[i]);
-//    free(test_staging_buffer_acquisitions);
 }
 
 cvm_vk_module_work_block * test_render_frame(cvm_camera * c)
@@ -772,54 +801,73 @@ cvm_vk_module_work_block * test_render_frame(cvm_camera * c)
     cvm_vk_module_work_block * work_block;
     uint32_t swapchain_image_index;
 
-
-
     ///perhaps this should return previous image index as well, such that that value can be used in cleanup (e.g. relinquishing ring buffer space)
     work_block = cvm_vk_begin_module_work_block(&test_module_data,0,&swapchain_image_index);
 
-
-
-    /// definitely want to clean up targets &c.
-    /// "resultant" (swapchain) attachment goes at end
-    /// actually loop framebuffers, look into benefit
-    /// define state that varies between attachments in base, referenceable struct that can be shared across functions and invocations (inc. clear values?)
-    /// dont bother storing framebuffer images/data in enumed array, store individually
-
+    /// look into benefit of cycling an array of framebuffer & backing images (TEST_FRAMEBUFFER_CYCLES)
 
     if(swapchain_image_index!=CVM_VK_INVALID_IMAGE_INDEX)
     {
-        #warning sort out naming scheme on memory / image stuff
-        cvm_vk_begin_transient_buffer(&test_transient_buffer,swapchain_image_index);
-        cvm_vk_begin_staging_buffer(&test_staging_buffer);
+        cvm_vk_transient_buffer_begin(&test_transient_buffer,swapchain_image_index);
+        cvm_vk_staging_buffer_begin(&test_staging_buffer);
 
-        if(!test_stellated_octahedron_mesh.initialised)
+        CVM_TMP_vkCmdPipelineBarrier2KHR(work_block->graphics_work,&test_graphics_to_transfer_dependencies);
+        ///technically only necessary if using staging!
+
+        if(!test_stellated_octahedron_mesh.ready)
         {
-            if(!cvm_mesh_load_file(&test_stellated_octahedron_mesh,"cvm_shared/resources/stellated_octahedron.mesh",CVM_MESH_ADGACENCY|CVM_MESH_PER_FACE_MATERIAL,false,&test_buffer))
+            if(!cvm_mesh_load_file(&test_stellated_octahedron_mesh,"cvm_shared/resources/stellated_octahedron.mesh",CVM_MESH_ADGACENCY|CVM_MESH_PER_FACE_MATERIAL,true,&test_managed_buffer))
             {
-                puts("load mesh failed!!!");
+                puts("load octahedron mesh failed!!!");
             }
         }
 
-        cvm_vk_end_staging_buffer(&test_staging_buffer,swapchain_image_index);
-        #warning need to incorporate memory / image locks to make compatible w/ MT environment, either use extant spinlock or add secondary pending copy spinlock
-        cvm_vk_managed_buffer_submit_all_pending_copy_actions(&test_buffer,work_block->graphics_work);///must go AFTER used staging buffer gets flushed, needs external synchronisation when being used in MT environment
+        if(!test_cube_mesh.ready)
+        {
+            if(!cvm_mesh_load_file(&test_cube_mesh,"cvm_shared/resources/cube.mesh",CVM_MESH_ADGACENCY|CVM_MESH_PER_FACE_MATERIAL,true,&test_managed_buffer))
+            {
+                puts("load cube mesh failed!!!");
+            }
+        }
+
+        cvm_vk_staging_buffer_end(&test_staging_buffer,swapchain_image_index);
+
+        cvm_vk_managed_buffer_submit_all_pending_copy_actions(&test_managed_buffer,work_block->graphics_work);///must go AFTER used staging buffer gets flushed, needs external synchronisation when being used in MT environment
+
+        ///end of transfer
+
+        CVM_TMP_vkCmdPipelineBarrier2KHR(work_block->graphics_work,&test_transfer_to_graphics_dependencies);
+        ///technically only necessary if using staging!
+
+        ///start of graphics
+
+
+        /// is probably worthwhile having separate command buffers for transfer and graphics regardless of whether queues are actually different, that way all copies can happen before render
+        /// but render and copy/create can be called from same function (i.e. next to each other)
+        /// ofc. if building up structures, i.e. mapped multiindirect draws this paradigm isnt really necessary, but should be supported regardless
+
 
         VkDeviceSize uniforms_offset;
-        float * uniforms = cvm_vk_get_transient_buffer_allocation(&test_transient_buffer,sizeof(float)*4,&uniforms_offset);
+        struct
+        {
+            matrix4f projection;
+            float offsets[4];//1 extra for padding
+            float multipliers[4];//1 extra for padding
+        }
+        *uniforms;
+
+        uniforms = cvm_vk_transient_buffer_get_allocation(&test_transient_buffer,sizeof(matrix4f)+sizeof(float)*8,&uniforms_offset);
         if(uniforms==NULL)puts("FAILED");
 
-        #warning move projection matrix into uniform buffer
+        uniforms->projection=*get_view_matrix_pointer(c);
 
-        uniforms[0]=0.7+0.3*cos(SDL_GetTicks()*0.005);
-        uniforms[1]=0.7+0.3*cos(SDL_GetTicks()*0.007);
-        uniforms[2]=0.7+0.3*cos(SDL_GetTicks()*0.011);
-        uniforms[3]=1.0;
+        uniforms->multipliers[0]=cos(SDL_GetTicks()*0.005);
+        uniforms->multipliers[1]=cos(SDL_GetTicks()*0.007);
+        uniforms->multipliers[2]=cos(SDL_GetTicks()*0.011);
 
         update_and_bind_test_uniforms(swapchain_image_index,uniforms_offset);
 
-
-
-        vkCmdPushConstants(work_block->graphics_work,test_pipeline_layout,VK_SHADER_STAGE_VERTEX_BIT,0,sizeof(matrix4f),get_view_matrix_pointer(c));
+        //vkCmdPushConstants(work_block->graphics_work,test_pipeline_layout,VK_SHADER_STAGE_VERTEX_BIT,0,sizeof(matrix4f),get_view_matrix_pointer(c));
 
         vkCmdBindDescriptorSets(work_block->graphics_work,VK_PIPELINE_BIND_POINT_GRAPHICS,test_pipeline_layout,0,1,test_descriptor_sets+swapchain_image_index,0,NULL);
 
@@ -827,6 +875,9 @@ cvm_vk_module_work_block * test_render_frame(cvm_camera * c)
         VkClearValue clear_values[2];///other clear colours should probably be provided by other chunks of application
         clear_values[0].color=(VkClearColorValue){{0.95f,0.5f,0.75f,1.0f}};
         clear_values[1].depthStencil=(VkClearDepthStencilValue){.depth=0.0,.stencil=0};
+
+        cvm_vk_managed_buffer_bind_as_index(work_block->graphics_work,&test_managed_buffer,VK_INDEX_TYPE_UINT16);
+        cvm_vk_managed_buffer_bind_as_vertex(work_block->graphics_work,&test_managed_buffer,0);
 
         VkRenderPassBeginInfo render_pass_begin_info=(VkRenderPassBeginInfo)
         {
@@ -843,28 +894,11 @@ cvm_vk_module_work_block * test_render_frame(cvm_camera * c)
 
         vkCmdBindPipeline(work_block->graphics_work,VK_PIPELINE_BIND_POINT_GRAPHICS,test_pipeline);
 
-
-        cvm_vk_bind_managed_buffer_index(work_block->graphics_work,&test_buffer,VK_INDEX_TYPE_UINT16);
-        cvm_vk_bind_managed_buffer_vertex(work_block->graphics_work,&test_buffer,0);
-
-        cvm_mesh_render(&test_stellated_octahedron_mesh,work_block->graphics_work,1);
-
-        //vkCmdDrawIndexed(work_block->graphics_work,36,1,0,0,0);
-
-
-//        vkCmdBindIndexBuffer(work_block->graphics_work,test_buffer.buffer,0,VK_INDEX_TYPE_UINT16);
-//        VkDeviceSize offset;
-//        offset=0;
-//        vkCmdBindVertexBuffers(work_block->graphics_work,0,1,&test_buffer.buffer,&offset);
-//        uint32_t index_offset=(test_index_allocation->offset << test_buffer.base_dynamic_allocation_size_factor)/sizeof(uint16_t);
-//        uint32_t vertex_offset=(test_vertex_allocation->offset << test_buffer.base_dynamic_allocation_size_factor)/sizeof(test_render_data);
-//
-//
-//        vkCmdDrawIndexed(work_block->graphics_work,36,1,index_offset,vertex_offset,0);
+        cvm_mesh_render(&test_stellated_octahedron_mesh,work_block->graphics_work,1,0);
 
         vkCmdEndRenderPass(work_block->graphics_work);///================
 
-        cvm_vk_end_transient_buffer(&test_transient_buffer);
+        cvm_vk_transient_buffer_end(&test_transient_buffer);
 
         test_current_framebuffer_index++;
         test_current_framebuffer_index*= test_current_framebuffer_index<TEST_FRAMEBUFFER_CYCLES;
@@ -877,7 +911,7 @@ void test_frame_cleanup(uint32_t swapchain_image_index)
 {
     if(swapchain_image_index!=CVM_VK_INVALID_IMAGE_INDEX)
     {
-        ///cvm_vk_relinquish_staging_buffer_space();
+        cvm_vk_staging_buffer_relinquish_space(&test_staging_buffer,swapchain_image_index);
     }
 }
 
