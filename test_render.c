@@ -171,16 +171,15 @@ static void create_test_pipeline_layouts(void)
         .flags=0,
         .setLayoutCount=1,
         .pSetLayouts=&test_descriptor_set_layout,
-        .pushConstantRangeCount=0,
-        .pPushConstantRanges=NULL
-//        (VkPushConstantRange[1])
-//        {
-//            {
-//                .stageFlags=VK_SHADER_STAGE_VERTEX_BIT,
-//                .offset=0,
-//                .size=sizeof(matrix4f)
-//            }
-//        }
+        .pushConstantRangeCount=1,
+        .pPushConstantRanges=(VkPushConstantRange[1])
+        {
+            {
+                .stageFlags=VK_SHADER_STAGE_VERTEX_BIT,
+                .offset=0,
+                .size=sizeof(float)*12
+            }
+        }
     };
 
     cvm_vk_create_pipeline_layout(&test_pipeline_layout,&pipeline_create_info);
@@ -861,13 +860,124 @@ cvm_vk_module_work_block * test_render_frame(cvm_camera * c)
 
         uniforms->projection=*get_view_matrix_pointer(c);
 
-        uniforms->multipliers[0]=cos(SDL_GetTicks()*0.005);
-        uniforms->multipliers[1]=cos(SDL_GetTicks()*0.007);
-        uniforms->multipliers[2]=cos(SDL_GetTicks()*0.011);
+        uniforms->multipliers[0]=1;//cos(SDL_GetTicks()*0.005);
+        uniforms->multipliers[1]=1;//cos(SDL_GetTicks()*0.007);
+        uniforms->multipliers[2]=1;//cos(SDL_GetTicks()*0.011);
 
         update_and_bind_test_uniforms(swapchain_image_index,uniforms_offset);
 
-        //vkCmdPushConstants(work_block->graphics_work,test_pipeline_layout,VK_SHADER_STAGE_VERTEX_BIT,0,sizeof(matrix4f),get_view_matrix_pointer(c));
+        vec3f v1,v2,v3;
+
+        v1=(vec3f){.x=1,.y=0,.z=0};
+
+        bivec3f b1,b2,b3;
+        rotor3f r;//,nr;
+        float s=sinf(SDL_GetTicks()*0.003);
+        float c=cosf(SDL_GetTicks()*0.003);
+        float isq3=0.57735026919;
+
+        r =(rotor3f){.d=c,.xy= -s*isq3,.yz= s*isq3,.zx= -s*isq3};
+        //nr=(rotor3f){.d=c,.xy=-s*isq3,.yz=-s*isq3,.zx=-s*isq3};
+
+
+
+
+
+        float x,y,z,t;
+        float tf,xf,yf,zf;
+
+        x = r.d * v1.x + v1.y * r.xy - v1.z * r.zx;
+        y = r.d * v1.y - v1.x * r.xy + v1.z * r.yz;
+        z = r.d * v1.z + v1.x * r.zx - v1.y * r.yz;
+
+        t = v1.x * r.yz + v1.y * r.zx + v1.z * r.xy; // trivector
+
+        xf = r.d * x + y * r.xy - z * r.zx + t * r.yz;
+        yf = r.d * y - x * r.xy + t * r.zx + z * r.yz;
+        zf = r.d * z + t * r.xy + x * r.zx - y * r.yz;
+
+        printf("A: %f : %f %f %f : %f\n",t,xf,yf,zf,sqrtf(xf*xf + yf*yf + zf*zf));
+
+
+        x=y=z=t=0.0;
+
+        ///only compositing x for now
+        x+=r.d*v1.x;
+        y+=-r.xy*v1.x;
+        t+=r.yz*v1.x;///trivec component xyz
+        z+=r.zx*v1.x;
+
+        y+=r.d*v1.y;
+        x+=r.xy*v1.y;
+        z+=-r.yz*v1.y;
+        t+=r.zx*v1.y;///trivec component xyz
+
+
+        z+=r.d*v1.z;
+        t+=r.xy*v1.z;
+        y+=r.yz*v1.z;///trivec component xyz
+        x+=-r.zx*v1.z;
+
+
+        tf=xf=yf=zf=0.0;
+
+        tf+= t*r.d;///trivec
+        zf+= t*r.xy;
+        xf+= t*r.yz;
+        yf+= t*r.zx;
+
+        xf+= x*r.d;
+        yf+= -x*r.xy;
+        tf+= -x*r.yz;
+        zf+= x*r.zx;
+
+        yf+= y*r.d;
+        xf+= y*r.xy;
+        zf+= -y*r.yz;
+        tf+= -y*r.zx;
+
+        zf+= z*r.d;
+        tf+= -z*r.xy;
+        yf+= z*r.yz;
+        xf+= -z*r.zx;
+
+
+        printf("B: %f : %f %f %f : %f\n",t,xf,yf,zf,sqrtf(xf*xf + yf*yf + zf*zf));
+
+
+
+        float transformation[12]=
+        {
+            1,0,0,1,
+            0,1,0,0,
+            0,0,1,0,
+        };
+        ///assuming unit vectors (necessary) some/all of these may be collapsible, i.e. all compoents of rotor, if treated as 4d vector, has a length of 1
+        ///probably want to keep commented out uncollapsed
+//        transformation[0]=r.yz*r.yz + r.d*r.d -r.xy*r.xy - r.zx*r.zx;
+//        transformation[4]=r.yz*r.zx - r.d*r.xy - r.xy*r.d + r.zx*r.yz;
+//        transformation[8]=r.yz*r.xy + r.d*r.zx +r.xy*r.yz + r.zx*r.d;
+        transformation[0]=r.yz*r.yz + r.d*r.d - r.xy*r.xy -r.zx*r.zx;
+        transformation[4]=2.0*r.yz*r.zx - 2.0*r.d*r.xy;
+        transformation[8]= 2.0*r.yz*r.xy + 2.0*r.d*r.zx;
+
+//        transformation[1]=r.zx*r.yz + r.xy*r.d + r.d*r.xy - -r.yz*r.zx;
+//        transformation[5]=r.zx*r.zx - r.xy*r.xy + r.d*r.d - r.yz*r.yz;
+//        transformation[9]=r.zx*r.xy + r.xy*r.zx - r.d*r.yz - r.yz*r.d;
+        transformation[1]=2.0*r.zx*r.yz + 2.0*r.xy*r.d;
+        transformation[5]=r.zx*r.zx - r.xy*r.xy + r.d*r.d - r.yz*r.yz;
+        transformation[9]=2.0*r.zx*r.xy - 2.0*r.yz*r.d;
+
+//        transformation[2]=r.xy*r.yz - r.zx*r.d + r.yz*r.xy - r.d*r.zx;
+//        transformation[6]=r.xy*r.zx + r.zx*r.xy + r.yz*r.d + r.d*r.yz;
+//        transformation[10]=r.xy*r.xy - r.zx*r.zx - r.yz*r.yz + r.d*r.d;
+        transformation[2]=2.0*r.xy*r.yz - 2.0*r.zx*r.d;
+        transformation[6]=2.0*r.xy*r.zx + 2.0*r.yz*r.d;
+        transformation[10]=r.xy*r.xy - r.zx*r.zx - r.yz*r.yz + r.d*r.d;
+
+        printf("C: %f : %f %f %f \n",t,transformation[0],transformation[4],transformation[8]);
+
+        vkCmdPushConstants(work_block->graphics_work,test_pipeline_layout,VK_SHADER_STAGE_VERTEX_BIT,0,sizeof(float)*12,transformation);
 
         vkCmdBindDescriptorSets(work_block->graphics_work,VK_PIPELINE_BIND_POINT_GRAPHICS,test_pipeline_layout,0,1,test_descriptor_sets+swapchain_image_index,0,NULL);
 

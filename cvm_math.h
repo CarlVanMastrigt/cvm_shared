@@ -100,6 +100,24 @@ typedef struct quaternion
 }
 quaternion;
 
+///not sure bivectors are necessary yet.
+typedef struct bivec3f
+{
+    float xy;
+    float yz;
+    float zx;
+}
+bivec3f;
+
+typedef struct rotor3f
+{
+    float xy;
+    float yz;
+    float zx;
+    float d;
+}
+rotor3f;
+
 typedef struct plane
 {
     vec3f n;///plane normal
