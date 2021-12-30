@@ -795,6 +795,39 @@ void terminate_test_swapchain_dependencies()
     for(i=0;i<TEST_FRAMEBUFFER_CYCLES;i++)free(test_framebuffers[i]);
 }
 
+
+static inline void construct_transformation(float * transformation,rotor3f r,vec3f p)
+{
+
+
+    ///multiplying by sqrt 2 4 times removes 18 future multiplications by 2
+    r.s*=SQRT_2;
+    r.xy*=SQRT_2;
+    r.yz*=SQRT_2;
+    r.zx*=SQRT_2;
+
+    ///results stored as row major for more efficient access on device side (just need to declare values as row_major, which ONLY affects how data is read)
+    /// written in memory order for better streaming results
+    transformation[0 ]= 1.0 - r.xy*r.xy -r.zx*r.zx;
+    transformation[1 ]= r.zx*r.yz + r.xy*r.s;
+    transformation[2 ]= r.xy*r.yz - r.zx*r.s;
+    transformation[3 ]=p.x;
+
+    transformation[4 ]= r.yz*r.zx - r.s*r.xy;
+    transformation[5 ]= 1.0- r.xy*r.xy - r.yz*r.yz;
+    transformation[6 ]= r.xy*r.zx + r.yz*r.s;
+    transformation[7 ]=p.y;
+
+    transformation[8 ]= r.yz*r.xy + r.s*r.zx;
+    transformation[9 ]= r.zx*r.xy - r.yz*r.s;
+    transformation[10]= 1.0 - r.zx*r.zx - r.yz*r.yz;
+    transformation[11]=p.z;
+}
+
+
+
+
+
 cvm_vk_module_work_block * test_render_frame(cvm_camera * c)
 {
     cvm_vk_module_work_block * work_block;
@@ -860,9 +893,9 @@ cvm_vk_module_work_block * test_render_frame(cvm_camera * c)
 
         uniforms->projection=*get_view_matrix_pointer(c);
 
-        uniforms->multipliers[0]=1;//cos(SDL_GetTicks()*0.005);
-        uniforms->multipliers[1]=1;//cos(SDL_GetTicks()*0.007);
-        uniforms->multipliers[2]=1;//cos(SDL_GetTicks()*0.011);
+        uniforms->multipliers[0]=cos(SDL_GetTicks()*0.005);
+        uniforms->multipliers[1]=cos(SDL_GetTicks()*0.007);
+        uniforms->multipliers[2]=cos(SDL_GetTicks()*0.011);
 
         update_and_bind_test_uniforms(swapchain_image_index,uniforms_offset);
 
@@ -871,80 +904,13 @@ cvm_vk_module_work_block * test_render_frame(cvm_camera * c)
         v1=(vec3f){.x=1,.y=0,.z=0};
 
         bivec3f b1,b2,b3;
-        rotor3f r;//,nr;
-        float s=sinf(SDL_GetTicks()*0.003);
-        float c=cosf(SDL_GetTicks()*0.003);
-        float isq3=0.57735026919;
-
-        r =(rotor3f){.d=c,.xy= -s*isq3,.yz= s*isq3,.zx= -s*isq3};
-        //nr=(rotor3f){.d=c,.xy=-s*isq3,.yz=-s*isq3,.zx=-s*isq3};
+        rotor3f r,rt;
+        float s=sinf(SDL_GetTicks()*0.001);
+        float c=cosf(SDL_GetTicks()*0.001);
 
 
-
-
-
-        float x,y,z,t;
-        float tf,xf,yf,zf;
-
-        x = r.d * v1.x + v1.y * r.xy - v1.z * r.zx;
-        y = r.d * v1.y - v1.x * r.xy + v1.z * r.yz;
-        z = r.d * v1.z + v1.x * r.zx - v1.y * r.yz;
-
-        t = v1.x * r.yz + v1.y * r.zx + v1.z * r.xy; // trivector
-
-        xf = r.d * x + y * r.xy - z * r.zx + t * r.yz;
-        yf = r.d * y - x * r.xy + t * r.zx + z * r.yz;
-        zf = r.d * z + t * r.xy + x * r.zx - y * r.yz;
-
-        printf("A: %f : %f %f %f : %f\n",t,xf,yf,zf,sqrtf(xf*xf + yf*yf + zf*zf));
-
-
-        x=y=z=t=0.0;
-
-        ///only compositing x for now
-        x+=r.d*v1.x;
-        y+=-r.xy*v1.x;
-        t+=r.yz*v1.x;///trivec component xyz
-        z+=r.zx*v1.x;
-
-        y+=r.d*v1.y;
-        x+=r.xy*v1.y;
-        z+=-r.yz*v1.y;
-        t+=r.zx*v1.y;///trivec component xyz
-
-
-        z+=r.d*v1.z;
-        t+=r.xy*v1.z;
-        y+=r.yz*v1.z;///trivec component xyz
-        x+=-r.zx*v1.z;
-
-
-        tf=xf=yf=zf=0.0;
-
-        tf+= t*r.d;///trivec
-        zf+= t*r.xy;
-        xf+= t*r.yz;
-        yf+= t*r.zx;
-
-        xf+= x*r.d;
-        yf+= -x*r.xy;
-        tf+= -x*r.yz;
-        zf+= x*r.zx;
-
-        yf+= y*r.d;
-        xf+= y*r.xy;
-        zf+= -y*r.yz;
-        tf+= -y*r.zx;
-
-        zf+= z*r.d;
-        tf+= -z*r.xy;
-        yf+= z*r.yz;
-        xf+= -z*r.zx;
-
-
-        printf("B: %f : %f %f %f : %f\n",t,xf,yf,zf,sqrtf(xf*xf + yf*yf + zf*zf));
-
-
+        r =(rotor3f){.s=c,.xy= -s*SQRT_THIRD,.yz= s*SQRT_THIRD,.zx= s*SQRT_THIRD};
+        //r =(rotor3f){.s=c,.xy= s,.yz= 0,.zx= 0};
 
         float transformation[12]=
         {
@@ -952,30 +918,23 @@ cvm_vk_module_work_block * test_render_frame(cvm_camera * c)
             0,1,0,0,
             0,0,1,0,
         };
+
+        v1=(vec3f){.x=SQRT_THIRD,.y=SQRT_THIRD,.z=-SQRT_THIRD};
+        v2=(vec3f){.x=0.0,.y=0.0,.z=1.0};
+        v2=v3f_norm_mid(v1,v2);
+
+        rt=r3f_from_between_v3f(v1,v2);///start to end
+
+        r=r3f_multiply(
+                       rt,r);
+
+
+
+
+        construct_transformation(transformation,r,(vec3f){0,0,0});
         ///assuming unit vectors (necessary) some/all of these may be collapsible, i.e. all compoents of rotor, if treated as 4d vector, has a length of 1
         ///probably want to keep commented out uncollapsed
-//        transformation[0]=r.yz*r.yz + r.d*r.d -r.xy*r.xy - r.zx*r.zx;
-//        transformation[4]=r.yz*r.zx - r.d*r.xy - r.xy*r.d + r.zx*r.yz;
-//        transformation[8]=r.yz*r.xy + r.d*r.zx +r.xy*r.yz + r.zx*r.d;
-        transformation[0]=r.yz*r.yz + r.d*r.d - r.xy*r.xy -r.zx*r.zx;
-        transformation[4]=2.0*r.yz*r.zx - 2.0*r.d*r.xy;
-        transformation[8]= 2.0*r.yz*r.xy + 2.0*r.d*r.zx;
 
-//        transformation[1]=r.zx*r.yz + r.xy*r.d + r.d*r.xy - -r.yz*r.zx;
-//        transformation[5]=r.zx*r.zx - r.xy*r.xy + r.d*r.d - r.yz*r.yz;
-//        transformation[9]=r.zx*r.xy + r.xy*r.zx - r.d*r.yz - r.yz*r.d;
-        transformation[1]=2.0*r.zx*r.yz + 2.0*r.xy*r.d;
-        transformation[5]=r.zx*r.zx - r.xy*r.xy + r.d*r.d - r.yz*r.yz;
-        transformation[9]=2.0*r.zx*r.xy - 2.0*r.yz*r.d;
-
-//        transformation[2]=r.xy*r.yz - r.zx*r.d + r.yz*r.xy - r.d*r.zx;
-//        transformation[6]=r.xy*r.zx + r.zx*r.xy + r.yz*r.d + r.d*r.yz;
-//        transformation[10]=r.xy*r.xy - r.zx*r.zx - r.yz*r.yz + r.d*r.d;
-        transformation[2]=2.0*r.xy*r.yz - 2.0*r.zx*r.d;
-        transformation[6]=2.0*r.xy*r.zx + 2.0*r.yz*r.d;
-        transformation[10]=r.xy*r.xy - r.zx*r.zx - r.yz*r.yz + r.d*r.d;
-
-        printf("C: %f : %f %f %f \n",t,transformation[0],transformation[4],transformation[8]);
 
         vkCmdPushConstants(work_block->graphics_work,test_pipeline_layout,VK_SHADER_STAGE_VERTEX_BIT,0,sizeof(float)*12,transformation);
 

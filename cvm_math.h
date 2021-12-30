@@ -25,19 +25,27 @@ along with cvm_shared.  If not, see <https://www.gnu.org/licenses/>.
 #define CVM_MATH_H
 
 #ifndef PI
-#define PI 3.14159265358979
+#define PI          3.1415926535897932384626433832795028841971693993751058209749445923
+#endif
+
+#ifndef EULER
+#define EULER       2.7182818284590452353602874713526624977572470936999595749669676277
 #endif
 
 #ifndef SQRT_3
-#define SQRT_3 1.7320508075688
+#define SQRT_3      1.7320508075688772935274463415058723669428052538103806280558069794
 #endif
 
 #ifndef SQRT_2
-#define SQRT_2 1.414213562373
+#define SQRT_2      1.4142135623730950488016887242096980785696718753769480731766797379
 #endif
 
 #ifndef SQRT_HALF
-#define SQRT_HALF 0.70710678118654
+#define SQRT_HALF   0.7071067811865475244008443621048490392848359376884740365883398689
+#endif
+
+#ifndef SQRT_THIRD
+#define SQRT_THIRD  0.5773502691896257645091487805019574556476017512701268760186023264
 #endif
 
 
@@ -111,10 +119,10 @@ bivec3f;
 
 typedef struct rotor3f
 {
+    float s;///scalar / symmetric component (dot product in ge0metric product)
     float xy;
     float yz;
     float zx;
-    float d;
 }
 rotor3f;
 
@@ -623,6 +631,147 @@ static inline float plane_point_dist(plane p,vec3f point)
 {
     return v3f_dot(p.n,point)-p.d;
 }
+
+
+
+static inline rotor3f r3f_from_between_v3f(vec3f v1,vec3f v2)
+{
+    /// result is the geometric product of v2 and v2   (in that order; v2 v1)
+    return(rotor3f)
+    {
+        .s=v2.x*v1.x+v2.y*v1.y+v2.z*v1.z,
+        .xy=v2.x*v1.y-v2.y*v1.x,
+        .yz=v2.y*v1.z-v2.z*v1.y,
+        .zx=v2.z*v1.x-v2.x*v1.z
+    };
+}
+
+static inline rotor3f r3f_from_v3f_and_angle(vec3f v,float a)
+{
+    float s=sinf(a*0.5);
+    return(rotor3f){.s=cosf(a*0.5),.xy=s*v.z,.yz=s*v.x,.zx=s*v.y};
+}
+
+static inline rotor3f r3f_multiply(rotor3f r1,rotor3f r2)
+{
+    /// figured out via geometric product of r1 on r2
+    return(rotor3f)
+    {
+        .s =r1.s*r2.s-r1.xy*r2.xy-r1.yz*r2.yz-r1.zx*r2.zx,
+        .xy=r1.s*r2.xy+r1.xy*r2.s-r1.yz*r2.zx+r1.zx*r2.yz,
+        .yz=r1.s*r2.yz+r1.xy*r2.zx+r1.yz*r2.s-r1.zx*r2.xy,
+        .zx=r1.s*r2.zx-r1.xy*r2.yz+r1.yz*r2.xy+r1.zx*r2.s
+    };
+}
+
+///for these simplify multiplication as if r1 represents a rotation about the respective axes
+static inline rotor3f r3f_rotate_around_x_axis(rotor3f r,float a)
+{
+    float s=sinf(a*0.5);
+    float c=cosf(a*0.5);
+    return (rotor3f){.s=c*r.s-s*r.yz, .xy=c*r.xy-s*r.zx, .yz=c*r.yz+s*r.s, .zx=c*r.zx+s*r.xy};
+}
+static inline rotor3f r3f_rotate_around_y_axis(rotor3f r,float a)
+{
+    float s=sinf(a*0.5);
+    float c=cosf(a*0.5);
+    return (rotor3f){.s=c*r.s-s*r.zx, .xy=c*r.xy+s*r.yz, .yz=c*r.yz-s*r.xy, .zx=c*r.zx+s*r.s};
+}
+static inline rotor3f r3f_rotate_around_z_axis(rotor3f r,float a)
+{
+    float s=sinf(a*0.5);
+    float c=cosf(a*0.5);
+    return (rotor3f){.s=c*r.s-s*r.xy, .xy=c*r.xy+s*r.s, .yz=c*r.yz+s*r.zx, .zx=c*r.zx-s*r.yz};
+}
+
+static inline matrix3f r3f_to_m3f(rotor3f r)
+{
+    /**
+    unoptimised included for educational purposes, is acquired by applying geometric product of rotor (r) over axis each asis(a) as -rar
+    using geometric product & exterior product rules (r is a geometic product of 2 implict vectors, comprised of a bivector and a scalar)
+    optimised using identity that xy^2+yz^2+zx^2+d^2=1
+
+    m.x.x = r.yz*r.yz + r.d*r.d -r.xy*r.xy - r.zx*r.zx;
+    m.x.y = r.yz*r.zx - r.d*r.xy - r.xy*r.d + r.zx*r.yz;
+    m.x.z = r.yz*r.xy + r.d*r.zx +r.xy*r.yz + r.zx*r.d;
+
+    m.y.x = r.zx*r.yz + r.xy*r.d + r.d*r.xy - -r.yz*r.zx;
+    m.y.y = r.zx*r.zx - r.xy*r.xy + r.d*r.d - r.yz*r.yz;
+    m.y.z = r.zx*r.xy + r.xy*r.zx - r.d*r.yz - r.yz*r.d;
+
+    m.z.x = r.xy*r.yz - r.zx*r.d + r.yz*r.xy - r.d*r.zx;
+    m.z.y = r.xy*r.zx + r.zx*r.xy + r.yz*r.d + r.d*r.yz;
+    m.z.z = r.xy*r.xy - r.zx*r.zx - r.yz*r.yz + r.d*r.d;
+    */
+
+    r.s*=SQRT_2;
+    r.xy*=SQRT_2;
+    r.yz*=SQRT_2;
+    r.zx*=SQRT_2;
+
+    return (matrix3f)
+    {
+        .x=
+        {
+            .x=1.0 - r.xy*r.xy - r.zx*r.zx,
+            .y=r.yz*r.zx - r.s*r.xy,
+            .z=r.yz*r.xy + r.s*r.zx
+        },
+        .y=
+        {
+            .x=r.zx*r.yz + r.xy*r.s,
+            .y=1.0 - r.xy*r.xy - r.yz*r.yz,
+            .z=r.zx*r.xy - r.yz*r.s
+        },
+        .z=
+        {
+            .x=r.xy*r.yz - r.zx*r.s,
+            .y=r.xy*r.zx + r.yz*r.s,
+            .z=1.0 - r.zx*r.zx - r.yz*r.yz
+        }
+    };
+}
+
+static inline vec3f r3f_rotate_v3f(rotor3f r,vec3f v)
+{
+    return(vec3f)
+    {
+        .x=2.0*(v.x*(0.5 - r.xy*r.xy - r.zx*r.zx) + v.y*(r.zx*r.yz + r.xy*r.s) + v.z*(r.xy*r.yz - r.zx*r.s)),
+        .y=2.0*(v.x*(r.yz*r.zx - r.s*r.xy) + v.y*(0.5 - r.xy*r.xy - r.yz*r.yz) + v.z*(r.xy*r.zx + r.yz*r.s)),
+        .z=2.0*(v.x*(r.yz*r.xy + r.s*r.zx) + v.y*(r.zx*r.xy - r.yz*r.s) + v.z*(0.5 - r.zx*r.zx - r.yz*r.yz))
+    };
+}
+
+static inline vec3f r3f_derotate_v3f(rotor3f r,vec3f v)
+{
+    /// reverse the rotation that would be performed by r, can be figured out based on rotation operation of r on v (as in r3f_rotate_v3f)
+    /// that rotation being represented/thought of as an orthonormal basis space transformation (a matrix)
+    /// and the inverse of an orthonormal matrix is just its that matrix transposed!
+    return(vec3f)
+    {
+        .x=2.0*(v.x*(0.5 - r.xy*r.xy - r.zx*r.zx) + v.y*(r.yz*r.zx - r.s*r.xy) + v.z*(r.yz*r.xy + r.s*r.zx)),
+        .y=2.0*(v.x*(r.zx*r.yz + r.xy*r.s) + v.y*(0.5 - r.xy*r.xy - r.yz*r.yz) + v.z*(r.zx*r.xy - r.yz*r.s)),
+        .z=2.0*(v.x*(r.xy*r.yz - r.zx*r.s) + v.y*(r.xy*r.zx + r.yz*r.s) + v.z*(0.5 - r.zx*r.zx - r.yz*r.yz))
+    };
+}
+
+static inline vec3f r3f_get_x_axis(rotor3f r)
+{
+    return(vec3f){.x=1.0-2.0*(r.xy*r.xy - r.zx*r.zx),.y=2.0*(r.yz*r.zx - r.s*r.xy),.z=2.0*(r.yz*r.xy + r.s*r.zx)};
+}
+
+static inline vec3f r3f_get_y_axis(rotor3f r)
+{
+    return(vec3f){.x=2.0*(r.zx*r.yz + r.xy*r.s),.y=1.0-2.0*(r.xy*r.xy - r.yz*r.yz),.z=2.0*(r.zx*r.xy - r.yz*r.s)};
+}
+
+static inline vec3f r3f_get_z_axis(rotor3f r)
+{
+    return(vec3f){.x=2.0*(r.xy*r.yz - r.zx*r.s),.y=2.0*(r.xy*r.zx + r.yz*r.s),.z=1.0-2.0*(r.zx*r.zx - r.yz*r.yz)};
+}
+
+
+
 
 #endif
 

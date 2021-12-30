@@ -57,6 +57,7 @@ typedef union widget widget;
 #include "cvm_overlay.h"
 #include "cvm_widget.h"
 #include "cvm_view.h"
+#include "cvm_transform.h"
 #include "cvm_camera.h"
 #include "cvm_mesh.h"
 #include "cvm_thread.h"
