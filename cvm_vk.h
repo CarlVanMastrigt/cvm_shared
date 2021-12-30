@@ -63,24 +63,15 @@ fragmentStoresAndAtomics
 
 vertexPipelineStoresAndAtomics
 
-
-for unified memory architecture (UMA) systems, its probably worth it to be able to avoid staging altogether
-    ^ have the memory system upload directly and just do appropriate barriers/semaphores (they will likely match barriers/semaphores used when transferring from staging memory anyway)
-
-
 could move swapchain/resource rebuilding outside of critical section if atomic locking mechanism is employed
     ^ cas to gain control, VK thread must gain absolute control (a==0 -> a=0xFFFFFFFF) whereas any thread using those resources can gain read permissions (a!=0xFFFFFFFF -> a=a+1)
         ^ this probably isnt woth it as some systems might handle busy waiting poorly, also swapchain/render_resource recreation should be a rare operation anyway!
 
 going to have to rely on acquire op failing to know when to recreate swapchain
     ^ also need to take settings changes into account, i.e. manually do same thing as out of date would and also prevent swapchain image acquisition
-
-
-    rename module to just module
 */
 
 ///won't be supporting modules having msaa output
-
 
 ///render system, upon swapchain creation/recreation should forward acquire swapchain images
 ///move this to be thread static declaration?
@@ -88,6 +79,7 @@ going to have to rely on acquire op failing to know when to recreate swapchain
 ///use swapchain image to index into these? yes
 ///this should encompass swapchain images? (or at least it could...)
 
+///could move these structs to the c file? - they should only ever be used by cvm_vk internally
 ///this struct contains the data needed to be known upfront when acquiring swapchain image (cvm_vk_swapchain_frame), some data could go in either struct though...
 typedef struct cvm_vk_swapchain_image_acquisition_data
 {
@@ -107,6 +99,9 @@ typedef struct cvm_vk_swapchain_image_present_data
     VkImage image;///theese are provided by the WSI
     VkImageView image_view;
 
+    VkFence completion_fence;
+    bool in_flight;///error checking
+
     ///following only used if present and graphics are different
     ///     ^ test as best as possible with bool that forces behaviour, and maybe try different queue/queue_family when possible (o.e. when available hardware allows)
     /// timeline semaphore in renderer instead?
@@ -115,9 +110,6 @@ typedef struct cvm_vk_swapchain_image_present_data
 
     VkSemaphore graphics_relinquish_semaphore;///only necessary when transferring to a dedicated present queue, used as part of queue transfer
     VkSemaphore present_semaphore;///needed by VkPresentInfoKHR
-
-    VkFence completion_fence;
-    bool in_flight;///error checking
 }
 cvm_vk_swapchain_image_present_data;
 
@@ -150,9 +142,12 @@ typedef struct cvm_vk_module_work_block
     /// synchronisation handled by the acquired frame/image
     cvm_vk_module_data * parent_module;
 
-    ///make these the same when they actually share a queue family/queue
-    //VkCommandBuffer transfer_work;
+    VkCommandPool graphics_pool;
     VkCommandBuffer graphics_work;///for now stack everything on graphics queue, later make a work block support many interdependent command buffers with semaphores as necessary
+
+    ///make these the same when they actually share a queue family/queue
+    VkCommandPool transfer_pool;
+    VkCommandBuffer transfer_work;
 
     /// need intra-frame and inter-frame (the structurally difficult one) semaphores to do ownership transfers, and structure to handle that
     /// support for multiple command buffers per frame each on different queue when necessary will allow for much more fine grained control and better GPU utilization (structure needs to support this)
@@ -180,9 +175,6 @@ cvm_vk_module_work_block;
 
 struct cvm_vk_module_data
 {
-    VkCommandPool graphics_pool;
-    VkCommandPool transfer_pool;
-
     cvm_vk_module_work_block * work_blocks;
 
     uint32_t block_count;
