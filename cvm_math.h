@@ -24,8 +24,16 @@ along with cvm_shared.  If not, see <https://www.gnu.org/licenses/>.
 #ifndef CVM_MATH_H
 #define CVM_MATH_H
 
+#ifndef TAU
+#define TAU         6.2831853071795864769252867665590057683943387987502116419498891846
+#endif
+
 #ifndef PI
 #define PI          3.1415926535897932384626433832795028841971693993751058209749445923
+#endif
+
+#ifndef PI_RCP
+#define PI_RCP      0.3183098861837906715377675267450287240689192914809128974953346881
 #endif
 
 #ifndef EULER
@@ -369,6 +377,12 @@ static inline vec3f v3f_from_spherical(float r,float zenith,float azimuth)
                     .y=r*sinf(azimuth)*sinf(zenith),
                     .z=r*cosf(zenith)};
 }
+static inline vec3f v3f_from_spherical_direction(float zenith,float azimuth)
+{
+    return (vec3f){ .x=cosf(azimuth)*sinf(zenith),
+                    .y=sinf(azimuth)*sinf(zenith),
+                    .z=cosf(zenith)};
+}
 static inline vec3f v3f_max(vec3f v1,vec3f v2)
 {
     return (vec3f){.x=(v1.x>v2.x)?v1.x:v2.x,.y=(v1.y>v2.y)?v1.y:v2.y,.z=(v1.z>v2.z)?v1.z:v2.z};
@@ -636,6 +650,8 @@ static inline float plane_point_dist(plane p,vec3f point)
 
 static inline rotor3f r3f_from_mid_v3f(vec3f v1,vec3f v2)
 {
+    ///assumes both input vectors are normalised
+
     /// result is the geometric product of v2 and v2   (in that order; v2 v1)
     return(rotor3f)
     {
@@ -648,6 +664,8 @@ static inline rotor3f r3f_from_mid_v3f(vec3f v1,vec3f v2)
 
 static inline rotor3f r3f_from_v3f(vec3f v1,vec3f v2)
 {
+    ///assumes both input vectors are normalised
+
     /**
     ///figure out using normalised half angle
     \\\m is magnitude of half angle vector
@@ -696,6 +714,7 @@ static inline rotor3f r3f_from_v3f(vec3f v1,vec3f v2)
 
 static inline rotor3f r3f_from_v3f_and_angle(vec3f v,float a)
 {
+    ///assumes input vector is normalised
     float s=sinf(a*0.5);
     return(rotor3f){.s=cosf(a*0.5),.xy=s*v.z,.yz=s*v.x,.zx=s*v.y};
 }
@@ -817,6 +836,66 @@ static inline vec3f r3f_get_z_axis(rotor3f r)
 {
     return(vec3f){.x=2.0*(r.xy*r.yz - r.zx*r.s),.y=2.0*(r.xy*r.zx + r.yz*r.s),.z=1.0-2.0*(r.zx*r.zx + r.yz*r.yz)};
 }
+
+static inline rotor3f r3f_lerp(rotor3f r1,rotor3f r2,float t)
+{
+    float u;
+    u=1.0-t;
+
+    r1.s =r1.s *u+r2.s *t;
+    r1.xy=r1.xy*u+r2.xy*t;
+    r1.yz=r1.yz*u+r2.yz*t;
+    r1.zx=r1.zx*u+r2.zx*t;
+
+    u=1.0/sqrtf(r1.s*r1.s+r1.xy*r1.xy+r1.yz*r1.yz+r1.zx*r1.zx);
+    r1.s*=u,r1.xy*=u,r1.yz*=u,r1.zx*=u;
+
+    return r1;
+}
+
+static inline rotor3f r3f_bezier_interp(rotor3f r0,rotor3f r1,rotor3f r2,rotor3f r3,float t)
+{
+    float u,uut,utt;
+
+    u=1.0-t;
+    uut=u*u*t*3.0;
+    utt=u*t*t*3.0;
+    t*=t*t;
+    u*=u*u;
+
+    r1.s =r1.s *u+(r1.s +(r2.s -r0.s )*0.1666)*uut+(r2.s +(r1.s -r3.s )*0.1666)*utt+r2.s *t;
+    r1.xy=r1.xy*u+(r1.xy+(r2.xy-r0.xy)*0.1666)*uut+(r2.xy+(r1.xy-r3.xy)*0.1666)*utt+r2.xy*t;
+    r1.yz=r1.yz*u+(r1.yz+(r2.yz-r0.yz)*0.1666)*uut+(r2.yz+(r1.yz-r3.yz)*0.1666)*utt+r2.yz*t;
+    r1.zx=r1.zx*u+(r1.zx+(r2.zx-r0.zx)*0.1666)*uut+(r2.zx+(r1.zx-r3.zx)*0.1666)*utt+r2.zx*t;
+
+    u=1.0/sqrtf(r1.s*r1.s+r1.xy*r1.xy+r1.yz*r1.yz+r1.zx*r1.zx);
+    r1.s*=u,r1.xy*=u,r1.yz*=u,r1.zx*=u;
+
+    return r1;
+}
+
+static inline rotor3f r3f_spherical_interp(rotor3f r1,rotor3f r2,float t)
+{
+    ///dont yet have derivation for this
+    ///may want to extend to r3f_bezier_spherical_interp
+
+    float u,m,d;
+
+    m=acosf(r1.s*r2.s+r1.xy*r2.xy+r1.yz*r2.yz+r1.zx*r2.zx);
+    d=1.0/sin(m);
+
+    u=sin((1.0-t)*m)*d;
+    t=sin(t*m)*d;
+
+    r1.s =r1.s *u+r2.s *t;
+    r1.xy=r1.xy*u+r2.xy*t;
+    r1.yz=r1.yz*u+r2.yz*t;
+    r1.zx=r1.zx*u+r2.zx*t;
+
+    return r1;
+}
+
+
 
 
 

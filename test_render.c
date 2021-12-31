@@ -826,12 +826,30 @@ static inline void construct_transformation(float * transformation,rotor3f r,vec
 
 
 
+void init_random_rotor(rotor3f * rot,uint32_t * seed)
+{
+    *rot=r3f_from_v3f_and_angle(
+        cvm_rng_point_on_sphere(
+            cvm_rng_lcg0_float(seed),cvm_rng_lcg0_float(seed)),
+        cvm_rng_lcg0_float(seed)*PI);
+//    *rot=r3f_from_v3f(
+//        cvm_rng_point_on_sphere(cvm_rng_lcg0_float(seed),cvm_rng_lcg0_float(seed)),
+//        cvm_rng_point_on_sphere(cvm_rng_lcg0_float(seed),cvm_rng_lcg0_float(seed)));
+}
+
 
 
 cvm_vk_module_work_block * test_render_frame(cvm_camera * c)
 {
     cvm_vk_module_work_block * work_block;
     uint32_t swapchain_image_index;
+
+    static rotor3f rots[4];
+    static uint32_t rand=83;
+    static uint32_t iter=0;
+
+    if(iter==0)for(iter=0;iter<4;iter++)init_random_rotor(rots+iter,&rand);
+
 
     ///perhaps this should return previous image index as well, such that that value can be used in cleanup (e.g. relinquishing ring buffer space)
     work_block = cvm_vk_begin_module_work_block(&test_module_data,0,&swapchain_image_index);
@@ -893,24 +911,12 @@ cvm_vk_module_work_block * test_render_frame(cvm_camera * c)
 
         uniforms->projection=*get_view_matrix_pointer(c);
 
-        uniforms->multipliers[0]=cos(SDL_GetTicks()*0.005);
-        uniforms->multipliers[1]=cos(SDL_GetTicks()*0.007);
-        uniforms->multipliers[2]=cos(SDL_GetTicks()*0.011);
+        uniforms->multipliers[0]=1;//cos(SDL_GetTicks()*0.005);
+        uniforms->multipliers[1]=1;//cos(SDL_GetTicks()*0.007);
+        uniforms->multipliers[2]=1;//cos(SDL_GetTicks()*0.011);
 
         update_and_bind_test_uniforms(swapchain_image_index,uniforms_offset);
 
-        vec3f v1,v2,v3;
-
-        v1=(vec3f){.x=1,.y=0,.z=0};
-
-        bivec3f b1,b2,b3;
-        rotor3f r,rt;
-        float s=sinf(SDL_GetTicks()*0.001);
-        float c=cosf(SDL_GetTicks()*0.001);
-
-
-        r =(rotor3f){.s=c,.xy= -s*SQRT_THIRD,.yz= s*SQRT_THIRD,.zx= s*SQRT_THIRD};
-        //r =(rotor3f){.s=c,.xy= s,.yz= 0,.zx= 0};
 
         float transformation[12]=
         {
@@ -919,14 +925,43 @@ cvm_vk_module_work_block * test_render_frame(cvm_camera * c)
             0,0,1,0,
         };
 
-        v1=(vec3f){.x=SQRT_THIRD,.y=SQRT_THIRD,.z=-SQRT_THIRD};
-        v2=(vec3f){.x=0.0,.y=0.0,.z=1.0};
-        v2=v3f_norm_mid(v1,v2);
+        rotor3f r;
+//        vec3f v=cvm_rng_point_on_sphere(cvm_rng_lcg0_float(&rand),cvm_rng_lcg0_float(&rand));
+//        printf("%f %f %f\n",v.x,v.y,v.z);
 
-        rt=r3f_from_between_v3f(v1,v2);///start to end
+        int index;
+        float lerp,m,l1,l2;
+        vec3f xv,yv,zv;
+        static vec3f xvp=(vec3f){0,0,0};
+        static vec3f yvp=(vec3f){0,0,0};
+        static vec3f zvp=(vec3f){0,0,0};
+        float xa,ya,za;
+        static float xap,yap,zap;
 
-        r=r3f_multiply(
-                       rt,r);
+
+        lerp=(((float)(iter&63))+0.5)/64.0;
+        index=(iter>>6)&3;
+        if(iter&63==0)init_random_rotor(rots+((index+2)&3),&rand);
+        iter++;
+
+//        r=r3f_spherical_interp(rots[index],rots[(index+1)&3],lerp);
+//        r=r3f_lerp(rots[index],rots[(index+1)&3],lerp);
+        r=r3f_bezier_interp(rots[(index+3)&3],rots[index],rots[(index+1)&3],rots[(index+2)&3],lerp);
+
+        xv=r3f_get_x_axis(r);
+        xa=acos(v3f_dot(xv,xvp));
+        yv=r3f_get_y_axis(r);
+        ya=acos(v3f_dot(yv,yvp));
+        zv=r3f_get_z_axis(r);
+        za=acos(v3f_dot(zv,zvp));
+
+        //printf("%i: %.3f %.3f %.3f  :  %f\n",index,fabsf((xap-xa)*1000.0f),fabsf((yap-ya)*1000.0f),fabsf((zap-za)*1000.0f),m);
+        xvp=xv;
+        yvp=yv;
+        zvp=zv;
+        xap=xa;
+        yap=ya;
+        zap=za;
 
 
 
