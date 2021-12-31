@@ -687,7 +687,7 @@ static inline rotor3f r3f_from_v3f(vec3f v1,vec3f v2)
 
     return(rotor3f)
     {
-        .s=m*d,
+        .s=m+m*d,
         .xy=m*(v2.x*v1.y-v2.y*v1.x),
         .yz=m*(v2.y*v1.z-v2.z*v1.y),
         .zx=m*(v2.z*v1.x-v2.x*v1.z)
