@@ -735,21 +735,21 @@ static inline rotor3f r3f_rotate_around_z_axis(rotor3f r,float a)
 static inline matrix3f r3f_to_m3f(rotor3f r)
 {
     /**
-    unoptimised included for educational purposes, is acquired by applying geometric product of rotor (r) over axis each asis(a) as -rar
+    unoptimised included for educational purposes, is acquired by applying geometric product of rotor (r) over axis each axis(a) as -rar
     using geometric product & exterior product rules (r is a geometic product of 2 implict vectors, comprised of a bivector and a scalar)
-    optimised using identity that xy^2+yz^2+zx^2+d^2=1
+    optimised using identity that xy^2+yz^2+zx^2+s^2=1
 
-    m.x.x = r.yz*r.yz + r.d*r.d -r.xy*r.xy - r.zx*r.zx;
-    m.x.y = r.yz*r.zx - r.d*r.xy - r.xy*r.d + r.zx*r.yz;
-    m.x.z = r.yz*r.xy + r.d*r.zx +r.xy*r.yz + r.zx*r.d;
+    m.x.x = r.yz*r.yz + r.s*r.s  - r.xy*r.xy - r.zx*r.zx;
+    m.x.y = r.yz*r.zx - r.s*r.xy - r.xy*r.s  + r.zx*r.yz;
+    m.x.z = r.yz*r.xy + r.s*r.zx + r.xy*r.yz + r.zx*r.s;
 
-    m.y.x = r.zx*r.yz + r.xy*r.d + r.d*r.xy - -r.yz*r.zx;
-    m.y.y = r.zx*r.zx - r.xy*r.xy + r.d*r.d - r.yz*r.yz;
-    m.y.z = r.zx*r.xy + r.xy*r.zx - r.d*r.yz - r.yz*r.d;
+    m.y.x = r.zx*r.yz + r.xy*r.s  + r.s*r.xy - -r.yz*r.zx;
+    m.y.y = r.zx*r.zx - r.xy*r.xy + r.s*r.s  - r.yz*r.yz;
+    m.y.z = r.zx*r.xy + r.xy*r.zx - r.s*r.yz - r.yz*r.s;
 
-    m.z.x = r.xy*r.yz - r.zx*r.d + r.yz*r.xy - r.d*r.zx;
-    m.z.y = r.xy*r.zx + r.zx*r.xy + r.yz*r.d + r.d*r.yz;
-    m.z.z = r.xy*r.xy - r.zx*r.zx - r.yz*r.yz + r.d*r.d;
+    m.z.x = r.xy*r.yz - r.zx*r.s  + r.yz*r.xy - r.s*r.zx;
+    m.z.y = r.xy*r.zx + r.zx*r.xy + r.yz*r.s  + r.s*r.yz;
+    m.z.z = r.xy*r.xy - r.zx*r.zx - r.yz*r.yz + r.s*r.s;
     */
 
     r.s*=SQRT_2;
