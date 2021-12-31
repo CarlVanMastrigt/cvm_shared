@@ -353,7 +353,7 @@ static inline vec3f v3f_mid(vec3f v1,vec3f v2)
 }
 static inline vec3f v3f_norm_mid(vec3f v1,vec3f v2)
 {
-    return v3f_norm(v3f_mid(v1,v2));
+    return v3f_norm(v3f_add(v1,v2));
 }
 static inline vec3f v3f_rotate(vec3f v,vec3f k,float cos_theta,float sin_theta)///Rodrigues rotation
 {
@@ -634,7 +634,7 @@ static inline float plane_point_dist(plane p,vec3f point)
 
 
 
-static inline rotor3f r3f_from_between_v3f(vec3f v1,vec3f v2)
+static inline rotor3f r3f_from_mid_v3f(vec3f v1,vec3f v2)
 {
     /// result is the geometric product of v2 and v2   (in that order; v2 v1)
     return(rotor3f)
@@ -643,6 +643,54 @@ static inline rotor3f r3f_from_between_v3f(vec3f v1,vec3f v2)
         .xy=v2.x*v1.y-v2.y*v1.x,
         .yz=v2.y*v1.z-v2.z*v1.y,
         .zx=v2.z*v1.x-v2.x*v1.z
+    };
+}
+
+static inline rotor3f r3f_from_v3f(vec3f v1,vec3f v2)
+{
+    /**
+    ///figure out using normalised half angle
+    \\\m is magnitude of half angle vector
+    m=sqrt((v1.x+v2.x)*(v1.x+v2.x)+(v1.y+v2.y)*(v1.y+v2.y)+(v1.z+v2.z)*(v1.z+v2.z));
+    m=sqrt(2 + 2*(v1.x*v2.x + v1.y*v2.y + v1.z*v2.z));
+    m=sqrt(2+2*d);
+
+    2+2*d   ///this is magnitude of rotor+{1,0,0,0} squared
+    s_component=d
+    planar_component_mag=xy*xy+yz*yz+zx*zx=sqrt(1-d*d)
+    mag(rotor+{1,0,0,0})^2 = (s_component+1)^2 + planar_component_mag^2
+    (1+d)*(1+d)+sqrt(1-d*d)*sqrt(1-d*d)
+    1+2*d+d*d + 1-d*d;
+    2+2*d;
+    \\\ergo
+    mag(rotor+{1,0,0,0})=sqrt(2+2*d)
+
+    \\\S
+    (v1.x*(v1.x+v2.x) + v1.y*(v1.y+v2.y) + v1.z*(v1.z+v2.z)) / m
+    (v1.x*v1.x + v1.x*v2.x + v1.y*v1.y + v1.y*v2.y + v1.z*v1.z + v1.z*v2.z) / m
+    (1 + v1.x*v2.x + v1.y*v2.y + v1.z*v2.z) / m
+    (1+d)/m
+    (1+d)/sqrt(2+2*d)
+    (1+d)/mag(rotor+{1,0,0,0})
+
+    \\\xy
+    (v1.y*(v1.x+v2.x)-v1.x*(v1.y+v2.y)) / m
+    (v1.y*v1.x + v1.y*v2.x - v1.x*v1.y - v1.x*v2.y) / m
+    (v1.y*v2.x-v1.x*v2.y + v1.y*v1.x-v1.x*v1.y) / m
+    (v1.y*v2.x-v1.x*v2.y) / m  ///this is the same as the regular xy component of the exterior product of v1 and v2, just divided by m, i.e. divided by mag(rotor+{1,0,0,0})
+
+    \\\yz same logic applies as did for xy
+    \\\xz same logic applies as did for xy
+    */
+    float d=v2.x*v1.x+v2.y*v1.y+v2.z*v1.z;
+    float m=1.0/sqrt(2.0+2.0*d);
+
+    return(rotor3f)
+    {
+        .s=m*d,
+        .xy=m*(v2.x*v1.y-v2.y*v1.x),
+        .yz=m*(v2.y*v1.z-v2.z*v1.y),
+        .zx=m*(v2.z*v1.x-v2.x*v1.z)
     };
 }
 
@@ -757,17 +805,17 @@ static inline vec3f r3f_derotate_v3f(rotor3f r,vec3f v)
 
 static inline vec3f r3f_get_x_axis(rotor3f r)
 {
-    return(vec3f){.x=1.0-2.0*(r.xy*r.xy - r.zx*r.zx),.y=2.0*(r.yz*r.zx - r.s*r.xy),.z=2.0*(r.yz*r.xy + r.s*r.zx)};
+    return(vec3f){.x=1.0-2.0*(r.xy*r.xy + r.zx*r.zx),.y=2.0*(r.yz*r.zx - r.s*r.xy),.z=2.0*(r.yz*r.xy + r.s*r.zx)};
 }
 
 static inline vec3f r3f_get_y_axis(rotor3f r)
 {
-    return(vec3f){.x=2.0*(r.zx*r.yz + r.xy*r.s),.y=1.0-2.0*(r.xy*r.xy - r.yz*r.yz),.z=2.0*(r.zx*r.xy - r.yz*r.s)};
+    return(vec3f){.x=2.0*(r.zx*r.yz + r.xy*r.s),.y=1.0-2.0*(r.xy*r.xy + r.yz*r.yz),.z=2.0*(r.zx*r.xy - r.yz*r.s)};
 }
 
 static inline vec3f r3f_get_z_axis(rotor3f r)
 {
-    return(vec3f){.x=2.0*(r.xy*r.yz - r.zx*r.s),.y=2.0*(r.xy*r.zx + r.yz*r.s),.z=1.0-2.0*(r.zx*r.zx - r.yz*r.yz)};
+    return(vec3f){.x=2.0*(r.xy*r.yz - r.zx*r.s),.y=2.0*(r.xy*r.zx + r.yz*r.s),.z=1.0-2.0*(r.zx*r.zx + r.yz*r.yz)};
 }
 
 
