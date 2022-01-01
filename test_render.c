@@ -72,6 +72,7 @@ static VkBufferMemoryBarrier2KHR test_graphics_to_transfer_buffer_barriers[1];
 
 
 static cvm_mesh test_stellated_octahedron_mesh;
+static cvm_mesh test_stub_stellated_octahedron_mesh;
 static cvm_mesh test_cube_mesh;
 
 static void create_test_descriptor_set_layouts(void)
@@ -716,6 +717,7 @@ void initialise_test_render_data()
 
     //create_test_vertex_buffer();
     test_stellated_octahedron_mesh.started=false;
+    test_stub_stellated_octahedron_mesh.started=false;
     test_cube_mesh.started=false;
 
 }
@@ -734,6 +736,7 @@ void terminate_test_render_data()
     cvm_vk_destroy_module_data(&test_module_data,false);
 
     cvm_mesh_relinquish(&test_stellated_octahedron_mesh,&test_managed_buffer);
+    cvm_mesh_relinquish(&test_stub_stellated_octahedron_mesh,&test_managed_buffer);
     cvm_mesh_relinquish(&test_cube_mesh,&test_managed_buffer);
 
     cvm_vk_managed_buffer_destroy(&test_managed_buffer);
@@ -795,49 +798,14 @@ void terminate_test_swapchain_dependencies()
     for(i=0;i<TEST_FRAMEBUFFER_CYCLES;i++)free(test_framebuffers[i]);
 }
 
-
-static inline void construct_transformation(float * transformation,rotor3f r,vec3f p)
-{
-
-
-    ///multiplying by sqrt 2 4 times removes 18 future multiplications by 2
-    r.s*=SQRT_2;
-    r.xy*=SQRT_2;
-    r.yz*=SQRT_2;
-    r.zx*=SQRT_2;
-
-    ///results stored as row major for more efficient access on device side (just need to declare values as row_major, which ONLY affects how data is read)
-    /// written in memory order for better streaming results
-    transformation[0 ]= 1.0 - r.xy*r.xy -r.zx*r.zx;
-    transformation[1 ]= r.zx*r.yz + r.xy*r.s;
-    transformation[2 ]= r.xy*r.yz - r.zx*r.s;
-    transformation[3 ]=p.x;
-
-    transformation[4 ]= r.yz*r.zx - r.s*r.xy;
-    transformation[5 ]= 1.0- r.xy*r.xy - r.yz*r.yz;
-    transformation[6 ]= r.xy*r.zx + r.yz*r.s;
-    transformation[7 ]=p.y;
-
-    transformation[8 ]= r.yz*r.xy + r.s*r.zx;
-    transformation[9 ]= r.zx*r.xy - r.yz*r.s;
-    transformation[10]= 1.0 - r.zx*r.zx - r.yz*r.yz;
-    transformation[11]=p.z;
-}
-
-
-
-void init_random_rotor(rotor3f * rot,uint32_t * seed)
-{
-    *rot=r3f_from_v3f_and_angle(
-        cvm_rng_point_on_sphere(
-            cvm_rng_lcg0_float(seed),cvm_rng_lcg0_float(seed)),
-        cvm_rng_lcg0_float(seed)*PI);
-//    *rot=r3f_from_v3f(
-//        cvm_rng_point_on_sphere(cvm_rng_lcg0_float(seed),cvm_rng_lcg0_float(seed)),
-//        cvm_rng_point_on_sphere(cvm_rng_lcg0_float(seed),cvm_rng_lcg0_float(seed)));
-}
-
-
+//rotor3f get_next_random_rotor(rotor3f prev_rot,uint64_t * seed)
+//{
+//    return r3f_normalize(r3f_multiply(prev_rot,r3f_from_v3f_and_angle(cvm_rng_point_on_sphere(seed),cvm_rng_even_zenith(seed))));//cvm_rng_centred_distribution
+////printf("%u\n",*seed);
+////    *rot=r3f_from_v3f(
+////        cvm_rng_point_on_sphere(cvm_rng_lcg0_float(seed),cvm_rng_lcg0_float(seed)),
+////        cvm_rng_point_on_sphere(cvm_rng_lcg0_float(seed),cvm_rng_lcg0_float(seed)));
+//}
 
 cvm_vk_module_work_block * test_render_frame(cvm_camera * c)
 {
@@ -845,10 +813,14 @@ cvm_vk_module_work_block * test_render_frame(cvm_camera * c)
     uint32_t swapchain_image_index;
 
     static rotor3f rots[4];
-    static uint32_t rand=83;
+    static uint64_t rand=83;//0xDEADBEEFC00FC00F;
     static uint32_t iter=0;
 
-    if(iter==0)for(iter=0;iter<4;iter++)init_random_rotor(rots+iter,&rand);
+    cvm_transform_stack ts;
+    cvm_transform_stack_reset(&ts);
+
+    //rots[0]=(rotor3f){.s=1,.xy=0,.yz=0,.zx=0};
+    if(iter==0)for(iter=0;iter<4;iter++)rots[iter]=cvm_rng_rotation_3d(&rand);
 
 
     ///perhaps this should return previous image index as well, such that that value can be used in cleanup (e.g. relinquishing ring buffer space)
@@ -868,7 +840,15 @@ cvm_vk_module_work_block * test_render_frame(cvm_camera * c)
         {
             if(!cvm_mesh_load_file(&test_stellated_octahedron_mesh,"cvm_shared/resources/stellated_octahedron.mesh",CVM_MESH_ADGACENCY|CVM_MESH_PER_FACE_MATERIAL,true,&test_managed_buffer))
             {
-                puts("load octahedron mesh failed!!!");
+                puts("load stellated octahedron mesh failed!!!");
+            }
+        }
+
+        if(!test_stub_stellated_octahedron_mesh.ready)
+        {
+            if(!cvm_mesh_load_file(&test_stub_stellated_octahedron_mesh,"cvm_shared/resources/stub_stellated_octahedron.mesh",CVM_MESH_ADGACENCY|CVM_MESH_PER_FACE_MATERIAL,true,&test_managed_buffer))
+            {
+                puts("load stub stellated octahedron mesh failed!!!");
             }
         }
 
@@ -918,56 +898,33 @@ cvm_vk_module_work_block * test_render_frame(cvm_camera * c)
         update_and_bind_test_uniforms(swapchain_image_index,uniforms_offset);
 
 
-        float transformation[12]=
-        {
-            1,0,0,1,
-            0,1,0,0,
-            0,0,1,0,
-        };
+        float transformation[12];
 
         rotor3f r;
-//        vec3f v=cvm_rng_point_on_sphere(cvm_rng_lcg0_float(&rand),cvm_rng_lcg0_float(&rand));
-//        printf("%f %f %f\n",v.x,v.y,v.z);
-
         int index;
-        float lerp,m,l1,l2;
-        vec3f xv,yv,zv;
-        static vec3f xvp=(vec3f){0,0,0};
-        static vec3f yvp=(vec3f){0,0,0};
-        static vec3f zvp=(vec3f){0,0,0};
-        float xa,ya,za;
-        static float xap,yap,zap;
+        float lerp;
 
 
         lerp=(((float)(iter&63))+0.5)/64.0;
         index=(iter>>6)&3;
-        if(iter&63==0)init_random_rotor(rots+((index+2)&3),&rand);
+        if((iter&63)==0)rots[(index+2)&3]=cvm_rng_rotation_3d(&rand);
         iter++;
 
 //        r=r3f_spherical_interp(rots[index],rots[(index+1)&3],lerp);
 //        r=r3f_lerp(rots[index],rots[(index+1)&3],lerp);
         r=r3f_bezier_interp(rots[(index+3)&3],rots[index],rots[(index+1)&3],rots[(index+2)&3],lerp);
 
-        xv=r3f_get_x_axis(r);
-        xa=acos(v3f_dot(xv,xvp));
-        yv=r3f_get_y_axis(r);
-        ya=acos(v3f_dot(yv,yvp));
-        zv=r3f_get_z_axis(r);
-        za=acos(v3f_dot(zv,zvp));
+        cvm_transform_stack_push(&ts);
+            cvm_transform_stack_rotate(&ts,r);
+            cvm_transform_stack_push(&ts);
+//                cvm_transform_stack_offset_position(&ts,((vec3f){1,1,1}));
+//                cvm_transform_stack_rotate_around_vector(&ts,((vec3f){SQRT_THIRD,SQRT_THIRD,SQRT_THIRD}),((float)(iter&31))*TAU/32);
+                cvm_transform_stack_get(&ts,transformation);
+            cvm_transform_stack_pop(&ts);
+        cvm_transform_stack_pop(&ts);
 
-        //printf("%i: %.3f %.3f %.3f  :  %f\n",index,fabsf((xap-xa)*1000.0f),fabsf((yap-ya)*1000.0f),fabsf((zap-za)*1000.0f),m);
-        xvp=xv;
-        yvp=yv;
-        zvp=zv;
-        xap=xa;
-        yap=ya;
-        zap=za;
-
-
-
-
-        construct_transformation(transformation,r,(vec3f){0,0,0});
-        ///assuming unit vectors (necessary) some/all of these may be collapsible, i.e. all compoents of rotor, if treated as 4d vector, has a length of 1
+        //cvm_transform_construct_from_rotor_and_position(transformation,r,(vec3f){0,0,0});
+        ///assuming unit vectors (necessary) some/all of these may be collapsible, i.e. all components of rotor, if treated as 4d vector, has a length of 1
         ///probably want to keep commented out uncollapsed
 
 
@@ -998,7 +955,7 @@ cvm_vk_module_work_block * test_render_frame(cvm_camera * c)
 
         vkCmdBindPipeline(work_block->graphics_work,VK_PIPELINE_BIND_POINT_GRAPHICS,test_pipeline);
 
-        cvm_mesh_render(&test_stellated_octahedron_mesh,work_block->graphics_work,1,0);
+        cvm_mesh_render(&test_stub_stellated_octahedron_mesh,work_block->graphics_work,1,0);
 
         vkCmdEndRenderPass(work_block->graphics_work);///================
 

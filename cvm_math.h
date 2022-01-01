@@ -837,6 +837,13 @@ static inline vec3f r3f_get_z_axis(rotor3f r)
     return(vec3f){.x=2.0*(r.xy*r.yz - r.zx*r.s),.y=2.0*(r.xy*r.zx + r.yz*r.s),.z=1.0-2.0*(r.zx*r.zx + r.yz*r.yz)};
 }
 
+///useful for ensuring object rotation doesn't start introducing skew as error accumulates over time
+static inline rotor3f r3f_normalize(rotor3f r)
+{
+    float m=1.0/sqrtf(r.s*r.s+r.xy*r.xy+r.yz*r.yz+r.zx*r.zx);
+    return(rotor3f){.s=r.s*m,.xy=r.xy*m,.yz=r.yz*m,.zx=r.zx*m};
+}
+
 static inline rotor3f r3f_lerp(rotor3f r1,rotor3f r2,float t)
 {
     float u;
