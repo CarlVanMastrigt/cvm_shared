@@ -675,7 +675,7 @@ static inline rotor3f r3f_from_v3f(vec3f v1,vec3f v2)
 
     2+2*d   ///this is magnitude of rotor+{1,0,0,0} squared
     s_component=d
-    planar_component_mag=xy*xy+yz*yz+zx*zx=sqrt(1-d*d)
+    planar_component_mag = sqrt(xy*xy+yz*yz+zx*zx) = sqrt(1-d*d)
     mag(rotor+{1,0,0,0})^2 = (s_component+1)^2 + planar_component_mag^2
     (1+d)*(1+d)+sqrt(1-d*d)*sqrt(1-d*d)
     1+2*d+d*d + 1-d*d;

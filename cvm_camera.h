@@ -56,12 +56,11 @@ typedef struct cvm_camera
     float fov;///vertical fov
     float near;
 
-    GLsizei screen_w;
-    GLsizei screen_h;
-    GLfloat aspect_ratio;///
-    GLfloat pixel_to_fov_angle_ratio;
-    GLfloat inverse_screen_dimensions[2];///x,y
-    GLfloat position_buffer[3];
+//    GLsizei screen_w;
+//    GLsizei screen_h;
+//    GLfloat aspect_ratio;///
+//    GLfloat pixel_to_fov_angle_ratio;
+//    GLfloat inverse_screen_dimensions[2];///x,y
 }
 cvm_camera;
 

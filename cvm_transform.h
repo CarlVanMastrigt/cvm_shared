@@ -26,6 +26,7 @@ along with cvm_shared.  If not, see <https://www.gnu.org/licenses/>.
 #define CVM_TRANSFORM
 
 
+///is it worth it to store rotation matrix and bool saying it has been calculated? can potentially save 18 mults and 12 adds
 typedef struct cvm_transform_frame
 {
     rotor3f r;
@@ -73,13 +74,13 @@ static inline void cvm_transform_construct_from_rotor_and_position(float * trans
     ///results stored as row major for more efficient access on device side
     ///     ^just need to declare values as row_major, which ONLY affects how data is READ from, not how matrix access operations are interpreted in shader
     /// written in memory order for better streaming results
-    transform_data[0 ]= 1.0 - r.xy*r.xy -r.zx*r.zx;
+    transform_data[0 ]= 1.0 - r.xy*r.xy - r.zx*r.zx;
     transform_data[1 ]= r.zx*r.yz + r.xy*r.s;
     transform_data[2 ]= r.xy*r.yz - r.zx*r.s;
     transform_data[3 ]=p.x;
 
     transform_data[4 ]= r.yz*r.zx - r.s*r.xy;
-    transform_data[5 ]= 1.0- r.xy*r.xy - r.yz*r.yz;
+    transform_data[5 ]= 1.0 - r.xy*r.xy - r.yz*r.yz;
     transform_data[6 ]= r.xy*r.zx + r.yz*r.s;
     transform_data[7 ]=p.y;
 

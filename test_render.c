@@ -63,11 +63,14 @@ static cvm_vk_transient_buffer test_transient_buffer;
 //static VkDependencyInfoKHR overlay_uninitialised_to_transfer_dependencies;
 //static VkImageMemoryBarrier2KHR overlay_uninitialised_to_transfer_image_barriers[2];
 
-static VkDependencyInfoKHR test_transfer_to_graphics_dependencies;
-static VkBufferMemoryBarrier2KHR test_transfer_to_graphics_buffer_barriers[1];
+//static VkDependencyInfoKHR test_transfer_to_graphics_dependencies;
+//static VkBufferMemoryBarrier2KHR test_transfer_to_graphics_buffer_barriers[1];
 
-static VkDependencyInfoKHR test_graphics_to_transfer_dependencies;
-static VkBufferMemoryBarrier2KHR test_graphics_to_transfer_buffer_barriers[1];
+//static VkDependencyInfoKHR test_graphics_to_transfer_dependencies;
+//static VkBufferMemoryBarrier2KHR test_graphics_to_transfer_buffer_barriers[1];
+
+static cvm_vk_dependency test_transfer_to_graphics_dependency;
+static cvm_vk_dependency test_graphics_to_transfer_dependency;
 
 
 
@@ -629,64 +632,24 @@ static void create_test_framebuffer_images(VkRect2D screen_rect,VkSampleCountFla
 
 static void create_test_barriers()
 {
-    //overlay_graphics_transfer_ownership_changes = cvm_vk_get_transfer_queue_family()==cvm_vk_get_graphics_queue_family();
-    ///put back queue ownership transfers as soon as its possible to test and profile, also needs backing structure to handle it
-
-    VkBufferMemoryBarrier2KHR memory_barrier=(VkBufferMemoryBarrier2KHR)///initialise all shared values;
-    {
-        .sType=VK_STRUCTURE_TYPE_BUFFER_MEMORY_BARRIER_2_KHR,
-        .pNext=NULL,
-        .offset=0,
-        .size=VK_WHOLE_SIZE
-    };
-
-
-    ///transfer to graphics
-    memory_barrier.srcStageMask=VK_PIPELINE_STAGE_TRANSFER_BIT;//VK_PIPELINE_STAGE_2_COPY_BIT_KHR;
-    memory_barrier.srcAccessMask=VK_ACCESS_2_TRANSFER_WRITE_BIT_KHR;
-    memory_barrier.dstStageMask=VK_PIPELINE_STAGE_2_ALL_GRAPHICS_BIT_KHR;
-    memory_barrier.dstAccessMask=VK_ACCESS_2_INDEX_READ_BIT_KHR;
+    cvm_vk_dependency_create_transfer_to_graphics(&test_transfer_to_graphics_dependency,0,1,0);
+    test_transfer_to_graphics_dependency.buffer_barriers[0].srcStageMask=VK_PIPELINE_STAGE_TRANSFER_BIT;//VK_PIPELINE_STAGE_2_COPY_BIT_KHR;
+    test_transfer_to_graphics_dependency.buffer_barriers[0].srcAccessMask=VK_ACCESS_2_TRANSFER_WRITE_BIT_KHR;
+    test_transfer_to_graphics_dependency.buffer_barriers[0].dstStageMask=VK_PIPELINE_STAGE_2_ALL_GRAPHICS_BIT_KHR;
+    test_transfer_to_graphics_dependency.buffer_barriers[0].dstAccessMask=VK_ACCESS_2_INDEX_READ_BIT_KHR;
     ///VK_ACCESS_2_INDEX_READ_BIT_KHR to test:  VK_ACCESS_2_MEMORY_READ_BIT_KHR // not sure about need for VK_ACCESS_2_MEMORY_WRITE_BIT_KHR... (could possibly write some buffer contents...)
-    memory_barrier.buffer=test_managed_buffer.buffer;
+    test_transfer_to_graphics_dependency.buffer_barriers[0].buffer=test_managed_buffer.buffer;
+    ///rely on default of the whole buffer for offset and size
 
-    test_transfer_to_graphics_buffer_barriers[0]=memory_barrier;
 
-    test_transfer_to_graphics_dependencies=(VkDependencyInfoKHR)
-    {
-        .sType=VK_STRUCTURE_TYPE_DEPENDENCY_INFO_KHR,
-        .pNext=NULL,
-        .dependencyFlags=0,
-        .memoryBarrierCount=0,
-        .pMemoryBarriers=NULL,
-        .bufferMemoryBarrierCount=1,
-        .pBufferMemoryBarriers=test_transfer_to_graphics_buffer_barriers,
-        .imageMemoryBarrierCount=0,
-        .pImageMemoryBarriers=NULL
-    };
-
-    ///graphics to transfer
-    memory_barrier.srcStageMask=VK_PIPELINE_STAGE_2_ALL_GRAPHICS_BIT_KHR;
-    memory_barrier.srcAccessMask=VK_ACCESS_2_INDEX_READ_BIT_KHR;
+    cvm_vk_dependency_create_graphics_to_transfer(&test_graphics_to_transfer_dependency,0,1,0);
+    test_graphics_to_transfer_dependency.buffer_barriers[0].srcStageMask=VK_PIPELINE_STAGE_2_ALL_GRAPHICS_BIT_KHR;
+    test_graphics_to_transfer_dependency.buffer_barriers[0].srcAccessMask=VK_ACCESS_2_INDEX_READ_BIT_KHR;
     ///VK_ACCESS_2_INDEX_READ_BIT_KHR to test:  VK_ACCESS_2_MEMORY_READ_BIT_KHR // not sure about need for VK_ACCESS_2_MEMORY_WRITE_BIT_KHR... (could possibly write some buffer contents...)
-    memory_barrier.dstStageMask=VK_PIPELINE_STAGE_TRANSFER_BIT;//VK_PIPELINE_STAGE_2_COPY_BIT_KHR;
-    memory_barrier.dstAccessMask=VK_ACCESS_2_TRANSFER_WRITE_BIT_KHR;
-    memory_barrier.buffer=test_managed_buffer.buffer;
-
-
-    test_graphics_to_transfer_buffer_barriers[0]=memory_barrier;
-
-    test_graphics_to_transfer_dependencies=(VkDependencyInfoKHR)
-    {
-        .sType=VK_STRUCTURE_TYPE_DEPENDENCY_INFO_KHR,
-        .pNext=NULL,
-        .dependencyFlags=0,
-        .memoryBarrierCount=0,
-        .pMemoryBarriers=NULL,
-        .bufferMemoryBarrierCount=1,
-        .pBufferMemoryBarriers=test_graphics_to_transfer_buffer_barriers,
-        .imageMemoryBarrierCount=0,
-        .pImageMemoryBarriers=NULL
-    };
+    test_graphics_to_transfer_dependency.buffer_barriers[0].dstStageMask=VK_PIPELINE_STAGE_TRANSFER_BIT;//VK_PIPELINE_STAGE_2_COPY_BIT_KHR;
+    test_graphics_to_transfer_dependency.buffer_barriers[0].dstAccessMask=VK_ACCESS_2_TRANSFER_WRITE_BIT_KHR;
+    test_graphics_to_transfer_dependency.buffer_barriers[0].buffer=test_managed_buffer.buffer;
+    ///rely on default of the whole buffer for offset and size
 }
 
 void initialise_test_render_data()
@@ -700,7 +663,7 @@ void initialise_test_render_data()
     cvm_vk_create_shader_stage_info(&test_vertex_stage,"cvm_shared/shaders/test_vert.spv",VK_SHADER_STAGE_VERTEX_BIT);
     cvm_vk_create_shader_stage_info(&test_fragment_stage,"cvm_shared/shaders/test_frag.spv",VK_SHADER_STAGE_FRAGMENT_BIT);
 
-    cvm_vk_create_module_data(&test_module_data,false);
+    cvm_vk_create_module_data(&test_module_data,false,0,1,1);
 
     cvm_vk_managed_buffer_create(&test_managed_buffer,65536,10,16,VK_BUFFER_USAGE_VERTEX_BUFFER_BIT|VK_BUFFER_USAGE_INDEX_BUFFER_BIT|VK_BUFFER_USAGE_TRANSFER_DST_BIT,false,false);
     ///VK_BUFFER_USAGE_TRANSFER_DST_BIT only necessary if not UMA system, but is it even possible to set this before finding that out??
@@ -744,6 +707,9 @@ void terminate_test_render_data()
     cvm_vk_transient_buffer_destroy(&test_transient_buffer);
 
     cvm_vk_staging_buffer_destroy(&test_staging_buffer);
+
+    cvm_vk_dependency_destroy(&test_transfer_to_graphics_dependency);
+    cvm_vk_dependency_destroy(&test_graphics_to_transfer_dependency);
 }
 
 
@@ -798,33 +764,22 @@ void terminate_test_swapchain_dependencies()
     for(i=0;i<TEST_FRAMEBUFFER_CYCLES;i++)free(test_framebuffers[i]);
 }
 
-//rotor3f get_next_random_rotor(rotor3f prev_rot,uint64_t * seed)
-//{
-//    return r3f_normalize(r3f_multiply(prev_rot,r3f_from_v3f_and_angle(cvm_rng_point_on_sphere(seed),cvm_rng_even_zenith(seed))));//cvm_rng_centred_distribution
-////printf("%u\n",*seed);
-////    *rot=r3f_from_v3f(
-////        cvm_rng_point_on_sphere(cvm_rng_lcg0_float(seed),cvm_rng_lcg0_float(seed)),
-////        cvm_rng_point_on_sphere(cvm_rng_lcg0_float(seed),cvm_rng_lcg0_float(seed)));
-//}
-
-cvm_vk_module_work_block * test_render_frame(cvm_camera * c)
+cvm_vk_module_batch * test_render_frame(cvm_camera * c)
 {
-    cvm_vk_module_work_block * work_block;
+    cvm_vk_module_batch * batch;
     uint32_t swapchain_image_index;
 
     static rotor3f rots[4];
-    static uint64_t rand=83;//0xDEADBEEFC00FC00F;
+    static uint64_t rand=0xDEADBEEFC00FC00F;
     static uint32_t iter=0;
 
     cvm_transform_stack ts;
     cvm_transform_stack_reset(&ts);
 
-    //rots[0]=(rotor3f){.s=1,.xy=0,.yz=0,.zx=0};
     if(iter==0)for(iter=0;iter<4;iter++)rots[iter]=cvm_rng_rotation_3d(&rand);
 
-
     ///perhaps this should return previous image index as well, such that that value can be used in cleanup (e.g. relinquishing ring buffer space)
-    work_block = cvm_vk_begin_module_work_block(&test_module_data,0,&swapchain_image_index);
+    batch = cvm_vk_begin_module_batch(&test_module_data,0,&swapchain_image_index);
 
     /// look into benefit of cycling an array of framebuffer & backing images (TEST_FRAMEBUFFER_CYCLES)
 
@@ -833,7 +788,10 @@ cvm_vk_module_work_block * test_render_frame(cvm_camera * c)
         cvm_vk_transient_buffer_begin(&test_transient_buffer,swapchain_image_index);
         cvm_vk_staging_buffer_begin(&test_staging_buffer);
 
-        CVM_TMP_vkCmdPipelineBarrier2KHR(work_block->graphics_work,&test_graphics_to_transfer_dependencies);
+        //CVM_TMP_vkCmdPipelineBarrier2KHR(batch->graphics_pcb,&test_graphics_to_transfer_dependencies);
+        cvm_vk_dependency_submit(&test_graphics_to_transfer_dependency,batch->graphics_pcb,batch->graphics_pcb);///make second transfer_pcb
+        ///move above to end ??
+        #warning need to figure out how to incorporate synchronization (semaphore) into dependency, just implicitly handled by module?
         ///technically only necessary if using staging!
 
         if(!test_stellated_octahedron_mesh.ready)
@@ -862,11 +820,12 @@ cvm_vk_module_work_block * test_render_frame(cvm_camera * c)
 
         cvm_vk_staging_buffer_end(&test_staging_buffer,swapchain_image_index);
 
-        cvm_vk_managed_buffer_submit_all_pending_copy_actions(&test_managed_buffer,work_block->graphics_work);///must go AFTER used staging buffer gets flushed, needs external synchronisation when being used in MT environment
+        cvm_vk_managed_buffer_submit_all_pending_copy_actions(&test_managed_buffer,batch->graphics_pcb);///must go AFTER used staging buffer gets flushed, needs external synchronisation when being used in MT environment
 
         ///end of transfer
 
-        CVM_TMP_vkCmdPipelineBarrier2KHR(work_block->graphics_work,&test_transfer_to_graphics_dependencies);
+        //CVM_TMP_vkCmdPipelineBarrier2KHR(batch->graphics_pcb,&test_transfer_to_graphics_dependencies);
+        cvm_vk_dependency_submit(&test_transfer_to_graphics_dependency,batch->graphics_pcb,batch->graphics_pcb);///make first transfer_pcb
         ///technically only necessary if using staging!
 
         ///start of graphics
@@ -905,9 +864,9 @@ cvm_vk_module_work_block * test_render_frame(cvm_camera * c)
         float lerp;
 
 
-        lerp=(((float)(iter&63))+0.5)/64.0;
-        index=(iter>>6)&3;
-        if((iter&63)==0)rots[(index+2)&3]=cvm_rng_rotation_3d(&rand);
+        lerp=(((float)(iter&127))+0.5)/127.0;
+        index=(iter>>7)&3;
+        if((iter&127)==0)rots[(index+2)&3]=cvm_rng_rotation_3d(&rand);
         iter++;
 
 //        r=r3f_spherical_interp(rots[index],rots[(index+1)&3],lerp);
@@ -917,8 +876,8 @@ cvm_vk_module_work_block * test_render_frame(cvm_camera * c)
         cvm_transform_stack_push(&ts);
             cvm_transform_stack_rotate(&ts,r);
             cvm_transform_stack_push(&ts);
-//                cvm_transform_stack_offset_position(&ts,((vec3f){1,1,1}));
-//                cvm_transform_stack_rotate_around_vector(&ts,((vec3f){SQRT_THIRD,SQRT_THIRD,SQRT_THIRD}),((float)(iter&31))*TAU/32);
+                //cvm_transform_stack_offset_position(&ts,((vec3f){1,1,1}));
+                //cvm_transform_stack_rotate_around_vector(&ts,((vec3f){SQRT_THIRD,SQRT_THIRD,SQRT_THIRD}),((float)(iter&31))*TAU/32);
                 cvm_transform_stack_get(&ts,transformation);
             cvm_transform_stack_pop(&ts);
         cvm_transform_stack_pop(&ts);
@@ -928,17 +887,17 @@ cvm_vk_module_work_block * test_render_frame(cvm_camera * c)
         ///probably want to keep commented out uncollapsed
 
 
-        vkCmdPushConstants(work_block->graphics_work,test_pipeline_layout,VK_SHADER_STAGE_VERTEX_BIT,0,sizeof(float)*12,transformation);
+        vkCmdPushConstants(batch->graphics_pcb,test_pipeline_layout,VK_SHADER_STAGE_VERTEX_BIT,0,sizeof(float)*12,transformation);
 
-        vkCmdBindDescriptorSets(work_block->graphics_work,VK_PIPELINE_BIND_POINT_GRAPHICS,test_pipeline_layout,0,1,test_descriptor_sets+swapchain_image_index,0,NULL);
+        vkCmdBindDescriptorSets(batch->graphics_pcb,VK_PIPELINE_BIND_POINT_GRAPHICS,test_pipeline_layout,0,1,test_descriptor_sets+swapchain_image_index,0,NULL);
 
         ///do graphics
         VkClearValue clear_values[2];///other clear colours should probably be provided by other chunks of application
         clear_values[0].color=(VkClearColorValue){{0.95f,0.5f,0.75f,1.0f}};
         clear_values[1].depthStencil=(VkClearDepthStencilValue){.depth=0.0,.stencil=0};
 
-        cvm_vk_managed_buffer_bind_as_index(work_block->graphics_work,&test_managed_buffer,VK_INDEX_TYPE_UINT16);
-        cvm_vk_managed_buffer_bind_as_vertex(work_block->graphics_work,&test_managed_buffer,0);
+        cvm_vk_managed_buffer_bind_as_index(batch->graphics_pcb,&test_managed_buffer,VK_INDEX_TYPE_UINT16);
+        cvm_vk_managed_buffer_bind_as_vertex(batch->graphics_pcb,&test_managed_buffer,0);
 
         VkRenderPassBeginInfo render_pass_begin_info=(VkRenderPassBeginInfo)
         {
@@ -951,13 +910,13 @@ cvm_vk_module_work_block * test_render_frame(cvm_camera * c)
             .pClearValues=clear_values
         };
 
-        vkCmdBeginRenderPass(work_block->graphics_work,&render_pass_begin_info,VK_SUBPASS_CONTENTS_INLINE);///================
+        vkCmdBeginRenderPass(batch->graphics_pcb,&render_pass_begin_info,VK_SUBPASS_CONTENTS_INLINE);///================
 
-        vkCmdBindPipeline(work_block->graphics_work,VK_PIPELINE_BIND_POINT_GRAPHICS,test_pipeline);
+        vkCmdBindPipeline(batch->graphics_pcb,VK_PIPELINE_BIND_POINT_GRAPHICS,test_pipeline);
 
-        cvm_mesh_render(&test_stub_stellated_octahedron_mesh,work_block->graphics_work,1,0);
+        cvm_mesh_render(&test_stub_stellated_octahedron_mesh,batch->graphics_pcb,1,0);
 
-        vkCmdEndRenderPass(work_block->graphics_work);///================
+        vkCmdEndRenderPass(batch->graphics_pcb);///================
 
         cvm_vk_transient_buffer_end(&test_transient_buffer);
 
@@ -965,7 +924,7 @@ cvm_vk_module_work_block * test_render_frame(cvm_camera * c)
         test_current_framebuffer_index*= test_current_framebuffer_index<TEST_FRAMEBUFFER_CYCLES;
     }
 
-    return cvm_vk_end_module_work_block(&test_module_data);
+    return cvm_vk_end_module_batch(&test_module_data);
 }
 
 void test_frame_cleanup(uint32_t swapchain_image_index)

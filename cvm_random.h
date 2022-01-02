@@ -211,7 +211,7 @@ static inline rotor3f cvm_rng_rotation_3d(uint64_t * state)
     /// does require assumption that the 2 circles rotations are independent, which should be the case (not 100% certain of this!)
     /// also of note: the selection of which axis (xy,yz,zx) as well as use of r vs 1-r is completely arbitrary, could swap any axis used here with no change in result
     /// ergo how components are assigned here doesn't seem to matter at all
-    /// seeming only that radii are paired with angles used to generate them is important (?)
+    /// only that radii are paired with the angles for the same circles is all that's important (is even this required ?)
 
     uint32_t s=cvm_rng_pcg_a(state);
     float a1=cvm_rng_float_16(&s)*TAU;

@@ -71,17 +71,14 @@ void update_camera(int screen_w,int screen_h,cvm_camera * c)
     c->position.z=-focal_distance*cosf(c->zenith_angle);
 
 
-    c->position_buffer[0]=c->position.x;
-    c->position_buffer[1]=c->position.y;
-    c->position_buffer[2]=c->position.z;
+    ar=((float)screen_w)/((float)screen_h);
 
-
-    c->screen_w=screen_w;
-    c->screen_h=screen_h;
-    c->inverse_screen_dimensions[0]=1.0f/((float)screen_w);
-    c->inverse_screen_dimensions[1]=1.0f/((float)screen_h);
-    c->aspect_ratio=ar=((float)screen_w)/((float)screen_h);
-    c->pixel_to_fov_angle_ratio=((float)screen_h)/c->fov;
+//    c->screen_w=screen_w;
+//    c->screen_h=screen_h;
+//    c->inverse_screen_dimensions[0]=1.0f/((float)screen_w);
+//    c->inverse_screen_dimensions[1]=1.0f/((float)screen_h);
+//    c->aspect_ratio=ar;
+//    c->pixel_to_fov_angle_ratio=((float)screen_h)/c->fov;
 
 
     tan_half_fov=tanf(c->fov*0.5);

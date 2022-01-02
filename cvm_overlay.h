@@ -99,7 +99,7 @@ void terminate_overlay_render_data(void);
 void initialise_overlay_swapchain_dependencies(void);
 void terminate_overlay_swapchain_dependencies(void);
 
-cvm_vk_module_work_block * overlay_render_frame(int screen_w,int screen_h,widget * menu_widget);
+cvm_vk_module_batch * overlay_render_frame(int screen_w,int screen_h,widget * menu_widget);
 
 void overlay_frame_cleanup(uint32_t swapchain_image_index);
 
