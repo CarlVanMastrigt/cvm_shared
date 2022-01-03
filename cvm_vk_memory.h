@@ -95,8 +95,20 @@ typedef struct cvm_vk_available_dynamic_allocation_heap
 }
 cvm_vk_available_dynamic_allocation_heap;
 
+typedef struct cvm_vk_managed_buffer_barrier_list
+{
+    VkPipelineStageFlags stage_mask;///would be nice to move VkBufferMemoryBarrier to VkBufferMemoryBarrier2KHR so that stages can be specified per barrier...
+    VkBufferMemoryBarrier * barriers;
+    uint32_t space;
+    uint32_t count;
+}
+cvm_vk_managed_buffer_barrier_list;
+
 typedef struct cvm_vk_managed_buffer
 {
+    atomic_uint_fast32_t acquire_spinlock;///put at top in order to get padding between spinlocks (other being copy_spinlock)
+    bool multithreaded;
+
     VkBuffer buffer;
     VkDeviceMemory memory;
 
@@ -107,8 +119,7 @@ typedef struct cvm_vk_managed_buffer
     uint32_t dynamic_offset;/// taken from start of buffer, is a multiple of base offset, actual offset = dynamic_offset<<base_dynamic_allocation_size_factor
     ///recursively free dynamic allocations (if they are the last allocation) when making available
     ///give error if dynamic_offset would become greater than static_offset
-    bool multithreaded;
-    atomic_uint_fast32_t acquire_spinlock;
+
 
     cvm_vk_dynamic_buffer_allocation * first_unused_allocation;///singly linked list of allocations to assign space to
     uint32_t unused_allocation_count;
@@ -122,13 +133,30 @@ typedef struct cvm_vk_managed_buffer
     uint32_t available_dynamic_allocation_bitmask;
     uint32_t base_dynamic_allocation_size_factor;
 
+
     void * mapping;///used for device generic buffers on UMA platforms and staging/uniform buffers on all others (assuming you would event want this for those prposes...) also operates as flag as to whether staging is necessary
 
-    atomic_uint_fast32_t copy_spinlock;/// could really do with padding between this and other spinlock...
+/// relevant data for copying, if UMA none of what follows will be used
+
     cvm_vk_staging_buffer * staging_buffer;///for when mapping is not available
+
     VkBufferCopy * pending_copy_actions;
     uint32_t pending_copy_space;
     uint32_t pending_copy_count;
+
+    cvm_vk_managed_buffer_barrier_list copy_release_barriers;
+    cvm_vk_managed_buffer_barrier_list copy_acquire_barriers;
+    ///could have an arbitrary number of cvm_vk_managed_buffer_barrier_list, allowing for more than 1 frame of delay
+    ///but after the number exceeds the number of swapchain images barriers become unnecessary unless transferring between queue families
+
+    uint32_t copy_src_queue_family;/// transfer (DMA)queue family where possible
+    uint32_t copy_dst_queue_family;/// graphics queue family
+    uint32_t copy_update_counter:CVM_VK_AVAILABITY_TOKEN_COUNTER_BITS;
+    /// acquire barrier only relevant when a dedicated transfer queue family is involved
+    /// is used to acquire ownership of buffer regions after they were released on transfer queue family
+    /// when this is the case, upon submitting copies, need to swap these 2 structs and reset the (new) transfer barrier list
+
+    atomic_uint_fast32_t copy_spinlock;///put at bottom in order to get padding between spinlocks (other being acquire_spinlock)
 }
 cvm_vk_managed_buffer;
 
@@ -144,48 +172,15 @@ static inline uint64_t cvm_vk_managed_buffer_get_dynamic_allocation_offset(cvm_v
 
 uint64_t cvm_vk_managed_buffer_acquire_static_allocation(cvm_vk_managed_buffer * mb,uint64_t size,uint64_t alignment);///cannot be relinquished, exists until
 
-void * cvm_vk_managed_buffer_get_dynamic_allocation_mapping(cvm_vk_managed_buffer * mb,cvm_vk_dynamic_buffer_allocation * allocation,uint64_t size);///if size==0 returns full allocation
-void * cvm_vk_managed_buffer_get_static_allocation_mapping(cvm_vk_managed_buffer * mb,uint64_t offset,uint64_t size);
+void * cvm_vk_managed_buffer_get_dynamic_allocation_mapping(cvm_vk_managed_buffer * mb,cvm_vk_dynamic_buffer_allocation * allocation,uint64_t size,VkPipelineStageFlags stage_mask,VkAccessFlags access_mask);///if size==0 returns full allocation
+void * cvm_vk_managed_buffer_get_static_allocation_mapping(cvm_vk_managed_buffer * mb,uint64_t offset,uint64_t size,VkPipelineStageFlags stage_mask,VkAccessFlags access_mask);
 
-void cvm_vk_managed_buffer_submit_all_pending_copy_actions(cvm_vk_managed_buffer * mb,VkCommandBuffer transfer_cb);
+void cvm_vk_managed_buffer_submit_all_pending_copy_actions(cvm_vk_managed_buffer * mb,VkCommandBuffer transfer_cb);///includes necessary barriers
+/// for the love of god only call this once per buffer per frame
+/// also must be called in single thread AFTER acquire operations are processed by that same thread
 
 void cvm_vk_managed_buffer_bind_as_vertex(VkCommandBuffer cmd_buf,cvm_vk_managed_buffer * mb,uint32_t binding);
 void cvm_vk_managed_buffer_bind_as_index(VkCommandBuffer cmd_buf,cvm_vk_managed_buffer * mb,VkIndexType type);
-
-///on UMA don't flush individual regions, instead every frame flush enture buffer (may want to profile?)
-//void cvm_vk_flush_managed_buffer(cvm_vk_managed_buffer * mb);
-
-
-
-
-
-
-/**
-ring buffer solves issues for uniform buffers and most of upload problems but isnt really extensible in the case of instance data
-
-instance data is somewhat problematic anyway, as it potentially varies a lot frame to frame, removing potential of allocating space only as necessary
-    and relying on enough being available this frame from memory being released this frame requires constant allocation with hard limits on particular instance data
-    this isnt the end of the world but it is wasteful both in terms of memory and flushing
-    a better approach might be to upfront allocate a LOT of space, using the same uniform space insurance BUT allowing space allocated for instance to expand as contract dependent on use
-        (even if this means frames where not everything gets drawn...) expanding available allocations by some count as necessary
-            perhaps increasing to ensure some max expected delta factor is satisfied while increasing in multiples of some some base allocation size, even though this is slightly wasteful it isn't terribly wasteful
-
-    this paradigm should also include the capacity of submodules to pause rendering while their allocated buffers expand.
-    BUT as ring buffer is completely transient there could be a system to seamlessly replace ring buffers with new, larger ones where possible (falling back to failed allocations when that happens)
-        ^ a system like this should expand by some reasonable factor, perhaps multiples of 2?
-        ^ this does sound more like user side code: probably good to provide example of this in use and/or default management tools to accomplish this (even though will likely end up implementation specific...)
-
-    uniform-  base constant allocation
-    instance- base unit, frame reserve space, expansion reserve space or factor (perhaps same as max expected allocation or half of it, used in sizing buffer)
-    upload-   expansion reserve space or factor (perhaps same as max expected allocation or half of it, used in sizing buffer)
-
-    perhaps expansion reserve ensures that at least that much (in multiples) will always be available when expanding/resizing buffer
-
-    immediate cleanup of space taken by finished frame ensures no space hangs around
-
-    by having error handling (unable to allocate space) and sufficient reserves having just 1 buffer to switch to when deciding to resize should be sufficient
-*/
-
 
 
 
@@ -218,93 +213,6 @@ void cvm_vk_transient_buffer_end(cvm_vk_transient_buffer * tb);
 
 void * cvm_vk_transient_buffer_get_allocation(cvm_vk_transient_buffer * tb,uint32_t allocation_size,VkDeviceSize * acquired_offset);
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-/**
-related to section 12.7. "Resource Sharing Mode" of vulkan spec.
-
-not sure if single buffer can be used across queue families (transfer,compute,graphics) like cvm_vk_upload_buffer potentially wants to be
-
-Ranges of buffers and image subresources of image objects created using VK_SHARING_MODE_EXCLUSIVE
-must only be accessed by queues in the queue family that has ownership of the resource.
-Upon creation, such resources are not owned by any queue family; ownership is implicitly acquired upon first use within a queue.
-Once a resource using VK_SHARING_MODE_EXCLUSIVE is owned by some queue family,
-the application must perform a queue family ownership transfer to make the memory contents of a range or image subresource accessible to a different queue
-
-
-this isnt very clear on whether ownersip is acquired per buffer or buffer-range, is a resource a buffer or a buffer range? ownership transfers happen per range,
-but if resource!=range then it appears ownership is first acquired for the whole buffer at once
-
-similarly
-
-A queue family can take ownership of an image subresource or buffer range of a resource created with
-VK_SHARING_MODE_EXCLUSIVE, without an ownership transfer, in the same way as for a resource that was just created;
-however, taking ownership in this way has the effect that the contents of the image subresource or buffer range are undefined.
-
-
-this doesn't specify what happens to data written from mapped regions, ownership is presumably acquired AFTER mapped writes (first use == implicit acquisition -> undefined contents)
-however it isnt specific upon when mapped wries become visible (presumably this is detailed somewhere else in the spec)
-
-either way it doesnt allow variable sized allocations so i will be using buffer per type paradigm
-*/
-
-/*typedef struct cvm_vk_upload_buffer
-{
-    VkBuffer buffer;
-    VkDeviceMemory memory;
-
-    VkBufferUsageFlags usage;
-
-    uint32_t alignment_size_factor;
-
-    void * mapping;
-
-    uint32_t frame_count;///basically just swapchain image count, useful for detecting change here and knowing when to recreate
-    uint32_t current_frame;///unnecessary also but makes code a tad cleaner (dont need to pass it in for every transient acquisition or end frame)
-
-    /// uniform/instance (transient) stuff
-    uint32_t transient_space_per_frame;///used in allocation step, if (0) dont perform setup/ops
-    atomic_uint_fast32_t transient_space_remaining;///this frame
-    uint32_t * transient_offsets;///all go after staging space b/c storing offsets anyway is required
-
-    ///staging stuff
-    uint32_t staging_space_per_frame;///used in allocation step,assert if any attempted staging acquisition is larger than this, if (0) dont perform setup/ops
-    uint32_t staging_space;///not really necessesary b/ have space per frame and frame count but is a convenience
-    uint32_t max_staging_offset;///fence, should be updated before multithreading becomes applicable this frame
-    atomic_uint_fast32_t staging_space_remaining;
-    uint32_t initial_staging_space_remaining;
-    uint32_t * staging_buffer_acquisitions;
-}
-cvm_vk_upload_buffer;
-
-void cvm_vk_create_upload_buffer(cvm_vk_upload_buffer * ub,VkBufferUsageFlags usage);
-void cvm_vk_update_upload_buffer(cvm_vk_upload_buffer * ub,uint32_t staging_space_per_frame,uint32_t transient_space_per_frame,uint32_t frame_count);
-void cvm_vk_destroy_upload_buffer(cvm_vk_upload_buffer * ub);
-///may want to set requisite space in separate functions...
-/// if adding space to requisite would be good to have set rounding ops to use...
-
-uint32_t cvm_vk_upload_buffer_get_rounded_allocation_size(cvm_vk_upload_buffer * ub,uint32_t allocation_size);///absolutely needed for uniform usage
-
-void cvm_vk_begin_upload_buffer_frame(cvm_vk_upload_buffer * ub,uint32_t frame_index);
-void cvm_vk_end_upload_buffer_frame(cvm_vk_upload_buffer * ub);
-
-void cvm_vk_relinquish_upload_buffer_space(cvm_vk_upload_buffer * ub,uint32_t frame_index);
-
-///need to be careful to avoid using a null return in either of these
-void * cvm_vk_get_upload_buffer_staging_allocation(cvm_vk_upload_buffer * ub,uint32_t allocation_size,VkDeviceSize * acquired_offset);
-void * cvm_vk_get_upload_buffer_transient_allocation(cvm_vk_upload_buffer * ub,uint32_t allocation_size,VkDeviceSize * acquired_offset);*/
 
 
 

@@ -59,20 +59,6 @@ static cvm_vk_staging_buffer test_staging_buffer;
 
 static cvm_vk_transient_buffer test_transient_buffer;
 
-///dont think these barriers are really neceessary
-//static VkDependencyInfoKHR overlay_uninitialised_to_transfer_dependencies;
-//static VkImageMemoryBarrier2KHR overlay_uninitialised_to_transfer_image_barriers[2];
-
-//static VkDependencyInfoKHR test_transfer_to_graphics_dependencies;
-//static VkBufferMemoryBarrier2KHR test_transfer_to_graphics_buffer_barriers[1];
-
-//static VkDependencyInfoKHR test_graphics_to_transfer_dependencies;
-//static VkBufferMemoryBarrier2KHR test_graphics_to_transfer_buffer_barriers[1];
-
-static cvm_vk_dependency test_transfer_to_graphics_dependency;
-static cvm_vk_dependency test_graphics_to_transfer_dependency;
-
-
 
 static cvm_mesh test_stellated_octahedron_mesh;
 static cvm_mesh test_stub_stellated_octahedron_mesh;
@@ -338,7 +324,7 @@ static void create_test_pipelines(VkRect2D screen_rectangle,VkSampleCountFlagBit
                         .location=0,
                         .binding=0,
                         .format=VK_FORMAT_R32G32B32_SFLOAT,
-                        .offset=offsetof(test_render_data,pos)
+                        .offset=0//offsetof(test_render_data,pos)
                     },
 //                    {
 //                        .location=1,
@@ -630,28 +616,6 @@ static void create_test_framebuffer_images(VkRect2D screen_rect,VkSampleCountFla
 
 }
 
-static void create_test_barriers()
-{
-    cvm_vk_dependency_create_transfer_to_graphics(&test_transfer_to_graphics_dependency,0,1,0);
-    test_transfer_to_graphics_dependency.buffer_barriers[0].srcStageMask=VK_PIPELINE_STAGE_TRANSFER_BIT;//VK_PIPELINE_STAGE_2_COPY_BIT_KHR;
-    test_transfer_to_graphics_dependency.buffer_barriers[0].srcAccessMask=VK_ACCESS_2_TRANSFER_WRITE_BIT_KHR;
-    test_transfer_to_graphics_dependency.buffer_barriers[0].dstStageMask=VK_PIPELINE_STAGE_2_ALL_GRAPHICS_BIT_KHR;
-    test_transfer_to_graphics_dependency.buffer_barriers[0].dstAccessMask=VK_ACCESS_2_INDEX_READ_BIT_KHR;
-    ///VK_ACCESS_2_INDEX_READ_BIT_KHR to test:  VK_ACCESS_2_MEMORY_READ_BIT_KHR // not sure about need for VK_ACCESS_2_MEMORY_WRITE_BIT_KHR... (could possibly write some buffer contents...)
-    test_transfer_to_graphics_dependency.buffer_barriers[0].buffer=test_managed_buffer.buffer;
-    ///rely on default of the whole buffer for offset and size
-
-
-    cvm_vk_dependency_create_graphics_to_transfer(&test_graphics_to_transfer_dependency,0,1,0);
-    test_graphics_to_transfer_dependency.buffer_barriers[0].srcStageMask=VK_PIPELINE_STAGE_2_ALL_GRAPHICS_BIT_KHR;
-    test_graphics_to_transfer_dependency.buffer_barriers[0].srcAccessMask=VK_ACCESS_2_INDEX_READ_BIT_KHR;
-    ///VK_ACCESS_2_INDEX_READ_BIT_KHR to test:  VK_ACCESS_2_MEMORY_READ_BIT_KHR // not sure about need for VK_ACCESS_2_MEMORY_WRITE_BIT_KHR... (could possibly write some buffer contents...)
-    test_graphics_to_transfer_dependency.buffer_barriers[0].dstStageMask=VK_PIPELINE_STAGE_TRANSFER_BIT;//VK_PIPELINE_STAGE_2_COPY_BIT_KHR;
-    test_graphics_to_transfer_dependency.buffer_barriers[0].dstAccessMask=VK_ACCESS_2_TRANSFER_WRITE_BIT_KHR;
-    test_graphics_to_transfer_dependency.buffer_barriers[0].buffer=test_managed_buffer.buffer;
-    ///rely on default of the whole buffer for offset and size
-}
-
 void initialise_test_render_data()
 {
     create_test_render_pass(cvm_vk_get_screen_format(),VK_SAMPLE_COUNT_1_BIT);
@@ -674,9 +638,6 @@ void initialise_test_render_data()
     cvm_vk_transient_buffer_create(&test_transient_buffer,VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT);
 
     cvm_vk_staging_buffer_create(&test_staging_buffer,VK_BUFFER_USAGE_TRANSFER_SRC_BIT);
-
-    create_test_barriers();///must go after creation of all resources these barriers act upon, if those resources change will need to be called again
-    /// ^ in this case only acts upon test_managed_buffer
 
     //create_test_vertex_buffer();
     test_stellated_octahedron_mesh.started=false;
@@ -707,9 +668,6 @@ void terminate_test_render_data()
     cvm_vk_transient_buffer_destroy(&test_transient_buffer);
 
     cvm_vk_staging_buffer_destroy(&test_staging_buffer);
-
-    cvm_vk_dependency_destroy(&test_transfer_to_graphics_dependency);
-    cvm_vk_dependency_destroy(&test_graphics_to_transfer_dependency);
 }
 
 
@@ -788,10 +746,8 @@ cvm_vk_module_batch * test_render_frame(cvm_camera * c)
         cvm_vk_transient_buffer_begin(&test_transient_buffer,swapchain_image_index);
         cvm_vk_staging_buffer_begin(&test_staging_buffer);
 
-        //CVM_TMP_vkCmdPipelineBarrier2KHR(batch->graphics_pcb,&test_graphics_to_transfer_dependencies);
-        cvm_vk_dependency_submit(&test_graphics_to_transfer_dependency,batch->graphics_pcb,batch->graphics_pcb);///make second transfer_pcb
         ///move above to end ??
-        #warning need to figure out how to incorporate synchronization (semaphore) into dependency, just implicitly handled by module?
+
         ///technically only necessary if using staging!
 
         if(!test_stellated_octahedron_mesh.ready)
@@ -820,13 +776,12 @@ cvm_vk_module_batch * test_render_frame(cvm_camera * c)
 
         cvm_vk_staging_buffer_end(&test_staging_buffer,swapchain_image_index);
 
+        #warning need to figure out how to incorporate synchronization (semaphore) into dependency, just implicitly handled by module?
+        ///     ^ specifically in the case of a queue ownership transfer scheduled by above
         cvm_vk_managed_buffer_submit_all_pending_copy_actions(&test_managed_buffer,batch->graphics_pcb);///must go AFTER used staging buffer gets flushed, needs external synchronisation when being used in MT environment
 
         ///end of transfer
 
-        //CVM_TMP_vkCmdPipelineBarrier2KHR(batch->graphics_pcb,&test_transfer_to_graphics_dependencies);
-        cvm_vk_dependency_submit(&test_transfer_to_graphics_dependency,batch->graphics_pcb,batch->graphics_pcb);///make first transfer_pcb
-        ///technically only necessary if using staging!
 
         ///start of graphics
 
@@ -881,11 +836,6 @@ cvm_vk_module_batch * test_render_frame(cvm_camera * c)
                 cvm_transform_stack_get(&ts,transformation);
             cvm_transform_stack_pop(&ts);
         cvm_transform_stack_pop(&ts);
-
-        //cvm_transform_construct_from_rotor_and_position(transformation,r,(vec3f){0,0,0});
-        ///assuming unit vectors (necessary) some/all of these may be collapsible, i.e. all components of rotor, if treated as 4d vector, has a length of 1
-        ///probably want to keep commented out uncollapsed
-
 
         vkCmdPushConstants(batch->graphics_pcb,test_pipeline_layout,VK_SHADER_STAGE_VERTEX_BIT,0,sizeof(float)*12,transformation);
 

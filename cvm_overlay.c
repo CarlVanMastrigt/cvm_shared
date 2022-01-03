@@ -66,21 +66,6 @@ static cvm_vk_staging_buffer overlay_staging_buffer;
 
 static uint32_t max_overlay_elements=4096;
 
-//static VkDependencyInfoKHR overlay_uninitialised_to_transfer_dependencies;
-//static VkImageMemoryBarrier2KHR overlay_uninitialised_to_transfer_image_barriers[2];
-//
-//static VkDependencyInfoKHR overlay_transfer_to_graphics_dependencies;
-//static VkImageMemoryBarrier2KHR overlay_transfer_to_graphics_image_barriers[2];
-//
-//static VkDependencyInfoKHR overlay_graphics_to_transfer_dependencies;
-//static VkImageMemoryBarrier2KHR overlay_graphics_to_transfer_image_barriers[2];
-
-static cvm_vk_dependency overlay_uninitialised_to_transfer_dependency;
-static cvm_vk_dependency overlay_transfer_to_graphics_dependency;
-static cvm_vk_dependency overlay_graphics_to_transfer_dependency;
-
-//static bool overlay_graphics_transfer_ownership_changes;
-
 
 void test_timing(bool start,char * name)
 {
@@ -676,61 +661,6 @@ static void create_overlay_images(uint32_t t_w,uint32_t t_h,uint32_t c_w,uint32_
     ///could move general section out and use a meta structure encompassing the generalised image atlas?
 }
 
-static void create_overlay_barriers()
-{
-    cvm_vk_dependency_create_uninitialised_to_transfer(&overlay_uninitialised_to_transfer_dependency,2);
-    ///rely on defaults (none/0) for src stage/access mask, same for subresourceRange (first mip of first array layer only)
-    overlay_uninitialised_to_transfer_dependency.image_barriers[0].dstStageMask=VK_PIPELINE_STAGE_2_TRANSFER_BIT_KHR;
-    overlay_uninitialised_to_transfer_dependency.image_barriers[0].dstAccessMask=VK_ACCESS_2_TRANSFER_WRITE_BIT_KHR;
-    overlay_uninitialised_to_transfer_dependency.image_barriers[0].oldLayout=VK_IMAGE_LAYOUT_UNDEFINED;
-    overlay_uninitialised_to_transfer_dependency.image_barriers[0].newLayout=VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL;
-    overlay_uninitialised_to_transfer_dependency.image_barriers[0].image=overlay_transparent_image;
-
-    overlay_uninitialised_to_transfer_dependency.image_barriers[1].dstStageMask=VK_PIPELINE_STAGE_2_TRANSFER_BIT_KHR;
-    overlay_uninitialised_to_transfer_dependency.image_barriers[1].dstAccessMask=VK_ACCESS_2_TRANSFER_WRITE_BIT_KHR;
-    overlay_uninitialised_to_transfer_dependency.image_barriers[1].oldLayout=VK_IMAGE_LAYOUT_UNDEFINED;
-    overlay_uninitialised_to_transfer_dependency.image_barriers[1].newLayout=VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL;
-    overlay_uninitialised_to_transfer_dependency.image_barriers[1].image=overlay_colour_image;
-
-
-    cvm_vk_dependency_create_transfer_to_graphics(&overlay_transfer_to_graphics_dependency,0,0,2);
-    ///rely on defaults (none/0) for src stage/access mask, same for subresourceRange (first mip of first array layer only)
-    overlay_transfer_to_graphics_dependency.image_barriers[0].srcStageMask=VK_PIPELINE_STAGE_2_TRANSFER_BIT_KHR;
-    overlay_transfer_to_graphics_dependency.image_barriers[0].srcAccessMask=VK_ACCESS_2_TRANSFER_WRITE_BIT_KHR;
-    overlay_transfer_to_graphics_dependency.image_barriers[0].dstStageMask=VK_PIPELINE_STAGE_2_FRAGMENT_SHADER_BIT_KHR;
-    overlay_transfer_to_graphics_dependency.image_barriers[0].dstAccessMask=VK_ACCESS_2_SHADER_READ_BIT_KHR;
-    overlay_transfer_to_graphics_dependency.image_barriers[0].oldLayout=VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL;
-    overlay_transfer_to_graphics_dependency.image_barriers[0].newLayout=VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
-    overlay_transfer_to_graphics_dependency.image_barriers[0].image=overlay_transparent_image;
-
-    overlay_transfer_to_graphics_dependency.image_barriers[1].srcStageMask=VK_PIPELINE_STAGE_2_TRANSFER_BIT_KHR;
-    overlay_transfer_to_graphics_dependency.image_barriers[1].srcAccessMask=VK_ACCESS_2_TRANSFER_WRITE_BIT_KHR;
-    overlay_transfer_to_graphics_dependency.image_barriers[1].dstStageMask=VK_PIPELINE_STAGE_2_FRAGMENT_SHADER_BIT_KHR;
-    overlay_transfer_to_graphics_dependency.image_barriers[1].dstAccessMask=VK_ACCESS_2_SHADER_READ_BIT_KHR;
-    overlay_transfer_to_graphics_dependency.image_barriers[1].oldLayout=VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL;
-    overlay_transfer_to_graphics_dependency.image_barriers[1].newLayout=VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
-    overlay_transfer_to_graphics_dependency.image_barriers[1].image=overlay_colour_image;
-
-
-    cvm_vk_dependency_create_graphics_to_transfer(&overlay_graphics_to_transfer_dependency,0,0,2);
-    ///rely on defaults (none/0) for src stage/access mask, same for subresourceRange (first mip of first array layer only)
-    overlay_graphics_to_transfer_dependency.image_barriers[0].srcStageMask=VK_PIPELINE_STAGE_2_FRAGMENT_SHADER_BIT_KHR;
-    overlay_graphics_to_transfer_dependency.image_barriers[0].srcAccessMask=VK_ACCESS_2_SHADER_READ_BIT_KHR;
-    overlay_graphics_to_transfer_dependency.image_barriers[0].dstStageMask=VK_PIPELINE_STAGE_2_TRANSFER_BIT_KHR;
-    overlay_graphics_to_transfer_dependency.image_barriers[0].dstAccessMask=VK_ACCESS_2_TRANSFER_WRITE_BIT_KHR;
-    overlay_graphics_to_transfer_dependency.image_barriers[0].oldLayout=VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
-    overlay_graphics_to_transfer_dependency.image_barriers[0].newLayout=VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL;
-    overlay_graphics_to_transfer_dependency.image_barriers[0].image=overlay_transparent_image;
-
-    overlay_graphics_to_transfer_dependency.image_barriers[1].srcStageMask=VK_PIPELINE_STAGE_2_FRAGMENT_SHADER_BIT_KHR;
-    overlay_graphics_to_transfer_dependency.image_barriers[1].srcAccessMask=VK_ACCESS_2_SHADER_READ_BIT_KHR;
-    overlay_graphics_to_transfer_dependency.image_barriers[1].dstStageMask=VK_PIPELINE_STAGE_2_TRANSFER_BIT_KHR;
-    overlay_graphics_to_transfer_dependency.image_barriers[1].dstAccessMask=VK_ACCESS_2_TRANSFER_WRITE_BIT_KHR;
-    overlay_graphics_to_transfer_dependency.image_barriers[1].oldLayout=VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
-    overlay_graphics_to_transfer_dependency.image_barriers[1].newLayout=VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL;
-    overlay_graphics_to_transfer_dependency.image_barriers[1].image=overlay_colour_image;
-}
-
 void initialise_overlay_render_data(void)
 {
     create_overlay_render_pass(cvm_vk_get_screen_format(),VK_SAMPLE_COUNT_1_BIT);
@@ -748,7 +678,6 @@ void initialise_overlay_render_data(void)
     cvm_vk_staging_buffer_create(&overlay_staging_buffer,VK_BUFFER_USAGE_TRANSFER_SRC_BIT);
 
     create_overlay_images(1024,1024,1024,1024);
-    create_overlay_barriers();///must go after creation of all resources these barriers act upon, if those resources change will need to be called again
 
     create_overlay_consistent_descriptors();
 
@@ -791,10 +720,6 @@ void terminate_overlay_render_data(void)
 
     cvm_vk_transient_buffer_destroy(&overlay_transient_buffer);
     cvm_vk_staging_buffer_destroy(&overlay_staging_buffer);
-
-    cvm_vk_dependency_destroy(&overlay_uninitialised_to_transfer_dependency);
-    cvm_vk_dependency_destroy(&overlay_transfer_to_graphics_dependency);
-    cvm_vk_dependency_destroy(&overlay_graphics_to_transfer_dependency);
 }
 
 
@@ -868,8 +793,6 @@ cvm_vk_module_batch * overlay_render_frame(int screen_w,int screen_h,widget * me
     cvm_vk_module_batch * batch;
     uint32_t swapchain_image_index;
 
-    static bool first=true;
-
     cvm_overlay_element_render_buffer element_render_buffer;
     VkDeviceSize uniform_offset,vertex_offset;
 
@@ -899,17 +822,6 @@ cvm_vk_module_batch * overlay_render_frame(int screen_w,int screen_h,widget * me
         ///         ^ have cvm_vk_begin_module_batch return same command buffer?
         ///             ^could have meta level function that inserts both barriers to appropriate queues simultaneously as necessary??? (VK_NULL_HANDLE when unit-transfer?)
         ///   module handles semaphore when necessary, perhaps it can also handle some aspect(s) of barriers?
-        if(first)
-        {
-            //CVM_TMP_vkCmdPipelineBarrier2KHR(batch->graphics_pcb,&overlay_uninitialised_to_transfer_dependencies);
-            cvm_vk_dependency_submit(&overlay_uninitialised_to_transfer_dependency,batch->graphics_pcb,batch->graphics_pcb);///make transfer_pcb
-            first=false;
-        }
-        else
-        {
-            //CVM_TMP_vkCmdPipelineBarrier2KHR(batch->graphics_pcb,&overlay_graphics_to_transfer_dependencies);
-            cvm_vk_dependency_submit(&overlay_graphics_to_transfer_dependency,batch->graphics_pcb,batch->graphics_pcb);///make second transfer_pcb
-        }
 
         element_render_buffer.buffer=cvm_vk_transient_buffer_get_allocation(&overlay_transient_buffer,max_overlay_elements*sizeof(cvm_overlay_render_data),&vertex_offset);
         element_render_buffer.space=max_overlay_elements;
@@ -924,20 +836,13 @@ cvm_vk_module_batch * overlay_render_frame(int screen_w,int screen_h,widget * me
 
         ///end of transfer
 
-        //CVM_TMP_vkCmdPipelineBarrier2KHR(batch->graphics_pcb,&overlay_transfer_to_graphics_dependencies);
-        cvm_vk_dependency_submit(&overlay_transfer_to_graphics_dependency,batch->graphics_pcb,batch->graphics_pcb);///make first transfer_pcb
-
         ///start of graphics
-
-
 
         float * colours = cvm_vk_transient_buffer_get_allocation(&overlay_transient_buffer,sizeof(float)*4*OVERLAY_NUM_COLOURS_,&uniform_offset);
 
         memcpy(colours,overlay_colours,sizeof(float)*4*OVERLAY_NUM_COLOURS_);
 
         update_overlay_uniforms(swapchain_image_index,uniform_offset);///should really build buffer acquisition into update uniforms function
-
-
 
 
         float screen_dimensions[4]={2.0/((float)screen_w),2.0/((float)screen_h),(float)screen_w,(float)screen_h};
@@ -972,8 +877,6 @@ cvm_vk_module_batch * overlay_render_frame(int screen_w,int screen_h,widget * me
         ///huh, could store this in buffer maybe as it occurrs once per frame...
         cvm_vk_transient_buffer_end(&overlay_transient_buffer);
         cvm_vk_staging_buffer_end(&overlay_staging_buffer,swapchain_image_index);
-
-//        overlay_upload_command_buffer=VK_NULL_HANDLE;
     }
 
     return cvm_vk_end_module_batch(&overlay_module_data);

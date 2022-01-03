@@ -1196,7 +1196,7 @@ void * cvm_vk_create_buffer(VkBuffer * buffer,VkDeviceMemory * memory,VkBufferUs
             if(cvm_vk_memory_properties.memoryTypes[i].propertyFlags&VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT)
             {
                 ///following if can be used to test staging on my UMA system
-                //if(require_host_visible)
+                if(require_host_visible)
                     CVM_VK_CHECK(vkMapMemory(cvm_vk_device,*memory,0,VK_WHOLE_SIZE,0,&mapping));
             }
 
@@ -1506,185 +1506,14 @@ cvm_vk_module_batch * cvm_vk_end_module_batch(cvm_vk_module_data * module_data)
 
 
 
-static void CVM_TMP_vkCmdPipelineBarrier2KHR(VkCommandBuffer commandBuffer,const VkDependencyInfoKHR* pDependencyInfo)
+uint32_t cvm_vk_get_transfer_queue_family(void)
 {
-    uint32_t i;
-
-    for(i=0;i<pDependencyInfo->imageMemoryBarrierCount;i++)
-    {
-        VkImageMemoryBarrier image_barrier=(VkImageMemoryBarrier)
-        {
-            .sType=VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER,
-            .pNext=NULL,
-            .srcAccessMask=pDependencyInfo->pImageMemoryBarriers[i].srcAccessMask,
-            .dstAccessMask=pDependencyInfo->pImageMemoryBarriers[i].dstAccessMask,
-            .oldLayout=pDependencyInfo->pImageMemoryBarriers[i].oldLayout,
-            .newLayout=pDependencyInfo->pImageMemoryBarriers[i].newLayout,
-            .srcQueueFamilyIndex=pDependencyInfo->pImageMemoryBarriers[i].srcQueueFamilyIndex,
-            .dstQueueFamilyIndex=pDependencyInfo->pImageMemoryBarriers[i].dstQueueFamilyIndex,
-            .image=pDependencyInfo->pImageMemoryBarriers[i].image,
-            .subresourceRange=pDependencyInfo->pImageMemoryBarriers[i].subresourceRange
-        };
-
-        vkCmdPipelineBarrier
-        (
-            commandBuffer,
-            pDependencyInfo->pImageMemoryBarriers[i].srcStageMask ? pDependencyInfo->pImageMemoryBarriers[i].srcStageMask : VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT,
-            pDependencyInfo->pImageMemoryBarriers[i].dstStageMask,
-            pDependencyInfo->dependencyFlags,
-            0,NULL,
-            0,NULL,
-            1,&image_barrier
-        );
-    }
-
-    for(i=0;i<pDependencyInfo->bufferMemoryBarrierCount;i++)
-    {
-        VkBufferMemoryBarrier buffer_barrier=(VkBufferMemoryBarrier)
-        {
-            .sType=VK_STRUCTURE_TYPE_BUFFER_MEMORY_BARRIER,
-            .pNext=NULL,
-            .srcAccessMask=pDependencyInfo->pBufferMemoryBarriers[i].srcAccessMask,
-            .dstAccessMask=pDependencyInfo->pBufferMemoryBarriers[i].dstAccessMask,
-            .srcQueueFamilyIndex=pDependencyInfo->pBufferMemoryBarriers[i].srcQueueFamilyIndex,
-            .dstQueueFamilyIndex=pDependencyInfo->pBufferMemoryBarriers[i].dstQueueFamilyIndex,
-            .buffer=pDependencyInfo->pBufferMemoryBarriers[i].buffer,
-            .offset=pDependencyInfo->pBufferMemoryBarriers[i].offset,
-            .size=pDependencyInfo->pBufferMemoryBarriers[i].size
-        };
-
-        vkCmdPipelineBarrier
-        (
-            commandBuffer,
-            pDependencyInfo->pBufferMemoryBarriers[i].srcStageMask ? pDependencyInfo->pBufferMemoryBarriers[i].srcStageMask : VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT,
-            pDependencyInfo->pBufferMemoryBarriers[i].dstStageMask,
-            pDependencyInfo->dependencyFlags,
-            0,NULL,
-            1,&buffer_barrier,
-            0,NULL
-        );
-    }
-
-    for(i=0;i<pDependencyInfo->memoryBarrierCount;i++)
-    {
-        VkMemoryBarrier memory_barrier=(VkMemoryBarrier)
-        {
-            .sType=VK_STRUCTURE_TYPE_MEMORY_BARRIER,
-            .pNext=NULL,
-            .srcAccessMask=pDependencyInfo->pMemoryBarriers[i].srcAccessMask,
-            .dstAccessMask=pDependencyInfo->pMemoryBarriers[i].dstAccessMask,
-        };
-
-        vkCmdPipelineBarrier
-        (
-            commandBuffer,
-            pDependencyInfo->pMemoryBarriers[i].srcStageMask ? pDependencyInfo->pMemoryBarriers[i].srcStageMask : VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT,
-            pDependencyInfo->pMemoryBarriers[i].dstStageMask,
-            pDependencyInfo->dependencyFlags,
-            1,&memory_barrier,
-            0,NULL,
-            0,NULL
-        );
-    }
+    return cvm_vk_transfer_queue_family;
 }
 
-
-static void cvm_vk_dependency_create(cvm_vk_dependency * d,uint32_t src_queue_family,uint32_t dst_queue_family,uint32_t memory_bc,uint32_t buffer_bc,uint32_t image_bc)
+uint32_t cvm_vk_get_graphics_queue_family(void)
 {
-    uint32_t i;
-
-    d->memory_barriers=malloc(sizeof(VkMemoryBarrier2KHR)*memory_bc);
-    for(i=0;i<memory_bc;i++)d->memory_barriers[i]=(VkMemoryBarrier2KHR)
-    {
-        .sType=VK_STRUCTURE_TYPE_MEMORY_BARRIER_2_KHR,
-        .pNext=NULL,
-        .srcStageMask=VK_PIPELINE_STAGE_2_NONE_KHR,///set later
-        .srcAccessMask=VK_ACCESS_2_NONE_KHR,///set later
-        .dstStageMask=VK_PIPELINE_STAGE_2_NONE_KHR,///set later
-        .dstAccessMask=VK_ACCESS_2_NONE_KHR,///set later
-    };
-
-    d->buffer_barriers=malloc(sizeof(VkBufferMemoryBarrier2KHR)*buffer_bc);
-    for(i=0;i<buffer_bc;i++)d->buffer_barriers[i]=(VkBufferMemoryBarrier2KHR)
-    {
-        .sType=VK_STRUCTURE_TYPE_BUFFER_MEMORY_BARRIER_2_KHR,
-        .pNext=NULL,
-        .srcStageMask=VK_PIPELINE_STAGE_2_NONE_KHR,///set later
-        .srcAccessMask=VK_ACCESS_2_NONE_KHR,///set later
-        .dstStageMask=VK_PIPELINE_STAGE_2_NONE_KHR,///set later
-        .dstAccessMask=VK_ACCESS_2_NONE_KHR,///set later
-        .srcQueueFamilyIndex=src_queue_family,
-        .dstQueueFamilyIndex=dst_queue_family,
-        .buffer=VK_NULL_HANDLE,///set later
-        .offset=0,///default value
-        .size=VK_WHOLE_SIZE///default value
-    };
-
-    d->image_barriers=malloc(sizeof(VkImageMemoryBarrier2KHR)*image_bc);
-    for(i=0;i<image_bc;i++)d->image_barriers[i]=(VkImageMemoryBarrier2KHR)///initialise all shared values;
-    {
-        .sType=VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER_2_KHR,
-        .pNext=NULL,
-        .srcStageMask=VK_PIPELINE_STAGE_2_NONE_KHR,///set later
-        .srcAccessMask=VK_ACCESS_2_NONE_KHR,///set later
-        .dstStageMask=VK_PIPELINE_STAGE_2_NONE_KHR,///set later
-        .dstAccessMask=VK_ACCESS_2_NONE_KHR,///set later
-        .oldLayout=VK_IMAGE_LAYOUT_UNDEFINED,///set later
-        .newLayout=VK_IMAGE_LAYOUT_UNDEFINED,///set later
-        .srcQueueFamilyIndex=src_queue_family,
-        .dstQueueFamilyIndex=dst_queue_family,
-        .image=VK_NULL_HANDLE,///set later
-        .subresourceRange=(VkImageSubresourceRange)///default value
-        {
-            .aspectMask=VK_IMAGE_ASPECT_COLOR_BIT,
-            .baseMipLevel=0,
-            .levelCount=1,
-            .baseArrayLayer=0,
-            .layerCount=1
-        }
-    };
-
-    d->dependency=(VkDependencyInfoKHR)
-    {
-        .sType=VK_STRUCTURE_TYPE_DEPENDENCY_INFO_KHR,
-        .pNext=NULL,
-        .dependencyFlags=0,
-        .memoryBarrierCount=memory_bc,
-        .pMemoryBarriers=d->memory_barriers,
-        .bufferMemoryBarrierCount=buffer_bc,
-        .pBufferMemoryBarriers=d->buffer_barriers,
-        .imageMemoryBarrierCount=image_bc,
-        .pImageMemoryBarriers=d->image_barriers
-    };
+    return cvm_vk_graphics_queue_family;
 }
 
-void cvm_vk_dependency_create_uninitialised_to_transfer(cvm_vk_dependency * d,uint32_t image_bc)
-{
-    cvm_vk_dependency_create(d,VK_QUEUE_FAMILY_IGNORED,VK_QUEUE_FAMILY_IGNORED,0,0,image_bc);
-    d->requires_transfer_operation=false;
-}
-
-void cvm_vk_dependency_create_transfer_to_graphics(cvm_vk_dependency * d,uint32_t memory_bc,uint32_t buffer_bc,uint32_t image_bc)
-{
-    cvm_vk_dependency_create(d,cvm_vk_transfer_queue_family,cvm_vk_graphics_queue_family,memory_bc,buffer_bc,image_bc);
-    d->requires_transfer_operation=(cvm_vk_transfer_queue_family!=cvm_vk_graphics_queue_family);
-}
-void cvm_vk_dependency_create_graphics_to_transfer(cvm_vk_dependency * d,uint32_t memory_bc,uint32_t buffer_bc,uint32_t image_bc)
-{
-    cvm_vk_dependency_create(d,cvm_vk_graphics_queue_family,cvm_vk_transfer_queue_family,memory_bc,buffer_bc,image_bc);
-    d->requires_transfer_operation=(cvm_vk_transfer_queue_family!=cvm_vk_graphics_queue_family);
-}
-
-void cvm_vk_dependency_destroy(cvm_vk_dependency * d)
-{
-    free(d->memory_barriers);
-    free(d->buffer_barriers);
-    free(d->image_barriers);
-}
-
-void cvm_vk_dependency_submit(cvm_vk_dependency * d,VkCommandBuffer src_cb,VkCommandBuffer dst_cb)
-{
-    CVM_TMP_vkCmdPipelineBarrier2KHR(src_cb,&d->dependency);
-    if(d->requires_transfer_operation)CVM_TMP_vkCmdPipelineBarrier2KHR(dst_cb,&d->dependency);
-}
 

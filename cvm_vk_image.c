@@ -109,6 +109,8 @@ void cvm_vk_create_image_atlas(cvm_vk_image_atlas * ia,VkImage image,VkImageView
     ia->pending_copy_actions=malloc(sizeof(VkBufferImageCopy)*16);
     ia->pending_copy_space=16;
     ia->pending_copy_count=0;
+
+    ia->initialised=false;
 }
 
 void cvm_vk_destroy_image_atlas(cvm_vk_image_atlas * ia)
@@ -783,14 +785,64 @@ void * cvm_vk_acquire_staging_for_image_atlas_tile(cvm_vk_image_atlas * ia,cvm_v
 void cvm_vk_image_atlas_submit_all_pending_copy_actions(cvm_vk_image_atlas * ia,VkCommandBuffer transfer_cb)
 {
     uint_fast32_t lock;
+    VkImageMemoryBarrier image_barrier;
 
     if(ia->multithreaded)do lock=atomic_load(&ia->copy_spinlock);
     while(lock!=0 || !atomic_compare_exchange_weak(&ia->copy_spinlock,&lock,1));
 
-    if(ia->pending_copy_count)
+
+    if(ia->pending_copy_count || !ia->initialised)
     {
+        image_barrier=(VkImageMemoryBarrier)
+        {
+            .sType=VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER,
+            .pNext=NULL,
+            .srcAccessMask=ia->initialised?VK_ACCESS_SHADER_READ_BIT:0,
+            .dstAccessMask=VK_ACCESS_TRANSFER_WRITE_BIT,
+            .oldLayout=ia->initialised?VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL:VK_IMAGE_LAYOUT_UNDEFINED,
+            .newLayout=VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
+            .srcQueueFamilyIndex=VK_QUEUE_FAMILY_IGNORED,
+            .dstQueueFamilyIndex=VK_QUEUE_FAMILY_IGNORED,
+            .image=ia->image,
+            .subresourceRange=(VkImageSubresourceRange)
+            {
+                .aspectMask=VK_IMAGE_ASPECT_COLOR_BIT,
+                .baseMipLevel=0,
+                .levelCount=1,
+                .baseArrayLayer=0,
+                .layerCount=1
+            }
+        };
+
+        vkCmdPipelineBarrier(transfer_cb,ia->initialised?VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT:0,VK_PIPELINE_STAGE_TRANSFER_BIT,0,0,NULL,0,NULL,1,&image_barrier);
+
+        ///actually execute the copies!
         vkCmdCopyBufferToImage(transfer_cb,ia->staging_buffer->buffer,ia->image,VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,ia->pending_copy_count,ia->pending_copy_actions);
         ia->pending_copy_count=0;
+        ia->initialised=true;
+
+        image_barrier=(VkImageMemoryBarrier)
+        {
+            .sType=VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER,
+            .pNext=NULL,
+            .srcAccessMask=VK_ACCESS_TRANSFER_WRITE_BIT,
+            .dstAccessMask=VK_ACCESS_SHADER_READ_BIT,
+            .oldLayout=VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
+            .newLayout=VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL,
+            .srcQueueFamilyIndex=VK_QUEUE_FAMILY_IGNORED,
+            .dstQueueFamilyIndex=VK_QUEUE_FAMILY_IGNORED,
+            .image=ia->image,
+            .subresourceRange=(VkImageSubresourceRange)
+            {
+                .aspectMask=VK_IMAGE_ASPECT_COLOR_BIT,
+                .baseMipLevel=0,
+                .levelCount=1,
+                .baseArrayLayer=0,
+                .layerCount=1
+            }
+        };
+
+        vkCmdPipelineBarrier(transfer_cb,VK_PIPELINE_STAGE_TRANSFER_BIT,VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT,0,0,NULL,0,NULL,1,&image_barrier);
     }
 
     if(ia->multithreaded) atomic_store(&ia->copy_spinlock,0);

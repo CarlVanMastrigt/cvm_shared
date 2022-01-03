@@ -40,7 +40,7 @@ typedef struct cvm_mesh
     uint16_t vertex_count;
     uint32_t face_count:20;///implicitly triangles
     uint32_t dynamic:1;
-    ///staged of creation
+    ///stages of creation
     uint32_t started:1;///must be set false earlier
     uint32_t allocated:1;
     uint32_t ready:1;

@@ -73,10 +73,26 @@ void cvm_vk_managed_buffer_create(cvm_vk_managed_buffer * mb,uint32_t buffer_siz
     mb->mapping=cvm_vk_create_buffer(&mb->buffer,&mb->memory,usage,buffer_size,host_visible);///if this is non-null then probably UMA and thus can circumvent staging buffer
 
     atomic_init(&mb->copy_spinlock,0);
+
     mb->staging_buffer=NULL;
     mb->pending_copy_actions=malloc(sizeof(VkBufferCopy)*16);
     mb->pending_copy_space=16;
     mb->pending_copy_count=0;
+
+    mb->copy_release_barriers.stage_mask=0;
+    mb->copy_release_barriers.barriers=malloc(sizeof(VkBufferMemoryBarrier)*16);
+    mb->copy_release_barriers.space=16;
+    mb->copy_release_barriers.count=0;
+
+    mb->copy_acquire_barriers.stage_mask=0;
+    mb->copy_acquire_barriers.barriers=malloc(sizeof(VkBufferMemoryBarrier)*16);
+    mb->copy_acquire_barriers.space=16;
+    mb->copy_acquire_barriers.count=0;
+
+    mb->copy_update_counter=0;
+
+    mb->copy_dst_queue_family=cvm_vk_get_graphics_queue_family();///will have to add a way to use compute here
+    mb->copy_dst_queue_family=cvm_vk_get_transfer_queue_family();
 }
 
 void cvm_vk_managed_buffer_destroy(cvm_vk_managed_buffer * mb)
@@ -117,6 +133,9 @@ void cvm_vk_managed_buffer_destroy(cvm_vk_managed_buffer * mb)
     }
 
     free(mb->pending_copy_actions);
+
+    free(mb->copy_release_barriers.barriers);
+    free(mb->copy_acquire_barriers.barriers);
 }
 
 cvm_vk_dynamic_buffer_allocation * cvm_vk_managed_buffer_acquire_dynamic_allocation(cvm_vk_managed_buffer * mb,uint64_t size)
@@ -442,7 +461,7 @@ uint64_t cvm_vk_managed_buffer_acquire_static_allocation(cvm_vk_managed_buffer *
     return e-size;
 }
 
-static inline void * stage_copy_action(cvm_vk_managed_buffer * mb,uint64_t offset,uint64_t size)
+static inline void * stage_copy_action(cvm_vk_managed_buffer * mb,uint64_t offset,uint64_t size,VkPipelineStageFlags stage_mask,VkAccessFlags access_mask)
 {
     VkDeviceSize staging_offset;
     uint_fast32_t lock;
@@ -467,8 +486,8 @@ static inline void * stage_copy_action(cvm_vk_managed_buffer * mb,uint64_t offse
     if(mb->multithreaded)do lock=atomic_load(&mb->copy_spinlock);
     while(lock!=0 || !atomic_compare_exchange_weak(&mb->copy_spinlock,&lock,1));
 
-    if(mb->pending_copy_count==mb->pending_copy_space)mb->pending_copy_actions=realloc(mb->pending_copy_actions,sizeof(VkBufferCopy)*(mb->pending_copy_space*=2));
 
+    if(mb->pending_copy_count==mb->pending_copy_space)mb->pending_copy_actions=realloc(mb->pending_copy_actions,sizeof(VkBufferCopy)*(mb->pending_copy_space*=2));
     mb->pending_copy_actions[mb->pending_copy_count++]=(VkBufferCopy)
     {
         .srcOffset=staging_offset,
@@ -476,31 +495,47 @@ static inline void * stage_copy_action(cvm_vk_managed_buffer * mb,uint64_t offse
         .size=size
     };
 
+    if(mb->copy_release_barriers.count==mb->copy_release_barriers.space)mb->copy_release_barriers.barriers=realloc(mb->copy_release_barriers.barriers,sizeof(VkBufferMemoryBarrier)*(mb->copy_release_barriers.space*=2));
+    mb->copy_release_barriers.barriers[mb->copy_release_barriers.count++]=(VkBufferMemoryBarrier)
+    {
+        .sType=VK_STRUCTURE_TYPE_BUFFER_MEMORY_BARRIER,
+        .pNext=NULL,
+        .srcAccessMask=VK_ACCESS_TRANSFER_WRITE_BIT,
+        .dstAccessMask=access_mask,/// staging/copy only ever writes
+        .srcQueueFamilyIndex=mb->copy_src_queue_family,
+        .dstQueueFamilyIndex=mb->copy_dst_queue_family,
+        .buffer=mb->buffer,
+        .offset=offset,
+        .size=size
+    };
+    mb->copy_release_barriers.stage_mask|=stage_mask;
+
     if(mb->multithreaded) atomic_store(&mb->copy_spinlock,0);
 
     return ptr;
 }
 
-void * cvm_vk_managed_buffer_get_dynamic_allocation_mapping(cvm_vk_managed_buffer * mb,cvm_vk_dynamic_buffer_allocation * allocation,uint64_t size)
+void * cvm_vk_managed_buffer_get_dynamic_allocation_mapping(cvm_vk_managed_buffer * mb,cvm_vk_dynamic_buffer_allocation * allocation,uint64_t size,VkPipelineStageFlags stage_mask,VkAccessFlags access_mask)
 {
     uint64_t offset=allocation->offset<<mb->base_dynamic_allocation_size_factor;
     if(mb->mapping) return mb->mapping+offset;///on UMA can access memory directly!
 
-    if(!size) size=1<<(allocation->size_factor+mb->base_dynamic_allocation_size_factor);
+    if(!size) size=1<<(allocation->size_factor+mb->base_dynamic_allocation_size_factor);///if size not specified use whole region
 
-    return stage_copy_action(mb,offset,size);
+    return stage_copy_action(mb,offset,size,stage_mask,access_mask);
 }
 
-void * cvm_vk_managed_buffer_get_static_allocation_mapping(cvm_vk_managed_buffer * mb,uint64_t offset,uint64_t size)
+void * cvm_vk_managed_buffer_get_static_allocation_mapping(cvm_vk_managed_buffer * mb,uint64_t offset,uint64_t size,VkPipelineStageFlags stage_mask,VkAccessFlags access_mask)
 {
     if(mb->mapping) return mb->mapping+offset;///on UMA can access memory directly!
 
-    return stage_copy_action(mb,offset,size);
+    return stage_copy_action(mb,offset,size,stage_mask,access_mask);
 }
 
 void cvm_vk_managed_buffer_submit_all_pending_copy_actions(cvm_vk_managed_buffer * mb,VkCommandBuffer transfer_cb)
 {
     uint_fast32_t lock;
+    cvm_vk_managed_buffer_barrier_list tmp_list;
 
     if(mb->mapping)/// is UMA system, no staging copies necessary
     {
@@ -522,6 +557,24 @@ void cvm_vk_managed_buffer_submit_all_pending_copy_actions(cvm_vk_managed_buffer
 
         vkCmdCopyBuffer(transfer_cb,mb->staging_buffer->buffer,mb->buffer,mb->pending_copy_count,mb->pending_copy_actions);
         mb->pending_copy_count=0;
+
+        vkCmdPipelineBarrier
+        (
+            transfer_cb,
+            VK_PIPELINE_STAGE_TRANSFER_BIT,
+            mb->copy_release_barriers.stage_mask,
+            0,
+            0,NULL,
+            mb->copy_release_barriers.count,mb->copy_release_barriers.barriers,
+            0,NULL
+        );
+
+        tmp_list=mb->copy_acquire_barriers;
+        mb->copy_acquire_barriers=mb->copy_release_barriers;
+        ///reset barriers
+        tmp_list.count=0;
+        tmp_list.stage_mask=0;
+        mb->copy_release_barriers=tmp_list;
 
         if(mb->multithreaded) atomic_store(&mb->copy_spinlock,0);
     }

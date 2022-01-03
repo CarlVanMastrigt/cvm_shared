@@ -409,7 +409,8 @@ bool cvm_mesh_load_file(cvm_mesh * mesh,char * filename,uint16_t flags,bool dyna
             mesh->allocated=true;
         }
 
-        ptr=cvm_vk_managed_buffer_get_dynamic_allocation_mapping(mb,mesh->dynamic_allocation,size);
+        #warning should probably be more specific with the stage and flags bits... (if possible)
+        ptr=cvm_vk_managed_buffer_get_dynamic_allocation_mapping(mb,mesh->dynamic_allocation,size,VK_PIPELINE_STAGE_ALL_GRAPHICS_BIT,VK_ACCESS_2_MEMORY_READ_BIT_KHR);
         if(!ptr)return false;///could not allocate staging space!
         base_offset = current_offset = cvm_vk_managed_buffer_get_dynamic_allocation_offset(mb,mesh->dynamic_allocation);
     }
@@ -428,7 +429,8 @@ bool cvm_mesh_load_file(cvm_mesh * mesh,char * filename,uint16_t flags,bool dyna
             mesh->allocated=true;
         }
 
-        ptr=cvm_vk_managed_buffer_get_static_allocation_mapping(mb,mesh->static_offset,size);
+        #warning should probably be more specific with the stage and flags bits... (if possible)
+        ptr=cvm_vk_managed_buffer_get_static_allocation_mapping(mb,mesh->static_offset,size,VK_PIPELINE_STAGE_ALL_GRAPHICS_BIT,VK_ACCESS_2_MEMORY_READ_BIT_KHR);
         if(!ptr)return false;///could not allocate staging space!
         base_offset = current_offset = mesh->static_offset;
     }

@@ -253,32 +253,18 @@ cvm_vk_module_batch * cvm_vk_begin_module_batch(cvm_vk_module_data * module_data
 cvm_vk_module_batch * cvm_vk_end_module_batch(cvm_vk_module_data * module_data);
 
 
-/// should allow removal of cvm_vk_get_transfer_queue_family and cvm_vk_get_graphics_queue_family, as well as making CVM_TMP_vkCmdPipelineBarrier2KHR static
-typedef struct cvm_vk_dependency
+#define CVM_VK_AVAILABITY_TOKEN_DELAY_BITS 4
+#define CVM_VK_AVAILABITY_TOKEN_COUNTER_BITS 28
+
+typedef struct cvm_vk_availability_token /// could make generalised struct and move to cvm_vk???
 {
-    VkDependencyInfoKHR dependency;
-
-    VkMemoryBarrier2KHR * memory_barriers;
-    VkBufferMemoryBarrier2KHR * buffer_barriers;
-    VkImageMemoryBarrier2KHR * image_barriers;
-
-    bool requires_transfer_operation;///needed to know whether to submit barrier in both queues provided
+    uint32_t counter:CVM_VK_AVAILABITY_TOKEN_COUNTER_BITS;
+    uint32_t delay:CVM_VK_AVAILABITY_TOKEN_DELAY_BITS;
 }
-cvm_vk_dependency;
+cvm_vk_availability_token;
 
-void cvm_vk_dependency_create_uninitialised_to_transfer(cvm_vk_dependency * d,uint32_t image_bc);///should only be needed for images
-///its possible that uninitialised_to_graphics would be needed for setting render target layout, same goes for compute...
-void cvm_vk_dependency_create_transfer_to_graphics(cvm_vk_dependency * d,uint32_t memory_bc,uint32_t buffer_bc,uint32_t image_bc);
-void cvm_vk_dependency_create_graphics_to_transfer(cvm_vk_dependency * d,uint32_t memory_bc,uint32_t buffer_bc,uint32_t image_bc);
-
-void cvm_vk_dependency_destroy(cvm_vk_dependency * d);
-
-void cvm_vk_dependency_submit(cvm_vk_dependency * d,VkCommandBuffer src_cb,VkCommandBuffer dst_cb);
-
-
-
-
-
+uint32_t cvm_vk_get_transfer_queue_family(void);
+uint32_t cvm_vk_get_graphics_queue_family(void);
 
 
 uint32_t cvm_vk_prepare_for_next_frame(bool rendering_resources_invalid);
