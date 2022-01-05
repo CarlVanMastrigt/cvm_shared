@@ -63,7 +63,7 @@ typedef struct cvm_managed_mesh
     uint16_t allocated:1;
     uint16_t loaded:1;
     uint16_t ready:1;
-    cvm_vk_availability_token availability_token;///only becomes relevant after moving data to the GPU
+    uint16_t availability_token;///only becomes relevant after moving data to the GPU
 
     ///precalculate following for speed of access/use
     uint32_t index_offset;

@@ -473,7 +473,7 @@ void cvm_managed_mesh_render(cvm_managed_mesh * mm,VkCommandBuffer graphics_cb,u
         cvm_managed_mesh_load(mm);
     }
 
-    if(mm->ready || (mm->loaded && (mm->ready=cvm_vk_availability_token_check(mm->availability_token,mm->mb->copy_update_counter))))
+    if(mm->ready || (mm->loaded && (mm->ready=cvm_vk_availability_token_check(mm->availability_token,mm->mb->copy_update_counter,mm->mb->copy_delay))))
     {
         //puts("RENDER");
         vkCmdDrawIndexed(graphics_cb,mm->data.face_count*3,instance_count,mm->index_offset,mm->vertex_offset,instance_offset);

@@ -1196,8 +1196,8 @@ void * cvm_vk_create_buffer(VkBuffer * buffer,VkDeviceMemory * memory,VkBufferUs
             if(cvm_vk_memory_properties.memoryTypes[i].propertyFlags&VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT)
             {
                 ///following if can be used to test staging on my UMA system
-                if(require_host_visible)
-                    CVM_VK_CHECK(vkMapMemory(cvm_vk_device,*memory,0,VK_WHOLE_SIZE,0,&mapping));
+                if(require_host_visible)///REMOVE
+                CVM_VK_CHECK(vkMapMemory(cvm_vk_device,*memory,0,VK_WHOLE_SIZE,0,&mapping));
             }
 
             return mapping;

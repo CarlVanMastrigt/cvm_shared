@@ -90,6 +90,7 @@ void cvm_vk_managed_buffer_create(cvm_vk_managed_buffer * mb,uint32_t buffer_siz
     mb->copy_acquire_barriers.count=0;
 
     mb->copy_update_counter=0;
+    mb->copy_delay=mb->mapping==NULL;
 
     mb->copy_dst_queue_family=cvm_vk_get_graphics_queue_family();///will have to add a way to use compute here
     mb->copy_dst_queue_family=cvm_vk_get_transfer_queue_family();
@@ -515,32 +516,23 @@ static inline void * stage_copy_action(cvm_vk_managed_buffer * mb,uint64_t offse
     return ptr;
 }
 
-void * cvm_vk_managed_buffer_get_dynamic_allocation_mapping(cvm_vk_managed_buffer * mb,cvm_vk_dynamic_buffer_allocation * allocation,uint64_t size,VkPipelineStageFlags stage_mask,VkAccessFlags access_mask,cvm_vk_availability_token * availability_token)
+void * cvm_vk_managed_buffer_get_dynamic_allocation_mapping(cvm_vk_managed_buffer * mb,cvm_vk_dynamic_buffer_allocation * allocation,uint64_t size,VkPipelineStageFlags stage_mask,VkAccessFlags access_mask,uint16_t * availability_token)
 {
+    *availability_token=mb->copy_update_counter;///could technically go after the early exit as mapped buffers (so far) don't need to be transferred
+
     uint64_t offset=allocation->offset<<mb->base_dynamic_allocation_size_factor;
-    if(mb->mapping)///on UMA can access memory directly!
-    {
-        availability_token->delay=0;
-        return mb->mapping+offset;
-    }
+    if(mb->mapping) return mb->mapping+offset;///on UMA can access memory directly!
 
     if(!size) size=1<<(allocation->size_factor+mb->base_dynamic_allocation_size_factor);///if size not specified use whole region
-    availability_token->delay=1;
-    availability_token->counter=mb->copy_update_counter;
 
     return stage_copy_action(mb,offset,size,stage_mask,access_mask);
 }
 
-void * cvm_vk_managed_buffer_get_static_allocation_mapping(cvm_vk_managed_buffer * mb,uint64_t offset,uint64_t size,VkPipelineStageFlags stage_mask,VkAccessFlags access_mask,cvm_vk_availability_token * availability_token)
+void * cvm_vk_managed_buffer_get_static_allocation_mapping(cvm_vk_managed_buffer * mb,uint64_t offset,uint64_t size,VkPipelineStageFlags stage_mask,VkAccessFlags access_mask,uint16_t * availability_token)
 {
-    if(mb->mapping)///on UMA can access memory directly!
-    {
-        availability_token->delay=0;
-        return mb->mapping+offset;
-    }
+    *availability_token=mb->copy_update_counter;///could technically go after the early exit as mapped buffers (so far) don't need to be transferre
 
-    availability_token->delay=1;
-    availability_token->counter=mb->copy_update_counter;
+    if(mb->mapping) return mb->mapping+offset;///on UMA can access memory directly!
 
     return stage_copy_action(mb,offset,size,stage_mask,access_mask);
 }

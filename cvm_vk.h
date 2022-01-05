@@ -254,22 +254,9 @@ VkCommandBuffer cvm_vk_module_batch_start_secondary_command_buffer(cvm_vk_module
 #define CVM_VK_MAIN_SUB_BATCH_INDEX 0xFFFFFFFF
 
 
-///num frames to delay with power of 2 -1??
-#define CVM_VK_AVAILABITY_TOKEN_DELAY_BITS 1
-#define CVM_VK_AVAILABITY_TOKEN_COUNTER_BITS 15
-/// need to compensate for overflow
-#define CVM_VK_AVAILABITY_TOKEN_COUNTER_MASK 0x7FFF
-
-typedef struct cvm_vk_availability_token /// could make generalised struct and move to cvm_vk???
+static inline bool cvm_vk_availability_token_check(uint16_t token_counter,uint16_t current_counter,uint16_t delay)
 {
-    uint16_t counter:CVM_VK_AVAILABITY_TOKEN_COUNTER_BITS;
-    uint16_t delay:CVM_VK_AVAILABITY_TOKEN_DELAY_BITS;
-}
-cvm_vk_availability_token;
-
-static inline bool cvm_vk_availability_token_check(cvm_vk_availability_token token,uint16_t current_counter)
-{
-    return ((current_counter-token.counter)&CVM_VK_AVAILABITY_TOKEN_COUNTER_MASK)>=token.delay;
+    return ((current_counter-token_counter)&0xFFFF)>=delay;
 }
 
 uint32_t cvm_vk_get_transfer_queue_family(void);
