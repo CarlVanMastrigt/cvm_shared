@@ -159,7 +159,6 @@ static inline vec3f cvm_rng_point_in_ball(uint64_t * state)
     uint32_t s=cvm_rng_pcg_a(state);
     float z=2.0*cvm_rng_float_16(&s)-1.0;///see notes above
     float p=sqrtf(1.0-z*z);
-    z=cosf(z);
     float a=cbrtf(cvm_rng_float_16(&s));///radius
     p*=a;
     z*=a;
