@@ -60,9 +60,9 @@ static cvm_vk_staging_buffer test_staging_buffer;
 static cvm_vk_transient_buffer test_transient_buffer;
 
 
-static cvm_mesh test_stellated_octahedron_mesh;
-static cvm_mesh test_stub_stellated_octahedron_mesh;
-static cvm_mesh test_cube_mesh;
+static cvm_managed_mesh test_stellated_octahedron_mesh;
+static cvm_managed_mesh test_stub_stellated_octahedron_mesh;
+static cvm_managed_mesh test_cube_mesh;
 
 static void create_test_descriptor_set_layouts(void)
 {
@@ -640,10 +640,9 @@ void initialise_test_render_data()
     cvm_vk_staging_buffer_create(&test_staging_buffer,VK_BUFFER_USAGE_TRANSFER_SRC_BIT);
 
     //create_test_vertex_buffer();
-    test_stellated_octahedron_mesh.started=false;
-    test_stub_stellated_octahedron_mesh.started=false;
-    test_cube_mesh.started=false;
-
+    cvm_managed_mesh_create(&test_stellated_octahedron_mesh,&test_managed_buffer,"cvm_shared/resources/stellated_octahedron.mesh",CVM_MESH_ADGACENCY|CVM_MESH_PER_FACE_MATERIAL,true);
+    cvm_managed_mesh_create(&test_stub_stellated_octahedron_mesh,&test_managed_buffer,"cvm_shared/resources/stub_stellated_octahedron.mesh",CVM_MESH_ADGACENCY|CVM_MESH_PER_FACE_MATERIAL,true);
+    cvm_managed_mesh_create(&test_cube_mesh,&test_managed_buffer,"cvm_shared/resources/cube.mesh",CVM_MESH_ADGACENCY|CVM_MESH_PER_FACE_MATERIAL,true);
 }
 
 void terminate_test_render_data()
@@ -659,9 +658,9 @@ void terminate_test_render_data()
 
     cvm_vk_destroy_module_data(&test_module_data,false);
 
-    cvm_mesh_relinquish(&test_stellated_octahedron_mesh,&test_managed_buffer);
-    cvm_mesh_relinquish(&test_stub_stellated_octahedron_mesh,&test_managed_buffer);
-    cvm_mesh_relinquish(&test_cube_mesh,&test_managed_buffer);
+    cvm_managed_mesh_destroy(&test_stellated_octahedron_mesh);
+    cvm_managed_mesh_destroy(&test_stub_stellated_octahedron_mesh);
+    cvm_managed_mesh_destroy(&test_cube_mesh);
 
     cvm_vk_managed_buffer_destroy(&test_managed_buffer);
 
@@ -727,6 +726,8 @@ cvm_vk_module_batch * test_render_frame(cvm_camera * c)
     cvm_vk_module_batch * batch;
     uint32_t swapchain_image_index;
 
+    VkCommandBuffer scb;///used for testing, essentially the secondary command buffer currently in use
+
     static rotor3f rots[4];
     static uint64_t rand=0xDEADBEEFC00FC00F;
     static uint32_t iter=0;
@@ -746,49 +747,9 @@ cvm_vk_module_batch * test_render_frame(cvm_camera * c)
         cvm_vk_transient_buffer_begin(&test_transient_buffer,swapchain_image_index);
         cvm_vk_staging_buffer_begin(&test_staging_buffer);
 
-        ///move above to end ??
-
-        ///technically only necessary if using staging!
-
-        if(!test_stellated_octahedron_mesh.ready)
-        {
-            if(!cvm_mesh_load_file(&test_stellated_octahedron_mesh,"cvm_shared/resources/stellated_octahedron.mesh",CVM_MESH_ADGACENCY|CVM_MESH_PER_FACE_MATERIAL,true,&test_managed_buffer))
-            {
-                puts("load stellated octahedron mesh failed!!!");
-            }
-        }
-
-        if(!test_stub_stellated_octahedron_mesh.ready)
-        {
-            if(!cvm_mesh_load_file(&test_stub_stellated_octahedron_mesh,"cvm_shared/resources/stub_stellated_octahedron.mesh",CVM_MESH_ADGACENCY|CVM_MESH_PER_FACE_MATERIAL,true,&test_managed_buffer))
-            {
-                puts("load stub stellated octahedron mesh failed!!!");
-            }
-        }
-
-        if(!test_cube_mesh.ready)
-        {
-            if(!cvm_mesh_load_file(&test_cube_mesh,"cvm_shared/resources/cube.mesh",CVM_MESH_ADGACENCY|CVM_MESH_PER_FACE_MATERIAL,true,&test_managed_buffer))
-            {
-                puts("load cube mesh failed!!!");
-            }
-        }
-
-        cvm_vk_staging_buffer_end(&test_staging_buffer,swapchain_image_index);
-
-        #warning need to figure out how to incorporate synchronization (semaphore) into dependency, just implicitly handled by module?
-        ///     ^ specifically in the case of a queue ownership transfer scheduled by above
-        cvm_vk_managed_buffer_submit_all_pending_copy_actions(&test_managed_buffer,batch->graphics_pcb);///must go AFTER used staging buffer gets flushed, needs external synchronisation when being used in MT environment
-
-        ///end of transfer
 
 
-        ///start of graphics
 
-
-        /// is probably worthwhile having separate command buffers for transfer and graphics regardless of whether queues are actually different, that way all copies can happen before render
-        /// but render and copy/create can be called from same function (i.e. next to each other)
-        /// ofc. if building up structures, i.e. mapped multiindirect draws this paradigm isnt really necessary, but should be supported regardless
 
 
         VkDeviceSize uniforms_offset;
@@ -803,7 +764,7 @@ cvm_vk_module_batch * test_render_frame(cvm_camera * c)
         uniforms = cvm_vk_transient_buffer_get_allocation(&test_transient_buffer,sizeof(matrix4f)+sizeof(float)*8,&uniforms_offset);
         if(uniforms==NULL)puts("FAILED");
 
-        uniforms->projection=*get_view_matrix_pointer(c);
+        uniforms->projection=*get_view_matrix_pointer(c);///try to avoid per item uniforms, when absolutely necessary (cant be put in push constants) use a linear allocator to distribute pre-allocated ones from here
 
         uniforms->multipliers[0]=1;//cos(SDL_GetTicks()*0.005);
         uniforms->multipliers[1]=1;//cos(SDL_GetTicks()*0.007);
@@ -837,17 +798,43 @@ cvm_vk_module_batch * test_render_frame(cvm_camera * c)
             cvm_transform_stack_pop(&ts);
         cvm_transform_stack_pop(&ts);
 
-        vkCmdPushConstants(batch->graphics_pcb,test_pipeline_layout,VK_SHADER_STAGE_VERTEX_BIT,0,sizeof(float)*12,transformation);
 
-        vkCmdBindDescriptorSets(batch->graphics_pcb,VK_PIPELINE_BIND_POINT_GRAPHICS,test_pipeline_layout,0,1,test_descriptor_sets+swapchain_image_index,0,NULL);
+        ///definitely not the cleanest function ever
+        scb=cvm_vk_module_batch_start_secondary_command_buffer(batch,CVM_VK_MAIN_SUB_BATCH_INDEX,0,
+                test_framebuffers[test_current_framebuffer_index][swapchain_image_index],test_render_pass,0);
 
-        ///do graphics
+
+
+        cvm_vk_managed_buffer_bind_as_index(scb,&test_managed_buffer,VK_INDEX_TYPE_UINT16);
+        cvm_vk_managed_buffer_bind_as_vertex(scb,&test_managed_buffer,0);
+
+        vkCmdBindDescriptorSets(scb,VK_PIPELINE_BIND_POINT_GRAPHICS,test_pipeline_layout,0,1,test_descriptor_sets+swapchain_image_index,0,NULL);
+
+        vkCmdBindPipeline(scb,VK_PIPELINE_BIND_POINT_GRAPHICS,test_pipeline);
+
+        vkCmdPushConstants(scb,test_pipeline_layout,VK_SHADER_STAGE_VERTEX_BIT,0,sizeof(float)*12,transformation);
+
+        cvm_managed_mesh_render(&test_stub_stellated_octahedron_mesh,scb,1,0);
+
+        vkEndCommandBuffer(scb);
+
+
+
+
+
+        cvm_vk_staging_buffer_end(&test_staging_buffer,swapchain_image_index);
+        cvm_vk_transient_buffer_end(&test_transient_buffer);
+
+        #warning need to figure out how to incorporate synchronization (semaphore) into dependency, just implicitly handled by module?
+        ///     ^ specifically in the case of a queue ownership transfer scheduled by above
+        cvm_vk_managed_buffer_submit_all_pending_copy_actions(&test_managed_buffer,batch->graphics_pcb,batch->graphics_pcb);
+
+
+
+
         VkClearValue clear_values[2];///other clear colours should probably be provided by other chunks of application
         clear_values[0].color=(VkClearColorValue){{0.95f,0.5f,0.75f,1.0f}};
         clear_values[1].depthStencil=(VkClearDepthStencilValue){.depth=0.0,.stencil=0};
-
-        cvm_vk_managed_buffer_bind_as_index(batch->graphics_pcb,&test_managed_buffer,VK_INDEX_TYPE_UINT16);
-        cvm_vk_managed_buffer_bind_as_vertex(batch->graphics_pcb,&test_managed_buffer,0);
 
         VkRenderPassBeginInfo render_pass_begin_info=(VkRenderPassBeginInfo)
         {
@@ -860,15 +847,15 @@ cvm_vk_module_batch * test_render_frame(cvm_camera * c)
             .pClearValues=clear_values
         };
 
-        vkCmdBeginRenderPass(batch->graphics_pcb,&render_pass_begin_info,VK_SUBPASS_CONTENTS_INLINE);///================
+        vkCmdBeginRenderPass(batch->graphics_pcb,&render_pass_begin_info,VK_SUBPASS_CONTENTS_SECONDARY_COMMAND_BUFFERS);///================
 
-        vkCmdBindPipeline(batch->graphics_pcb,VK_PIPELINE_BIND_POINT_GRAPHICS,test_pipeline);
+        #warning for post processing should be able to pre-record seconadry command buffers with multiple submits, without VK_COMMAND_BUFFER_USAGE_ONE_TIME_SUBMIT_BIT, but with VK_COMMAND_BUFFER_USAGE_SIMULTANEOUS_USE_BIT
 
-        cvm_mesh_render(&test_stub_stellated_octahedron_mesh,batch->graphics_pcb,1,0);
+        vkCmdExecuteCommands(batch->graphics_pcb,1,&scb);
 
         vkCmdEndRenderPass(batch->graphics_pcb);///================
 
-        cvm_vk_transient_buffer_end(&test_transient_buffer);
+
 
         test_current_framebuffer_index++;
         test_current_framebuffer_index*= test_current_framebuffer_index<TEST_FRAMEBUFFER_CYCLES;

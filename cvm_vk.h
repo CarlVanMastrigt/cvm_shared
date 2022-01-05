@@ -187,10 +187,6 @@ typedef struct cvm_vk_module_work_sub_batch
     VkCommandPool graphics_pool;
     VkCommandBuffer * graphics_scbs;///secondary command buffers
 
-    ///make these the same when they actually share a queue family/queue
-    VkCommandPool transfer_pool;
-    VkCommandBuffer * transfer_scbs;///secondary command buffers
-
     ///should not need to query number of scbs allocated, max that ever tries to be used should match number allocated
 }
 cvm_vk_module_work_sub_batch;
@@ -202,6 +198,8 @@ typedef struct cvm_vk_module_batch
     VkCommandBuffer transfer_pcb;///primary command buffer, allocated from base pool
 
     cvm_vk_module_work_sub_batch * sub_batches;
+
+    VkCommandPool transfer_pool;/// cannot have transfers in secondary command buffer (scb's need renderpass/subpass) and they arent needed anyway, so have 1 per module batch
     /// should not need to ask module how many of these there are
     /// should use same/similar logic to distribute them that was used to create them
     /// effectively allocated is max, so can have variant number actually used in any given frame depending on workload
@@ -252,16 +250,27 @@ void cvm_vk_destroy_module_data(cvm_vk_module_data * module_data,bool in_separat
 cvm_vk_module_batch * cvm_vk_begin_module_batch(cvm_vk_module_data * module_data,uint32_t frame_offset,uint32_t * swapchain_image_index);///have this return bool? (VkCommandBuffer through ref.)
 cvm_vk_module_batch * cvm_vk_end_module_batch(cvm_vk_module_data * module_data);
 
+VkCommandBuffer cvm_vk_module_batch_start_secondary_command_buffer(cvm_vk_module_batch * mb,uint32_t sub_batch_index,uint32_t scb_index,VkFramebuffer framebuffer,VkRenderPass render_pass,uint32_t sub_pass);
+#define CVM_VK_MAIN_SUB_BATCH_INDEX 0xFFFFFFFF
 
-#define CVM_VK_AVAILABITY_TOKEN_DELAY_BITS 4
-#define CVM_VK_AVAILABITY_TOKEN_COUNTER_BITS 28
+
+///num frames to delay with power of 2 -1??
+#define CVM_VK_AVAILABITY_TOKEN_DELAY_BITS 1
+#define CVM_VK_AVAILABITY_TOKEN_COUNTER_BITS 15
+/// need to compensate for overflow
+#define CVM_VK_AVAILABITY_TOKEN_COUNTER_MASK 0x7FFF
 
 typedef struct cvm_vk_availability_token /// could make generalised struct and move to cvm_vk???
 {
-    uint32_t counter:CVM_VK_AVAILABITY_TOKEN_COUNTER_BITS;
-    uint32_t delay:CVM_VK_AVAILABITY_TOKEN_DELAY_BITS;
+    uint16_t counter:CVM_VK_AVAILABITY_TOKEN_COUNTER_BITS;
+    uint16_t delay:CVM_VK_AVAILABITY_TOKEN_DELAY_BITS;
 }
 cvm_vk_availability_token;
+
+static inline bool cvm_vk_availability_token_check(cvm_vk_availability_token token,uint16_t current_counter)
+{
+    return ((current_counter-token.counter)&CVM_VK_AVAILABITY_TOKEN_COUNTER_MASK)>=token.delay;
+}
 
 uint32_t cvm_vk_get_transfer_queue_family(void);
 uint32_t cvm_vk_get_graphics_queue_family(void);

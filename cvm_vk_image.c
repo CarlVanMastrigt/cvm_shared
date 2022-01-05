@@ -814,10 +814,12 @@ void cvm_vk_image_atlas_submit_all_pending_copy_actions(cvm_vk_image_atlas * ia,
             }
         };
 
-        vkCmdPipelineBarrier(transfer_cb,ia->initialised?VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT:0,VK_PIPELINE_STAGE_TRANSFER_BIT,0,0,NULL,0,NULL,1,&image_barrier);
+        //vkCmdPipelineBarrier(transfer_cb,ia->initialised?VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT:0,VK_PIPELINE_STAGE_TRANSFER_BIT,0,0,NULL,0,NULL,1,&image_barrier);
+        vkCmdPipelineBarrier(transfer_cb,ia->initialised?VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT:VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT,VK_PIPELINE_STAGE_TRANSFER_BIT,0,0,NULL,0,NULL,1,&image_barrier);
 
         ///actually execute the copies!
-        vkCmdCopyBufferToImage(transfer_cb,ia->staging_buffer->buffer,ia->image,VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,ia->pending_copy_count,ia->pending_copy_actions);
+        ///unfortunately need another test here in case initialised path is being taken
+        if(ia->pending_copy_count)vkCmdCopyBufferToImage(transfer_cb,ia->staging_buffer->buffer,ia->image,VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,ia->pending_copy_count,ia->pending_copy_actions);
         ia->pending_copy_count=0;
         ia->initialised=true;
 

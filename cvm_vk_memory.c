@@ -515,27 +515,42 @@ static inline void * stage_copy_action(cvm_vk_managed_buffer * mb,uint64_t offse
     return ptr;
 }
 
-void * cvm_vk_managed_buffer_get_dynamic_allocation_mapping(cvm_vk_managed_buffer * mb,cvm_vk_dynamic_buffer_allocation * allocation,uint64_t size,VkPipelineStageFlags stage_mask,VkAccessFlags access_mask)
+void * cvm_vk_managed_buffer_get_dynamic_allocation_mapping(cvm_vk_managed_buffer * mb,cvm_vk_dynamic_buffer_allocation * allocation,uint64_t size,VkPipelineStageFlags stage_mask,VkAccessFlags access_mask,cvm_vk_availability_token * availability_token)
 {
     uint64_t offset=allocation->offset<<mb->base_dynamic_allocation_size_factor;
-    if(mb->mapping) return mb->mapping+offset;///on UMA can access memory directly!
+    if(mb->mapping)///on UMA can access memory directly!
+    {
+        availability_token->delay=0;
+        return mb->mapping+offset;
+    }
 
     if(!size) size=1<<(allocation->size_factor+mb->base_dynamic_allocation_size_factor);///if size not specified use whole region
+    availability_token->delay=1;
+    availability_token->counter=mb->copy_update_counter;
 
     return stage_copy_action(mb,offset,size,stage_mask,access_mask);
 }
 
-void * cvm_vk_managed_buffer_get_static_allocation_mapping(cvm_vk_managed_buffer * mb,uint64_t offset,uint64_t size,VkPipelineStageFlags stage_mask,VkAccessFlags access_mask)
+void * cvm_vk_managed_buffer_get_static_allocation_mapping(cvm_vk_managed_buffer * mb,uint64_t offset,uint64_t size,VkPipelineStageFlags stage_mask,VkAccessFlags access_mask,cvm_vk_availability_token * availability_token)
 {
-    if(mb->mapping) return mb->mapping+offset;///on UMA can access memory directly!
+    if(mb->mapping)///on UMA can access memory directly!
+    {
+        availability_token->delay=0;
+        return mb->mapping+offset;
+    }
+
+    availability_token->delay=1;
+    availability_token->counter=mb->copy_update_counter;
 
     return stage_copy_action(mb,offset,size,stage_mask,access_mask);
 }
 
-void cvm_vk_managed_buffer_submit_all_pending_copy_actions(cvm_vk_managed_buffer * mb,VkCommandBuffer transfer_cb)
+void cvm_vk_managed_buffer_submit_all_pending_copy_actions(cvm_vk_managed_buffer * mb,VkCommandBuffer transfer_cb,VkCommandBuffer graphics_cb)
 {
     uint_fast32_t lock;
-    cvm_vk_managed_buffer_barrier_list tmp_list;
+    cvm_vk_managed_buffer_barrier_list tmp;
+
+    mb->copy_update_counter++;
 
     if(mb->mapping)/// is UMA system, no staging copies necessary
     {
@@ -550,33 +565,58 @@ void cvm_vk_managed_buffer_submit_all_pending_copy_actions(cvm_vk_managed_buffer
 
         cvm_vk_flush_buffer_memory_range(&flush_range);
     }
-    else if(mb->pending_copy_count)
+    else
     {
-        if(mb->multithreaded)do lock=atomic_load(&mb->copy_spinlock);
-        while(lock!=0 || !atomic_compare_exchange_weak(&mb->copy_spinlock,&lock,1));
+        ///this design isnt enough if using delay more than 1, but this should do for now
 
-        vkCmdCopyBuffer(transfer_cb,mb->staging_buffer->buffer,mb->buffer,mb->pending_copy_count,mb->pending_copy_actions);
-        mb->pending_copy_count=0;
+        if(mb->copy_acquire_barriers.count)
+        {
+            //puts("BARRIER");
+            vkCmdPipelineBarrier
+            (
+                graphics_cb,
+                VK_PIPELINE_STAGE_TRANSFER_BIT,
+                mb->copy_acquire_barriers.stage_mask,
+                0,
+                0,NULL,
+                mb->copy_acquire_barriers.count,mb->copy_acquire_barriers.barriers,
+                0,NULL
+            );
 
-        vkCmdPipelineBarrier
-        (
-            transfer_cb,
-            VK_PIPELINE_STAGE_TRANSFER_BIT,
-            mb->copy_release_barriers.stage_mask,
-            0,
-            0,NULL,
-            mb->copy_release_barriers.count,mb->copy_release_barriers.barriers,
-            0,NULL
-        );
+            ///rest now that we're done with it
+            mb->copy_acquire_barriers.count=0;
+            mb->copy_acquire_barriers.stage_mask=0;
+        }
 
-        tmp_list=mb->copy_acquire_barriers;
-        mb->copy_acquire_barriers=mb->copy_release_barriers;
-        ///reset barriers
-        tmp_list.count=0;
-        tmp_list.stage_mask=0;
-        mb->copy_release_barriers=tmp_list;
+        if(mb->pending_copy_count) /// mb->pending_copy_count should be the same as mb->copy_release_barriers.count
+        {
+//            if(mb->multithreaded)do lock=atomic_load(&mb->copy_spinlock);
+//            while(lock!=0 || !atomic_compare_exchange_weak(&mb->copy_spinlock,&lock,1));
+            ///multithreading consideration shouldnt be necessary as this should only ever be called from the main thread relevant to this resource while no worker threads are operating on the resource
 
-        if(mb->multithreaded) atomic_store(&mb->copy_spinlock,0);
+            vkCmdCopyBuffer(transfer_cb,mb->staging_buffer->buffer,mb->buffer,mb->pending_copy_count,mb->pending_copy_actions);
+            mb->pending_copy_count=0;
+
+            if(mb->copy_src_queue_family!=mb->copy_dst_queue_family)///first barrier is only needed when QFOT is necessary
+            {
+                vkCmdPipelineBarrier
+                (
+                    transfer_cb,
+                    VK_PIPELINE_STAGE_TRANSFER_BIT,
+                    mb->copy_release_barriers.stage_mask,
+                    0,
+                    0,NULL,
+                    mb->copy_release_barriers.count,mb->copy_release_barriers.barriers,
+                    0,NULL
+                );
+            }
+
+            tmp=mb->copy_acquire_barriers;
+            mb->copy_acquire_barriers=mb->copy_release_barriers;
+            mb->copy_release_barriers=tmp;
+
+//            if(mb->multithreaded) atomic_store(&mb->copy_spinlock,0);
+        }
     }
 }
 

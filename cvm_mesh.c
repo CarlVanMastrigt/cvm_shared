@@ -313,7 +313,6 @@ size_t cvm_mesh_get_vertex_data_size(cvm_mesh * mesh)
 
 void cvm_mesh_load_file_header(FILE * f,cvm_mesh * mesh)
 {
-    uint32_t num_faces;
     uint16_t tmp;
 
     fread(&tmp,sizeof(uint16_t),1,f);
@@ -332,8 +331,7 @@ void cvm_mesh_load_file_header(FILE * f,cvm_mesh * mesh)
 
     fread(&mesh->flags,sizeof(uint16_t),1,f);
     fread(&mesh->vertex_count,sizeof(uint16_t),1,f);
-    fread(&num_faces,sizeof(uint32_t),1,f);
-    mesh->face_count=num_faces;
+    fread(&mesh->face_count,sizeof(uint32_t),1,f);
 }
 
 void cvm_mesh_load_file_body(FILE * f,cvm_mesh * mesh,uint16_t * indices,uint16_t * adjacency,uint16_t * materials,void * vertex_data)
@@ -345,9 +343,10 @@ void cvm_mesh_load_file_body(FILE * f,cvm_mesh * mesh,uint16_t * indices,uint16_
 }
 
 
-bool cvm_mesh_load_file(cvm_mesh * mesh,char * filename,uint16_t flags,bool dynamic,cvm_vk_managed_buffer * mb)
+bool cvm_managed_mesh_load(cvm_managed_mesh * mm)
 {
     uint16_t *indices,*adjacency,*materials;
+    uint16_t desired_flags;
     void * vertex_data;
     uint64_t base_offset,current_offset;
     char * ptr;
@@ -356,318 +355,152 @@ bool cvm_mesh_load_file(cvm_mesh * mesh,char * filename,uint16_t flags,bool dyna
     FILE * f;
     VkDeviceSize sb_offset;
 
-    if(!mesh->started)
-    {
-        mesh->started=true;
-        mesh->allocated=false;
-        mesh->ready=false;
-        mesh->dynamic=dynamic;
-    }
-    else if(dynamic!=mesh->dynamic)
-    {
-        fprintf(stderr,"TRIED TO CREATE MESH WITH DIFFERENT DYNAMIC SETTING TO WHEN MESH STARTED CREATION\n");
-        exit(-1);
-    }
-
-    f=fopen(filename,"rb");
+    f=fopen(mm->filename,"rb");
     if(!f)
     {
-        fprintf(stderr,"MESH FILE MISSING: %s\n",filename);
+        fprintf(stderr,"MESH FILE MISSING: %s\n",mm->filename);
         exit(-1);
     }
 
-    cvm_mesh_load_file_header(f,mesh);
+    desired_flags=mm->data.flags;
+
+    cvm_mesh_load_file_header(f,&mm->data);
 
     #warning perhaps have way to just take all relevant flags from the mesh? (special mesh flag?)
-    if((mesh->flags&flags)!=flags)
+    if((mm->data.flags&desired_flags)!=desired_flags)
     {
-        fprintf(stderr,"ATTEMPTED TO LOAD MESH WITH FLAGS IT WAS NOT CREATED WITH\n");
+        fprintf(stderr,"ATTEMPTED TO LOAD MESH FILE WITH FLAGS IT WAS NOT CREATED WITH\n");
         exit(-1);
     }
 
-    mesh->flags=flags;
+    mm->data.flags=desired_flags;
 
-    vertex_data_size=cvm_mesh_get_vertex_data_size(mesh);
+    vertex_data_size=cvm_mesh_get_vertex_data_size(&mm->data);
 
-    size=mesh->face_count*3*sizeof(uint16_t);
-    if(mesh->flags&CVM_MESH_ADGACENCY)size+=mesh->face_count*6*sizeof(uint16_t);
-    if(mesh->flags&CVM_MESH_PER_FACE_MATERIAL)size+=mesh->face_count*sizeof(uint16_t);
-    size+=(mesh->vertex_count+1)*vertex_data_size;///1 extra needed for alignment
+    size=mm->data.face_count*3*sizeof(uint16_t);
+    if(desired_flags&CVM_MESH_ADGACENCY)size+=mm->data.face_count*6*sizeof(uint16_t);
+    if(desired_flags&CVM_MESH_PER_FACE_MATERIAL)size+=mm->data.face_count*sizeof(uint16_t);
+    size+=(mm->data.vertex_count+1)*vertex_data_size;///1 extra needed for alignment
 
-    if(dynamic)
+
+    if(mm->dynamic)
     {
-        if(!mesh->allocated)
+        if(!mm->allocated)
         {
-            mesh->dynamic_allocation=cvm_vk_managed_buffer_acquire_dynamic_allocation(mb,size);
+            mm->dynamic_allocation=cvm_vk_managed_buffer_acquire_dynamic_allocation(mm->mb,size);
 
-            if(!mesh->dynamic_allocation)
+            if(!mm->dynamic_allocation)
             {
-                fprintf(stderr,"INSUFFICIENT SPACE REMAINING IN BUFFER FOR MESH: %s\n",filename);
+                fprintf(stderr,"INSUFFICIENT SPACE REMAINING IN BUFFER FOR MESH: %s\n",mm->filename);
                 exit(-1);
             }
 
-            mesh->allocated=true;
+            mm->allocated=true;
         }
 
         #warning should probably be more specific with the stage and flags bits... (if possible)
-        ptr=cvm_vk_managed_buffer_get_dynamic_allocation_mapping(mb,mesh->dynamic_allocation,size,VK_PIPELINE_STAGE_ALL_GRAPHICS_BIT,VK_ACCESS_2_MEMORY_READ_BIT_KHR);
+        ptr=cvm_vk_managed_buffer_get_dynamic_allocation_mapping(mm->mb,mm->dynamic_allocation,size,VK_PIPELINE_STAGE_VERTEX_INPUT_BIT,VK_ACCESS_INDEX_READ_BIT|VK_ACCESS_VERTEX_ATTRIBUTE_READ_BIT,&mm->availability_token);
         if(!ptr)return false;///could not allocate staging space!
-        base_offset = current_offset = cvm_vk_managed_buffer_get_dynamic_allocation_offset(mb,mesh->dynamic_allocation);
+        base_offset = current_offset = cvm_vk_managed_buffer_get_dynamic_allocation_offset(mm->mb,mm->dynamic_allocation);
     }
     else
     {
-        if(!mesh->allocated)
+        if(!mm->allocated)
         {
-            mesh->static_offset = cvm_vk_managed_buffer_acquire_static_allocation(mb,size,2);
+            mm->static_offset = cvm_vk_managed_buffer_acquire_static_allocation(mm->mb,size,2);
 
-            if(!mesh->static_offset)
+            if(!mm->static_offset)
             {
-                fprintf(stderr,"INSUFFICIENT SPACE REMAINING IN BUFFER FOR MESH: %s\n",filename);
+                fprintf(stderr,"INSUFFICIENT SPACE REMAINING IN BUFFER FOR MESH: %s\n",mm->filename);
                 exit(-1);
             }
 
-            mesh->allocated=true;
+            mm->allocated=true;
         }
 
         #warning should probably be more specific with the stage and flags bits... (if possible)
-        ptr=cvm_vk_managed_buffer_get_static_allocation_mapping(mb,mesh->static_offset,size,VK_PIPELINE_STAGE_ALL_GRAPHICS_BIT,VK_ACCESS_2_MEMORY_READ_BIT_KHR);
+        ptr=cvm_vk_managed_buffer_get_static_allocation_mapping(mm->mb,mm->static_offset,size,VK_PIPELINE_STAGE_VERTEX_INPUT_BIT,VK_ACCESS_INDEX_READ_BIT|VK_ACCESS_VERTEX_ATTRIBUTE_READ_BIT,&mm->availability_token);
         if(!ptr)return false;///could not allocate staging space!
-        base_offset = current_offset = mesh->static_offset;
+        base_offset = current_offset = mm->static_offset;
     }
 
 
-    mesh->index_offset=current_offset/sizeof(uint16_t);
+    mm->index_offset=current_offset/sizeof(uint16_t);
     indices=(uint16_t*)ptr;
-    current_offset+=mesh->face_count*3*sizeof(uint16_t);
+    current_offset+=mm->data.face_count*3*sizeof(uint16_t);
 
-    if(mesh->flags&CVM_MESH_ADGACENCY)
+    if(desired_flags&CVM_MESH_ADGACENCY)
     {
-        mesh->adjacency_offset=current_offset/sizeof(uint16_t);
+        mm->adjacency_offset=current_offset/sizeof(uint16_t);
         adjacency=(uint16_t*)(ptr + (current_offset-base_offset));
-        current_offset+=mesh->face_count*6*sizeof(uint16_t);
+        current_offset+=mm->data.face_count*6*sizeof(uint16_t);
     }
     else adjacency=NULL;
 
-    if(mesh->flags&CVM_MESH_PER_FACE_MATERIAL)
+    if(desired_flags&CVM_MESH_PER_FACE_MATERIAL)
     {
-        mesh->material_offset=current_offset/sizeof(uint16_t);
+        mm->material_offset=current_offset/sizeof(uint16_t);
         materials=(uint16_t*)(ptr + (current_offset-base_offset));
-        current_offset+=mesh->face_count*sizeof(uint16_t);
+        current_offset+=mm->data.face_count*sizeof(uint16_t);
     }
     else materials=NULL;
 
     current_offset=(current_offset-1) / vertex_data_size + 1;
-    mesh->vertex_offset=current_offset;
+    mm->vertex_offset=current_offset;
     current_offset*=vertex_data_size;
     vertex_data=(ptr + (current_offset-base_offset));
-    current_offset+=mesh->vertex_count*vertex_data_size;
+    current_offset+=mm->data.vertex_count*vertex_data_size;
 
-    cvm_mesh_load_file_body(f,mesh,indices,adjacency,materials,vertex_data);
+    cvm_mesh_load_file_body(f,&mm->data,indices,adjacency,materials,vertex_data);
 
-    mesh->ready=true;
+    mm->loaded=true;
 
     return true;
 }
 
-void cvm_mesh_relinquish(cvm_mesh * mesh,cvm_vk_managed_buffer * mb)
+void cvm_managed_mesh_relinquish(cvm_managed_mesh * mm)
 {
-    if(mesh->allocated)
+    if(mm->allocated && mm->dynamic)
     {
-        if(mesh->dynamic)
-        {
-            cvm_vk_managed_buffer_relinquish_dynamic_allocation(mb,mesh->dynamic_allocation);
-        }
+        cvm_vk_managed_buffer_relinquish_dynamic_allocation(mm->mb,mm->dynamic_allocation);
     }
 }
 
-void cvm_mesh_render(cvm_mesh * mesh,VkCommandBuffer graphics_cb,uint32_t instance_count,uint32_t instance_offset)///assumes managed buffer used in creation was bound to appropriate points
+void cvm_managed_mesh_render(cvm_managed_mesh * mm,VkCommandBuffer graphics_cb,uint32_t instance_count,uint32_t instance_offset)///assumes managed buffer used in creation was bound to appropriate points
 {
-    if(mesh->ready)vkCmdDrawIndexed(graphics_cb,mesh->face_count*3,instance_count,mesh->index_offset,mesh->vertex_offset,instance_offset);
+    if(!mm->loaded)///should go first b/c can be used immediately on UMA systems
+    {
+        cvm_managed_mesh_load(mm);
+    }
+
+    if(mm->ready || (mm->loaded && (mm->ready=cvm_vk_availability_token_check(mm->availability_token,mm->mb->copy_update_counter))))
+    {
+        //puts("RENDER");
+        vkCmdDrawIndexed(graphics_cb,mm->data.face_count*3,instance_count,mm->index_offset,mm->vertex_offset,instance_offset);
+    }
 }
 
-//static GLuint assorted_ibo;
-//static GLuint assorted_vbo;
-//
-//static GLuint assorted_line_vbo;
-//
-//
-///// 6 - 8
-//
-//
-//static GLfloat assorted_vertices[]=
-//{
-//    ///octahedron (bounds sphere of radius 1, centred on origin)
-//    0.0,0.0,SQRT_3,
-//    -SQRT_3,0.0,0.0,
-//    0.0,SQRT_3,0.0,
-//    SQRT_3,0.0,0.0,
-//    0.0,0.0,-SQRT_3,
-//    0.0,-SQRT_3,0.0,
-//    ///triangular antiprism (bounds sphere of radius 1 and length 1, with its base centred on origin)
-//    0.0,-2.0,0.0,
-//    -SQRT_3,1.0,0.0,
-//    SQRT_3,1.0,0.0,
-//    -SQRT_3,-1.0,1.0,
-//    0.0,2.0,1.0,
-//    SQRT_3,-1.0,1.0
-//};
-//
-//static GLushort assorted_indices[]=
-//{
-//    ///octahedron
-//    1,0,2,
-//    3,2,0,
-//    3,4,2,
-//    1,2,4,
-//    3,0,5,
-//    1,5,0,
-//    3,5,4,
-//    1,4,5,
-//    1,5,0,3,2,4,
-//    3,4,2,1,0,5,
-//    3,5,4,1,2,0,
-//    1,0,2,3,4,5,
-//    3,2,0,1,5,4,
-//    1,4,5,3,0,2,
-//    3,0,5,1,4,2,
-//    1,2,4,3,5,0,
-//    ///triangular antiprism
-//    6,7,8,
-//    6,9,7,
-//    9,10,7,
-//    7,10,8,
-//    10,11,8,
-//    8,11,6,
-//    11,9,6,
-//    11,10,9,
-//    6,9,7,10,8,11,
-//    6,11,9,10,7,8,
-//    9,11,10,8,7,6,
-//    7,9,10,11,8,6,
-//    10,9,11,6,8,7,
-//    8,10,11,9,6,7,
-//    11,10,9,7,6,8,
-//    11,8,10,7,9,6
-//};
-//
-//static const uint32_t circle_divisions=64;
-//
-//static GLfloat assorted_line_vertices[]=
-//{
-//    0.5,0.5,
-//    1.5,1.5,
-//    -0.5,0.5,
-//    -1.5,1.5,
-//    0.5,-0.5,
-//    1.5,-1.5,
-//    -0.5,-0.5,
-//    -1.5,-1.5,
-//
-//    1.5,0.0,
-//    0.0,1.5,
-//    -1.5,0.0,
-//    0.0,-1.5,
-//
-//    1.0,1.0,
-//    -1.0,1.0,
-//    -1.0,-1.0,
-//    -1.0,-1.0,
-//    1.0,-1.0,
-//    1.0,1.0
-//};
-//
-//void initialise_assorted_meshes(gl_functions * glf)
-//{
-//    glf->glGenBuffers(1,&assorted_vbo);
-//    glf->glBindBuffer(GL_ARRAY_BUFFER,assorted_vbo);
-//    glf->glBufferData(GL_ARRAY_BUFFER,sizeof(GLfloat)*36,assorted_vertices,GL_STATIC_DRAW);
-//    glf->glBindBuffer(GL_ARRAY_BUFFER, 0);
-//
-//    glf->glGenBuffers(1,&assorted_ibo);
-//    glf->glBindBuffer(GL_ELEMENT_ARRAY_BUFFER,assorted_ibo);
-//    glf->glBufferData(GL_ELEMENT_ARRAY_BUFFER,sizeof(GLushort)*144,assorted_indices,GL_STATIC_DRAW);
-//    glf->glBindBuffer(GL_ELEMENT_ARRAY_BUFFER,0);
-//
-//
-//
-//    GLfloat line_verts[36+2*circle_divisions];
-//
-//    uint32_t i;
-//    float angle;
-//
-//    for(i=0;i<36;i++)
-//    {
-//        line_verts[i]=assorted_line_vertices[i];
-//    }
-//
-//    for(i=0;i<circle_divisions;i++)
-//    {
-//        angle=((float)i)*2.0*PI/((float)circle_divisions);
-//        line_verts[36+i*2+0]=cosf(angle);
-//        line_verts[36+i*2+1]=sinf(angle);
-//    }
-//
-//
-//    glf->glGenBuffers(1,&assorted_line_vbo);
-//    glf->glBindBuffer(GL_ARRAY_BUFFER,assorted_line_vbo);
-//    glf->glBufferData(GL_ARRAY_BUFFER,sizeof(GLfloat)*(36+2*circle_divisions),line_verts,GL_STATIC_DRAW);
-//    glf->glBindBuffer(GL_ARRAY_BUFFER, 0);
-//}
-//
-//void bind_assorted_for_vao_vec3(gl_functions * glf)
-//{
-//    glf->glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, assorted_ibo);
-//
-//    glf->glBindBuffer(GL_ARRAY_BUFFER,assorted_vbo);
-//    glf->glEnableVertexAttribArray(0);
-//    glf->glVertexAttribPointer(0,3,GL_FLOAT,GL_FALSE,0,0);
-//}
-//
-//void bind_assorted_for_vao_vec2(gl_functions * glf)
-//{
-//    glf->glBindBuffer(GL_ARRAY_BUFFER,assorted_line_vbo);
-//    glf->glEnableVertexAttribArray(0);
-//    glf->glVertexAttribPointer(0,2,GL_FLOAT,GL_FALSE,0,0);
-//}
-//
-//void render_octahedron_colour(gl_functions * glf,uint32_t count)
-//{
-//    glf->glDrawElementsInstanced(GL_TRIANGLES,24,GL_UNSIGNED_SHORT,NULL,count);
-//}
-//
-//void render_octahedron_shadow(gl_functions * glf,uint32_t count)
-//{
-//    glf->glDrawElementsInstanced(GL_TRIANGLES_ADJACENCY,48,GL_UNSIGNED_SHORT,(const void *)(24*sizeof(GLushort)),count);
-//}
-//
-//void render_triangular_antiprism_colour(gl_functions * glf,uint32_t count)
-//{
-//    glf->glDrawElementsInstanced(GL_TRIANGLES,24,GL_UNSIGNED_SHORT,(const void *)(72*sizeof(GLushort)),count);
-//}
-//
-//void render_triangular_antiprism_shadow(gl_functions * glf,uint32_t count)
-//{
-//    glf->glDrawElementsInstanced(GL_TRIANGLES_ADJACENCY,48,GL_UNSIGNED_SHORT,(const void *)(96*sizeof(GLushort)),count);
-//}
-//
-//
-//
-//void render_cross_lines(gl_functions * glf,uint32_t count)
-//{
-//    glf->glDrawArraysInstanced(GL_LINES,0,8,count);
-//}
-//
-//void render_square_lines(gl_functions * glf,uint32_t count)
-//{
-//    glf->glDrawArraysInstanced(GL_LINE_LOOP,8,4,count);
-//}
-//
-//void render_square(gl_functions * glf,uint32_t count)
-//{
-//    glf->glDrawArraysInstanced(GL_TRIANGLES,12,6,count);
-//}
-//
-//void render_circle_lines(gl_functions * glf,uint32_t count)
-//{
-//    glf->glDrawArraysInstanced(GL_LINE_LOOP,36,circle_divisions,count);
-//}
+void cvm_managed_mesh_create(cvm_managed_mesh * mm,cvm_vk_managed_buffer * mb,char * filename,uint16_t flags,bool dynamic)
+{
+    mm->filename=strdup(filename);
+    mm->mb=mb;
+    mm->data.flags=flags;
+    mm->allocated=false;
+    mm->loaded=false;
+    mm->ready=false;
+    mm->dynamic=dynamic;
+}
+
+void cvm_managed_mesh_destroy(cvm_managed_mesh * mm)
+{
+    cvm_managed_mesh_relinquish(mm);
+    free(mm->filename);
+}
+
+
+
+
+
+
+
+

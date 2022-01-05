@@ -151,7 +151,8 @@ typedef struct cvm_vk_managed_buffer
 
     uint32_t copy_src_queue_family;/// transfer (DMA)queue family where possible
     uint32_t copy_dst_queue_family;/// graphics queue family
-    uint32_t copy_update_counter:CVM_VK_AVAILABITY_TOKEN_COUNTER_BITS;
+
+    uint16_t copy_update_counter;
     /// acquire barrier only relevant when a dedicated transfer queue family is involved
     /// is used to acquire ownership of buffer regions after they were released on transfer queue family
     /// when this is the case, upon submitting copies, need to swap these 2 structs and reset the (new) transfer barrier list
@@ -172,12 +173,11 @@ static inline uint64_t cvm_vk_managed_buffer_get_dynamic_allocation_offset(cvm_v
 
 uint64_t cvm_vk_managed_buffer_acquire_static_allocation(cvm_vk_managed_buffer * mb,uint64_t size,uint64_t alignment);///cannot be relinquished, exists until
 
-void * cvm_vk_managed_buffer_get_dynamic_allocation_mapping(cvm_vk_managed_buffer * mb,cvm_vk_dynamic_buffer_allocation * allocation,uint64_t size,VkPipelineStageFlags stage_mask,VkAccessFlags access_mask);///if size==0 returns full allocation
-void * cvm_vk_managed_buffer_get_static_allocation_mapping(cvm_vk_managed_buffer * mb,uint64_t offset,uint64_t size,VkPipelineStageFlags stage_mask,VkAccessFlags access_mask);
+void * cvm_vk_managed_buffer_get_dynamic_allocation_mapping(cvm_vk_managed_buffer * mb,cvm_vk_dynamic_buffer_allocation * allocation,uint64_t size,VkPipelineStageFlags stage_mask,VkAccessFlags access_mask,cvm_vk_availability_token * availability_token);///if size==0 returns full allocation
+void * cvm_vk_managed_buffer_get_static_allocation_mapping(cvm_vk_managed_buffer * mb,uint64_t offset,uint64_t size,VkPipelineStageFlags stage_mask,VkAccessFlags access_mask,cvm_vk_availability_token * availability_token);
 
-void cvm_vk_managed_buffer_submit_all_pending_copy_actions(cvm_vk_managed_buffer * mb,VkCommandBuffer transfer_cb);///includes necessary barriers
-/// for the love of god only call this once per buffer per frame
-/// also must be called in single thread AFTER acquire operations are processed by that same thread
+void cvm_vk_managed_buffer_submit_all_pending_copy_actions(cvm_vk_managed_buffer * mb,VkCommandBuffer transfer_cb,VkCommandBuffer graphics_cb);///includes necessary barriers
+/// for the love of god only call this once per buffer per frame, transfer and graphics cb necessary for case of QFOT (process acquisitions for previous frames releases)
 
 void cvm_vk_managed_buffer_bind_as_vertex(VkCommandBuffer cmd_buf,cvm_vk_managed_buffer * mb,uint32_t binding);
 void cvm_vk_managed_buffer_bind_as_index(VkCommandBuffer cmd_buf,cvm_vk_managed_buffer * mb,VkIndexType type);

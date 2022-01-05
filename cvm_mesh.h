@@ -38,12 +38,32 @@ typedef struct cvm_mesh
 {
     uint16_t flags;
     uint16_t vertex_count;
-    uint32_t face_count:20;///implicitly triangles
-    uint32_t dynamic:1;
+    uint32_t face_count;///implicitly triangles
+}
+cvm_mesh;
+
+void cvm_mesh_load_file_header(FILE * f,cvm_mesh * mesh);///separate out metadata contents relevant to this operation such that complete mesh, tied to every other part of system, isn't necessary
+void cvm_mesh_load_file_body(FILE * f,cvm_mesh * mesh,uint16_t * indices,uint16_t * adjacency,uint16_t * materials,void * vertex_data);
+
+size_t cvm_mesh_get_vertex_data_size(cvm_mesh * mesh);
+
+typedef struct cvm_managed_mesh
+{
+    cvm_vk_managed_buffer * mb;
+    char * filename;
+
+    union
+    {
+        cvm_vk_dynamic_buffer_allocation * dynamic_allocation;///store so that this can be deleted quickly, will be null if static allocation
+        uint64_t static_offset;
+    };
+
+    uint16_t dynamic:1;
     ///stages of creation
-    uint32_t started:1;///must be set false earlier
-    uint32_t allocated:1;
-    uint32_t ready:1;
+    uint16_t allocated:1;
+    uint16_t loaded:1;
+    uint16_t ready:1;
+    cvm_vk_availability_token availability_token;///only becomes relevant after moving data to the GPU
 
     ///precalculate following for speed of access/use
     uint32_t index_offset;
@@ -51,24 +71,18 @@ typedef struct cvm_mesh
     uint32_t material_offset;
     uint32_t vertex_offset;
 
-    union
-    {
-        cvm_vk_dynamic_buffer_allocation * dynamic_allocation;///store so that this can be deleted quickly, will be null if static allocation
-        uint64_t static_offset;
-    };
+    cvm_mesh data;
 }
-cvm_mesh;
+cvm_managed_mesh;
 
-void cvm_mesh_load_file_header(FILE * f,cvm_mesh * mesh);
-void cvm_mesh_load_file_body(FILE * f,cvm_mesh * mesh,uint16_t * indices,uint16_t * adjacency,uint16_t * materials,void * vertex_data);
+void cvm_managed_mesh_create(cvm_managed_mesh * mm,cvm_vk_managed_buffer * mb,char * filename,uint16_t flags,bool dynamic);
+void cvm_managed_mesh_destroy(cvm_managed_mesh * mm);
 
-size_t cvm_mesh_get_vertex_data_size(cvm_mesh * mesh);
+bool cvm_managed_mesh_load(cvm_managed_mesh * mm);
 
-bool cvm_mesh_load_file(cvm_mesh * mesh,char * filename,uint16_t flags,bool dynamic,cvm_vk_managed_buffer * mb);
+void cvm_managed_mesh_relinquish(cvm_managed_mesh * mm);
 
-void cvm_mesh_relinquish(cvm_mesh * mesh,cvm_vk_managed_buffer * mb);
-
-void cvm_mesh_render(cvm_mesh * mesh,VkCommandBuffer graphics_cb,uint32_t instance_count,uint32_t instance_offset);///assumes managed buffer used in creation was bound to appropriate points
+void cvm_managed_mesh_render(cvm_managed_mesh * mm,VkCommandBuffer graphics_cb,uint32_t instance_count,uint32_t instance_offset);///assumes managed buffer used in creation was bound to appropriate points
 
 
 

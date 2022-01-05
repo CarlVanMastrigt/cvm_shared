@@ -1276,28 +1276,18 @@ static void cvm_vk_create_work_sub_batch(cvm_vk_module_data * md,cvm_vk_module_w
         .sType=VK_STRUCTURE_TYPE_COMMAND_POOL_CREATE_INFO,
         .pNext=NULL,
         .flags= VK_COMMAND_POOL_CREATE_TRANSIENT_BIT,
-        .queueFamilyIndex=0xFFFFFFFF ///set later
+        .queueFamilyIndex=cvm_vk_graphics_queue_family
     };
 
-    command_pool_create_info.queueFamilyIndex=cvm_vk_graphics_queue_family;
     CVM_VK_CHECK(vkCreateCommandPool(cvm_vk_device,&command_pool_create_info,NULL,&wsb->graphics_pool));
-
-    if(cvm_vk_transfer_queue_family!=cvm_vk_graphics_queue_family)
-    {
-        command_pool_create_info.queueFamilyIndex=cvm_vk_transfer_queue_family;
-        CVM_VK_CHECK(vkCreateCommandPool(cvm_vk_device,&command_pool_create_info,NULL,&wsb->transfer_pool));
-    }
-    else wsb->transfer_pool=wsb->graphics_pool;
-
-
 
     VkCommandBufferAllocateInfo command_buffer_allocate_info=(VkCommandBufferAllocateInfo)
     {
         .sType=VK_STRUCTURE_TYPE_COMMAND_BUFFER_ALLOCATE_INFO,
         .pNext=NULL,
-        .commandPool=VK_NULL_HANDLE,///set later
+        .commandPool=wsb->graphics_pool,
         .level=VK_COMMAND_BUFFER_LEVEL_SECONDARY,
-        .commandBufferCount=0///set later
+        .commandBufferCount=md->graphics_scb_count
     };
 
     if(md->graphics_scb_count)
@@ -1308,15 +1298,6 @@ static void cvm_vk_create_work_sub_batch(cvm_vk_module_data * md,cvm_vk_module_w
         CVM_VK_CHECK(vkAllocateCommandBuffers(cvm_vk_device,&command_buffer_allocate_info,wsb->graphics_scbs));
     }
     else wsb->graphics_scbs=NULL;
-
-    if(md->transfer_scb_count)
-    {
-        wsb->transfer_scbs=malloc(sizeof(VkCommandBuffer)*md->transfer_scb_count);
-        command_buffer_allocate_info.commandPool=wsb->transfer_pool;
-        command_buffer_allocate_info.commandBufferCount=md->transfer_scb_count;
-        CVM_VK_CHECK(vkAllocateCommandBuffers(cvm_vk_device,&command_buffer_allocate_info,wsb->transfer_scbs));
-    }
-    else wsb->transfer_scbs=NULL;
 }
 
 static void cvm_vk_destroy_work_sub_batch(cvm_vk_module_data * md,cvm_vk_module_work_sub_batch * wsb)
@@ -1327,17 +1308,7 @@ static void cvm_vk_destroy_work_sub_batch(cvm_vk_module_data * md,cvm_vk_module_
         free(wsb->graphics_scbs);
     }
 
-    if(md->transfer_scb_count)
-    {
-        vkFreeCommandBuffers(cvm_vk_device,wsb->transfer_pool,md->graphics_scb_count,wsb->transfer_scbs);
-        free(wsb->transfer_scbs);
-    }
-
     vkDestroyCommandPool(cvm_vk_device,wsb->graphics_pool,NULL);
-    if(cvm_vk_transfer_queue_family!=cvm_vk_graphics_queue_family)
-    {
-        vkDestroyCommandPool(cvm_vk_device,wsb->transfer_pool,NULL);
-    }
 }
 
 void cvm_vk_resize_module_graphics_data(cvm_vk_module_data * module_data,uint32_t extra_frame_count)
@@ -1363,7 +1334,7 @@ void cvm_vk_resize_module_graphics_data(cvm_vk_module_data * module_data,uint32_
         }
 
         vkFreeCommandBuffers(cvm_vk_device,module_data->batches[i].main_sub_batch.graphics_pool,1,&module_data->batches[i].graphics_pcb);
-        vkFreeCommandBuffers(cvm_vk_device,module_data->batches[i].main_sub_batch.transfer_pool,1,&module_data->batches[i].transfer_pcb);
+        vkFreeCommandBuffers(cvm_vk_device,module_data->batches[i].transfer_pool,1,&module_data->batches[i].transfer_pcb);
 
         cvm_vk_destroy_work_sub_batch(module_data,&module_data->batches[i].main_sub_batch);
         for(j=0;j<module_data->sub_batch_count;j++)cvm_vk_destroy_work_sub_batch(module_data,module_data->batches[i].sub_batches+j);
@@ -1389,8 +1360,25 @@ void cvm_vk_resize_module_graphics_data(cvm_vk_module_data * module_data,uint32_
 //            .flags=0
 //        };
 
+
         cvm_vk_create_work_sub_batch(module_data,&module_data->batches[i].main_sub_batch);
         for(j=0;j<module_data->sub_batch_count;j++)cvm_vk_create_work_sub_batch(module_data,module_data->batches[i].sub_batches+j);
+
+
+        if(cvm_vk_transfer_queue_family!=cvm_vk_graphics_queue_family)
+        {
+            VkCommandPoolCreateInfo command_pool_create_info=(VkCommandPoolCreateInfo)
+            {
+                .sType=VK_STRUCTURE_TYPE_COMMAND_POOL_CREATE_INFO,
+                .pNext=NULL,
+                .flags= VK_COMMAND_POOL_CREATE_TRANSIENT_BIT,
+                .queueFamilyIndex=cvm_vk_transfer_queue_family
+            };
+
+            CVM_VK_CHECK(vkCreateCommandPool(cvm_vk_device,&command_pool_create_info,NULL,&module_data->batches[i].transfer_pool));
+        }
+        else module_data->batches[i].transfer_pool=module_data->batches[i].main_sub_batch.graphics_pool;
+
 
         VkCommandBufferAllocateInfo command_buffer_allocate_info=(VkCommandBufferAllocateInfo)
         {
@@ -1404,7 +1392,7 @@ void cvm_vk_resize_module_graphics_data(cvm_vk_module_data * module_data,uint32_
         command_buffer_allocate_info.commandPool=module_data->batches[i].main_sub_batch.graphics_pool;
         CVM_VK_CHECK(vkAllocateCommandBuffers(cvm_vk_device,&command_buffer_allocate_info,&module_data->batches[i].graphics_pcb));
 
-        command_buffer_allocate_info.commandPool=module_data->batches[i].main_sub_batch.transfer_pool;
+        command_buffer_allocate_info.commandPool=module_data->batches[i].transfer_pool;
         CVM_VK_CHECK(vkAllocateCommandBuffers(cvm_vk_device,&command_buffer_allocate_info,&module_data->batches[i].transfer_pcb));
     }
 
@@ -1425,7 +1413,7 @@ void cvm_vk_destroy_module_data(cvm_vk_module_data * module_data,bool in_separat
         }
 
         vkFreeCommandBuffers(cvm_vk_device,module_data->batches[i].main_sub_batch.graphics_pool,1,&module_data->batches[i].graphics_pcb);
-        vkFreeCommandBuffers(cvm_vk_device,module_data->batches[i].main_sub_batch.transfer_pool,1,&module_data->batches[i].transfer_pcb);
+        vkFreeCommandBuffers(cvm_vk_device,module_data->batches[i].transfer_pool,1,&module_data->batches[i].transfer_pcb);
 
         cvm_vk_destroy_work_sub_batch(module_data,&module_data->batches[i].main_sub_batch);
         for(j=0;j<module_data->sub_batch_count;j++)cvm_vk_destroy_work_sub_batch(module_data,module_data->batches[i].sub_batches+j);
@@ -1459,8 +1447,7 @@ cvm_vk_module_batch * cvm_vk_begin_module_batch(cvm_vk_module_data * module_data
 
         if(cvm_vk_transfer_queue_family!=cvm_vk_graphics_queue_family)
         {
-            vkResetCommandPool(cvm_vk_device,batch->main_sub_batch.transfer_pool,0);
-            for(i=0;i<module_data->sub_batch_count;i++)vkResetCommandPool(cvm_vk_device,batch->sub_batches[i].transfer_pool,0);
+            vkResetCommandPool(cvm_vk_device,batch->transfer_pool,0);
         }
 
         VkCommandBufferBeginInfo command_buffer_begin_info=(VkCommandBufferBeginInfo)
@@ -1499,7 +1486,36 @@ cvm_vk_module_batch * cvm_vk_end_module_batch(cvm_vk_module_data * module_data)
     return batch;
 }
 
+VkCommandBuffer cvm_vk_module_batch_start_secondary_command_buffer(cvm_vk_module_batch * mb,uint32_t sub_batch_index,uint32_t scb_index,VkFramebuffer framebuffer,VkRenderPass render_pass,uint32_t sub_pass)
+{
+    VkCommandBuffer scb;
 
+    scb=(sub_batch_index==CVM_VK_MAIN_SUB_BATCH_INDEX)?mb->main_sub_batch.graphics_scbs[scb_index]:mb->sub_batches[sub_batch_index].graphics_scbs[scb_index];
+
+    VkCommandBufferBeginInfo scb_info=(VkCommandBufferBeginInfo)
+    {
+        .sType=VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO,
+        .pNext=NULL,
+        .flags=VK_COMMAND_BUFFER_USAGE_ONE_TIME_SUBMIT_BIT|VK_COMMAND_BUFFER_USAGE_RENDER_PASS_CONTINUE_BIT,
+        .pInheritanceInfo=(VkCommandBufferInheritanceInfo[1])
+        {
+            {
+                .sType=VK_STRUCTURE_TYPE_COMMAND_BUFFER_INHERITANCE_INFO,
+                .pNext=NULL,
+                .renderPass=render_pass,
+                .subpass=0,
+                .framebuffer=framebuffer,
+                .occlusionQueryEnable=VK_FALSE,
+                .queryFlags=0,
+                .pipelineStatistics=0
+            }
+        }
+    };
+
+    vkBeginCommandBuffer(scb,&scb_info);
+
+    return scb;
+}
 
 
 
