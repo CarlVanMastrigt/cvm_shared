@@ -672,7 +672,7 @@ void initialise_overlay_render_data(void)
     cvm_vk_create_shader_stage_info(&overlay_vertex_stage,"cvm_shared/shaders/overlay_vert.spv",VK_SHADER_STAGE_VERTEX_BIT);
     cvm_vk_create_shader_stage_info(&overlay_fragment_stage,"cvm_shared/shaders/overlay_frag.spv",VK_SHADER_STAGE_FRAGMENT_BIT);
 
-    cvm_vk_create_module_data(&overlay_module_data,false,0,0,0);
+    cvm_vk_create_module_data(&overlay_module_data,false,0,0);
 
     cvm_vk_transient_buffer_create(&overlay_transient_buffer,VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT | VK_BUFFER_USAGE_VERTEX_BUFFER_BIT);
     cvm_vk_staging_buffer_create(&overlay_staging_buffer,VK_BUFFER_USAGE_TRANSFER_SRC_BIT);

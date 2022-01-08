@@ -39,7 +39,7 @@ void terminate_test_render_data(void);
 
 /// applications responsibility to handle recreation of module resources (unless i can come up with a better approach)
 
-void initialise_test_swapchain_dependencies(void);
+void initialise_test_swapchain_dependencies(VkSampleCountFlagBits sample_count);
 void terminate_test_swapchain_dependencies(void);
 
 cvm_vk_module_batch * test_render_frame(cvm_camera * c);

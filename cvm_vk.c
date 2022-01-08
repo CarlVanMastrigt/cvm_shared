@@ -1249,8 +1249,15 @@ uint32_t cvm_vk_get_buffer_alignment_requirements(VkBufferUsageFlags usage)
     return alignment;
 }
 
+bool cvm_vk_format_check_optimal_feature_support(VkFormat format,VkFormatFeatureFlags flags)
+{
+    VkFormatProperties prop;
+    vkGetPhysicalDeviceFormatProperties(cvm_vk_physical_device,format,&prop);
+    return (prop.optimalTilingFeatures&flags)==flags;
+}
 
-void cvm_vk_create_module_data(cvm_vk_module_data * module_data,bool in_separate_thread,uint32_t sub_batch_count,uint32_t graphics_scb_count,uint32_t transfer_scb_count)
+
+void cvm_vk_create_module_data(cvm_vk_module_data * module_data,bool in_separate_thread,uint32_t sub_batch_count,uint32_t graphics_scb_count)
 {
     module_data->batch_count=0;
     module_data->batches=NULL;
@@ -1258,9 +1265,8 @@ void cvm_vk_create_module_data(cvm_vk_module_data * module_data,bool in_separate
     module_data->sub_batch_count=sub_batch_count;
 
     module_data->graphics_scb_count=graphics_scb_count;
-    module_data->transfer_scb_count=transfer_scb_count;
 
-    if(sub_batch_count && !(graphics_scb_count||transfer_scb_count) )
+    if(sub_batch_count && !graphics_scb_count )
     {
         fprintf(stderr,"TRYING TO CREATE MODULE WITH SUB BLOCKS BUT NO SECONDARY COMMAND BUFFERS\n");
         exit(-1);
@@ -1503,7 +1509,7 @@ VkCommandBuffer cvm_vk_module_batch_start_secondary_command_buffer(cvm_vk_module
                 .sType=VK_STRUCTURE_TYPE_COMMAND_BUFFER_INHERITANCE_INFO,
                 .pNext=NULL,
                 .renderPass=render_pass,
-                .subpass=0,
+                .subpass=sub_pass,
                 .framebuffer=framebuffer,
                 .occlusionQueryEnable=VK_FALSE,
                 .queryFlags=0,

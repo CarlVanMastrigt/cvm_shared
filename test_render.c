@@ -30,27 +30,43 @@ static cvm_vk_module_data test_module_data;
 ///actual resultant structures defined/created by above
 static VkRenderPass test_render_pass;
 
-static VkDescriptorSetLayout test_descriptor_set_layout;
 static VkDescriptorPool test_descriptor_pool;
-static VkDescriptorSet * test_descriptor_sets;
 
-///figure out if pool needs to be reallocated based on whether the pool size changed?
+static VkDescriptorSetLayout test_geo_descriptor_set_layout;
+static VkDescriptorSet * test_geo_descriptor_sets;
 
-static VkPipelineLayout test_pipeline_layout;///relevant descriptors, share as much as possible
-static VkPipeline test_pipeline;
-static VkPipelineShaderStageCreateInfo test_vertex_stage;
-static VkPipelineShaderStageCreateInfo test_fragment_stage;
+static VkPipelineLayout test_geo_pipeline_layout;///relevant descriptors, share as much as possible
+static VkPipeline test_geo_pipeline;
+static VkPipelineShaderStageCreateInfo test_geo_vertex_stage;
+static VkPipelineShaderStageCreateInfo test_geo_fragment_stage;
+
+static VkDescriptorSetLayout test_post_descriptor_set_layout;
+static VkDescriptorSet * test_post_descriptor_sets;
+
+static VkPipelineLayout test_post_pipeline_layout;///relevant descriptors, share as much as possible
+static VkPipeline test_post_pipeline;
+static VkPipelineShaderStageCreateInfo test_post_vertex_stage;///could replace with generic post vertex shader
+static VkPipelineShaderStageCreateInfo test_post_fragment_stage_1;
+static VkPipelineShaderStageCreateInfo test_post_fragment_stage_2;
+static VkPipelineShaderStageCreateInfo test_post_fragment_stage_4;
 
 static VkFramebuffer * test_framebuffers[TEST_FRAMEBUFFER_CYCLES];
 static uint32_t test_current_framebuffer_index;
 
 static VkDeviceMemory test_framebuffer_image_memory;
 
+static VkFormat test_depth_format;
 static VkImage test_framebuffer_depth;
-static VkImageView test_framebuffer_depth_views[TEST_FRAMEBUFFER_CYCLES];///views of single array slice from image
+static VkImageView test_framebuffer_depth_stencil_views[TEST_FRAMEBUFFER_CYCLES];///views of single array slice from image
+static VkImageView test_framebuffer_depth_only_views[TEST_FRAMEBUFFER_CYCLES];///views of single array slice from image
 
+static VkFormat test_colour_format;
 static VkImage test_framebuffer_colour;
 static VkImageView test_framebuffer_colour_views[TEST_FRAMEBUFFER_CYCLES];///views of single array slice from image
+
+static VkFormat test_normal_format;
+static VkImage test_framebuffer_normal;
+static VkImageView test_framebuffer_normal_views[TEST_FRAMEBUFFER_CYCLES];///views of single array slice from image
 
 
 static cvm_vk_managed_buffer test_managed_buffer;
@@ -64,9 +80,28 @@ static cvm_managed_mesh test_stellated_octahedron_mesh;
 static cvm_managed_mesh test_stub_stellated_octahedron_mesh;
 static cvm_managed_mesh test_cube_mesh;
 
+
+typedef struct test_geo_uniform_data
+{
+    matrix4f proj;
+    float colour_offsets[4];///1 extra for implicit padding
+    float colour_multipliers[4];///1 extra for implicit padding
+}
+test_geo_uniform_data;
+
+typedef struct test_post_uniform_data
+{
+    matrix4f inv_proj;
+    float inv_screen_size_x;
+    float inv_screen_size_y;
+    uint32_t sample_count;
+    uint32_t padding;
+}
+test_post_uniform_data;
+
 static void create_test_descriptor_set_layouts(void)
 {
-    VkDescriptorSetLayoutCreateInfo layout_create_info=(VkDescriptorSetLayoutCreateInfo)
+    VkDescriptorSetLayoutCreateInfo geo_layout_create_info=(VkDescriptorSetLayoutCreateInfo)
     {
         .sType=VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO,
         .pNext=NULL,
@@ -84,14 +119,54 @@ static void create_test_descriptor_set_layouts(void)
         }
     };
 
-    cvm_vk_create_descriptor_set_layout(&test_descriptor_set_layout,&layout_create_info);
+    cvm_vk_create_descriptor_set_layout(&test_geo_descriptor_set_layout,&geo_layout_create_info);
+
+    VkDescriptorSetLayoutCreateInfo post_layout_create_info=(VkDescriptorSetLayoutCreateInfo)
+    {
+        .sType=VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO,
+        .pNext=NULL,
+        .flags=0,
+        .bindingCount=4,
+        .pBindings=(VkDescriptorSetLayoutBinding[4])
+        {
+            {
+                .binding=0,
+                .descriptorType=VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER,
+                .descriptorCount=1,
+                .stageFlags=VK_SHADER_STAGE_FRAGMENT_BIT,
+                .pImmutableSamplers=NULL
+            },
+            {
+                .binding=1,
+                .descriptorType=VK_DESCRIPTOR_TYPE_INPUT_ATTACHMENT,
+                .descriptorCount=1,
+                .stageFlags=VK_SHADER_STAGE_FRAGMENT_BIT,
+                .pImmutableSamplers=NULL
+            },
+            {
+                .binding=2,
+                .descriptorType=VK_DESCRIPTOR_TYPE_INPUT_ATTACHMENT,
+                .descriptorCount=1,
+                .stageFlags=VK_SHADER_STAGE_FRAGMENT_BIT,
+                .pImmutableSamplers=NULL
+            },
+            {
+                .binding=3,
+                .descriptorType=VK_DESCRIPTOR_TYPE_INPUT_ATTACHMENT,
+                .descriptorCount=1,
+                .stageFlags=VK_SHADER_STAGE_FRAGMENT_BIT,
+                .pImmutableSamplers=NULL
+            }
+        }
+    };
+
+    cvm_vk_create_descriptor_set_layout(&test_post_descriptor_set_layout,&post_layout_create_info);
 }
 
 static void create_test_descriptor_sets(uint32_t swapchain_image_count)
 {
     uint32_t i;
     VkDescriptorSetLayout set_layouts[swapchain_image_count];
-    for(i=0;i<swapchain_image_count;i++)set_layouts[i]=test_descriptor_set_layout;
 
     ///pool size dependent upon swapchain image count so must go here
     VkDescriptorPoolCreateInfo pool_create_info=(VkDescriptorPoolCreateInfo)
@@ -99,13 +174,17 @@ static void create_test_descriptor_sets(uint32_t swapchain_image_count)
         .sType=VK_STRUCTURE_TYPE_DESCRIPTOR_POOL_CREATE_INFO,
         .pNext=NULL,
         .flags=0,///by not specifying individual free must reset whole pool (which is fine)
-        .maxSets=swapchain_image_count,
-        .poolSizeCount=1,
-        .pPoolSizes=(VkDescriptorPoolSize[1])
+        .maxSets=swapchain_image_count*3,///1 for geo, 1 for post
+        .poolSizeCount=2,
+        .pPoolSizes=(VkDescriptorPoolSize[2])
         {
             {
                 .type=VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER,
-                .descriptorCount=swapchain_image_count
+                .descriptorCount=swapchain_image_count*2///1 for geo, 1 for post
+            },
+            {
+                .type=VK_DESCRIPTOR_TYPE_INPUT_ATTACHMENT,
+                .descriptorCount=swapchain_image_count*3///3 for post
             }
         }
     };
@@ -121,18 +200,105 @@ static void create_test_descriptor_sets(uint32_t swapchain_image_count)
         .pSetLayouts=set_layouts
     };
 
-    test_descriptor_sets=malloc(swapchain_image_count*sizeof(VkDescriptorSet));
+    for(i=0;i<swapchain_image_count;i++)set_layouts[i]=test_geo_descriptor_set_layout;
+    test_geo_descriptor_sets=malloc(swapchain_image_count*sizeof(VkDescriptorSet));
+    cvm_vk_allocate_descriptor_sets(test_geo_descriptor_sets,&descriptor_set_allocate_info);
 
-    cvm_vk_allocate_descriptor_sets(test_descriptor_sets,&descriptor_set_allocate_info);
+    for(i=0;i<swapchain_image_count;i++)set_layouts[i]=test_post_descriptor_set_layout;
+    test_post_descriptor_sets=malloc(swapchain_image_count*sizeof(VkDescriptorSet));
+    cvm_vk_allocate_descriptor_sets(test_post_descriptor_sets,&descriptor_set_allocate_info);
 }
 
-static void update_and_bind_test_uniforms(uint32_t swapchain_image,VkDeviceSize offset)
+static void update_and_write_test_geo_descriptors(uint32_t swapchain_image,VkDeviceSize uniform_offset)
 {
     VkWriteDescriptorSet write=(VkWriteDescriptorSet)
     {
         .sType=VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET,
         .pNext=NULL,
-        .dstSet=test_descriptor_sets[swapchain_image],
+        .dstSet=test_geo_descriptor_sets[swapchain_image],
+        .dstBinding=0,
+        .dstArrayElement=0,
+        .descriptorCount=1,
+        .descriptorType=VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER,
+        .pImageInfo=NULL,
+        .pBufferInfo=(VkDescriptorBufferInfo[1])
+        {
+            {
+                .buffer=test_transient_buffer.buffer,
+                .offset=uniform_offset,
+                .range=sizeof(test_geo_uniform_data)
+            }
+        },
+        .pTexelBufferView=NULL
+    };
+
+    cvm_vk_write_descriptor_sets(&write,1);
+}
+
+static void update_and_write_test_post_descriptors(uint32_t swapchain_image,VkDeviceSize uniform_offset)
+{
+    VkWriteDescriptorSet writes[2]=
+    {
+        {
+            .sType=VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET,
+            .pNext=NULL,
+            .dstSet=test_post_descriptor_sets[swapchain_image],
+            .dstBinding=0,
+            .dstArrayElement=0,
+            .descriptorCount=1,
+            .descriptorType=VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER,
+            .pImageInfo=NULL,
+            .pBufferInfo=(VkDescriptorBufferInfo[1])
+            {
+                {
+                    .buffer=test_transient_buffer.buffer,
+                    .offset=uniform_offset,
+                    .range=sizeof(test_post_uniform_data)
+                }
+            },
+            .pTexelBufferView=NULL
+        },
+        {
+            .sType=VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET,
+            .pNext=NULL,
+            .dstSet=test_post_descriptor_sets[swapchain_image],
+            .dstBinding=1,
+            .dstArrayElement=0,
+            .descriptorCount=3,
+            .descriptorType=VK_DESCRIPTOR_TYPE_INPUT_ATTACHMENT,
+            .pImageInfo=(VkDescriptorImageInfo[3])
+            {
+                {
+                    .sampler=VK_NULL_HANDLE,
+                    .imageView=test_framebuffer_depth_only_views[test_current_framebuffer_index],
+                    .imageLayout=VK_IMAGE_LAYOUT_DEPTH_STENCIL_READ_ONLY_OPTIMAL
+                },
+                {
+                    .sampler=VK_NULL_HANDLE,
+                    .imageView=test_framebuffer_colour_views[test_current_framebuffer_index],
+                    .imageLayout=VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL
+                },
+                {
+                    .sampler=VK_NULL_HANDLE,
+                    .imageView=test_framebuffer_normal_views[test_current_framebuffer_index],
+                    .imageLayout=VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL
+                }
+            },
+            .pBufferInfo=NULL,
+            .pTexelBufferView=NULL
+        }
+    };
+
+    cvm_vk_write_descriptor_sets(writes,2);
+}
+
+static void update_and_write_test_post_uniforms(uint32_t swapchain_image,VkDeviceSize offset)
+{
+    VkWriteDescriptorSet write=(VkWriteDescriptorSet)
+    {
+        .sType=VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET,
+        .pNext=NULL,
+        .dstSet=test_post_descriptor_sets[swapchain_image],
         .dstBinding=0,
         .dstArrayElement=0,
         .descriptorCount=1,
@@ -143,7 +309,8 @@ static void update_and_bind_test_uniforms(uint32_t swapchain_image,VkDeviceSize 
             {
                 .buffer=test_transient_buffer.buffer,
                 .offset=offset,
-                .range=sizeof(matrix4f)+sizeof(float)*8
+                .range=256///sizeof(matrix4f)+sizeof(float)*8
+                #warning set above
             }
         },
         .pTexelBufferView=NULL
@@ -154,13 +321,13 @@ static void update_and_bind_test_uniforms(uint32_t swapchain_image,VkDeviceSize 
 
 static void create_test_pipeline_layouts(void)
 {
-    VkPipelineLayoutCreateInfo pipeline_create_info=(VkPipelineLayoutCreateInfo)
+    VkPipelineLayoutCreateInfo geo_pipeline_create_info=(VkPipelineLayoutCreateInfo)
     {
         .sType=VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO,
         .pNext=NULL,
         .flags=0,
         .setLayoutCount=1,
-        .pSetLayouts=&test_descriptor_set_layout,
+        .pSetLayouts=&test_geo_descriptor_set_layout,
         .pushConstantRangeCount=1,
         .pPushConstantRanges=(VkPushConstantRange[1])
         {
@@ -172,24 +339,58 @@ static void create_test_pipeline_layouts(void)
         }
     };
 
-    cvm_vk_create_pipeline_layout(&test_pipeline_layout,&pipeline_create_info);
+    cvm_vk_create_pipeline_layout(&test_geo_pipeline_layout,&geo_pipeline_create_info);
+
+    VkPipelineLayoutCreateInfo post_pipeline_create_info=(VkPipelineLayoutCreateInfo)
+    {
+        .sType=VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO,
+        .pNext=NULL,
+        .flags=0,
+        .setLayoutCount=1,
+        .pSetLayouts=&test_post_descriptor_set_layout,
+        .pushConstantRangeCount=0,
+        .pPushConstantRanges=NULL
+    };
+
+    cvm_vk_create_pipeline_layout(&test_post_pipeline_layout,&post_pipeline_create_info);
 }
 
 static void create_test_render_pass(VkFormat swapchain_format,VkSampleCountFlagBits sample_count)
 {
+    if(cvm_vk_format_check_optimal_feature_support(VK_FORMAT_D32_SFLOAT_S8_UINT,VK_FORMAT_FEATURE_DEPTH_STENCIL_ATTACHMENT_BIT))test_depth_format=VK_FORMAT_D32_SFLOAT_S8_UINT;
+    else test_depth_format=VK_FORMAT_D24_UNORM_S8_UINT;///one of these 2 is required format
+
+    test_colour_format=VK_FORMAT_A2B10G10R10_UNORM_PACK32;///required format
+
+    test_normal_format=VK_FORMAT_A2B10G10R10_UNORM_PACK32;///required format, nome of the snorm formats are required, so probably just have to scale [0,1] to [-1,1]
+    ///could also try more exotic mapping variants that use RG, e.g. octahedral mapping, would give better precision...
+//    if(cvm_vk_format_check_optimal_feature_support(VK_FORMAT_A2R10G10B10_SNORM_PACK32,VK_FORMAT_FEATURE_COLOR_ATTACHMENT_BIT))test_normal_format=VK_FORMAT_A2R10G10B10_SNORM_PACK32;
+//    if(cvm_vk_format_check_optimal_feature_support(VK_FORMAT_A2B10G10R10_SNORM_PACK32,VK_FORMAT_FEATURE_COLOR_ATTACHMENT_BIT))test_normal_format=VK_FORMAT_A2B10G10R10_SNORM_PACK32;
+//    else if(cvm_vk_format_check_optimal_feature_support(VK_FORMAT_R8G8B8_SNORM,VK_FORMAT_FEATURE_COLOR_ATTACHMENT_BIT))test_normal_format=VK_FORMAT_R8G8B8_SNORM;
+//    else if(cvm_vk_format_check_optimal_feature_support(VK_FORMAT_B8G8R8_SNORM,VK_FORMAT_FEATURE_COLOR_ATTACHMENT_BIT))test_normal_format=VK_FORMAT_B8G8R8_SNORM;
+//    else if(cvm_vk_format_check_optimal_feature_support(VK_FORMAT_R8G8B8A8_SNORM,VK_FORMAT_FEATURE_COLOR_ATTACHMENT_BIT))test_normal_format=VK_FORMAT_R8G8B8A8_SNORM;
+//    else if(cvm_vk_format_check_optimal_feature_support(VK_FORMAT_B8G8R8A8_SNORM,VK_FORMAT_FEATURE_COLOR_ATTACHMENT_BIT))test_normal_format=VK_FORMAT_B8G8R8A8_SNORM;
+//    else if(cvm_vk_format_check_optimal_feature_support(VK_FORMAT_A8B8G8R8_SNORM_PACK32,VK_FORMAT_FEATURE_COLOR_ATTACHMENT_BIT))test_normal_format=VK_FORMAT_A8B8G8R8_SNORM_PACK32;
+//    else
+//    {
+//        fprintf(stderr,"NO SUPPORTED NORMAL FORMAT FOUND\n");
+//        exit(-1);
+//    }
+
+
     VkRenderPassCreateInfo create_info=(VkRenderPassCreateInfo)
     {
         .sType=VK_STRUCTURE_TYPE_RENDER_PASS_CREATE_INFO,
         .pNext=NULL,
         .flags=0,
-        .attachmentCount=2,
-        .pAttachments=(VkAttachmentDescription[2])
+        .attachmentCount=4,
+        .pAttachments=(VkAttachmentDescription[4])
         {
             {
                 .flags=0,
                 .format=swapchain_format,
                 .samples=VK_SAMPLE_COUNT_1_BIT,///sample_count not relevant for actual render target (swapchain image)
-                .loadOp=VK_ATTACHMENT_LOAD_OP_CLEAR,
+                .loadOp=VK_ATTACHMENT_LOAD_OP_DONT_CARE,
                 .storeOp=VK_ATTACHMENT_STORE_OP_STORE,
                 .stencilLoadOp=VK_ATTACHMENT_LOAD_OP_DONT_CARE,
                 .stencilStoreOp=VK_ATTACHMENT_STORE_OP_DONT_CARE,
@@ -198,29 +399,57 @@ static void create_test_render_pass(VkFormat swapchain_format,VkSampleCountFlagB
             },
             {
                 .flags=0,
-                .format=VK_FORMAT_D32_SFLOAT_S8_UINT,
+                .format=test_depth_format,
                 .samples=sample_count,
+                .loadOp=VK_ATTACHMENT_LOAD_OP_CLEAR,
+                .storeOp=VK_ATTACHMENT_STORE_OP_DONT_CARE,
+                .stencilLoadOp=VK_ATTACHMENT_LOAD_OP_CLEAR,
+                .stencilStoreOp=VK_ATTACHMENT_STORE_OP_DONT_CARE,
+                .initialLayout=VK_IMAGE_LAYOUT_UNDEFINED,
+                .finalLayout=VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL
+            },
+            {
+                .flags=0,
+                .format=test_colour_format,
+                .samples=sample_count,
+//                .loadOp=VK_ATTACHMENT_LOAD_OP_DONT_CARE,
                 .loadOp=VK_ATTACHMENT_LOAD_OP_CLEAR,
                 .storeOp=VK_ATTACHMENT_STORE_OP_DONT_CARE,
                 .stencilLoadOp=VK_ATTACHMENT_LOAD_OP_DONT_CARE,
                 .stencilStoreOp=VK_ATTACHMENT_STORE_OP_DONT_CARE,
                 .initialLayout=VK_IMAGE_LAYOUT_UNDEFINED,
-                .finalLayout=VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL
+                .finalLayout=VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL
+            },
+            {
+                .flags=0,
+                .format=test_normal_format,
+                .samples=sample_count,
+//                .loadOp=VK_ATTACHMENT_LOAD_OP_DONT_CARE,
+                .loadOp=VK_ATTACHMENT_LOAD_OP_CLEAR,
+                .storeOp=VK_ATTACHMENT_STORE_OP_DONT_CARE,
+                .stencilLoadOp=VK_ATTACHMENT_LOAD_OP_DONT_CARE,
+                .stencilStoreOp=VK_ATTACHMENT_STORE_OP_DONT_CARE,
+                .initialLayout=VK_IMAGE_LAYOUT_UNDEFINED,
+                .finalLayout=VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL
             }
         },
-        .subpassCount=1,
-        .pSubpasses=(VkSubpassDescription[1])
+        .subpassCount=2,
+        .pSubpasses=(VkSubpassDescription[2])
         {
             {
                 .flags=0,
                 .pipelineBindPoint=VK_PIPELINE_BIND_POINT_GRAPHICS,
                 .inputAttachmentCount=0,
                 .pInputAttachments=NULL,
-                .colorAttachmentCount=1,
-                .pColorAttachments=(VkAttachmentReference[1])
+                .colorAttachmentCount=2,
+                .pColorAttachments=(VkAttachmentReference[2])
                 {
                     {
-                        .attachment=0,
+                        .attachment=2,
+                        .layout=VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL,
+                    },
+                    {
+                        .attachment=3,
                         .layout=VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL,
                     }
                 },
@@ -233,12 +462,52 @@ static void create_test_render_pass(VkFormat swapchain_format,VkSampleCountFlagB
                     }
                 },
                 .preserveAttachmentCount=0,
-                .pPreserveAttachments=NULL
+                .pPreserveAttachments=NULL///this will be important in future!
+            },
+            {
+                .flags=0,
+                .pipelineBindPoint=VK_PIPELINE_BIND_POINT_GRAPHICS,
+                .inputAttachmentCount=3,
+                .pInputAttachments=(VkAttachmentReference[3])
+                {
+                    {
+                        .attachment=1,
+                        .layout=VK_IMAGE_LAYOUT_DEPTH_STENCIL_READ_ONLY_OPTIMAL,
+                    },
+                    {
+                        .attachment=2,
+                        .layout=VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL,
+                    },
+                    {
+                        .attachment=3,
+                        .layout=VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL,
+                    }
+                },
+                .colorAttachmentCount=1,
+                .pColorAttachments=(VkAttachmentReference[1])
+                {
+                    {
+                        .attachment=0,
+                        .layout=VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL,
+                    },
+                },
+                .pResolveAttachments=NULL,
+                .pDepthStencilAttachment=NULL,
+//                .pDepthStencilAttachment=(VkAttachmentReference[1])
+//                {
+//                    {
+//                        .attachment=1,
+//                        .layout=VK_IMAGE_LAYOUT_DEPTH_STENCIL_READ_ONLY_OPTIMAL,
+//                    }
+//                },
+                .preserveAttachmentCount=0,
+                .pPreserveAttachments=NULL///this will be important in future!
             }
         },
-        .dependencyCount=4,
-        .pDependencies=(VkSubpassDependency[4])
+        .dependencyCount=6,
+        .pDependencies=(VkSubpassDependency[6])
         {
+            #warning needs review now that there are multiple internal stages
             ///these define dependencies for both depth and swapchain/colour, can probably separate them to be just scope associated w/ colour/depth &c.
             /// if future attachments aren't used until/after specific subpasses, then will need external dependencies for them as well
             /// these dependencies don't necessarily mean multiple framebuffer images isnt a valid approach, as they are *sub* resource specific "barriers"
@@ -266,6 +535,24 @@ static void create_test_render_pass(VkFormat swapchain_format,VkSampleCountFlagB
             },
             {
                 .srcSubpass=0,
+                .dstSubpass=1,
+                .srcStageMask=VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT,
+                .dstStageMask=VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT,
+                .srcAccessMask=VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT | VK_ACCESS_COLOR_ATTACHMENT_READ_BIT,
+                .dstAccessMask=VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT | VK_ACCESS_COLOR_ATTACHMENT_READ_BIT,
+                .dependencyFlags=VK_DEPENDENCY_BY_REGION_BIT
+            },
+            {
+                .srcSubpass=0,
+                .dstSubpass=1,
+                .srcStageMask=VK_PIPELINE_STAGE_EARLY_FRAGMENT_TESTS_BIT | VK_PIPELINE_STAGE_LATE_FRAGMENT_TESTS_BIT,
+                .dstStageMask=VK_PIPELINE_STAGE_EARLY_FRAGMENT_TESTS_BIT | VK_PIPELINE_STAGE_LATE_FRAGMENT_TESTS_BIT,
+                .srcAccessMask=VK_ACCESS_DEPTH_STENCIL_ATTACHMENT_WRITE_BIT | VK_ACCESS_DEPTH_STENCIL_ATTACHMENT_READ_BIT,
+                .dstAccessMask=VK_ACCESS_DEPTH_STENCIL_ATTACHMENT_WRITE_BIT | VK_ACCESS_DEPTH_STENCIL_ATTACHMENT_READ_BIT,
+                .dependencyFlags=VK_DEPENDENCY_BY_REGION_BIT
+            },
+            {
+                .srcSubpass=1,
                 .dstSubpass=VK_SUBPASS_EXTERNAL,
                 ///not sure on specific dependencies related to swapchain images being read/written by presentation engine
                 .srcStageMask=VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT,
@@ -275,7 +562,7 @@ static void create_test_render_pass(VkFormat swapchain_format,VkSampleCountFlagB
                 .dependencyFlags=VK_DEPENDENCY_BY_REGION_BIT
             },
             {
-                .srcSubpass=0,
+                .srcSubpass=1,
                 .dstSubpass=VK_SUBPASS_EXTERNAL,
                 .srcStageMask=VK_PIPELINE_STAGE_EARLY_FRAGMENT_TESTS_BIT | VK_PIPELINE_STAGE_LATE_FRAGMENT_TESTS_BIT,
                 .dstStageMask=VK_PIPELINE_STAGE_EARLY_FRAGMENT_TESTS_BIT | VK_PIPELINE_STAGE_LATE_FRAGMENT_TESTS_BIT,
@@ -291,7 +578,7 @@ static void create_test_render_pass(VkFormat swapchain_format,VkSampleCountFlagB
 
 static void create_test_pipelines(VkRect2D screen_rectangle,VkSampleCountFlagBits sample_count,float min_sample_shading)
 {
-    VkGraphicsPipelineCreateInfo create_info=(VkGraphicsPipelineCreateInfo)
+    VkGraphicsPipelineCreateInfo geo_create_info=(VkGraphicsPipelineCreateInfo)
     {
         .sType=VK_STRUCTURE_TYPE_GRAPHICS_PIPELINE_CREATE_INFO,
         .pNext=NULL,
@@ -299,8 +586,8 @@ static void create_test_pipelines(VkRect2D screen_rectangle,VkSampleCountFlagBit
         .stageCount=2,
         .pStages=(VkPipelineShaderStageCreateInfo[2])
         {
-            test_vertex_stage,
-            test_fragment_stage
+            test_geo_vertex_stage,
+            test_geo_fragment_stage
         },///could be null then provided by each actual pipeline type (for sets of pipelines only variant based on shader)
         .pVertexInputState=(VkPipelineVertexInputStateCreateInfo[1])
         {
@@ -324,14 +611,8 @@ static void create_test_pipelines(VkRect2D screen_rectangle,VkSampleCountFlagBit
                         .location=0,
                         .binding=0,
                         .format=VK_FORMAT_R32G32B32_SFLOAT,
-                        .offset=0//offsetof(test_render_data,pos)
+                        .offset=0
                     },
-//                    {
-//                        .location=1,
-//                        .binding=0,
-//                        .format=VK_FORMAT_R8G8B8A8_UNORM,
-//                        .offset=offsetof(test_render_data,col)
-//                    }
                 }
             }
         },
@@ -410,16 +691,16 @@ static void create_test_pipelines(VkRect2D screen_rectangle,VkSampleCountFlagBit
                 .depthWriteEnable=VK_TRUE,
                 .depthCompareOp=VK_COMPARE_OP_GREATER,
                 .depthBoundsTestEnable=VK_FALSE,
-                .stencilTestEnable=VK_FALSE,
+                .stencilTestEnable=VK_TRUE,
                 .front=(VkStencilOpState)
                 {
                     .failOp=VK_STENCIL_OP_KEEP,
-                    .passOp=VK_STENCIL_OP_KEEP,
+                    .passOp=VK_STENCIL_OP_REPLACE,
                     .depthFailOp=VK_STENCIL_OP_KEEP,
-                    .compareOp=VK_COMPARE_OP_NEVER,
-                    .compareMask=0,
-                    .writeMask=0,
-                    .reference=0
+                    .compareOp=VK_COMPARE_OP_ALWAYS,
+                    .compareMask=0x00,
+                    .writeMask=0x80,
+                    .reference=0x80
                 },
                 .back=(VkStencilOpState)
                 {
@@ -427,9 +708,189 @@ static void create_test_pipelines(VkRect2D screen_rectangle,VkSampleCountFlagBit
                     .passOp=VK_STENCIL_OP_KEEP,
                     .depthFailOp=VK_STENCIL_OP_KEEP,
                     .compareOp=VK_COMPARE_OP_NEVER,
-                    .compareMask=0,
-                    .writeMask=0,
-                    .reference=0
+                    .compareMask=0x00,
+                    .writeMask=0x00,
+                    .reference=0x00
+                },
+                .minDepthBounds=0.0,
+                .maxDepthBounds=1.0,
+            }
+        },
+        .pColorBlendState=(VkPipelineColorBlendStateCreateInfo[1])
+        {
+            {
+                .sType=VK_STRUCTURE_TYPE_PIPELINE_COLOR_BLEND_STATE_CREATE_INFO,
+                .pNext=NULL,
+                .flags=0,
+                .logicOpEnable=VK_FALSE,
+                .logicOp=VK_LOGIC_OP_COPY,
+                .attachmentCount=2,///must equal colorAttachmentCount in subpass
+                .pAttachments= (VkPipelineColorBlendAttachmentState[2])
+                {
+                    {
+                        .blendEnable=VK_FALSE,
+                        .srcColorBlendFactor=VK_BLEND_FACTOR_ONE,
+                        .dstColorBlendFactor=VK_BLEND_FACTOR_ZERO,
+                        .colorBlendOp=VK_BLEND_OP_ADD,
+                        .srcAlphaBlendFactor=VK_BLEND_FACTOR_ONE,
+                        .dstAlphaBlendFactor=VK_BLEND_FACTOR_ZERO,
+                        .alphaBlendOp=VK_BLEND_OP_ADD,
+                        .colorWriteMask=VK_COLOR_COMPONENT_R_BIT|VK_COLOR_COMPONENT_G_BIT|VK_COLOR_COMPONENT_B_BIT|VK_COLOR_COMPONENT_A_BIT
+                    },
+                    {
+                        .blendEnable=VK_FALSE,
+                        .srcColorBlendFactor=VK_BLEND_FACTOR_ONE,
+                        .dstColorBlendFactor=VK_BLEND_FACTOR_ZERO,
+                        .colorBlendOp=VK_BLEND_OP_ADD,
+                        .srcAlphaBlendFactor=VK_BLEND_FACTOR_ONE,
+                        .dstAlphaBlendFactor=VK_BLEND_FACTOR_ZERO,
+                        .alphaBlendOp=VK_BLEND_OP_ADD,
+                        .colorWriteMask=VK_COLOR_COMPONENT_R_BIT|VK_COLOR_COMPONENT_G_BIT|VK_COLOR_COMPONENT_B_BIT|VK_COLOR_COMPONENT_A_BIT
+                    }
+                },
+                .blendConstants={0.0,0.0,0.0,0.0}
+            }
+        },
+        .pDynamicState=NULL,
+        .layout=test_geo_pipeline_layout,
+        .renderPass=test_render_pass,
+        .subpass=0,
+        .basePipelineHandle=VK_NULL_HANDLE,
+        .basePipelineIndex=-1
+    };
+
+    ///can pass above into multiple functions as parameter
+    cvm_vk_create_graphics_pipeline(&test_geo_pipeline,&geo_create_info);
+
+    VkPipelineShaderStageCreateInfo post_frag;
+    if(sample_count==VK_SAMPLE_COUNT_1_BIT)post_frag=test_post_fragment_stage_1;
+    else if(sample_count==VK_SAMPLE_COUNT_2_BIT)post_frag=test_post_fragment_stage_2;
+    else if(sample_count==VK_SAMPLE_COUNT_4_BIT)post_frag=test_post_fragment_stage_4;
+    else
+    {
+        fprintf(stderr,"SELECTED TEST MSAA MODE NOT SUPPORTED\n");
+        exit(-1);
+    }
+
+
+    VkGraphicsPipelineCreateInfo post_create_info=(VkGraphicsPipelineCreateInfo)
+    {
+        .sType=VK_STRUCTURE_TYPE_GRAPHICS_PIPELINE_CREATE_INFO,
+        .pNext=NULL,
+        .flags=0,
+        .stageCount=2,
+        .pStages=(VkPipelineShaderStageCreateInfo[2])
+        {
+            test_post_vertex_stage,
+            post_frag
+        },///could be null then provided by each actual pipeline type (for sets of pipelines only variant based on shader)
+        .pVertexInputState=(VkPipelineVertexInputStateCreateInfo[1])
+        {
+            {
+                .sType=VK_STRUCTURE_TYPE_PIPELINE_VERTEX_INPUT_STATE_CREATE_INFO,
+                .pNext=NULL,
+                .flags=0,
+                .vertexBindingDescriptionCount=0,
+                .pVertexBindingDescriptions=NULL,
+                .vertexAttributeDescriptionCount=0,
+                .pVertexAttributeDescriptions=NULL
+            }
+        },
+        .pInputAssemblyState=(VkPipelineInputAssemblyStateCreateInfo[1])
+        {
+            {
+                .sType=VK_STRUCTURE_TYPE_PIPELINE_INPUT_ASSEMBLY_STATE_CREATE_INFO,
+                .pNext=NULL,
+                .flags=0,
+                .topology=VK_PRIMITIVE_TOPOLOGY_TRIANGLE_LIST,
+                .primitiveRestartEnable=VK_FALSE
+            }
+        },
+        .pTessellationState=NULL,///not needed (yet)
+        .pViewportState=(VkPipelineViewportStateCreateInfo[1])
+        {
+            {
+                .sType=VK_STRUCTURE_TYPE_PIPELINE_VIEWPORT_STATE_CREATE_INFO,
+                .pNext=NULL,
+                .flags=0,
+                .viewportCount=1,
+                .pViewports=(VkViewport[1])
+                {
+                    {
+                        .x=(float)screen_rectangle.offset.x,
+                        .y=(float)screen_rectangle.offset.y,
+                        .width=(float)screen_rectangle.extent.width,
+                        .height=(float)screen_rectangle.extent.height,
+                        .minDepth=0.0,
+                        .maxDepth=1.0
+                    }
+                },
+                .scissorCount=1,
+                .pScissors= &screen_rectangle
+            }
+        },
+        .pRasterizationState=(VkPipelineRasterizationStateCreateInfo[1])
+        {
+            {
+                .sType=VK_STRUCTURE_TYPE_PIPELINE_RASTERIZATION_STATE_CREATE_INFO,
+                .pNext=NULL,
+                .flags=0,
+                .depthClampEnable=VK_FALSE,
+                .rasterizerDiscardEnable=VK_FALSE,
+                .polygonMode=VK_POLYGON_MODE_FILL,
+                .cullMode=VK_CULL_MODE_BACK_BIT,
+                .frontFace=VK_FRONT_FACE_COUNTER_CLOCKWISE,
+                .depthBiasEnable=VK_FALSE,
+                .depthBiasConstantFactor=0.0,
+                .depthBiasClamp=0.0,
+                .depthBiasSlopeFactor=0.0,
+                .lineWidth=1.0
+            }
+        },
+        .pMultisampleState=(VkPipelineMultisampleStateCreateInfo[1])
+        {
+            {
+                .sType=VK_STRUCTURE_TYPE_PIPELINE_MULTISAMPLE_STATE_CREATE_INFO,
+                .pNext=NULL,
+                .flags=0,
+                .rasterizationSamples=VK_SAMPLE_COUNT_1_BIT,///this is the output pass, writes to swapchain which has 1 sample
+                .sampleShadingEnable=VK_FALSE,
+                .minSampleShading=min_sample_shading,///this can be changed, only requires rebuild of pipelines, possibly set here (in post processing) to be 1.0 (force full shading)
+                .pSampleMask=NULL,
+                .alphaToCoverageEnable=VK_FALSE,
+                .alphaToOneEnable=VK_FALSE
+            }
+        },
+        .pDepthStencilState=(VkPipelineDepthStencilStateCreateInfo[1])
+        {
+            {
+                .sType=VK_STRUCTURE_TYPE_PIPELINE_DEPTH_STENCIL_STATE_CREATE_INFO,
+                .pNext=NULL,
+                .flags=0,
+                .depthTestEnable=VK_FALSE,
+                .depthWriteEnable=VK_FALSE,
+                .depthCompareOp=VK_COMPARE_OP_ALWAYS,
+                .depthBoundsTestEnable=VK_FALSE,
+                .stencilTestEnable=VK_FALSE,//VK_TRUE, VK_FALSE
+                .front=(VkStencilOpState)
+                {
+                    .failOp=VK_STENCIL_OP_KEEP,
+                    .passOp=VK_STENCIL_OP_KEEP,
+                    .depthFailOp=VK_STENCIL_OP_KEEP,
+                    .compareOp=VK_COMPARE_OP_EQUAL,
+                    .compareMask=0x80,
+                    .writeMask=0x00,
+                    .reference=0x80
+                },
+                .back=(VkStencilOpState)
+                {
+                    .failOp=VK_STENCIL_OP_KEEP,
+                    .passOp=VK_STENCIL_OP_KEEP,
+                    .depthFailOp=VK_STENCIL_OP_KEEP,
+                    .compareOp=VK_COMPARE_OP_NEVER,
+                    .compareMask=0x00,
+                    .writeMask=0x00,
+                    .reference=0x00
                 },
                 .minDepthBounds=0.0,
                 .maxDepthBounds=1.0,
@@ -444,7 +905,7 @@ static void create_test_pipelines(VkRect2D screen_rectangle,VkSampleCountFlagBit
                 .logicOpEnable=VK_FALSE,
                 .logicOp=VK_LOGIC_OP_COPY,
                 .attachmentCount=1,///must equal colorAttachmentCount in subpass
-                .pAttachments= (VkPipelineColorBlendAttachmentState[])
+                .pAttachments= (VkPipelineColorBlendAttachmentState[1])
                 {
                     {
                         .blendEnable=VK_FALSE,
@@ -461,21 +922,21 @@ static void create_test_pipelines(VkRect2D screen_rectangle,VkSampleCountFlagBit
             }
         },
         .pDynamicState=NULL,
-        .layout=test_pipeline_layout,
+        .layout=test_post_pipeline_layout,
         .renderPass=test_render_pass,
-        .subpass=0,
+        .subpass=1,
         .basePipelineHandle=VK_NULL_HANDLE,
         .basePipelineIndex=-1
     };
 
     ///can pass above into multiple functions as parameter
-    cvm_vk_create_graphics_pipeline(&test_pipeline,&create_info);
+    cvm_vk_create_graphics_pipeline(&test_post_pipeline,&post_create_info);
 }
 
 static void create_test_framebuffers(VkRect2D screen_rectangle,uint32_t swapchain_image_count)
 {
     uint32_t i,j;
-    VkImageView attachments[2];
+    VkImageView attachments[4];
 
     test_current_framebuffer_index=0;
 
@@ -485,7 +946,7 @@ static void create_test_framebuffers(VkRect2D screen_rectangle,uint32_t swapchai
         .pNext=NULL,
         .flags=0,
         .renderPass=test_render_pass,
-        .attachmentCount=2,
+        .attachmentCount=4,
         .pAttachments=attachments,
         .width=screen_rectangle.extent.width,
         .height=screen_rectangle.extent.height,
@@ -499,16 +960,14 @@ static void create_test_framebuffers(VkRect2D screen_rectangle,uint32_t swapchai
         for(j=0;j<swapchain_image_count;j++)
         {
             attachments[0]=cvm_vk_get_swapchain_image_view(j);
-            attachments[1]=test_framebuffer_depth_views[i];
+            attachments[1]=test_framebuffer_depth_stencil_views[i];
+            attachments[2]=test_framebuffer_colour_views[i];
+            attachments[3]=test_framebuffer_normal_views[i];
 
             cvm_vk_create_framebuffer(test_framebuffers[i]+j,&create_info);
         }
     }
 }
-
-
-
-
 
 
 
@@ -567,67 +1026,61 @@ static void create_test_framebuffer_images(VkRect2D screen_rect,VkSampleCountFla
         }
     };
 
-
-
-    image_creation_info.format=VK_FORMAT_D32_SFLOAT_S8_UINT;
-    image_creation_info.usage=VK_IMAGE_USAGE_DEPTH_STENCIL_ATTACHMENT_BIT;///VK_IMAGE_USAGE_INPUT_ATTACHMENT_BIT
+    image_creation_info.format=test_depth_format;
+    image_creation_info.usage=VK_IMAGE_USAGE_DEPTH_STENCIL_ATTACHMENT_BIT|VK_IMAGE_USAGE_INPUT_ATTACHMENT_BIT;///VK_IMAGE_USAGE_INPUT_ATTACHMENT_BIT
     cvm_vk_create_image(&test_framebuffer_depth,&image_creation_info);
 
-    image_creation_info.format=VK_FORMAT_A2R10G10B10_UNORM_PACK32;
-    image_creation_info.usage=VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT;///VK_IMAGE_USAGE_INPUT_ATTACHMENT_BIT
+    image_creation_info.format=test_colour_format;
+    image_creation_info.usage=VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT|VK_IMAGE_USAGE_INPUT_ATTACHMENT_BIT;///VK_IMAGE_USAGE_INPUT_ATTACHMENT_BIT
     cvm_vk_create_image(&test_framebuffer_colour,&image_creation_info);
 
-    VkImage images[2]={test_framebuffer_depth,test_framebuffer_colour};
-    cvm_vk_create_and_bind_memory_for_images(&test_framebuffer_image_memory,images,2);
+    image_creation_info.format=test_normal_format;
+    image_creation_info.usage=VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT|VK_IMAGE_USAGE_INPUT_ATTACHMENT_BIT;///VK_IMAGE_USAGE_INPUT_ATTACHMENT_BIT
+    cvm_vk_create_image(&test_framebuffer_normal,&image_creation_info);
+
+    VkImage images[3]={test_framebuffer_depth,test_framebuffer_colour,test_framebuffer_normal};
+    cvm_vk_create_and_bind_memory_for_images(&test_framebuffer_image_memory,images,3);
 
 
     for(i=0;i<TEST_FRAMEBUFFER_CYCLES;i++)
     {
-        view_creation_info.format=VK_FORMAT_D32_SFLOAT_S8_UINT;
+        view_creation_info.subresourceRange.baseArrayLayer=i;
+
+        view_creation_info.format=test_depth_format;
         view_creation_info.subresourceRange.aspectMask=VK_IMAGE_ASPECT_DEPTH_BIT|VK_IMAGE_ASPECT_STENCIL_BIT;
         view_creation_info.image=test_framebuffer_depth;
-        view_creation_info.subresourceRange.baseArrayLayer=i;
-        cvm_vk_create_image_view(test_framebuffer_depth_views+i,&view_creation_info);
+        cvm_vk_create_image_view(test_framebuffer_depth_stencil_views+i,&view_creation_info);
 
-        view_creation_info.format=VK_FORMAT_A2R10G10B10_UNORM_PACK32;
+        view_creation_info.subresourceRange.aspectMask=VK_IMAGE_ASPECT_DEPTH_BIT;
+        cvm_vk_create_image_view(test_framebuffer_depth_only_views+i,&view_creation_info);
+
+        view_creation_info.format=test_colour_format;
         view_creation_info.subresourceRange.aspectMask=VK_IMAGE_ASPECT_COLOR_BIT;
         view_creation_info.image=test_framebuffer_colour;
-        view_creation_info.subresourceRange.baseArrayLayer=i;
         cvm_vk_create_image_view(test_framebuffer_colour_views+i,&view_creation_info);
+
+        view_creation_info.format=test_normal_format;
+        view_creation_info.subresourceRange.aspectMask=VK_IMAGE_ASPECT_COLOR_BIT;
+        view_creation_info.image=test_framebuffer_normal;
+        cvm_vk_create_image_view(test_framebuffer_normal_views+i,&view_creation_info);
     }
-
-
-    ///  | VK_IMAGE_USAGE_SAMPLED_BIT | VK_IMAGE_USAGE_INPUT_ATTACHMENT_BIT
-
-    ///VK_FORMAT_D32_SFLOAT_S8_UINT,
-    ///VK_IMAGE_USAGE_DEPTH_STENCIL_ATTACHMENT_BIT
-
-    /// for colour and normal attachments:
-    ///VK_FORMAT_A2R10G10B10_UNORM_PACK32
-    ///VK_FORMAT_A2R10G10B10_SNORM_PACK32
-    /// higher quality variants
-    ///VK_FORMAT_R16G16B16_UNORM
-    ///VK_FORMAT_R16G16B16_SNORM
-    /// lighting &c.
-    /// VK_FORMAT_R16_UNORM
-
-    ///VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT
-
-
 }
 
 void initialise_test_render_data()
 {
-    create_test_render_pass(cvm_vk_get_screen_format(),VK_SAMPLE_COUNT_1_BIT);
-
     create_test_descriptor_set_layouts();
 
     create_test_pipeline_layouts();
 
-    cvm_vk_create_shader_stage_info(&test_vertex_stage,"cvm_shared/shaders/test_vert.spv",VK_SHADER_STAGE_VERTEX_BIT);
-    cvm_vk_create_shader_stage_info(&test_fragment_stage,"cvm_shared/shaders/test_frag.spv",VK_SHADER_STAGE_FRAGMENT_BIT);
+    cvm_vk_create_shader_stage_info(&test_geo_vertex_stage,"cvm_shared/shaders/test_geo_vert.spv",VK_SHADER_STAGE_VERTEX_BIT);
+    cvm_vk_create_shader_stage_info(&test_geo_fragment_stage,"cvm_shared/shaders/test_geo_frag.spv",VK_SHADER_STAGE_FRAGMENT_BIT);
 
-    cvm_vk_create_module_data(&test_module_data,false,0,1,1);
+    cvm_vk_create_shader_stage_info(&test_post_vertex_stage,"cvm_shared/shaders/test_post_vert.spv",VK_SHADER_STAGE_VERTEX_BIT);
+    cvm_vk_create_shader_stage_info(&test_post_fragment_stage_1,"cvm_shared/shaders/test_post_frag_1.spv",VK_SHADER_STAGE_FRAGMENT_BIT);
+    cvm_vk_create_shader_stage_info(&test_post_fragment_stage_2,"cvm_shared/shaders/test_post_frag_2.spv",VK_SHADER_STAGE_FRAGMENT_BIT);
+    cvm_vk_create_shader_stage_info(&test_post_fragment_stage_4,"cvm_shared/shaders/test_post_frag_4.spv",VK_SHADER_STAGE_FRAGMENT_BIT);
+
+    cvm_vk_create_module_data(&test_module_data,false,0,2);
 
     cvm_vk_managed_buffer_create(&test_managed_buffer,65536,10,16,VK_BUFFER_USAGE_VERTEX_BUFFER_BIT|VK_BUFFER_USAGE_INDEX_BUFFER_BIT|VK_BUFFER_USAGE_TRANSFER_DST_BIT,false,false);
     ///VK_BUFFER_USAGE_TRANSFER_DST_BIT only necessary if not UMA system, but is it even possible to set this before finding that out??
@@ -647,14 +1100,19 @@ void initialise_test_render_data()
 
 void terminate_test_render_data()
 {
-    cvm_vk_destroy_render_pass(test_render_pass);
+    cvm_vk_destroy_shader_stage_info(&test_geo_vertex_stage);
+    cvm_vk_destroy_shader_stage_info(&test_geo_fragment_stage);
 
-    cvm_vk_destroy_shader_stage_info(&test_vertex_stage);
-    cvm_vk_destroy_shader_stage_info(&test_fragment_stage);
+    cvm_vk_destroy_shader_stage_info(&test_post_vertex_stage);
+    cvm_vk_destroy_shader_stage_info(&test_post_fragment_stage_1);
+    cvm_vk_destroy_shader_stage_info(&test_post_fragment_stage_2);
+    cvm_vk_destroy_shader_stage_info(&test_post_fragment_stage_4);
 
-    cvm_vk_destroy_pipeline_layout(test_pipeline_layout);
+    cvm_vk_destroy_pipeline_layout(test_geo_pipeline_layout);
+    cvm_vk_destroy_pipeline_layout(test_post_pipeline_layout);
 
-    cvm_vk_destroy_descriptor_set_layout(test_descriptor_set_layout);
+    cvm_vk_destroy_descriptor_set_layout(test_geo_descriptor_set_layout);
+    cvm_vk_destroy_descriptor_set_layout(test_post_descriptor_set_layout);
 
     cvm_vk_destroy_module_data(&test_module_data,false);
 
@@ -670,14 +1128,16 @@ void terminate_test_render_data()
 }
 
 
-void initialise_test_swapchain_dependencies(void)
+void initialise_test_swapchain_dependencies(VkSampleCountFlagBits sample_count)
 {
     uint32_t swapchain_image_count=cvm_vk_get_swapchain_image_count();
     VkRect2D screen_rectangle=cvm_vk_get_screen_rectangle();
 
-    create_test_pipelines(screen_rectangle,VK_SAMPLE_COUNT_1_BIT,1.0);
+    create_test_render_pass(cvm_vk_get_screen_format(),sample_count);
 
-    create_test_framebuffer_images(screen_rectangle,VK_SAMPLE_COUNT_1_BIT);
+    create_test_pipelines(screen_rectangle,sample_count,0.5);
+
+    create_test_framebuffer_images(screen_rectangle,sample_count);
 
     create_test_framebuffers(screen_rectangle,swapchain_image_count);
 
@@ -686,7 +1146,8 @@ void initialise_test_swapchain_dependencies(void)
     cvm_vk_resize_module_graphics_data(&test_module_data,0);
 
     uint32_t uniform_size=0;
-    uniform_size+=cvm_vk_transient_buffer_get_rounded_allocation_size(&test_transient_buffer,sizeof(matrix4f)+sizeof(float)*8);
+    uniform_size+=cvm_vk_transient_buffer_get_rounded_allocation_size(&test_transient_buffer,sizeof(test_geo_uniform_data));
+    uniform_size+=cvm_vk_transient_buffer_get_rounded_allocation_size(&test_transient_buffer,sizeof(test_post_uniform_data));
     cvm_vk_transient_buffer_update(&test_transient_buffer,uniform_size,swapchain_image_count);
 
     uint32_t staging_size=65536;
@@ -700,25 +1161,33 @@ void terminate_test_swapchain_dependencies()
     uint32_t swapchain_image_count=cvm_vk_get_swapchain_image_count();
     uint32_t i,j;
 
-    cvm_vk_destroy_pipeline(test_pipeline);
+    cvm_vk_destroy_pipeline(test_geo_pipeline);
+    cvm_vk_destroy_pipeline(test_post_pipeline);
 
     for(i=0;i<swapchain_image_count;i++) for(j=0;j<TEST_FRAMEBUFFER_CYCLES;j++) cvm_vk_destroy_framebuffer(test_framebuffers[j][i]);
 
     for(i=0;i<TEST_FRAMEBUFFER_CYCLES;i++)
     {
-        cvm_vk_destroy_image_view(test_framebuffer_depth_views[i]);
+        cvm_vk_destroy_image_view(test_framebuffer_depth_stencil_views[i]);
+        cvm_vk_destroy_image_view(test_framebuffer_depth_only_views[i]);
         cvm_vk_destroy_image_view(test_framebuffer_colour_views[i]);
+        cvm_vk_destroy_image_view(test_framebuffer_normal_views[i]);
     }
 
     cvm_vk_destroy_image(test_framebuffer_depth);
     cvm_vk_destroy_image(test_framebuffer_colour);
+    cvm_vk_destroy_image(test_framebuffer_normal);
 
     cvm_vk_free_memory(test_framebuffer_image_memory);
 
     cvm_vk_destroy_descriptor_pool(test_descriptor_pool);
 
-    free(test_descriptor_sets);
+    free(test_geo_descriptor_sets);
+    free(test_post_descriptor_sets);
+
     for(i=0;i<TEST_FRAMEBUFFER_CYCLES;i++)free(test_framebuffers[i]);
+
+    cvm_vk_destroy_render_pass(test_render_pass);
 }
 
 cvm_vk_module_batch * test_render_frame(cvm_camera * c)
@@ -726,10 +1195,10 @@ cvm_vk_module_batch * test_render_frame(cvm_camera * c)
     cvm_vk_module_batch * batch;
     uint32_t swapchain_image_index;
 
-    VkCommandBuffer scb;///used for testing, essentially the secondary command buffer currently in use
+    VkCommandBuffer scb_geo,scb_post;///used for testing, essentially the secondary command buffer currently in use
 
     static rotor3f rots[4];
-    static uint64_t rand=0xDEADBEEFC00FC00F;
+    static uint64_t rand=83;
     static uint32_t iter=0;
 
     cvm_transform_stack ts;
@@ -753,24 +1222,39 @@ cvm_vk_module_batch * test_render_frame(cvm_camera * c)
 
 
         VkDeviceSize uniforms_offset;
-        struct
-        {
-            matrix4f projection;
-            float offsets[4];//1 extra for padding
-            float multipliers[4];//1 extra for padding
-        }
-        *uniforms;
 
-        uniforms = cvm_vk_transient_buffer_get_allocation(&test_transient_buffer,sizeof(matrix4f)+sizeof(float)*8,&uniforms_offset);
-        if(uniforms==NULL)puts("FAILED");
 
-        uniforms->projection=*get_view_matrix_pointer(c);///try to avoid per item uniforms, when absolutely necessary (cant be put in push constants) use a linear allocator to distribute pre-allocated ones from here
+        test_geo_uniform_data * geo_uniforms;
 
-        uniforms->multipliers[0]=1;//cos(SDL_GetTicks()*0.005);
-        uniforms->multipliers[1]=1;//cos(SDL_GetTicks()*0.007);
-        uniforms->multipliers[2]=1;//cos(SDL_GetTicks()*0.011);
+        geo_uniforms = cvm_vk_transient_buffer_get_allocation(&test_transient_buffer,sizeof(test_geo_uniform_data),&uniforms_offset);
+        if(geo_uniforms==NULL)puts("FAILED");
 
-        update_and_bind_test_uniforms(swapchain_image_index,uniforms_offset);
+        geo_uniforms->proj=*get_view_matrix_pointer(c);///try to avoid per item uniforms, when absolutely necessary (cant be put in push constants) use a linear allocator to distribute pre-allocated ones from here
+
+        geo_uniforms->colour_offsets[0]=0.5;//cos(SDL_GetTicks()*0.005);
+        geo_uniforms->colour_offsets[1]=0.5;//cos(SDL_GetTicks()*0.007);
+        geo_uniforms->colour_offsets[2]=0.5;//cos(SDL_GetTicks()*0.011);
+
+
+        geo_uniforms->colour_multipliers[0]=0.5;//cos(SDL_GetTicks()*0.005);
+        geo_uniforms->colour_multipliers[1]=0.5;//cos(SDL_GetTicks()*0.007);
+        geo_uniforms->colour_multipliers[2]=0.5;//cos(SDL_GetTicks()*0.011);
+
+
+        update_and_write_test_geo_descriptors(swapchain_image_index,uniforms_offset);
+
+
+
+        test_post_uniform_data * post_uniforms;
+
+        post_uniforms = cvm_vk_transient_buffer_get_allocation(&test_transient_buffer,sizeof(test_post_uniform_data),&uniforms_offset);
+        if(geo_uniforms==NULL)puts("FAILED");
+
+        post_uniforms->sample_count=2;
+
+        update_and_write_test_post_descriptors(swapchain_image_index,uniforms_offset);
+
+
 
 
         float transformation[12];
@@ -780,7 +1264,7 @@ cvm_vk_module_batch * test_render_frame(cvm_camera * c)
         float lerp;
 
 
-        lerp=(((float)(iter&127))+0.5)/127.0;
+        lerp=(((float)(iter&127))+0.5)/128.0;
         index=(iter>>7)&3;
         if((iter&127)==0)rots[(index+2)&3]=cvm_rng_rotation_3d(&rand);
         iter++;
@@ -791,33 +1275,48 @@ cvm_vk_module_batch * test_render_frame(cvm_camera * c)
 
         cvm_transform_stack_push(&ts);
             cvm_transform_stack_rotate(&ts,r);
-            cvm_transform_stack_push(&ts);
+            //cvm_transform_stack_push(&ts);
                 //cvm_transform_stack_offset_position(&ts,((vec3f){1,1,1}));
                 //cvm_transform_stack_rotate_around_vector(&ts,((vec3f){SQRT_THIRD,SQRT_THIRD,SQRT_THIRD}),((float)(iter&31))*TAU/32);
                 cvm_transform_stack_get(&ts,transformation);
-            cvm_transform_stack_pop(&ts);
+            //cvm_transform_stack_pop(&ts);
         cvm_transform_stack_pop(&ts);
 
 
+
+
         ///definitely not the cleanest function ever
-        scb=cvm_vk_module_batch_start_secondary_command_buffer(batch,CVM_VK_MAIN_SUB_BATCH_INDEX,0,
+        scb_geo=cvm_vk_module_batch_start_secondary_command_buffer(batch,CVM_VK_MAIN_SUB_BATCH_INDEX,0,
                 test_framebuffers[test_current_framebuffer_index][swapchain_image_index],test_render_pass,0);
 
+        cvm_vk_managed_buffer_bind_as_index(scb_geo,&test_managed_buffer,VK_INDEX_TYPE_UINT16);
+        cvm_vk_managed_buffer_bind_as_vertex(scb_geo,&test_managed_buffer,0);
+
+        vkCmdBindDescriptorSets(scb_geo,VK_PIPELINE_BIND_POINT_GRAPHICS,test_geo_pipeline_layout,0,1,test_geo_descriptor_sets+swapchain_image_index,0,NULL);
+
+        vkCmdBindPipeline(scb_geo,VK_PIPELINE_BIND_POINT_GRAPHICS,test_geo_pipeline);
+
+        vkCmdPushConstants(scb_geo,test_geo_pipeline_layout,VK_SHADER_STAGE_VERTEX_BIT,0,sizeof(float)*12,transformation);
+
+//        cvm_managed_mesh_render(&test_stub_stellated_octahedron_mesh,scb_geo,1,0);
+        //cvm_managed_mesh_render(&test_cube_mesh,scb_geo,1,0);
+        cvm_managed_mesh_render(&test_stellated_octahedron_mesh,scb_geo,1,0);
+
+        vkEndCommandBuffer(scb_geo);
 
 
-        cvm_vk_managed_buffer_bind_as_index(scb,&test_managed_buffer,VK_INDEX_TYPE_UINT16);
-        cvm_vk_managed_buffer_bind_as_vertex(scb,&test_managed_buffer,0);
 
-        vkCmdBindDescriptorSets(scb,VK_PIPELINE_BIND_POINT_GRAPHICS,test_pipeline_layout,0,1,test_descriptor_sets+swapchain_image_index,0,NULL);
 
-        vkCmdBindPipeline(scb,VK_PIPELINE_BIND_POINT_GRAPHICS,test_pipeline);
+        scb_post=cvm_vk_module_batch_start_secondary_command_buffer(batch,CVM_VK_MAIN_SUB_BATCH_INDEX,1,
+                test_framebuffers[test_current_framebuffer_index][swapchain_image_index],test_render_pass,1);
 
-        vkCmdPushConstants(scb,test_pipeline_layout,VK_SHADER_STAGE_VERTEX_BIT,0,sizeof(float)*12,transformation);
+        vkCmdBindDescriptorSets(scb_post,VK_PIPELINE_BIND_POINT_GRAPHICS,test_post_pipeline_layout,0,1,test_post_descriptor_sets+swapchain_image_index,0,NULL);
 
-        cvm_managed_mesh_render(&test_stub_stellated_octahedron_mesh,scb,1,0);
+        vkCmdBindPipeline(scb_post,VK_PIPELINE_BIND_POINT_GRAPHICS,test_post_pipeline);
 
-        vkEndCommandBuffer(scb);
+        vkCmdDraw(scb_post,3,1,0,0);
 
+        vkEndCommandBuffer(scb_post);
 
 
 
@@ -831,10 +1330,13 @@ cvm_vk_module_batch * test_render_frame(cvm_camera * c)
 
 
 
-
-        VkClearValue clear_values[2];///other clear colours should probably be provided by other chunks of application
+        /// make this static, and initialise it at the same time as render pass
+        VkClearValue clear_values[4];///other clear colours should probably be provided by other chunks of application
         clear_values[0].color=(VkClearColorValue){{0.95f,0.5f,0.75f,1.0f}};
         clear_values[1].depthStencil=(VkClearDepthStencilValue){.depth=0.0,.stencil=0};
+        clear_values[2].color=(VkClearColorValue){{1.0f,0.5f,0.75f,0.0f}};
+//        clear_values[3].color=(VkClearColorValue){{0.0f,0.0f,1.0f,0.0f}};
+        clear_values[3].color=(VkClearColorValue){{SQRT_THIRD,SQRT_THIRD,SQRT_THIRD,0.0f}};
 
         VkRenderPassBeginInfo render_pass_begin_info=(VkRenderPassBeginInfo)
         {
@@ -843,7 +1345,7 @@ cvm_vk_module_batch * test_render_frame(cvm_camera * c)
             .renderPass=test_render_pass,
             .framebuffer=test_framebuffers[test_current_framebuffer_index][swapchain_image_index],
             .renderArea=cvm_vk_get_screen_rectangle(),
-            .clearValueCount=2,
+            .clearValueCount=4,
             .pClearValues=clear_values
         };
 
@@ -851,14 +1353,19 @@ cvm_vk_module_batch * test_render_frame(cvm_camera * c)
 
         #warning for post processing should be able to pre-record seconadry command buffers with multiple submits, without VK_COMMAND_BUFFER_USAGE_ONE_TIME_SUBMIT_BIT, but with VK_COMMAND_BUFFER_USAGE_SIMULTANEOUS_USE_BIT
 
-        vkCmdExecuteCommands(batch->graphics_pcb,1,&scb);
+        vkCmdExecuteCommands(batch->graphics_pcb,1,&scb_geo);
+
+        vkCmdNextSubpass(batch->graphics_pcb,VK_SUBPASS_CONTENTS_SECONDARY_COMMAND_BUFFERS);
+        ///can also inline post passes or even use multi-submit pre-recorded secondary command buffers
+
+        vkCmdExecuteCommands(batch->graphics_pcb,1,&scb_post);
 
         vkCmdEndRenderPass(batch->graphics_pcb);///================
 
 
 
         test_current_framebuffer_index++;
-        test_current_framebuffer_index*= test_current_framebuffer_index<TEST_FRAMEBUFFER_CYCLES;
+        test_current_framebuffer_index*= test_current_framebuffer_index<TEST_FRAMEBUFFER_CYCLES;///resets to 0
     }
 
     return cvm_vk_end_module_batch(&test_module_data);

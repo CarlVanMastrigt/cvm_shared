@@ -179,7 +179,7 @@ VkImageView cvm_vk_get_swapchain_image_view(uint32_t index);
 VkSampler cvm_vk_get_fetch_sampler(void);
 
 
-
+bool cvm_vk_format_check_optimal_feature_support(VkFormat format,VkFormatFeatureFlags flags);
 
 ///misc data the rendering system needs from each module, as well as container for module's per frame rendering data, should be static var in module file
 typedef struct cvm_vk_module_work_sub_batch
@@ -236,13 +236,12 @@ typedef struct cvm_vk_module_data
     uint32_t batch_index;
 
     uint32_t graphics_scb_count;
-    uint32_t transfer_scb_count;
 
     uint32_t sub_batch_count;///effectively max number of worker threads this module will use
 }
 cvm_vk_module_data;
 ///must be called after cvm_vk_initialise
-void cvm_vk_create_module_data(cvm_vk_module_data * module_data,bool in_separate_thread,uint32_t sub_block_count,uint32_t graphics_scb_count,uint32_t transfer_scb_count);
+void cvm_vk_create_module_data(cvm_vk_module_data * module_data,bool in_separate_thread,uint32_t sub_block_count,uint32_t graphics_scb_count);
 ///extra_transfer_slots should be equal to number passed in to extra_frame_count elsewhere
 void cvm_vk_resize_module_graphics_data(cvm_vk_module_data * module_data,uint32_t extra_frame_count);///this must be called in critical section
 void cvm_vk_destroy_module_data(cvm_vk_module_data * module_data,bool in_separate_thread);
