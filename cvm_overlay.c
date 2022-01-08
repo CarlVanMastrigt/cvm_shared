@@ -385,7 +385,7 @@ static void create_overlay_render_pass(VkFormat swapchain_format,VkSampleCountFl
     cvm_vk_create_render_pass(&overlay_render_pass,&create_info);
 }
 
-static void create_overlay_pipelines(VkRect2D screen_rectangle)
+static void create_overlay_pipelines(void)
 {
     VkGraphicsPipelineCreateInfo create_info=
     {
@@ -452,28 +452,7 @@ static void create_overlay_pipelines(VkRect2D screen_rectangle)
             }
         },
         .pTessellationState=NULL,///not needed (yet)
-        .pViewportState=(VkPipelineViewportStateCreateInfo[1])
-        {
-            {
-                .sType=VK_STRUCTURE_TYPE_PIPELINE_VIEWPORT_STATE_CREATE_INFO,
-                .pNext=NULL,
-                .flags=0,
-                .viewportCount=1,
-                .pViewports=(VkViewport[1])
-                {
-                    {
-                        .x=(float)screen_rectangle.offset.x,
-                        .y=(float)screen_rectangle.offset.y,
-                        .width=(float)screen_rectangle.extent.width,
-                        .height=(float)screen_rectangle.extent.height,
-                        .minDepth=0.0,
-                        .maxDepth=1.0
-                    }
-                },
-                .scissorCount=1,
-                .pScissors= &screen_rectangle
-            }
-        },
+        .pViewportState=cvm_vk_get_default_viewport_state(),
         .pRasterizationState=(VkPipelineRasterizationStateCreateInfo[1])
         {
             {
@@ -544,23 +523,10 @@ static void create_overlay_pipelines(VkRect2D screen_rectangle)
     cvm_vk_create_graphics_pipeline(&overlay_pipeline,&create_info);
 }
 
-static void create_overlay_framebuffers(VkRect2D screen_rectangle,uint32_t swapchain_image_count)
+static void create_overlay_framebuffers(uint32_t swapchain_image_count)
 {
     uint32_t i;
     VkImageView attachments[1];
-
-    VkFramebufferCreateInfo create_info=
-    {
-        .sType=VK_STRUCTURE_TYPE_FRAMEBUFFER_CREATE_INFO,
-        .pNext=NULL,
-        .flags=0,
-        .renderPass=overlay_render_pass,
-        .attachmentCount=1,
-        .pAttachments=attachments,
-        .width=screen_rectangle.extent.width,
-        .height=screen_rectangle.extent.height,
-        .layers=1
-    };
 
     overlay_framebuffers=malloc(swapchain_image_count*sizeof(VkFramebuffer));
 
@@ -568,7 +534,7 @@ static void create_overlay_framebuffers(VkRect2D screen_rectangle,uint32_t swapc
     {
         attachments[0]=cvm_vk_get_swapchain_image_view(i);
 
-        cvm_vk_create_framebuffer(overlay_framebuffers+i,&create_info);
+        cvm_vk_create_default_framebuffer(overlay_framebuffers+i,overlay_render_pass,attachments,1);
     }
 }
 
@@ -726,11 +692,10 @@ void terminate_overlay_render_data(void)
 void initialise_overlay_swapchain_dependencies(void)
 {
     uint32_t swapchain_image_count=cvm_vk_get_swapchain_image_count();
-    VkRect2D screen_rectangle=cvm_vk_get_screen_rectangle();
 
-    create_overlay_pipelines(screen_rectangle);
+    create_overlay_pipelines();
 
-    create_overlay_framebuffers(screen_rectangle,swapchain_image_count);
+    create_overlay_framebuffers(swapchain_image_count);
 
     create_overlay_descriptor_sets(swapchain_image_count);
 

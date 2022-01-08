@@ -79,6 +79,7 @@ static cvm_vk_transient_buffer test_transient_buffer;
 static cvm_managed_mesh test_stellated_octahedron_mesh;
 static cvm_managed_mesh test_stub_stellated_octahedron_mesh;
 static cvm_managed_mesh test_cube_mesh;
+//static cvm_managed_mesh test_face_mesh;
 
 
 typedef struct test_geo_uniform_data
@@ -576,7 +577,7 @@ static void create_test_render_pass(VkFormat swapchain_format,VkSampleCountFlagB
     cvm_vk_create_render_pass(&test_render_pass,&create_info);
 }
 
-static void create_test_pipelines(VkRect2D screen_rectangle,VkSampleCountFlagBits sample_count,float min_sample_shading)
+static void create_test_pipelines(VkSampleCountFlagBits sample_count,float min_sample_shading)
 {
     VkGraphicsPipelineCreateInfo geo_create_info=(VkGraphicsPipelineCreateInfo)
     {
@@ -627,28 +628,7 @@ static void create_test_pipelines(VkRect2D screen_rectangle,VkSampleCountFlagBit
             }
         },
         .pTessellationState=NULL,///not needed (yet)
-        .pViewportState=(VkPipelineViewportStateCreateInfo[1])
-        {
-            {
-                .sType=VK_STRUCTURE_TYPE_PIPELINE_VIEWPORT_STATE_CREATE_INFO,
-                .pNext=NULL,
-                .flags=0,
-                .viewportCount=1,
-                .pViewports=(VkViewport[1])
-                {
-                    {
-                        .x=(float)screen_rectangle.offset.x,
-                        .y=(float)screen_rectangle.offset.y,
-                        .width=(float)screen_rectangle.extent.width,
-                        .height=(float)screen_rectangle.extent.height,
-                        .minDepth=0.0,
-                        .maxDepth=1.0
-                    }
-                },
-                .scissorCount=1,
-                .pScissors= &screen_rectangle
-            }
-        },
+        .pViewportState=cvm_vk_get_default_viewport_state(),
         .pRasterizationState=(VkPipelineRasterizationStateCreateInfo[1])
         {
             {
@@ -807,28 +787,7 @@ static void create_test_pipelines(VkRect2D screen_rectangle,VkSampleCountFlagBit
             }
         },
         .pTessellationState=NULL,///not needed (yet)
-        .pViewportState=(VkPipelineViewportStateCreateInfo[1])
-        {
-            {
-                .sType=VK_STRUCTURE_TYPE_PIPELINE_VIEWPORT_STATE_CREATE_INFO,
-                .pNext=NULL,
-                .flags=0,
-                .viewportCount=1,
-                .pViewports=(VkViewport[1])
-                {
-                    {
-                        .x=(float)screen_rectangle.offset.x,
-                        .y=(float)screen_rectangle.offset.y,
-                        .width=(float)screen_rectangle.extent.width,
-                        .height=(float)screen_rectangle.extent.height,
-                        .minDepth=0.0,
-                        .maxDepth=1.0
-                    }
-                },
-                .scissorCount=1,
-                .pScissors= &screen_rectangle
-            }
-        },
+        .pViewportState=cvm_vk_get_default_viewport_state(),
         .pRasterizationState=(VkPipelineRasterizationStateCreateInfo[1])
         {
             {
@@ -933,25 +892,12 @@ static void create_test_pipelines(VkRect2D screen_rectangle,VkSampleCountFlagBit
     cvm_vk_create_graphics_pipeline(&test_post_pipeline,&post_create_info);
 }
 
-static void create_test_framebuffers(VkRect2D screen_rectangle,uint32_t swapchain_image_count)
+static void create_test_framebuffers(uint32_t swapchain_image_count)
 {
     uint32_t i,j;
     VkImageView attachments[4];
 
     test_current_framebuffer_index=0;
-
-    VkFramebufferCreateInfo create_info=(VkFramebufferCreateInfo)
-    {
-        .sType=VK_STRUCTURE_TYPE_FRAMEBUFFER_CREATE_INFO,
-        .pNext=NULL,
-        .flags=0,
-        .renderPass=test_render_pass,
-        .attachmentCount=4,
-        .pAttachments=attachments,
-        .width=screen_rectangle.extent.width,
-        .height=screen_rectangle.extent.height,
-        .layers=1
-    };
 
     for(i=0;i<TEST_FRAMEBUFFER_CYCLES;i++)
     {
@@ -964,7 +910,7 @@ static void create_test_framebuffers(VkRect2D screen_rectangle,uint32_t swapchai
             attachments[2]=test_framebuffer_colour_views[i];
             attachments[3]=test_framebuffer_normal_views[i];
 
-            cvm_vk_create_framebuffer(test_framebuffers[i]+j,&create_info);
+            cvm_vk_create_default_framebuffer(test_framebuffers[i]+j,test_render_pass,attachments,4);
         }
     }
 }
@@ -973,97 +919,19 @@ static void create_test_framebuffers(VkRect2D screen_rectangle,uint32_t swapchai
 
 /// these need to be recreated whenever swapchain image changes size
 /// unless we allocate at max and alter with image views... investigate potential of this, use max size, let user set max_size from startup options?
-static void create_test_framebuffer_images(VkRect2D screen_rect,VkSampleCountFlagBits sample_count)
+static void create_test_framebuffer_images(VkSampleCountFlagBits sample_count)
 {
-    uint32_t i;
-
-    VkImageCreateInfo image_creation_info=(VkImageCreateInfo)
-    {
-        .sType=VK_STRUCTURE_TYPE_IMAGE_CREATE_INFO,
-        .pNext=NULL,
-        .flags=0,
-        .imageType=VK_IMAGE_TYPE_2D,
-        .format=VK_FORMAT_UNDEFINED,///set later
-        .extent=(VkExtent3D)
-        {
-            .width=screen_rect.extent.width,
-            .height=screen_rect.extent.height,
-            .depth=1
-        },
-        .mipLevels=1,
-        .arrayLayers=TEST_FRAMEBUFFER_CYCLES,///one for each level
-        .samples=sample_count,
-        .tiling=VK_IMAGE_TILING_OPTIMAL,
-        .usage=0,///set later
-        .sharingMode=VK_SHARING_MODE_EXCLUSIVE,
-        .queueFamilyIndexCount=0,
-        .pQueueFamilyIndices=NULL,
-        .initialLayout=VK_IMAGE_LAYOUT_UNDEFINED
-    };
-
-    VkImageViewCreateInfo view_creation_info=(VkImageViewCreateInfo)
-    {
-        .sType=VK_STRUCTURE_TYPE_IMAGE_VIEW_CREATE_INFO,
-        .pNext=NULL,
-        .flags=0,
-        .image=VK_NULL_HANDLE,///set later
-        .viewType=VK_IMAGE_VIEW_TYPE_2D,
-        .format=VK_FORMAT_UNDEFINED,///set later
-        .components=(VkComponentMapping)
-        {
-            .r=VK_COMPONENT_SWIZZLE_IDENTITY,
-            .g=VK_COMPONENT_SWIZZLE_IDENTITY,
-            .b=VK_COMPONENT_SWIZZLE_IDENTITY,
-            .a=VK_COMPONENT_SWIZZLE_IDENTITY
-        },
-        .subresourceRange=(VkImageSubresourceRange)
-        {
-            .aspectMask=0,///set later
-            .baseMipLevel=0,
-            .levelCount=1,
-            .baseArrayLayer=0,///set later
-            .layerCount=1
-        }
-    };
-
-    image_creation_info.format=test_depth_format;
-    image_creation_info.usage=VK_IMAGE_USAGE_DEPTH_STENCIL_ATTACHMENT_BIT|VK_IMAGE_USAGE_INPUT_ATTACHMENT_BIT;///VK_IMAGE_USAGE_INPUT_ATTACHMENT_BIT
-    cvm_vk_create_image(&test_framebuffer_depth,&image_creation_info);
-
-    image_creation_info.format=test_colour_format;
-    image_creation_info.usage=VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT|VK_IMAGE_USAGE_INPUT_ATTACHMENT_BIT;///VK_IMAGE_USAGE_INPUT_ATTACHMENT_BIT
-    cvm_vk_create_image(&test_framebuffer_colour,&image_creation_info);
-
-    image_creation_info.format=test_normal_format;
-    image_creation_info.usage=VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT|VK_IMAGE_USAGE_INPUT_ATTACHMENT_BIT;///VK_IMAGE_USAGE_INPUT_ATTACHMENT_BIT
-    cvm_vk_create_image(&test_framebuffer_normal,&image_creation_info);
+    cvm_vk_create_default_framebuffer_image(&test_framebuffer_depth,test_depth_format,TEST_FRAMEBUFFER_CYCLES,sample_count,VK_IMAGE_USAGE_DEPTH_STENCIL_ATTACHMENT_BIT|VK_IMAGE_USAGE_INPUT_ATTACHMENT_BIT);
+    cvm_vk_create_default_framebuffer_image(&test_framebuffer_colour,test_colour_format,TEST_FRAMEBUFFER_CYCLES,sample_count,VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT|VK_IMAGE_USAGE_INPUT_ATTACHMENT_BIT);
+    cvm_vk_create_default_framebuffer_image(&test_framebuffer_normal,test_normal_format,TEST_FRAMEBUFFER_CYCLES,sample_count,VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT|VK_IMAGE_USAGE_INPUT_ATTACHMENT_BIT);
 
     VkImage images[3]={test_framebuffer_depth,test_framebuffer_colour,test_framebuffer_normal};
     cvm_vk_create_and_bind_memory_for_images(&test_framebuffer_image_memory,images,3);
 
-
-    for(i=0;i<TEST_FRAMEBUFFER_CYCLES;i++)
-    {
-        view_creation_info.subresourceRange.baseArrayLayer=i;
-
-        view_creation_info.format=test_depth_format;
-        view_creation_info.subresourceRange.aspectMask=VK_IMAGE_ASPECT_DEPTH_BIT|VK_IMAGE_ASPECT_STENCIL_BIT;
-        view_creation_info.image=test_framebuffer_depth;
-        cvm_vk_create_image_view(test_framebuffer_depth_stencil_views+i,&view_creation_info);
-
-        view_creation_info.subresourceRange.aspectMask=VK_IMAGE_ASPECT_DEPTH_BIT;
-        cvm_vk_create_image_view(test_framebuffer_depth_only_views+i,&view_creation_info);
-
-        view_creation_info.format=test_colour_format;
-        view_creation_info.subresourceRange.aspectMask=VK_IMAGE_ASPECT_COLOR_BIT;
-        view_creation_info.image=test_framebuffer_colour;
-        cvm_vk_create_image_view(test_framebuffer_colour_views+i,&view_creation_info);
-
-        view_creation_info.format=test_normal_format;
-        view_creation_info.subresourceRange.aspectMask=VK_IMAGE_ASPECT_COLOR_BIT;
-        view_creation_info.image=test_framebuffer_normal;
-        cvm_vk_create_image_view(test_framebuffer_normal_views+i,&view_creation_info);
-    }
+    cvm_vk_create_default_framebuffer_image_views(test_framebuffer_depth_stencil_views,test_framebuffer_depth,test_depth_format,VK_IMAGE_ASPECT_DEPTH_BIT|VK_IMAGE_ASPECT_STENCIL_BIT,TEST_FRAMEBUFFER_CYCLES);
+    cvm_vk_create_default_framebuffer_image_views(test_framebuffer_depth_only_views,test_framebuffer_depth,test_depth_format,VK_IMAGE_ASPECT_DEPTH_BIT,TEST_FRAMEBUFFER_CYCLES);
+    cvm_vk_create_default_framebuffer_image_views(test_framebuffer_colour_views,test_framebuffer_colour,test_colour_format,VK_IMAGE_ASPECT_COLOR_BIT,TEST_FRAMEBUFFER_CYCLES);
+    cvm_vk_create_default_framebuffer_image_views(test_framebuffer_normal_views,test_framebuffer_normal,test_normal_format,VK_IMAGE_ASPECT_COLOR_BIT,TEST_FRAMEBUFFER_CYCLES);
 }
 
 void initialise_test_render_data()
@@ -1096,6 +964,7 @@ void initialise_test_render_data()
     cvm_managed_mesh_create(&test_stellated_octahedron_mesh,&test_managed_buffer,"cvm_shared/resources/stellated_octahedron.mesh",CVM_MESH_ADGACENCY|CVM_MESH_PER_FACE_MATERIAL,true);
     cvm_managed_mesh_create(&test_stub_stellated_octahedron_mesh,&test_managed_buffer,"cvm_shared/resources/stub_stellated_octahedron.mesh",CVM_MESH_ADGACENCY|CVM_MESH_PER_FACE_MATERIAL,true);
     cvm_managed_mesh_create(&test_cube_mesh,&test_managed_buffer,"cvm_shared/resources/cube.mesh",CVM_MESH_ADGACENCY|CVM_MESH_PER_FACE_MATERIAL,true);
+//    cvm_managed_mesh_create(&test_face_mesh,&test_managed_buffer,"cvm_shared/resources/face.mesh",CVM_MESH_ADGACENCY|CVM_MESH_PER_FACE_MATERIAL,true);
 }
 
 void terminate_test_render_data()
@@ -1119,6 +988,7 @@ void terminate_test_render_data()
     cvm_managed_mesh_destroy(&test_stellated_octahedron_mesh);
     cvm_managed_mesh_destroy(&test_stub_stellated_octahedron_mesh);
     cvm_managed_mesh_destroy(&test_cube_mesh);
+//    cvm_managed_mesh_destroy(&test_face_mesh);
 
     cvm_vk_managed_buffer_destroy(&test_managed_buffer);
 
@@ -1131,15 +1001,14 @@ void terminate_test_render_data()
 void initialise_test_swapchain_dependencies(VkSampleCountFlagBits sample_count)
 {
     uint32_t swapchain_image_count=cvm_vk_get_swapchain_image_count();
-    VkRect2D screen_rectangle=cvm_vk_get_screen_rectangle();
 
     create_test_render_pass(cvm_vk_get_screen_format(),sample_count);
 
-    create_test_pipelines(screen_rectangle,sample_count,0.5);
+    create_test_pipelines(sample_count,0.5);
 
-    create_test_framebuffer_images(screen_rectangle,sample_count);
+    create_test_framebuffer_images(sample_count);
 
-    create_test_framebuffers(screen_rectangle,swapchain_image_count);
+    create_test_framebuffers(swapchain_image_count);
 
     create_test_descriptor_sets(swapchain_image_count);
 
@@ -1198,7 +1067,7 @@ cvm_vk_module_batch * test_render_frame(cvm_camera * c)
     VkCommandBuffer scb_geo,scb_post;///used for testing, essentially the secondary command buffer currently in use
 
     static rotor3f rots[4];
-    static uint64_t rand=83;
+    static uint64_t rand=813;
     static uint32_t iter=0;
 
     cvm_transform_stack ts;
@@ -1275,11 +1144,14 @@ cvm_vk_module_batch * test_render_frame(cvm_camera * c)
 
         cvm_transform_stack_push(&ts);
             cvm_transform_stack_rotate(&ts,r);
+//            cvm_transform_stack_offset_position(&ts,(vec3f){.x=0,.y=-0.75,.z=0});
+
+
             //cvm_transform_stack_push(&ts);
                 //cvm_transform_stack_offset_position(&ts,((vec3f){1,1,1}));
                 //cvm_transform_stack_rotate_around_vector(&ts,((vec3f){SQRT_THIRD,SQRT_THIRD,SQRT_THIRD}),((float)(iter&31))*TAU/32);
                 cvm_transform_stack_get(&ts,transformation);
-            //cvm_transform_stack_pop(&ts);
+//            cvm_transform_stack_pop(&ts);
         cvm_transform_stack_pop(&ts);
 
 
@@ -1298,9 +1170,10 @@ cvm_vk_module_batch * test_render_frame(cvm_camera * c)
 
         vkCmdPushConstants(scb_geo,test_geo_pipeline_layout,VK_SHADER_STAGE_VERTEX_BIT,0,sizeof(float)*12,transformation);
 
-//        cvm_managed_mesh_render(&test_stub_stellated_octahedron_mesh,scb_geo,1,0);
+        cvm_managed_mesh_render(&test_stub_stellated_octahedron_mesh,scb_geo,1,0);
         //cvm_managed_mesh_render(&test_cube_mesh,scb_geo,1,0);
-        cvm_managed_mesh_render(&test_stellated_octahedron_mesh,scb_geo,1,0);
+//        cvm_managed_mesh_render(&test_stellated_octahedron_mesh,scb_geo,1,0);
+//        cvm_managed_mesh_render(&test_face_mesh,scb_geo,1,0);
 
         vkEndCommandBuffer(scb_geo);
 

@@ -25,19 +25,8 @@ along with cvm_shared.  If not, see <https://www.gnu.org/licenses/>.
 #ifndef CVM_TEST_RENDER_H
 #define CVM_TEST_RENDER_H
 
-typedef struct test_render_data
-{
-    float pos[3];
-    uint8_t col[3];
-}
-test_render_data;
-
 void initialise_test_render_data(void);
 void terminate_test_render_data(void);
-
-//void create_test_render_pass(VkFormat swapchain_format);
-
-/// applications responsibility to handle recreation of module resources (unless i can come up with a better approach)
 
 void initialise_test_swapchain_dependencies(VkSampleCountFlagBits sample_count);
 void terminate_test_swapchain_dependencies(void);

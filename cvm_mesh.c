@@ -342,6 +342,7 @@ void cvm_mesh_load_file_body(FILE * f,cvm_mesh * mesh,uint16_t * indices,uint16_
     fread(vertex_data,cvm_mesh_get_vertex_data_size(mesh),mesh->vertex_count,f);
 }
 
+#warning trying to load a mesh with different (fewer) flags set to those it was created with doesnt work, will try and read some conditional data as the incorrect type!
 
 bool cvm_managed_mesh_load(cvm_managed_mesh * mm)
 {

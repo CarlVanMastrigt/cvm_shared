@@ -1,5 +1,5 @@
 /**
-Copyright 2020,2021 Carl van Mastrigt
+Copyright 2020,2021,2022 Carl van Mastrigt
 
 This file is part of cvm_shared.
 
@@ -421,13 +421,11 @@ void cvm_vk_create_swapchain(void)
 
     cvm_vk_screen_rectangle=(VkRect2D)
     {
-        .offset=(VkOffset2D)
-        {
-            .x=0,
-            .y=0
-        },
+        .offset=(VkOffset2D){.x=0,.y=0},
         .extent=surface_capabilities.currentExtent
     };
+
+    cvm_vk_initialise_swapchain_dependednt_defaults(surface_capabilities.currentExtent.width,surface_capabilities.currentExtent.height);
 
     cvm_vk_swapchain_image_count=((surface_capabilities.minImageCount > cvm_vk_min_swapchain_images) ? surface_capabilities.minImageCount : cvm_vk_min_swapchain_images)+cvm_vk_extra_swapchain_images;
 

@@ -1,5 +1,5 @@
 /**
-Copyright 2020,2021 Carl van Mastrigt
+Copyright 2020,2021,2022 Carl van Mastrigt
 
 This file is part of cvm_shared.
 
@@ -175,7 +175,6 @@ VkFormat cvm_vk_get_screen_format(void);///can remove?
 uint32_t cvm_vk_get_swapchain_image_count(void);
 VkImageView cvm_vk_get_swapchain_image_view(uint32_t index);
 
-
 VkSampler cvm_vk_get_fetch_sampler(void);
 
 
@@ -272,7 +271,7 @@ bool cvm_vk_check_for_remaining_frames(uint32_t * completed_frame_index);
 
 #include "cvm_vk_memory.h"
 #include "cvm_vk_image.h"
-
+#include "cvm_vk_defaults.h"
 
 
 #endif
