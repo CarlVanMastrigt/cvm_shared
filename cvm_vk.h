@@ -143,8 +143,6 @@ void cvm_vk_destroy_pipeline(VkPipeline pipeline);
 void cvm_vk_create_shader_stage_info(VkPipelineShaderStageCreateInfo * stage_info,const char * filename,VkShaderStageFlagBits stage);
 void cvm_vk_destroy_shader_stage_info(VkPipelineShaderStageCreateInfo * stage_info);
 
-
-
 void cvm_vk_create_descriptor_set_layout(VkDescriptorSetLayout * descriptor_set_layout,VkDescriptorSetLayoutCreateInfo * info);
 void cvm_vk_destroy_descriptor_set_layout(VkDescriptorSetLayout descriptor_set_layout);
 
@@ -162,6 +160,9 @@ void cvm_vk_create_and_bind_memory_for_images(VkDeviceMemory * memory,VkImage * 
 void cvm_vk_create_image_view(VkImageView * image_view,VkImageViewCreateInfo * info);
 void cvm_vk_destroy_image_view(VkImageView image_view);
 
+void cvm_vk_create_sampler(VkSampler * sampler,VkSamplerCreateInfo * info);
+void cvm_vk_destroy_sampler(VkSampler sampler);
+
 void cvm_vk_free_memory(VkDeviceMemory memory);
 
 void * cvm_vk_create_buffer(VkBuffer * buffer,VkDeviceMemory * memory,VkBufferUsageFlags usage,VkDeviceSize size,bool require_host_visible);
@@ -170,12 +171,15 @@ void cvm_vk_flush_buffer_memory_range(VkMappedMemoryRange * flush_range);
 uint32_t cvm_vk_get_buffer_alignment_requirements(VkBufferUsageFlags usage);
 
 
-VkRect2D cvm_vk_get_screen_rectangle(void);
+VkPhysicalDeviceFeatures * cvm_vk_get_device_features(void);
+
 VkFormat cvm_vk_get_screen_format(void);///can remove?
 uint32_t cvm_vk_get_swapchain_image_count(void);
 VkImageView cvm_vk_get_swapchain_image_view(uint32_t index);
 
-VkSampler cvm_vk_get_fetch_sampler(void);
+
+
+
 
 
 bool cvm_vk_format_check_optimal_feature_support(VkFormat format,VkFormatFeatureFlags flags);
@@ -240,10 +244,10 @@ typedef struct cvm_vk_module_data
 }
 cvm_vk_module_data;
 ///must be called after cvm_vk_initialise
-void cvm_vk_create_module_data(cvm_vk_module_data * module_data,bool in_separate_thread,uint32_t sub_block_count,uint32_t graphics_scb_count);
+void cvm_vk_create_module_data(cvm_vk_module_data * module_data,uint32_t sub_batch_count,uint32_t graphics_scb_count);///sub batches are basically the number of worker threads
 ///extra_transfer_slots should be equal to number passed in to extra_frame_count elsewhere
 void cvm_vk_resize_module_graphics_data(cvm_vk_module_data * module_data,uint32_t extra_frame_count);///this must be called in critical section
-void cvm_vk_destroy_module_data(cvm_vk_module_data * module_data,bool in_separate_thread);
+void cvm_vk_destroy_module_data(cvm_vk_module_data * module_data);
 
 cvm_vk_module_batch * cvm_vk_begin_module_batch(cvm_vk_module_data * module_data,uint32_t frame_offset,uint32_t * swapchain_image_index);///have this return bool? (VkCommandBuffer through ref.)
 cvm_vk_module_batch * cvm_vk_end_module_batch(cvm_vk_module_data * module_data);

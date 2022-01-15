@@ -39,8 +39,8 @@ void main()
     switch(gl_VertexIndex)
     {
         case 0: p=data0.xy;break;
-        case 1: p=data0.zy;break;
-        case 2: p=data0.xw;break;
+        case 1: p=data0.xw;break;
+        case 2: p=data0.zy;break;
         default: p=data0.zw;
     }
 

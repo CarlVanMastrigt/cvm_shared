@@ -27,11 +27,11 @@ static VkDevice cvm_vk_device;///"logical" device
 static VkSurfaceKHR cvm_vk_surface;
 static VkPhysicalDeviceMemoryProperties cvm_vk_memory_properties;
 static VkPhysicalDeviceProperties cvm_vk_device_properties;
+static VkPhysicalDeviceFeatures cvm_vk_device_features;
 
 static VkSwapchainKHR cvm_vk_swapchain=VK_NULL_HANDLE;
 static VkSurfaceFormatKHR cvm_vk_surface_format;
 static VkPresentModeKHR cvm_vk_surface_present_mode;
-static VkRect2D cvm_vk_screen_rectangle;///extent
 
 ///these can be the same
 static uint32_t cvm_vk_transfer_queue_family;
@@ -61,12 +61,7 @@ static uint32_t cvm_vk_min_swapchain_images;
 static uint32_t cvm_vk_extra_swapchain_images;///thread separation, applicable to transfer as well, name *should* reflect this
 static bool cvm_vk_rendering_resources_valid=false;///can this be determined for next frame during critical section?
 
-//static uint32_t cvm_vk_base_transfer_slots;
-//static uint32_t cvm_vk_extra_transfer_slots;
-//static cvm_vk_transfer_chain_data * cvm_vk_transfer_chain;
 
-static VkSampler cvm_vk_fetch_sampler;
-//static uint32_t cvm_vk_transfer_cycle_count;
 
 
 
@@ -135,7 +130,6 @@ static bool check_physical_device_appropriate(bool dedicated_gpu_required,bool s
     uint32_t i,queue_family_count;
     VkQueueFamilyProperties * queue_family_properties=NULL;
     VkBool32 surface_supported;
-    VkPhysicalDeviceFeatures features;
 
     vkGetPhysicalDeviceProperties(cvm_vk_physical_device,&cvm_vk_device_properties);
 
@@ -143,11 +137,13 @@ static bool check_physical_device_appropriate(bool dedicated_gpu_required,bool s
 
     printf("testing GPU : %s\n",cvm_vk_device_properties.deviceName);
 
-    vkGetPhysicalDeviceFeatures(cvm_vk_physical_device,&features);
+    vkGetPhysicalDeviceFeatures(cvm_vk_physical_device,&cvm_vk_device_features);
 
     #warning test for required features. need comparitor struct to do this?   enable all by default for time being?
 
     ///SIMPLE EXAMPLE TEST: printf("geometry shader: %d\n",features.geometryShader);
+    printf("geometry shader: %d\n",cvm_vk_device_features.geometryShader);
+    printf("sample rate shading: %d\n",cvm_vk_device_features.sampleRateShading);
 
     vkGetPhysicalDeviceQueueFamilyProperties(cvm_vk_physical_device,&queue_family_count,NULL);
     queue_family_properties=malloc(sizeof(VkQueueFamilyProperties)*queue_family_count);
@@ -366,37 +362,7 @@ static void cvm_vk_destroy_internal_command_pools(void)
     if(cvm_vk_present_queue_family!=cvm_vk_transfer_queue_family) vkDestroyCommandPool(cvm_vk_device,cvm_vk_present_command_pool,NULL);
 }
 
-static void cvm_vk_create_default_samplers(void)
-{
-    VkSamplerCreateInfo fetch_sampler_creation_info=(VkSamplerCreateInfo)
-    {
-        .sType=VK_STRUCTURE_TYPE_SAMPLER_CREATE_INFO,
-        .pNext=NULL,
-        .flags=0,
-        .magFilter=VK_FILTER_NEAREST,
-        .minFilter=VK_FILTER_NEAREST,
-        .mipmapMode=VK_SAMPLER_MIPMAP_MODE_NEAREST,
-        .addressModeU=VK_SAMPLER_ADDRESS_MODE_CLAMP_TO_EDGE,
-        .addressModeV=VK_SAMPLER_ADDRESS_MODE_CLAMP_TO_EDGE,
-        .addressModeW=VK_SAMPLER_ADDRESS_MODE_CLAMP_TO_EDGE,
-        .mipLodBias=0.0f,
-        .anisotropyEnable=VK_FALSE,
-        .maxAnisotropy=0.0f,
-        .compareEnable=VK_FALSE,
-        .compareOp=VK_COMPARE_OP_NEVER,
-        .minLod=0.0f,
-        .maxLod=0.0f,
-        .borderColor=VK_BORDER_COLOR_FLOAT_TRANSPARENT_BLACK,
-        .unnormalizedCoordinates=VK_TRUE,
-    };
 
-    CVM_VK_CHECK(vkCreateSampler(cvm_vk_device,&fetch_sampler_creation_info,NULL,&cvm_vk_fetch_sampler));
-}
-
-static void cvm_vk_destroy_default_samplers(void)
-{
-    vkDestroySampler(cvm_vk_device,cvm_vk_fetch_sampler,NULL);
-}
 
 static void cvm_vk_create_transfer_chain(void)
 {
@@ -418,14 +384,6 @@ void cvm_vk_create_swapchain(void)
 
     ///swapchain
     CVM_VK_CHECK(vkGetPhysicalDeviceSurfaceCapabilitiesKHR(cvm_vk_physical_device,cvm_vk_surface,&surface_capabilities));
-
-    cvm_vk_screen_rectangle=(VkRect2D)
-    {
-        .offset=(VkOffset2D){.x=0,.y=0},
-        .extent=surface_capabilities.currentExtent
-    };
-
-    cvm_vk_initialise_swapchain_dependednt_defaults(surface_capabilities.currentExtent.width,surface_capabilities.currentExtent.height);
 
     cvm_vk_swapchain_image_count=((surface_capabilities.minImageCount > cvm_vk_min_swapchain_images) ? surface_capabilities.minImageCount : cvm_vk_min_swapchain_images)+cvm_vk_extra_swapchain_images;
 
@@ -635,12 +593,16 @@ void cvm_vk_create_swapchain(void)
 
     if(old_swapchain!=VK_NULL_HANDLE)vkDestroySwapchainKHR(cvm_vk_device,old_swapchain,NULL);
 
+    cvm_vk_create_swapchain_dependednt_defaults(surface_capabilities.currentExtent.width,surface_capabilities.currentExtent.height);
+
     cvm_vk_rendering_resources_valid=true;
 }
 
 void cvm_vk_destroy_swapchain(void)
 {
     uint32_t i;
+
+    cvm_vk_destroy_swapchain_dependednt_defaults();
 
     for(i=0;i<cvm_vk_swapchain_image_count;i++)
     {
@@ -666,10 +628,9 @@ void cvm_vk_destroy_swapchain(void)
 }
 
 
-
-VkRect2D cvm_vk_get_screen_rectangle(void)
+VkPhysicalDeviceFeatures * cvm_vk_get_device_features(void)
 {
-    return cvm_vk_screen_rectangle;
+    return &cvm_vk_device_features;
 }
 
 VkFormat cvm_vk_get_screen_format(void)
@@ -687,10 +648,7 @@ VkImageView cvm_vk_get_swapchain_image_view(uint32_t index)
     return cvm_vk_presenting_images[index].image_view;
 }
 
-VkSampler cvm_vk_get_fetch_sampler(void)
-{
-    return cvm_vk_fetch_sampler;
-}
+
 
 void cvm_vk_initialise(SDL_Window * window,uint32_t min_swapchain_images,uint32_t extra_swapchain_images,bool sync_compute_required)
 {
@@ -703,12 +661,14 @@ void cvm_vk_initialise(SDL_Window * window,uint32_t min_swapchain_images,uint32_
     cvm_vk_create_logical_device();
     cvm_vk_create_internal_command_pools();
     cvm_vk_create_transfer_chain();
-    cvm_vk_create_default_samplers();
+
+    cvm_vk_create_defaults();
 }
 
 void cvm_vk_terminate(void)
 {
-    cvm_vk_destroy_default_samplers();
+    cvm_vk_destroy_defaults();
+
     cvm_vk_destroy_transfer_chain();
     cvm_vk_destroy_internal_command_pools();
 
@@ -1136,6 +1096,16 @@ void cvm_vk_destroy_image_view(VkImageView image_view)
     vkDestroyImageView(cvm_vk_device,image_view,NULL);
 }
 
+void cvm_vk_create_sampler(VkSampler * sampler,VkSamplerCreateInfo * info)
+{
+    CVM_VK_CHECK(vkCreateSampler(cvm_vk_device,info,NULL,sampler));
+}
+
+void cvm_vk_destroy_sampler(VkSampler sampler)
+{
+    vkDestroySampler(cvm_vk_device,sampler,NULL);
+}
+
 void cvm_vk_free_memory(VkDeviceMemory memory)
 {
     vkFreeMemory(cvm_vk_device,memory,NULL);
@@ -1255,7 +1225,7 @@ bool cvm_vk_format_check_optimal_feature_support(VkFormat format,VkFormatFeature
 }
 
 
-void cvm_vk_create_module_data(cvm_vk_module_data * module_data,bool in_separate_thread,uint32_t sub_batch_count,uint32_t graphics_scb_count)
+void cvm_vk_create_module_data(cvm_vk_module_data * module_data,uint32_t sub_batch_count,uint32_t graphics_scb_count)
 {
     module_data->batch_count=0;
     module_data->batches=NULL;
@@ -1404,7 +1374,7 @@ void cvm_vk_resize_module_graphics_data(cvm_vk_module_data * module_data,uint32_
     module_data->batch_count=new_batch_count;
 }
 
-void cvm_vk_destroy_module_data(cvm_vk_module_data * module_data,bool in_separate_thread)
+void cvm_vk_destroy_module_data(cvm_vk_module_data * module_data)
 {
     uint32_t i,j;
 

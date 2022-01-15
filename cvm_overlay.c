@@ -55,17 +55,9 @@ static VkImage overlay_colour_image;
 static VkImageView overlay_colour_image_view;///views of single array slice from image
 static cvm_vk_image_atlas overlay_colour_image_atlas;
 
-/// actually we want a way to handle uploads from here, and as dynamics are the same as instance data its probably worth having a dedicated buffer for them and uniforms AND upload/transfers
 static cvm_vk_transient_buffer overlay_transient_buffer;
-//static uint32_t * overlay_uniform_buffer_acquisitions;
-
 static cvm_vk_staging_buffer overlay_staging_buffer;
-//static uint32_t * overlay_staging_buffer_acquisitions;
-
-//static VkCommandBuffer overlay_upload_command_buffer;
-
 static uint32_t max_overlay_elements=4096;
-
 
 void test_timing(bool start,char * name)
 {
@@ -312,7 +304,7 @@ static void create_overlay_pipeline_layouts(void)
     cvm_vk_create_pipeline_layout(&overlay_pipeline_layout,&pipeline_create_info);
 }
 
-static void create_overlay_render_pass(VkFormat swapchain_format,VkSampleCountFlagBits sample_count)
+static void create_overlay_render_pass(void)
 {
     VkRenderPassCreateInfo create_info=
     {
@@ -324,7 +316,7 @@ static void create_overlay_render_pass(VkFormat swapchain_format,VkSampleCountFl
         {
             {
                 .flags=0,
-                .format=swapchain_format,
+                .format=cvm_vk_get_screen_format(),
                 .samples=VK_SAMPLE_COUNT_1_BIT,///sample_count not relevant for actual render target (swapchain image)
                 .loadOp=VK_ATTACHMENT_LOAD_OP_LOAD,
                 .storeOp=VK_ATTACHMENT_STORE_OP_STORE,
@@ -447,44 +439,14 @@ static void create_overlay_pipelines(void)
                 .sType=VK_STRUCTURE_TYPE_PIPELINE_INPUT_ASSEMBLY_STATE_CREATE_INFO,
                 .pNext=NULL,
                 .flags=0,
-                .topology=VK_PRIMITIVE_TOPOLOGY_TRIANGLE_STRIP,
+                .topology=VK_PRIMITIVE_TOPOLOGY_TRIANGLE_STRIP,///not the default
                 .primitiveRestartEnable=VK_FALSE
             }
         },
         .pTessellationState=NULL,///not needed (yet)
         .pViewportState=cvm_vk_get_default_viewport_state(),
-        .pRasterizationState=(VkPipelineRasterizationStateCreateInfo[1])
-        {
-            {
-                .sType=VK_STRUCTURE_TYPE_PIPELINE_RASTERIZATION_STATE_CREATE_INFO,
-                .pNext=NULL,
-                .flags=0,
-                .depthClampEnable=VK_FALSE,
-                .rasterizerDiscardEnable=VK_FALSE,
-                .polygonMode=VK_POLYGON_MODE_FILL,
-                .cullMode=VK_CULL_MODE_NONE,
-                .frontFace=VK_FRONT_FACE_CLOCKWISE,
-                .depthBiasEnable=VK_FALSE,
-                .depthBiasConstantFactor=0.0,
-                .depthBiasClamp=0.0,
-                .depthBiasSlopeFactor=0.0,
-                .lineWidth=1.0
-            }
-        },
-        .pMultisampleState=(VkPipelineMultisampleStateCreateInfo[1])
-        {
-            {
-                .sType=VK_STRUCTURE_TYPE_PIPELINE_MULTISAMPLE_STATE_CREATE_INFO,
-                .pNext=NULL,
-                .flags=0,
-                .rasterizationSamples=VK_SAMPLE_COUNT_1_BIT,
-                .sampleShadingEnable=VK_FALSE,
-                .minSampleShading=1.0,///this can be changed, only requires rebuild of pipelines
-                .pSampleMask=NULL,
-                .alphaToCoverageEnable=VK_FALSE,
-                .alphaToOneEnable=VK_FALSE
-            }
-        },
+        .pRasterizationState=cvm_vk_get_default_raster_state(false),
+        .pMultisampleState=cvm_vk_get_default_multisample_state(),
         .pDepthStencilState=NULL,
         .pColorBlendState=(VkPipelineColorBlendStateCreateInfo[1])
         {
@@ -497,16 +459,7 @@ static void create_overlay_pipelines(void)
                 .attachmentCount=1,///must equal colorAttachmentCount in subpass
                 .pAttachments= (VkPipelineColorBlendAttachmentState[])
                 {
-                    {
-                        .blendEnable=VK_TRUE,
-                        .srcColorBlendFactor=VK_BLEND_FACTOR_SRC_ALPHA,
-                        .dstColorBlendFactor=VK_BLEND_FACTOR_ONE_MINUS_SRC_ALPHA,
-                        .colorBlendOp=VK_BLEND_OP_ADD,
-                        .srcAlphaBlendFactor=VK_BLEND_FACTOR_ZERO,
-                        .dstAlphaBlendFactor=VK_BLEND_FACTOR_ZERO,
-                        .alphaBlendOp=VK_BLEND_OP_ADD,
-                        .colorWriteMask=VK_COLOR_COMPONENT_R_BIT|VK_COLOR_COMPONENT_G_BIT|VK_COLOR_COMPONENT_B_BIT|VK_COLOR_COMPONENT_A_BIT
-                    }
+                    cvm_vk_get_default_alpha_blend_state()
                 },
                 .blendConstants={0.0,0.0,0.0,0.0}
             }
@@ -629,7 +582,7 @@ static void create_overlay_images(uint32_t t_w,uint32_t t_h,uint32_t c_w,uint32_
 
 void initialise_overlay_render_data(void)
 {
-    create_overlay_render_pass(cvm_vk_get_screen_format(),VK_SAMPLE_COUNT_1_BIT);
+    create_overlay_render_pass();
 
     create_overlay_descriptor_set_layouts();
 
@@ -638,7 +591,7 @@ void initialise_overlay_render_data(void)
     cvm_vk_create_shader_stage_info(&overlay_vertex_stage,"cvm_shared/shaders/overlay_vert.spv",VK_SHADER_STAGE_VERTEX_BIT);
     cvm_vk_create_shader_stage_info(&overlay_fragment_stage,"cvm_shared/shaders/overlay_frag.spv",VK_SHADER_STAGE_FRAGMENT_BIT);
 
-    cvm_vk_create_module_data(&overlay_module_data,false,0,0);
+    cvm_vk_create_module_data(&overlay_module_data,0,0);
 
     cvm_vk_transient_buffer_create(&overlay_transient_buffer,VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT | VK_BUFFER_USAGE_VERTEX_BUFFER_BIT);
     cvm_vk_staging_buffer_create(&overlay_staging_buffer,VK_BUFFER_USAGE_TRANSFER_SRC_BIT);
@@ -648,14 +601,10 @@ void initialise_overlay_render_data(void)
     create_overlay_consistent_descriptors();
 
     cvm_overlay_open_freetype();
-
-//    overlay_upload_command_buffer=VK_NULL_HANDLE;
 }
 
 void terminate_overlay_render_data(void)
 {
-    //cvm_overlay_destroy_font(&overlay_test_font);
-
     cvm_overlay_close_freetype();
 
     cvm_vk_destroy_image_view(overlay_transparent_image_view);
@@ -682,7 +631,7 @@ void terminate_overlay_render_data(void)
     cvm_vk_destroy_descriptor_set_layout(overlay_descriptor_set_layout);
     cvm_vk_destroy_descriptor_set_layout(overlay_consistent_descriptor_set_layout);
 
-    cvm_vk_destroy_module_data(&overlay_module_data,false);
+    cvm_vk_destroy_module_data(&overlay_module_data);
 
     cvm_vk_transient_buffer_destroy(&overlay_transient_buffer);
     cvm_vk_staging_buffer_destroy(&overlay_staging_buffer);
@@ -739,19 +688,6 @@ float overlay_colours[OVERLAY_NUM_COLOURS_*4]=
     0.2,0.3,1.0,0.8,///OVERLAY_TEXT_COMPOSITION_COLOUR_0_
     0.4,0.6,0.9,0.8,///OVERLAY_TEXT_COLOUR_0
 };
-
-//float overlay_colours[OVERLAY_NUM_COLOURS_*4]=
-//{
-//    0.1,0.1,1.0,1.0,///OVERLAY_NO_COLOUR (error)
-//    0.05,0.05,0.05,0.9,///OVERLAY_BACKGROUND_COLOUR
-//    0.8,0.15,0.15,0.85,///OVERLAY_MAIN_COLOUR
-//    0.8,0.1,0.1,0.85,///OVERLAY_MAIN_ALTERNATE_COLOUR
-//    0.05,0.05,0.05,0.3,///OVERLAY_TEXT_HIGHLIGHT_COLOUR_
-//    0.3,0.05,0.05,0.9,///OVERLAY_TEXT_COMPOSITION_COLOUR_0_
-//    0.05,0.05,0.05,0.9,///OVERLAY_TEXT_COLOUR_0
-//};
-
-/// texel buffers for overlay colours are probably NOT the best solution as they would potentially require creating a buffer view every frame (if offset changes) or a least a buffer view per swapchain image
 
 cvm_vk_module_batch * overlay_render_frame(int screen_w,int screen_h,widget * menu_widget)
 {
@@ -824,7 +760,7 @@ cvm_vk_module_batch * overlay_render_frame(int screen_w,int screen_h,widget * me
             .pNext=NULL,
             .renderPass=overlay_render_pass,
             .framebuffer=overlay_framebuffers[swapchain_image_index],
-            .renderArea=cvm_vk_get_screen_rectangle(),
+            .renderArea=cvm_vk_get_default_render_area(),
             .clearValueCount=0,
             .pClearValues=NULL
         };

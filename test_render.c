@@ -45,7 +45,6 @@ static VkDescriptorSet * test_post_descriptor_sets;
 
 static VkPipelineLayout test_post_pipeline_layout;///relevant descriptors, share as much as possible
 static VkPipeline test_post_pipeline;
-static VkPipelineShaderStageCreateInfo test_post_vertex_stage;///could replace with generic post vertex shader
 static VkPipelineShaderStageCreateInfo test_post_fragment_stage_1;
 static VkPipelineShaderStageCreateInfo test_post_fragment_stage_2;
 static VkPipelineShaderStageCreateInfo test_post_fragment_stage_4;
@@ -293,33 +292,6 @@ static void update_and_write_test_post_descriptors(uint32_t swapchain_image,VkDe
     cvm_vk_write_descriptor_sets(writes,2);
 }
 
-static void update_and_write_test_post_uniforms(uint32_t swapchain_image,VkDeviceSize offset)
-{
-    VkWriteDescriptorSet write=(VkWriteDescriptorSet)
-    {
-        .sType=VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET,
-        .pNext=NULL,
-        .dstSet=test_post_descriptor_sets[swapchain_image],
-        .dstBinding=0,
-        .dstArrayElement=0,
-        .descriptorCount=1,
-        .descriptorType=VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER,
-        .pImageInfo=NULL,
-        .pBufferInfo=(VkDescriptorBufferInfo[1])
-        {
-            {
-                .buffer=test_transient_buffer.buffer,
-                .offset=offset,
-                .range=256///sizeof(matrix4f)+sizeof(float)*8
-                #warning set above
-            }
-        },
-        .pTexelBufferView=NULL
-    };
-
-    cvm_vk_write_descriptor_sets(&write,1);
-}
-
 static void create_test_pipeline_layouts(void)
 {
     VkPipelineLayoutCreateInfo geo_pipeline_create_info=(VkPipelineLayoutCreateInfo)
@@ -356,7 +328,7 @@ static void create_test_pipeline_layouts(void)
     cvm_vk_create_pipeline_layout(&test_post_pipeline_layout,&post_pipeline_create_info);
 }
 
-static void create_test_render_pass(VkFormat swapchain_format,VkSampleCountFlagBits sample_count)
+static void create_test_render_pass(VkSampleCountFlagBits sample_count)
 {
     if(cvm_vk_format_check_optimal_feature_support(VK_FORMAT_D32_SFLOAT_S8_UINT,VK_FORMAT_FEATURE_DEPTH_STENCIL_ATTACHMENT_BIT))test_depth_format=VK_FORMAT_D32_SFLOAT_S8_UINT;
     else test_depth_format=VK_FORMAT_D24_UNORM_S8_UINT;///one of these 2 is required format
@@ -364,20 +336,6 @@ static void create_test_render_pass(VkFormat swapchain_format,VkSampleCountFlagB
     test_colour_format=VK_FORMAT_A2B10G10R10_UNORM_PACK32;///required format
 
     test_normal_format=VK_FORMAT_A2B10G10R10_UNORM_PACK32;///required format, nome of the snorm formats are required, so probably just have to scale [0,1] to [-1,1]
-    ///could also try more exotic mapping variants that use RG, e.g. octahedral mapping, would give better precision...
-//    if(cvm_vk_format_check_optimal_feature_support(VK_FORMAT_A2R10G10B10_SNORM_PACK32,VK_FORMAT_FEATURE_COLOR_ATTACHMENT_BIT))test_normal_format=VK_FORMAT_A2R10G10B10_SNORM_PACK32;
-//    if(cvm_vk_format_check_optimal_feature_support(VK_FORMAT_A2B10G10R10_SNORM_PACK32,VK_FORMAT_FEATURE_COLOR_ATTACHMENT_BIT))test_normal_format=VK_FORMAT_A2B10G10R10_SNORM_PACK32;
-//    else if(cvm_vk_format_check_optimal_feature_support(VK_FORMAT_R8G8B8_SNORM,VK_FORMAT_FEATURE_COLOR_ATTACHMENT_BIT))test_normal_format=VK_FORMAT_R8G8B8_SNORM;
-//    else if(cvm_vk_format_check_optimal_feature_support(VK_FORMAT_B8G8R8_SNORM,VK_FORMAT_FEATURE_COLOR_ATTACHMENT_BIT))test_normal_format=VK_FORMAT_B8G8R8_SNORM;
-//    else if(cvm_vk_format_check_optimal_feature_support(VK_FORMAT_R8G8B8A8_SNORM,VK_FORMAT_FEATURE_COLOR_ATTACHMENT_BIT))test_normal_format=VK_FORMAT_R8G8B8A8_SNORM;
-//    else if(cvm_vk_format_check_optimal_feature_support(VK_FORMAT_B8G8R8A8_SNORM,VK_FORMAT_FEATURE_COLOR_ATTACHMENT_BIT))test_normal_format=VK_FORMAT_B8G8R8A8_SNORM;
-//    else if(cvm_vk_format_check_optimal_feature_support(VK_FORMAT_A8B8G8R8_SNORM_PACK32,VK_FORMAT_FEATURE_COLOR_ATTACHMENT_BIT))test_normal_format=VK_FORMAT_A8B8G8R8_SNORM_PACK32;
-//    else
-//    {
-//        fprintf(stderr,"NO SUPPORTED NORMAL FORMAT FOUND\n");
-//        exit(-1);
-//    }
-
 
     VkRenderPassCreateInfo create_info=(VkRenderPassCreateInfo)
     {
@@ -389,7 +347,7 @@ static void create_test_render_pass(VkFormat swapchain_format,VkSampleCountFlagB
         {
             {
                 .flags=0,
-                .format=swapchain_format,
+                .format=cvm_vk_get_screen_format(),
                 .samples=VK_SAMPLE_COUNT_1_BIT,///sample_count not relevant for actual render target (swapchain image)
                 .loadOp=VK_ATTACHMENT_LOAD_OP_DONT_CARE,
                 .storeOp=VK_ATTACHMENT_STORE_OP_STORE,
@@ -413,7 +371,6 @@ static void create_test_render_pass(VkFormat swapchain_format,VkSampleCountFlagB
                 .flags=0,
                 .format=test_colour_format,
                 .samples=sample_count,
-//                .loadOp=VK_ATTACHMENT_LOAD_OP_DONT_CARE,
                 .loadOp=VK_ATTACHMENT_LOAD_OP_CLEAR,
                 .storeOp=VK_ATTACHMENT_STORE_OP_DONT_CARE,
                 .stencilLoadOp=VK_ATTACHMENT_LOAD_OP_DONT_CARE,
@@ -425,7 +382,6 @@ static void create_test_render_pass(VkFormat swapchain_format,VkSampleCountFlagB
                 .flags=0,
                 .format=test_normal_format,
                 .samples=sample_count,
-//                .loadOp=VK_ATTACHMENT_LOAD_OP_DONT_CARE,
                 .loadOp=VK_ATTACHMENT_LOAD_OP_CLEAR,
                 .storeOp=VK_ATTACHMENT_STORE_OP_DONT_CARE,
                 .stencilLoadOp=VK_ATTACHMENT_LOAD_OP_DONT_CARE,
@@ -494,13 +450,6 @@ static void create_test_render_pass(VkFormat swapchain_format,VkSampleCountFlagB
                 },
                 .pResolveAttachments=NULL,
                 .pDepthStencilAttachment=NULL,
-//                .pDepthStencilAttachment=(VkAttachmentReference[1])
-//                {
-//                    {
-//                        .attachment=1,
-//                        .layout=VK_IMAGE_LAYOUT_DEPTH_STENCIL_READ_ONLY_OPTIMAL,
-//                    }
-//                },
                 .preserveAttachmentCount=0,
                 .pPreserveAttachments=NULL///this will be important in future!
             }
@@ -590,63 +539,11 @@ static void create_test_pipelines(VkSampleCountFlagBits sample_count,float min_s
             test_geo_vertex_stage,
             test_geo_fragment_stage
         },///could be null then provided by each actual pipeline type (for sets of pipelines only variant based on shader)
-        .pVertexInputState=(VkPipelineVertexInputStateCreateInfo[1])
-        {
-            {
-                .sType=VK_STRUCTURE_TYPE_PIPELINE_VERTEX_INPUT_STATE_CREATE_INFO,
-                .pNext=NULL,
-                .flags=0,
-                .vertexBindingDescriptionCount=1,
-                .pVertexBindingDescriptions= (VkVertexInputBindingDescription[1])
-                {
-                    {
-                        .binding=0,
-                        .stride=sizeof(float)*3,
-                        .inputRate=VK_VERTEX_INPUT_RATE_VERTEX
-                    }
-                },
-                .vertexAttributeDescriptionCount=1,
-                .pVertexAttributeDescriptions=(VkVertexInputAttributeDescription[1])
-                {
-                    {
-                        .location=0,
-                        .binding=0,
-                        .format=VK_FORMAT_R32G32B32_SFLOAT,
-                        .offset=0
-                    },
-                }
-            }
-        },
-        .pInputAssemblyState=(VkPipelineInputAssemblyStateCreateInfo[1])
-        {
-            {
-                .sType=VK_STRUCTURE_TYPE_PIPELINE_INPUT_ASSEMBLY_STATE_CREATE_INFO,
-                .pNext=NULL,
-                .flags=0,
-                .topology=VK_PRIMITIVE_TOPOLOGY_TRIANGLE_LIST,/// VK_PRIMITIVE_TOPOLOGY_TRIANGLE_STRIP
-                .primitiveRestartEnable=VK_FALSE
-            }
-        },
+        .pVertexInputState=cvm_vk_get_mesh_vertex_input_state(0),///position only
+        .pInputAssemblyState=cvm_vk_get_default_input_assembly_state(),
         .pTessellationState=NULL,///not needed (yet)
         .pViewportState=cvm_vk_get_default_viewport_state(),
-        .pRasterizationState=(VkPipelineRasterizationStateCreateInfo[1])
-        {
-            {
-                .sType=VK_STRUCTURE_TYPE_PIPELINE_RASTERIZATION_STATE_CREATE_INFO,
-                .pNext=NULL,
-                .flags=0,
-                .depthClampEnable=VK_FALSE,
-                .rasterizerDiscardEnable=VK_FALSE,
-                .polygonMode=VK_POLYGON_MODE_FILL,
-                .cullMode=VK_CULL_MODE_BACK_BIT,
-                .frontFace=VK_FRONT_FACE_COUNTER_CLOCKWISE,
-                .depthBiasEnable=VK_FALSE,
-                .depthBiasConstantFactor=0.0,
-                .depthBiasClamp=0.0,
-                .depthBiasSlopeFactor=0.0,
-                .lineWidth=1.0
-            }
-        },
+        .pRasterizationState=cvm_vk_get_default_raster_state(true),
         .pMultisampleState=(VkPipelineMultisampleStateCreateInfo[1])
         {
             {
@@ -661,41 +558,7 @@ static void create_test_pipelines(VkSampleCountFlagBits sample_count,float min_s
                 .alphaToOneEnable=VK_FALSE
             }
         },
-        .pDepthStencilState=(VkPipelineDepthStencilStateCreateInfo[1])
-        {
-            {
-                .sType=VK_STRUCTURE_TYPE_PIPELINE_DEPTH_STENCIL_STATE_CREATE_INFO,
-                .pNext=NULL,
-                .flags=0,
-                .depthTestEnable=VK_TRUE,
-                .depthWriteEnable=VK_TRUE,
-                .depthCompareOp=VK_COMPARE_OP_GREATER,
-                .depthBoundsTestEnable=VK_FALSE,
-                .stencilTestEnable=VK_TRUE,
-                .front=(VkStencilOpState)
-                {
-                    .failOp=VK_STENCIL_OP_KEEP,
-                    .passOp=VK_STENCIL_OP_REPLACE,
-                    .depthFailOp=VK_STENCIL_OP_KEEP,
-                    .compareOp=VK_COMPARE_OP_ALWAYS,
-                    .compareMask=0x00,
-                    .writeMask=0x80,
-                    .reference=0x80
-                },
-                .back=(VkStencilOpState)
-                {
-                    .failOp=VK_STENCIL_OP_KEEP,
-                    .passOp=VK_STENCIL_OP_KEEP,
-                    .depthFailOp=VK_STENCIL_OP_KEEP,
-                    .compareOp=VK_COMPARE_OP_NEVER,
-                    .compareMask=0x00,
-                    .writeMask=0x00,
-                    .reference=0x00
-                },
-                .minDepthBounds=0.0,
-                .maxDepthBounds=1.0,
-            }
-        },
+        .pDepthStencilState=cvm_vk_get_default_depth_stencil_state(),
         .pColorBlendState=(VkPipelineColorBlendStateCreateInfo[1])
         {
             {
@@ -707,26 +570,8 @@ static void create_test_pipelines(VkSampleCountFlagBits sample_count,float min_s
                 .attachmentCount=2,///must equal colorAttachmentCount in subpass
                 .pAttachments= (VkPipelineColorBlendAttachmentState[2])
                 {
-                    {
-                        .blendEnable=VK_FALSE,
-                        .srcColorBlendFactor=VK_BLEND_FACTOR_ONE,
-                        .dstColorBlendFactor=VK_BLEND_FACTOR_ZERO,
-                        .colorBlendOp=VK_BLEND_OP_ADD,
-                        .srcAlphaBlendFactor=VK_BLEND_FACTOR_ONE,
-                        .dstAlphaBlendFactor=VK_BLEND_FACTOR_ZERO,
-                        .alphaBlendOp=VK_BLEND_OP_ADD,
-                        .colorWriteMask=VK_COLOR_COMPONENT_R_BIT|VK_COLOR_COMPONENT_G_BIT|VK_COLOR_COMPONENT_B_BIT|VK_COLOR_COMPONENT_A_BIT
-                    },
-                    {
-                        .blendEnable=VK_FALSE,
-                        .srcColorBlendFactor=VK_BLEND_FACTOR_ONE,
-                        .dstColorBlendFactor=VK_BLEND_FACTOR_ZERO,
-                        .colorBlendOp=VK_BLEND_OP_ADD,
-                        .srcAlphaBlendFactor=VK_BLEND_FACTOR_ONE,
-                        .dstAlphaBlendFactor=VK_BLEND_FACTOR_ZERO,
-                        .alphaBlendOp=VK_BLEND_OP_ADD,
-                        .colorWriteMask=VK_COLOR_COMPONENT_R_BIT|VK_COLOR_COMPONENT_G_BIT|VK_COLOR_COMPONENT_B_BIT|VK_COLOR_COMPONENT_A_BIT
-                    }
+                    cvm_vk_get_default_no_blend_state(),
+                    cvm_vk_get_default_no_blend_state()
                 },
                 .blendConstants={0.0,0.0,0.0,0.0}
             }
@@ -761,100 +606,16 @@ static void create_test_pipelines(VkSampleCountFlagBits sample_count,float min_s
         .stageCount=2,
         .pStages=(VkPipelineShaderStageCreateInfo[2])
         {
-            test_post_vertex_stage,
+            cvm_vk_get_default_fullscreen_vertex_stage(),
             post_frag
         },///could be null then provided by each actual pipeline type (for sets of pipelines only variant based on shader)
-        .pVertexInputState=(VkPipelineVertexInputStateCreateInfo[1])
-        {
-            {
-                .sType=VK_STRUCTURE_TYPE_PIPELINE_VERTEX_INPUT_STATE_CREATE_INFO,
-                .pNext=NULL,
-                .flags=0,
-                .vertexBindingDescriptionCount=0,
-                .pVertexBindingDescriptions=NULL,
-                .vertexAttributeDescriptionCount=0,
-                .pVertexAttributeDescriptions=NULL
-            }
-        },
-        .pInputAssemblyState=(VkPipelineInputAssemblyStateCreateInfo[1])
-        {
-            {
-                .sType=VK_STRUCTURE_TYPE_PIPELINE_INPUT_ASSEMBLY_STATE_CREATE_INFO,
-                .pNext=NULL,
-                .flags=0,
-                .topology=VK_PRIMITIVE_TOPOLOGY_TRIANGLE_LIST,
-                .primitiveRestartEnable=VK_FALSE
-            }
-        },
+        .pVertexInputState=cvm_vk_get_empty_vertex_input_state(),
+        .pInputAssemblyState=cvm_vk_get_default_input_assembly_state(),
         .pTessellationState=NULL,///not needed (yet)
         .pViewportState=cvm_vk_get_default_viewport_state(),
-        .pRasterizationState=(VkPipelineRasterizationStateCreateInfo[1])
-        {
-            {
-                .sType=VK_STRUCTURE_TYPE_PIPELINE_RASTERIZATION_STATE_CREATE_INFO,
-                .pNext=NULL,
-                .flags=0,
-                .depthClampEnable=VK_FALSE,
-                .rasterizerDiscardEnable=VK_FALSE,
-                .polygonMode=VK_POLYGON_MODE_FILL,
-                .cullMode=VK_CULL_MODE_BACK_BIT,
-                .frontFace=VK_FRONT_FACE_COUNTER_CLOCKWISE,
-                .depthBiasEnable=VK_FALSE,
-                .depthBiasConstantFactor=0.0,
-                .depthBiasClamp=0.0,
-                .depthBiasSlopeFactor=0.0,
-                .lineWidth=1.0
-            }
-        },
-        .pMultisampleState=(VkPipelineMultisampleStateCreateInfo[1])
-        {
-            {
-                .sType=VK_STRUCTURE_TYPE_PIPELINE_MULTISAMPLE_STATE_CREATE_INFO,
-                .pNext=NULL,
-                .flags=0,
-                .rasterizationSamples=VK_SAMPLE_COUNT_1_BIT,///this is the output pass, writes to swapchain which has 1 sample
-                .sampleShadingEnable=VK_FALSE,
-                .minSampleShading=min_sample_shading,///this can be changed, only requires rebuild of pipelines, possibly set here (in post processing) to be 1.0 (force full shading)
-                .pSampleMask=NULL,
-                .alphaToCoverageEnable=VK_FALSE,
-                .alphaToOneEnable=VK_FALSE
-            }
-        },
-        .pDepthStencilState=(VkPipelineDepthStencilStateCreateInfo[1])
-        {
-            {
-                .sType=VK_STRUCTURE_TYPE_PIPELINE_DEPTH_STENCIL_STATE_CREATE_INFO,
-                .pNext=NULL,
-                .flags=0,
-                .depthTestEnable=VK_FALSE,
-                .depthWriteEnable=VK_FALSE,
-                .depthCompareOp=VK_COMPARE_OP_ALWAYS,
-                .depthBoundsTestEnable=VK_FALSE,
-                .stencilTestEnable=VK_FALSE,//VK_TRUE, VK_FALSE
-                .front=(VkStencilOpState)
-                {
-                    .failOp=VK_STENCIL_OP_KEEP,
-                    .passOp=VK_STENCIL_OP_KEEP,
-                    .depthFailOp=VK_STENCIL_OP_KEEP,
-                    .compareOp=VK_COMPARE_OP_EQUAL,
-                    .compareMask=0x80,
-                    .writeMask=0x00,
-                    .reference=0x80
-                },
-                .back=(VkStencilOpState)
-                {
-                    .failOp=VK_STENCIL_OP_KEEP,
-                    .passOp=VK_STENCIL_OP_KEEP,
-                    .depthFailOp=VK_STENCIL_OP_KEEP,
-                    .compareOp=VK_COMPARE_OP_NEVER,
-                    .compareMask=0x00,
-                    .writeMask=0x00,
-                    .reference=0x00
-                },
-                .minDepthBounds=0.0,
-                .maxDepthBounds=1.0,
-            }
-        },
+        .pRasterizationState=cvm_vk_get_default_raster_state(false),
+        .pMultisampleState=cvm_vk_get_default_multisample_state(),
+        .pDepthStencilState=NULL,
         .pColorBlendState=(VkPipelineColorBlendStateCreateInfo[1])
         {
             {
@@ -866,16 +627,7 @@ static void create_test_pipelines(VkSampleCountFlagBits sample_count,float min_s
                 .attachmentCount=1,///must equal colorAttachmentCount in subpass
                 .pAttachments= (VkPipelineColorBlendAttachmentState[1])
                 {
-                    {
-                        .blendEnable=VK_FALSE,
-                        .srcColorBlendFactor=VK_BLEND_FACTOR_ONE,//VK_BLEND_FACTOR_SRC_ALPHA,
-                        .dstColorBlendFactor=VK_BLEND_FACTOR_ZERO,//VK_BLEND_FACTOR_ONE_MINUS_SRC_ALPHA
-                        .colorBlendOp=VK_BLEND_OP_ADD,
-                        .srcAlphaBlendFactor=VK_BLEND_FACTOR_ONE,//VK_BLEND_FACTOR_ZERO // both ZERO as alpha is ignored?
-                        .dstAlphaBlendFactor=VK_BLEND_FACTOR_ZERO,//VK_BLEND_FACTOR_ONE
-                        .alphaBlendOp=VK_BLEND_OP_ADD,
-                        .colorWriteMask=VK_COLOR_COMPONENT_R_BIT|VK_COLOR_COMPONENT_G_BIT|VK_COLOR_COMPONENT_B_BIT|VK_COLOR_COMPONENT_A_BIT
-                    }
+                    cvm_vk_get_default_no_blend_state()
                 },
                 .blendConstants={0.0,0.0,0.0,0.0}
             }
@@ -943,12 +695,11 @@ void initialise_test_render_data()
     cvm_vk_create_shader_stage_info(&test_geo_vertex_stage,"cvm_shared/shaders/test_geo_vert.spv",VK_SHADER_STAGE_VERTEX_BIT);
     cvm_vk_create_shader_stage_info(&test_geo_fragment_stage,"cvm_shared/shaders/test_geo_frag.spv",VK_SHADER_STAGE_FRAGMENT_BIT);
 
-    cvm_vk_create_shader_stage_info(&test_post_vertex_stage,"cvm_shared/shaders/test_post_vert.spv",VK_SHADER_STAGE_VERTEX_BIT);
     cvm_vk_create_shader_stage_info(&test_post_fragment_stage_1,"cvm_shared/shaders/test_post_frag_1.spv",VK_SHADER_STAGE_FRAGMENT_BIT);
     cvm_vk_create_shader_stage_info(&test_post_fragment_stage_2,"cvm_shared/shaders/test_post_frag_2.spv",VK_SHADER_STAGE_FRAGMENT_BIT);
     cvm_vk_create_shader_stage_info(&test_post_fragment_stage_4,"cvm_shared/shaders/test_post_frag_4.spv",VK_SHADER_STAGE_FRAGMENT_BIT);
 
-    cvm_vk_create_module_data(&test_module_data,false,0,2);
+    cvm_vk_create_module_data(&test_module_data,0,2);
 
     cvm_vk_managed_buffer_create(&test_managed_buffer,65536,10,16,VK_BUFFER_USAGE_VERTEX_BUFFER_BIT|VK_BUFFER_USAGE_INDEX_BUFFER_BIT|VK_BUFFER_USAGE_TRANSFER_DST_BIT,false,false);
     ///VK_BUFFER_USAGE_TRANSFER_DST_BIT only necessary if not UMA system, but is it even possible to set this before finding that out??
@@ -972,7 +723,6 @@ void terminate_test_render_data()
     cvm_vk_destroy_shader_stage_info(&test_geo_vertex_stage);
     cvm_vk_destroy_shader_stage_info(&test_geo_fragment_stage);
 
-    cvm_vk_destroy_shader_stage_info(&test_post_vertex_stage);
     cvm_vk_destroy_shader_stage_info(&test_post_fragment_stage_1);
     cvm_vk_destroy_shader_stage_info(&test_post_fragment_stage_2);
     cvm_vk_destroy_shader_stage_info(&test_post_fragment_stage_4);
@@ -983,7 +733,7 @@ void terminate_test_render_data()
     cvm_vk_destroy_descriptor_set_layout(test_geo_descriptor_set_layout);
     cvm_vk_destroy_descriptor_set_layout(test_post_descriptor_set_layout);
 
-    cvm_vk_destroy_module_data(&test_module_data,false);
+    cvm_vk_destroy_module_data(&test_module_data);
 
     cvm_managed_mesh_destroy(&test_stellated_octahedron_mesh);
     cvm_managed_mesh_destroy(&test_stub_stellated_octahedron_mesh);
@@ -1002,9 +752,9 @@ void initialise_test_swapchain_dependencies(VkSampleCountFlagBits sample_count)
 {
     uint32_t swapchain_image_count=cvm_vk_get_swapchain_image_count();
 
-    create_test_render_pass(cvm_vk_get_screen_format(),sample_count);
+    create_test_render_pass(sample_count);
 
-    create_test_pipelines(sample_count,0.5);
+    create_test_pipelines(sample_count,0.0);
 
     create_test_framebuffer_images(sample_count);
 
@@ -1217,7 +967,7 @@ cvm_vk_module_batch * test_render_frame(cvm_camera * c)
             .pNext=NULL,
             .renderPass=test_render_pass,
             .framebuffer=test_framebuffers[test_current_framebuffer_index][swapchain_image_index],
-            .renderArea=cvm_vk_get_screen_rectangle(),
+            .renderArea=cvm_vk_get_default_render_area(),
             .clearValueCount=4,
             .pClearValues=clear_values
         };

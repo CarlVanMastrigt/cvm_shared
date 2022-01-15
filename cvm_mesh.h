@@ -45,7 +45,7 @@ cvm_mesh;
 void cvm_mesh_load_file_header(FILE * f,cvm_mesh * mesh);///separate out metadata contents relevant to this operation such that complete mesh, tied to every other part of system, isn't necessary
 void cvm_mesh_load_file_body(FILE * f,cvm_mesh * mesh,uint16_t * indices,uint16_t * adjacency,uint16_t * materials,void * vertex_data);
 
-size_t cvm_mesh_get_vertex_data_size(cvm_mesh * mesh);
+size_t cvm_mesh_get_vertex_data_size(uint16_t flags);
 
 typedef struct cvm_managed_mesh
 {
@@ -85,6 +85,14 @@ void cvm_managed_mesh_relinquish(cvm_managed_mesh * mm);
 void cvm_managed_mesh_render(cvm_managed_mesh * mm,VkCommandBuffer graphics_cb,uint32_t instance_count,uint32_t instance_offset);///assumes managed buffer used in creation was bound to appropriate points
 
 
+
+typedef struct cvm_mesh_data_pos
+{
+    float pos[3];
+}
+cvm_mesh_data_pos;
+
+static inline VkFormat cvm_mesh_get_pos_format(void){return VK_FORMAT_R32G32B32_SFLOAT;}
 
 
 #endif

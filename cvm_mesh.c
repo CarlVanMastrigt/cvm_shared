@@ -304,8 +304,13 @@ int cvm_mesh_generate_file_from_objs(const char * name,uint16_t flags)
     return 0;
 }
 
-size_t cvm_mesh_get_vertex_data_size(cvm_mesh * mesh)
+size_t cvm_mesh_get_vertex_data_size(uint16_t flags)
 {
+    if(flags & (CVM_MESH_VERTEX_NORMALS|CVM_MESH_TEXTURE_COORDS))
+    {
+        fprintf(stderr,"MESH NORMALS AND TEX-COORDS NYI\n");
+        exit(-1);
+    }
     ///will (conditionally) change when texture coordinates and normals are implemented
     return 3*sizeof(float);
 }
@@ -339,10 +344,12 @@ void cvm_mesh_load_file_body(FILE * f,cvm_mesh * mesh,uint16_t * indices,uint16_
     fread(indices,sizeof(uint16_t),mesh->face_count*3,f);
     if(mesh->flags&CVM_MESH_ADGACENCY)fread(adjacency,sizeof(uint16_t),mesh->face_count*6,f);
     if(mesh->flags&CVM_MESH_PER_FACE_MATERIAL)fread(materials,sizeof(uint16_t),mesh->face_count,f);
-    fread(vertex_data,cvm_mesh_get_vertex_data_size(mesh),mesh->vertex_count,f);
+    fread(vertex_data,cvm_mesh_get_vertex_data_size(mesh->flags),mesh->vertex_count,f);
 }
 
 #warning trying to load a mesh with different (fewer) flags set to those it was created with doesnt work, will try and read some conditional data as the incorrect type!
+/// possible solution could involve fseek when data isn't desired, but this wouldn't solve the problem of vertex data which is tightly packed together
+/// would need to read data to temporary buffer and "deinterlace" or actually separate out the different vertex steams
 
 bool cvm_managed_mesh_load(cvm_managed_mesh * mm)
 {
@@ -367,16 +374,15 @@ bool cvm_managed_mesh_load(cvm_managed_mesh * mm)
 
     cvm_mesh_load_file_header(f,&mm->data);
 
-    #warning perhaps have way to just take all relevant flags from the mesh? (special mesh flag?)
-    if((mm->data.flags&desired_flags)!=desired_flags)
+    if(mm->data.flags!=desired_flags)
     {
-        fprintf(stderr,"ATTEMPTED TO LOAD MESH FILE WITH FLAGS IT WAS NOT CREATED WITH\n");
+        fprintf(stderr,"ATTEMPTED TO LOAD MESH FILE WITH FLAGS DIFFERENT TO THOSE IT WAS CREATED WITH\n");
         exit(-1);
     }
 
     mm->data.flags=desired_flags;
 
-    vertex_data_size=cvm_mesh_get_vertex_data_size(&mm->data);
+    vertex_data_size=cvm_mesh_get_vertex_data_size(desired_flags);
 
     size=mm->data.face_count*3*sizeof(uint16_t);
     if(desired_flags&CVM_MESH_ADGACENCY)size+=mm->data.face_count*6*sizeof(uint16_t);
