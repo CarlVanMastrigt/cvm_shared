@@ -137,6 +137,8 @@ static bool check_physical_device_appropriate(bool dedicated_gpu_required,bool s
 
     printf("testing GPU : %s\n",cvm_vk_device_properties.deviceName);
 
+    printf("standard sample locations: %d\n",cvm_vk_device_properties.limits.standardSampleLocations);
+
     vkGetPhysicalDeviceFeatures(cvm_vk_physical_device,&cvm_vk_device_features);
 
     #warning test for required features. need comparitor struct to do this?   enable all by default for time being?
@@ -754,8 +756,11 @@ void cvm_vk_present_current_frame(cvm_vk_module_batch ** batches, uint32_t work_
 {
     cvm_vk_swapchain_image_acquisition_data * acquired_image;
     cvm_vk_swapchain_image_present_data * presenting_image;
+
+    VkSemaphore wait_semaphores[4];
+    VkPipelineStageFlags wait_stage_masks[4];
+    VkSemaphore signal_semaphores[4];
     ///add extra ones if async/sync compute can be waited upon as well?
-    VkPipelineStageFlags wait_stage_flags;
     uint32_t i;
 
     acquired_image=cvm_vk_acquired_images+cvm_vk_current_acquired_image_index;
@@ -777,16 +782,32 @@ void cvm_vk_present_current_frame(cvm_vk_module_batch ** batches, uint32_t work_
         .sType=VK_STRUCTURE_TYPE_SUBMIT_INFO,
         .pNext=NULL,
         .waitSemaphoreCount=0,
-        .pWaitSemaphores=NULL,
-        .pWaitDstStageMask=&wait_stage_flags,
+        .pWaitSemaphores=wait_semaphores,
+        .pWaitDstStageMask=wait_stage_masks,
         .commandBufferCount=1,///always just 1
         .pCommandBuffers= NULL,///not set yet
         .signalSemaphoreCount=0,///only changes to 1 for last module, 0 otherwise
-        .pSignalSemaphores=NULL
+        .pSignalSemaphores=signal_semaphores
     };
 
     for(i=0;i<work_batch_count;i++)
     {
+        submit_info.waitSemaphoreCount=0;
+        submit_info.signalSemaphoreCount=0;
+
+        submit_info.pCommandBuffers=&batches[i]->transfer_pcb;
+
+        CVM_VK_CHECK(vkQueueSubmit(cvm_vk_transfer_queue,1,&submit_info,VK_NULL_HANDLE));
+
+
+
+        #warning need appropriate transfer-graphics semaphore here when they are potentially from different queue families (wait on transfer from previous frame specifically)
+
+        ///transfer signals and graphics waits
+
+        ///graphics
+        submit_info.waitSemaphoreCount=0;
+        submit_info.signalSemaphoreCount=0;
         ///semaphores in between submits in same queue probably arent necessary, can likely rely on external subpass dependencies, this needs looking into
         /// ^yes this looks to be the case
 
@@ -794,31 +815,30 @@ void cvm_vk_present_current_frame(cvm_vk_module_batch ** batches, uint32_t work_
 
         if(i==0)///wait on image acquisition
         {
-            submit_info.waitSemaphoreCount=1;
-            submit_info.pWaitSemaphores=&acquired_image->acquire_semaphore;
+            wait_semaphores[submit_info.waitSemaphoreCount]=acquired_image->acquire_semaphore;
+            wait_stage_masks[submit_info.waitSemaphoreCount]=VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT;///is this correct?
 
-            wait_stage_flags=VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT;///is this correct?
+            submit_info.waitSemaphoreCount++;
         }
-        else
-        {
-            submit_info.waitSemaphoreCount=0;
-            submit_info.pWaitSemaphores=NULL;
-        }
+
 
         ///may also want to wait on async compute? (if so, reimplement allowing multiple semaphore waits)
+
+        /// need to wait on transfer from previous frame with semaphore when in different queue families
 
         submit_info.pCommandBuffers=&batches[i]->graphics_pcb;
 
         if((i==(work_batch_count-1))&&(cvm_vk_present_queue_family==cvm_vk_graphics_queue_family))///no queue ownership transfer required, signal present semaphore as this is the last frame
         {
-            submit_info.signalSemaphoreCount=1;
-            submit_info.pSignalSemaphores=&presenting_image->present_semaphore;
+            signal_semaphores[submit_info.signalSemaphoreCount]=presenting_image->present_semaphore;
+
+            submit_info.signalSemaphoreCount++;
 
             CVM_VK_CHECK(vkQueueSubmit(cvm_vk_graphics_queue,1,&submit_info,presenting_image->completion_fence));
         }
         else
         {
-            CVM_VK_CHECK(vkQueueSubmit(cvm_vk_graphics_queue,1,&submit_info,VK_NULL_HANDLE));
+            CVM_VK_CHECK(vkQueueSubmit(cvm_vk_graphics_queue,1,&submit_info,VK_NULL_HANDLE));//
         }
     }
 
@@ -826,19 +846,21 @@ void cvm_vk_present_current_frame(cvm_vk_module_batch ** batches, uint32_t work_
     {
         ///relinquish
         submit_info.waitSemaphoreCount=0;
-        submit_info.pWaitSemaphores=NULL;
+        //submit_info.pWaitSemaphores=NULL;
         submit_info.signalSemaphoreCount=1;
-        submit_info.pSignalSemaphores=&presenting_image->graphics_relinquish_semaphore;
+        signal_semaphores[0]=presenting_image->graphics_relinquish_semaphore;
         submit_info.pCommandBuffers=&presenting_image->graphics_relinquish_command_buffer;
+
         CVM_VK_CHECK(vkQueueSubmit(cvm_vk_graphics_queue,1,&submit_info,VK_NULL_HANDLE));
 
         ///acquire
-        wait_stage_flags=VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT;
         submit_info.waitSemaphoreCount=1;
-        submit_info.pWaitSemaphores=&presenting_image->graphics_relinquish_semaphore;
+        wait_semaphores[0]=presenting_image->graphics_relinquish_semaphore;
+        wait_stage_masks[0]=VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT;
         submit_info.signalSemaphoreCount=1;
-        submit_info.pSignalSemaphores=&presenting_image->present_semaphore;
+        signal_semaphores[0]=presenting_image->present_semaphore;
         submit_info.pCommandBuffers=&presenting_image->present_acquire_command_buffer;
+
         CVM_VK_CHECK(vkQueueSubmit(cvm_vk_present_queue,1,&submit_info,presenting_image->completion_fence));
     }
 

@@ -473,7 +473,9 @@ void cvm_managed_mesh_relinquish(cvm_managed_mesh * mm)
     }
 }
 
-void cvm_managed_mesh_render(cvm_managed_mesh * mm,VkCommandBuffer graphics_cb,uint32_t instance_count,uint32_t instance_offset)///assumes managed buffer used in creation was bound to appropriate points
+/// assumes managed buffer used in creation was bound to appropriate points
+/// assumes staging buffer used by managed buffer used in mesh creation is currently active (between begin and end)
+void cvm_managed_mesh_render(cvm_managed_mesh * mm,VkCommandBuffer graphics_cb,uint32_t instance_count,uint32_t instance_offset)
 {
     if(!mm->loaded)///should go first b/c can be used immediately on UMA systems
     {

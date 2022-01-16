@@ -126,7 +126,7 @@ cvm_vk_image_atlas_tile * cvm_vk_acquire_image_atlas_tile_with_staging(cvm_vk_im
 void * cvm_vk_acquire_staging_for_image_atlas_tile(cvm_vk_image_atlas * ia,cvm_vk_image_atlas_tile * t,uint32_t width,uint32_t height);
 
 void cvm_vk_image_atlas_submit_all_pending_copy_actions(cvm_vk_image_atlas * ia,VkCommandBuffer transfer_cb);
-/// transfer_cb MUST be submitted to queue from same queue family to where the graphics commands that will use the image atlas will be used
+/// transfer_cb MUST be submitted to queue from same queue family to where the graphics commands that will use the image atlas will be used, assuming usage paradigm is correct this can even be the graphics queue itself
 
 #endif
 
