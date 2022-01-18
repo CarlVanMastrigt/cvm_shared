@@ -35,6 +35,7 @@ void cvm_vk_destroy_swapchain_dependednt_defaults(void);
 
 
 VkRect2D cvm_vk_get_default_render_area(void);
+VkExtent3D cvm_vk_get_default_framebuffer_extent(void);
 
 VkPipelineInputAssemblyStateCreateInfo * cvm_vk_get_default_input_assembly_state(void);
 VkPipelineViewportStateCreateInfo * cvm_vk_get_default_viewport_state(void);

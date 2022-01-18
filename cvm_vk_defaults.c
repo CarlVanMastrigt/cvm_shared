@@ -21,6 +21,7 @@ along with cvm_shared.  If not, see <https://www.gnu.org/licenses/>.
 
 static VkRect2D cvm_vk_default_screen_rectangle;
 static VkViewport cvm_vk_default_viewport;
+static VkExtent3D cvm_vk_default_framebuffer_extent;
 
 static VkPipelineInputAssemblyStateCreateInfo cvm_vk_default_input_assembly_state;
 static VkPipelineViewportStateCreateInfo cvm_vk_default_viewport_state;
@@ -278,6 +279,13 @@ void cvm_vk_create_swapchain_dependednt_defaults(uint32_t width,uint32_t height)
         .maxDepth=1.0
     };
 
+    cvm_vk_default_framebuffer_extent=(VkExtent3D)
+    {
+        .width=width,
+        .height=height,
+        .depth=1
+    };
+
     cvm_vk_default_viewport_state=(VkPipelineViewportStateCreateInfo)
     {
         .sType=VK_STRUCTURE_TYPE_PIPELINE_VIEWPORT_STATE_CREATE_INFO,
@@ -297,12 +305,7 @@ void cvm_vk_create_swapchain_dependednt_defaults(uint32_t width,uint32_t height)
         .flags=0,
         .imageType=VK_IMAGE_TYPE_2D,
         .format=VK_FORMAT_UNDEFINED,///set later
-        .extent=(VkExtent3D)
-        {
-            .width=width,
-            .height=height,
-            .depth=1
-        },
+        .extent=cvm_vk_default_framebuffer_extent,
         .mipLevels=1,
         .arrayLayers=0,///set later
         .samples=0,///set later
@@ -360,6 +363,11 @@ void cvm_vk_destroy_swapchain_dependednt_defaults(void)
 VkRect2D cvm_vk_get_default_render_area(void)
 {
     return cvm_vk_default_screen_rectangle;
+}
+
+VkExtent3D cvm_vk_get_default_framebuffer_extent(void)
+{
+    return cvm_vk_default_framebuffer_extent;
 }
 
 VkPipelineInputAssemblyStateCreateInfo * cvm_vk_get_default_input_assembly_state(void)

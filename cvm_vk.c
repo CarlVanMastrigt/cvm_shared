@@ -650,6 +650,10 @@ VkImageView cvm_vk_get_swapchain_image_view(uint32_t index)
     return cvm_vk_presenting_images[index].image_view;
 }
 
+VkImage cvm_vk_get_swapchain_image(uint32_t index)
+{
+    return cvm_vk_presenting_images[index].image;
+}
 
 
 void cvm_vk_initialise(SDL_Window * window,uint32_t min_swapchain_images,uint32_t extra_swapchain_images,bool sync_compute_required)

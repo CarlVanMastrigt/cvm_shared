@@ -176,6 +176,7 @@ VkPhysicalDeviceFeatures * cvm_vk_get_device_features(void);
 VkFormat cvm_vk_get_screen_format(void);///can remove?
 uint32_t cvm_vk_get_swapchain_image_count(void);
 VkImageView cvm_vk_get_swapchain_image_view(uint32_t index);
+VkImage cvm_vk_get_swapchain_image(uint32_t index);
 
 
 
