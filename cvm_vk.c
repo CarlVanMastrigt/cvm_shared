@@ -407,7 +407,7 @@ void cvm_vk_create_swapchain(void)
         .imageColorSpace=cvm_vk_surface_format.colorSpace,
         .imageExtent=surface_capabilities.currentExtent,
         .imageArrayLayers=1,
-        .imageUsage=VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT,
+        .imageUsage=VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT|VK_IMAGE_USAGE_TRANSFER_DST_BIT,
         .imageSharingMode=VK_SHARING_MODE_EXCLUSIVE,
         .queueFamilyIndexCount=0,
         .pQueueFamilyIndices=NULL,

@@ -55,16 +55,16 @@ static uint32_t test_current_framebuffer_index;
 static VkDeviceMemory test_framebuffer_image_memory;
 
 static VkFormat test_depth_format;
-static VkImage test_framebuffer_depth;
+static VkImage test_framebuffer_depth_images[TEST_FRAMEBUFFER_CYCLES];
 static VkImageView test_framebuffer_depth_stencil_views[TEST_FRAMEBUFFER_CYCLES];///views of single array slice from image
 static VkImageView test_framebuffer_depth_only_views[TEST_FRAMEBUFFER_CYCLES];///views of single array slice from image
 
 static VkFormat test_colour_format;
-static VkImage test_framebuffer_colour;
+static VkImage test_framebuffer_colour_images[TEST_FRAMEBUFFER_CYCLES];
 static VkImageView test_framebuffer_colour_views[TEST_FRAMEBUFFER_CYCLES];///views of single array slice from image
 
 static VkFormat test_normal_format;
-static VkImage test_framebuffer_normal;
+static VkImage test_framebuffer_normal_images[TEST_FRAMEBUFFER_CYCLES];
 static VkImageView test_framebuffer_normal_views[TEST_FRAMEBUFFER_CYCLES];///views of single array slice from image
 
 
@@ -271,7 +271,7 @@ static void update_and_write_test_post_descriptors(uint32_t swapchain_image,VkDe
                 {
                     .sampler=VK_NULL_HANDLE,
                     .imageView=test_framebuffer_depth_only_views[test_current_framebuffer_index],
-                    .imageLayout=VK_IMAGE_LAYOUT_DEPTH_STENCIL_READ_ONLY_OPTIMAL
+                    .imageLayout=VK_IMAGE_LAYOUT_DEPTH_STENCIL_READ_ONLY_OPTIMAL///HMMMM, actually using depth only
                 },
                 {
                     .sampler=VK_NULL_HANDLE,
@@ -429,7 +429,7 @@ static void create_test_render_pass(VkSampleCountFlagBits sample_count)
                 {
                     {
                         .attachment=1,
-                        .layout=VK_IMAGE_LAYOUT_DEPTH_STENCIL_READ_ONLY_OPTIMAL,
+                        .layout=VK_IMAGE_LAYOUT_DEPTH_STENCIL_READ_ONLY_OPTIMAL,///HMMMM, actually using depth only
                     },
                     {
                         .attachment=2,
@@ -673,17 +673,20 @@ static void create_test_framebuffers(uint32_t swapchain_image_count)
 /// unless we allocate at max and alter with image views... investigate potential of this, use max size, let user set max_size from startup options?
 static void create_test_framebuffer_images(VkSampleCountFlagBits sample_count)
 {
-    cvm_vk_create_default_framebuffer_image(&test_framebuffer_depth,test_depth_format,TEST_FRAMEBUFFER_CYCLES,sample_count,VK_IMAGE_USAGE_DEPTH_STENCIL_ATTACHMENT_BIT|VK_IMAGE_USAGE_INPUT_ATTACHMENT_BIT);
-    cvm_vk_create_default_framebuffer_image(&test_framebuffer_colour,test_colour_format,TEST_FRAMEBUFFER_CYCLES,sample_count,VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT|VK_IMAGE_USAGE_INPUT_ATTACHMENT_BIT);
-    cvm_vk_create_default_framebuffer_image(&test_framebuffer_normal,test_normal_format,TEST_FRAMEBUFFER_CYCLES,sample_count,VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT|VK_IMAGE_USAGE_INPUT_ATTACHMENT_BIT);
+    cvm_vk_create_default_framebuffer_images(test_framebuffer_depth_images,test_depth_format,TEST_FRAMEBUFFER_CYCLES,sample_count,VK_IMAGE_USAGE_DEPTH_STENCIL_ATTACHMENT_BIT|VK_IMAGE_USAGE_INPUT_ATTACHMENT_BIT);
+    cvm_vk_create_default_framebuffer_images(test_framebuffer_colour_images,test_colour_format,TEST_FRAMEBUFFER_CYCLES,sample_count,VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT|VK_IMAGE_USAGE_INPUT_ATTACHMENT_BIT);
+    cvm_vk_create_default_framebuffer_images(test_framebuffer_normal_images,test_normal_format,TEST_FRAMEBUFFER_CYCLES,sample_count,VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT|VK_IMAGE_USAGE_INPUT_ATTACHMENT_BIT);
 
-    VkImage images[3]={test_framebuffer_depth,test_framebuffer_colour,test_framebuffer_normal};
+    VkImage images[6]={
+        test_framebuffer_depth_images[0],test_framebuffer_depth_images[1],
+        test_framebuffer_colour_images[0],test_framebuffer_colour_images[1],
+        test_framebuffer_normal_images[0],test_framebuffer_normal_images[1]};
     cvm_vk_create_and_bind_memory_for_images(&test_framebuffer_image_memory,images,3);
 
-    cvm_vk_create_default_framebuffer_image_views(test_framebuffer_depth_stencil_views,test_framebuffer_depth,test_depth_format,VK_IMAGE_ASPECT_DEPTH_BIT|VK_IMAGE_ASPECT_STENCIL_BIT,TEST_FRAMEBUFFER_CYCLES);
-    cvm_vk_create_default_framebuffer_image_views(test_framebuffer_depth_only_views,test_framebuffer_depth,test_depth_format,VK_IMAGE_ASPECT_DEPTH_BIT,TEST_FRAMEBUFFER_CYCLES);
-    cvm_vk_create_default_framebuffer_image_views(test_framebuffer_colour_views,test_framebuffer_colour,test_colour_format,VK_IMAGE_ASPECT_COLOR_BIT,TEST_FRAMEBUFFER_CYCLES);
-    cvm_vk_create_default_framebuffer_image_views(test_framebuffer_normal_views,test_framebuffer_normal,test_normal_format,VK_IMAGE_ASPECT_COLOR_BIT,TEST_FRAMEBUFFER_CYCLES);
+    cvm_vk_create_default_framebuffer_image_views(test_framebuffer_depth_stencil_views,test_framebuffer_depth_images,test_depth_format,VK_IMAGE_ASPECT_DEPTH_BIT|VK_IMAGE_ASPECT_STENCIL_BIT,TEST_FRAMEBUFFER_CYCLES);
+    cvm_vk_create_default_framebuffer_image_views(test_framebuffer_depth_only_views,test_framebuffer_depth_images,test_depth_format,VK_IMAGE_ASPECT_DEPTH_BIT,TEST_FRAMEBUFFER_CYCLES);
+    cvm_vk_create_default_framebuffer_image_views(test_framebuffer_colour_views,test_framebuffer_colour_images,test_colour_format,VK_IMAGE_ASPECT_COLOR_BIT,TEST_FRAMEBUFFER_CYCLES);
+    cvm_vk_create_default_framebuffer_image_views(test_framebuffer_normal_views,test_framebuffer_normal_images,test_normal_format,VK_IMAGE_ASPECT_COLOR_BIT,TEST_FRAMEBUFFER_CYCLES);
 }
 
 void initialise_test_render_data()
@@ -791,11 +794,11 @@ void terminate_test_swapchain_dependencies()
         cvm_vk_destroy_image_view(test_framebuffer_depth_only_views[i]);
         cvm_vk_destroy_image_view(test_framebuffer_colour_views[i]);
         cvm_vk_destroy_image_view(test_framebuffer_normal_views[i]);
-    }
 
-    cvm_vk_destroy_image(test_framebuffer_depth);
-    cvm_vk_destroy_image(test_framebuffer_colour);
-    cvm_vk_destroy_image(test_framebuffer_normal);
+        cvm_vk_destroy_image(test_framebuffer_depth_images[i]);
+        cvm_vk_destroy_image(test_framebuffer_colour_images[i]);
+        cvm_vk_destroy_image(test_framebuffer_normal_images[i]);
+    }
 
     cvm_vk_free_memory(test_framebuffer_image_memory);
 

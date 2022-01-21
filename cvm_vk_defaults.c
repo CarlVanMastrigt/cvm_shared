@@ -31,6 +31,7 @@ static VkPipelineMultisampleStateCreateInfo cvm_vk_default_multisample_state;
 static VkPipelineDepthStencilStateCreateInfo cvm_vk_default_depth_stencil_state;
 static VkPipelineColorBlendAttachmentState cvm_vk_default_no_blend_state;
 static VkPipelineColorBlendAttachmentState cvm_vk_default_alpha_blend_state;
+static VkPipelineColorBlendAttachmentState cvm_vk_default_additive_blend_state;
 
 static VkImageCreateInfo cvm_vk_default_framebuffer_image_creation_info;
 static VkImageViewCreateInfo cvm_vk_default_framebuffer_image_view_creation_info;
@@ -250,6 +251,18 @@ void cvm_vk_create_defaults(void)
         .colorWriteMask=VK_COLOR_COMPONENT_R_BIT|VK_COLOR_COMPONENT_G_BIT|VK_COLOR_COMPONENT_B_BIT|VK_COLOR_COMPONENT_A_BIT
     };
 
+    cvm_vk_default_additive_blend_state=(VkPipelineColorBlendAttachmentState)
+    {
+        .blendEnable=VK_TRUE,
+        .srcColorBlendFactor=VK_BLEND_FACTOR_ONE,
+        .dstColorBlendFactor=VK_BLEND_FACTOR_ONE,
+        .colorBlendOp=VK_BLEND_OP_ADD,
+        .srcAlphaBlendFactor=VK_BLEND_FACTOR_ZERO,
+        .dstAlphaBlendFactor=VK_BLEND_FACTOR_ZERO,
+        .alphaBlendOp=VK_BLEND_OP_ADD,
+        .colorWriteMask=VK_COLOR_COMPONENT_R_BIT|VK_COLOR_COMPONENT_G_BIT|VK_COLOR_COMPONENT_B_BIT|VK_COLOR_COMPONENT_A_BIT
+    };
+
     cvm_vk_create_shader_stage_info(&cvm_vk_default_fullscreen_vertex_stage,"cvm_shared/shaders/fullscreen_vert.spv",VK_SHADER_STAGE_VERTEX_BIT);
 }
 
@@ -307,7 +320,7 @@ void cvm_vk_create_swapchain_dependednt_defaults(uint32_t width,uint32_t height)
         .format=VK_FORMAT_UNDEFINED,///set later
         .extent=cvm_vk_default_framebuffer_extent,
         .mipLevels=1,
-        .arrayLayers=0,///set later
+        .arrayLayers=1,
         .samples=0,///set later
         .tiling=VK_IMAGE_TILING_OPTIMAL,
         .usage=0,///set later
@@ -337,7 +350,7 @@ void cvm_vk_create_swapchain_dependednt_defaults(uint32_t width,uint32_t height)
             .aspectMask=0,///set later
             .baseMipLevel=0,
             .levelCount=1,
-            .baseArrayLayer=0,///set later
+            .baseArrayLayer=0,
             .layerCount=1
         }
     };
@@ -405,26 +418,29 @@ VkPipelineColorBlendAttachmentState cvm_vk_get_default_alpha_blend_state(void)
     return cvm_vk_default_alpha_blend_state;
 }
 
-void cvm_vk_create_default_framebuffer_image(VkImage * image,VkFormat format,uint32_t layers,VkSampleCountFlagBits samples,VkImageUsageFlags usage)
+VkPipelineColorBlendAttachmentState cvm_vk_get_default_additive_blend_state(void)
+{
+    return cvm_vk_default_additive_blend_state;
+}
+
+void cvm_vk_create_default_framebuffer_images(VkImage * images,VkFormat format,uint32_t count,VkSampleCountFlagBits samples,VkImageUsageFlags usage)
 {
     cvm_vk_default_framebuffer_image_creation_info.format=format;
-    cvm_vk_default_framebuffer_image_creation_info.arrayLayers=layers;
     cvm_vk_default_framebuffer_image_creation_info.samples=samples;
     cvm_vk_default_framebuffer_image_creation_info.usage=usage;
 
-    cvm_vk_create_image(image,&cvm_vk_default_framebuffer_image_creation_info);
+    while(count--)cvm_vk_create_image(images+count,&cvm_vk_default_framebuffer_image_creation_info);
 }
 
-void cvm_vk_create_default_framebuffer_image_views(VkImageView * views,VkImage image,VkFormat format,VkImageAspectFlags aspects,uint32_t layers)
+void cvm_vk_create_default_framebuffer_image_views(VkImageView * views,VkImage * images,VkFormat format,VkImageAspectFlags aspects,uint32_t count)
 {
-    cvm_vk_default_framebuffer_image_view_creation_info.image=image;
     cvm_vk_default_framebuffer_image_view_creation_info.format=format;
     cvm_vk_default_framebuffer_image_view_creation_info.subresourceRange.aspectMask=aspects;
 
-    while(layers--)
+    while(count--)
     {
-        cvm_vk_default_framebuffer_image_view_creation_info.subresourceRange.baseArrayLayer=layers;
-        cvm_vk_create_image_view(views+layers,&cvm_vk_default_framebuffer_image_view_creation_info);
+        cvm_vk_default_framebuffer_image_view_creation_info.image=images[count];
+        cvm_vk_create_image_view(views+count,&cvm_vk_default_framebuffer_image_view_creation_info);
     }
 }
 
@@ -467,3 +483,53 @@ VkPipelineShaderStageCreateInfo cvm_vk_get_default_fullscreen_vertex_stage(void)
 {
     return cvm_vk_default_fullscreen_vertex_stage;
 }
+
+void cvm_vk_render_fullscreen_pass(VkCommandBuffer cb)
+{
+    vkCmdDraw(cb,3,1,0,0);
+}
+
+VkAttachmentDescription cvm_vk_get_default_colour_attachment(VkFormat format,VkSampleCountFlagBits sample_count,bool clear,bool load,bool store)
+{
+    if(clear && load)
+    {
+        fprintf(stderr,"CANNOT CLEAR AND LOAD COLOUR ATTACHMENT UPON INPUT\n");
+        exit(-1);
+    }
+
+    return (VkAttachmentDescription)
+    {
+        .flags=0,
+        .format=format,
+        .samples=sample_count,
+        .loadOp=load?VK_ATTACHMENT_LOAD_OP_LOAD:clear?VK_ATTACHMENT_LOAD_OP_CLEAR:VK_ATTACHMENT_LOAD_OP_DONT_CARE,
+        .storeOp=store?VK_ATTACHMENT_STORE_OP_STORE:VK_ATTACHMENT_STORE_OP_DONT_CARE,
+        .stencilLoadOp=VK_ATTACHMENT_LOAD_OP_DONT_CARE,
+        .stencilStoreOp=VK_ATTACHMENT_STORE_OP_DONT_CARE,
+        .initialLayout=load?VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL:VK_IMAGE_LAYOUT_UNDEFINED,
+        .finalLayout=VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL
+    };
+}
+
+VkAttachmentDescription cvm_vk_get_default_depth_stencil_attachment(VkFormat format,VkSampleCountFlagBits sample_count,bool clear,bool load,bool store)
+{
+    if(clear && load)
+    {
+        fprintf(stderr,"CANNOT CLEAR AND LOAD DEPTH ATTACHMENT UPON INPUT\n");
+        exit(-1);
+    }
+
+    return (VkAttachmentDescription)
+    {
+        .flags=0,
+        .format=format,
+        .samples=sample_count,
+        .loadOp=load?VK_ATTACHMENT_LOAD_OP_LOAD:clear?VK_ATTACHMENT_LOAD_OP_CLEAR:VK_ATTACHMENT_LOAD_OP_DONT_CARE,
+        .storeOp=store?VK_ATTACHMENT_STORE_OP_STORE:VK_ATTACHMENT_STORE_OP_DONT_CARE,
+        .stencilLoadOp=load?VK_ATTACHMENT_LOAD_OP_LOAD:clear?VK_ATTACHMENT_LOAD_OP_CLEAR:VK_ATTACHMENT_LOAD_OP_DONT_CARE,
+        .stencilStoreOp=store?VK_ATTACHMENT_STORE_OP_STORE:VK_ATTACHMENT_STORE_OP_DONT_CARE,
+        .initialLayout=load?VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL:VK_IMAGE_LAYOUT_UNDEFINED,
+        .finalLayout=VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL
+    };
+}
+

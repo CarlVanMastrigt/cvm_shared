@@ -44,10 +44,11 @@ VkPipelineMultisampleStateCreateInfo * cvm_vk_get_default_multisample_state(void
 VkPipelineDepthStencilStateCreateInfo * cvm_vk_get_default_depth_stencil_state(void);
 VkPipelineColorBlendAttachmentState cvm_vk_get_default_no_blend_state(void);
 VkPipelineColorBlendAttachmentState cvm_vk_get_default_alpha_blend_state(void);
+VkPipelineColorBlendAttachmentState cvm_vk_get_default_additive_blend_state(void);
 
 
-void cvm_vk_create_default_framebuffer_image(VkImage * image,VkFormat format,uint32_t layers,VkSampleCountFlagBits samples,VkImageUsageFlags usage);
-void cvm_vk_create_default_framebuffer_image_views(VkImageView * views,VkImage image,VkFormat format,VkImageAspectFlags aspects,uint32_t layers);
+void cvm_vk_create_default_framebuffer_images(VkImage * images,VkFormat format,uint32_t count,VkSampleCountFlagBits samples,VkImageUsageFlags usage);
+void cvm_vk_create_default_framebuffer_image_views(VkImageView * views,VkImage * images,VkFormat format,VkImageAspectFlags aspects,uint32_t count);
 void cvm_vk_create_default_framebuffer(VkFramebuffer * framebuffer,VkRenderPass render_pass,VkImageView * attachments,uint32_t attachment_count);
 
 VkPipelineVertexInputStateCreateInfo * cvm_vk_get_mesh_vertex_input_state(uint16_t flags);
@@ -57,6 +58,10 @@ VkSampler cvm_vk_get_fetch_sampler(void);
 
 
 VkPipelineShaderStageCreateInfo cvm_vk_get_default_fullscreen_vertex_stage(void);
+void cvm_vk_render_fullscreen_pass(VkCommandBuffer cb);
+
+VkAttachmentDescription cvm_vk_get_default_colour_attachment(VkFormat format,VkSampleCountFlagBits sample_count,bool clear,bool load,bool store);
+VkAttachmentDescription cvm_vk_get_default_depth_stencil_attachment(VkFormat format,VkSampleCountFlagBits sample_count,bool clear,bool load,bool store);
 
 #endif
 
