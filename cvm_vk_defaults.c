@@ -28,8 +28,9 @@ static VkPipelineViewportStateCreateInfo cvm_vk_default_viewport_state;
 static VkPipelineRasterizationStateCreateInfo cvm_vk_default_unculled_raster_state;
 static VkPipelineRasterizationStateCreateInfo cvm_vk_default_culled_raster_state;
 static VkPipelineMultisampleStateCreateInfo cvm_vk_default_multisample_state;
-static VkPipelineDepthStencilStateCreateInfo cvm_vk_default_depth_stencil_state;
-static VkPipelineColorBlendAttachmentState cvm_vk_default_no_blend_state;
+static VkPipelineDepthStencilStateCreateInfo cvm_vk_default_ordered_depth_stencil_state;
+static VkPipelineDepthStencilStateCreateInfo cvm_vk_default_null_depth_stencil_state;
+static VkPipelineColorBlendAttachmentState cvm_vk_default_null_blend_state;
 static VkPipelineColorBlendAttachmentState cvm_vk_default_alpha_blend_state;
 static VkPipelineColorBlendAttachmentState cvm_vk_default_additive_blend_state;
 
@@ -192,7 +193,7 @@ void cvm_vk_create_defaults(void)
         .alphaToOneEnable=VK_FALSE
     };
 
-    cvm_vk_default_depth_stencil_state=(VkPipelineDepthStencilStateCreateInfo)
+    cvm_vk_default_ordered_depth_stencil_state=(VkPipelineDepthStencilStateCreateInfo)
     {
         .sType=VK_STRUCTURE_TYPE_PIPELINE_DEPTH_STENCIL_STATE_CREATE_INFO,
         .pNext=NULL,
@@ -207,7 +208,7 @@ void cvm_vk_create_defaults(void)
             .failOp=VK_STENCIL_OP_KEEP,
             .passOp=VK_STENCIL_OP_KEEP,
             .depthFailOp=VK_STENCIL_OP_KEEP,
-            .compareOp=VK_COMPARE_OP_ALWAYS,
+            .compareOp=VK_COMPARE_OP_NEVER,
             .compareMask=0x00,
             .writeMask=0x00,
             .reference=0x00
@@ -217,7 +218,41 @@ void cvm_vk_create_defaults(void)
             .failOp=VK_STENCIL_OP_KEEP,
             .passOp=VK_STENCIL_OP_KEEP,
             .depthFailOp=VK_STENCIL_OP_KEEP,
-            .compareOp=VK_COMPARE_OP_ALWAYS,
+            .compareOp=VK_COMPARE_OP_NEVER,
+            .compareMask=0x00,
+            .writeMask=0x00,
+            .reference=0x00
+        },
+        .minDepthBounds=0.0,
+        .maxDepthBounds=1.0,
+    };
+
+    cvm_vk_default_null_depth_stencil_state=(VkPipelineDepthStencilStateCreateInfo)
+    {
+        .sType=VK_STRUCTURE_TYPE_PIPELINE_DEPTH_STENCIL_STATE_CREATE_INFO,
+        .pNext=NULL,
+        .flags=0,
+        .depthTestEnable=VK_FALSE,
+        .depthWriteEnable=VK_FALSE,
+        .depthCompareOp=VK_COMPARE_OP_NEVER,
+        .depthBoundsTestEnable=VK_FALSE,
+        .stencilTestEnable=VK_FALSE,
+        .front=(VkStencilOpState)
+        {
+            .failOp=VK_STENCIL_OP_KEEP,
+            .passOp=VK_STENCIL_OP_KEEP,
+            .depthFailOp=VK_STENCIL_OP_KEEP,
+            .compareOp=VK_COMPARE_OP_NEVER,
+            .compareMask=0x00,
+            .writeMask=0x00,
+            .reference=0x00
+        },
+        .back=(VkStencilOpState)
+        {
+            .failOp=VK_STENCIL_OP_KEEP,
+            .passOp=VK_STENCIL_OP_KEEP,
+            .depthFailOp=VK_STENCIL_OP_KEEP,
+            .compareOp=VK_COMPARE_OP_NEVER,
             .compareMask=0x00,
             .writeMask=0x00,
             .reference=0x00
@@ -227,7 +262,7 @@ void cvm_vk_create_defaults(void)
     };
 
 
-    cvm_vk_default_no_blend_state=(VkPipelineColorBlendAttachmentState)
+    cvm_vk_default_null_blend_state=(VkPipelineColorBlendAttachmentState)
     {
         .blendEnable=VK_FALSE,
         .srcColorBlendFactor=VK_BLEND_FACTOR_ONE,
@@ -403,14 +438,19 @@ VkPipelineMultisampleStateCreateInfo * cvm_vk_get_default_multisample_state(void
     return &cvm_vk_default_multisample_state;
 }
 
-VkPipelineDepthStencilStateCreateInfo * cvm_vk_get_default_depth_stencil_state(void)
+VkPipelineDepthStencilStateCreateInfo * cvm_vk_get_default_ordered_depth_stencil_state(void)
 {
-    return &cvm_vk_default_depth_stencil_state;
+    return &cvm_vk_default_ordered_depth_stencil_state;
 }
 
-VkPipelineColorBlendAttachmentState cvm_vk_get_default_no_blend_state(void)
+VkPipelineDepthStencilStateCreateInfo * cvm_vk_get_default_null_depth_stencil_state(void)
 {
-    return cvm_vk_default_no_blend_state;
+    return &cvm_vk_default_null_depth_stencil_state;
+}
+
+VkPipelineColorBlendAttachmentState cvm_vk_get_default_null_blend_state(void)
+{
+    return cvm_vk_default_null_blend_state;
 }
 
 VkPipelineColorBlendAttachmentState cvm_vk_get_default_alpha_blend_state(void)
@@ -429,7 +469,21 @@ void cvm_vk_create_default_framebuffer_images(VkImage * images,VkFormat format,u
     cvm_vk_default_framebuffer_image_creation_info.samples=samples;
     cvm_vk_default_framebuffer_image_creation_info.usage=usage;
 
+//    if(format==VK_FORMAT_D32_SFLOAT_S8_UINT)
+//    {
+//        VkImageStencilUsageCreateInfo su=
+//        {
+//            .sType=VK_STRUCTURE_TYPE_IMAGE_STENCIL_USAGE_CREATE_INFO,
+//            .pNext=NULL,
+//            .stencilUsage=VK_IMAGE_USAGE_STORAGE_BIT|VK_IMAGE_USAGE_DEPTH_STENCIL_ATTACHMENT_BIT,
+//        };
+//
+//        cvm_vk_default_framebuffer_image_creation_info.pNext=&su;
+//    }
+
     while(count--)cvm_vk_create_image(images+count,&cvm_vk_default_framebuffer_image_creation_info);
+
+//    cvm_vk_default_framebuffer_image_creation_info.pNext=NULL;
 }
 
 void cvm_vk_create_default_framebuffer_image_views(VkImageView * views,VkImage * images,VkFormat format,VkImageAspectFlags aspects,uint32_t count)

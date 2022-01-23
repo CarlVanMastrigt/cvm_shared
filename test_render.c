@@ -558,7 +558,7 @@ static void create_test_pipelines(VkSampleCountFlagBits sample_count,float min_s
                 .alphaToOneEnable=VK_FALSE
             }
         },
-        .pDepthStencilState=cvm_vk_get_default_depth_stencil_state(),
+        .pDepthStencilState=cvm_vk_get_default_ordered_depth_stencil_state(),
         .pColorBlendState=(VkPipelineColorBlendStateCreateInfo[1])
         {
             {
@@ -570,8 +570,8 @@ static void create_test_pipelines(VkSampleCountFlagBits sample_count,float min_s
                 .attachmentCount=2,///must equal colorAttachmentCount in subpass
                 .pAttachments= (VkPipelineColorBlendAttachmentState[2])
                 {
-                    cvm_vk_get_default_no_blend_state(),
-                    cvm_vk_get_default_no_blend_state()
+                    cvm_vk_get_default_null_blend_state(),
+                    cvm_vk_get_default_null_blend_state()
                 },
                 .blendConstants={0.0,0.0,0.0,0.0}
             }
@@ -627,7 +627,7 @@ static void create_test_pipelines(VkSampleCountFlagBits sample_count,float min_s
                 .attachmentCount=1,///must equal colorAttachmentCount in subpass
                 .pAttachments= (VkPipelineColorBlendAttachmentState[1])
                 {
-                    cvm_vk_get_default_no_blend_state()
+                    cvm_vk_get_default_null_blend_state()
                 },
                 .blendConstants={0.0,0.0,0.0,0.0}
             }
