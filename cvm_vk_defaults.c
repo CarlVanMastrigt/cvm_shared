@@ -28,7 +28,8 @@ static VkPipelineViewportStateCreateInfo cvm_vk_default_viewport_state;
 static VkPipelineRasterizationStateCreateInfo cvm_vk_default_unculled_raster_state;
 static VkPipelineRasterizationStateCreateInfo cvm_vk_default_culled_raster_state;
 static VkPipelineMultisampleStateCreateInfo cvm_vk_default_multisample_state;
-static VkPipelineDepthStencilStateCreateInfo cvm_vk_default_ordered_depth_stencil_state;
+static VkPipelineDepthStencilStateCreateInfo cvm_vk_default_greater_depth_stencil_state;
+static VkPipelineDepthStencilStateCreateInfo cvm_vk_default_equal_depth_stencil_state;
 static VkPipelineDepthStencilStateCreateInfo cvm_vk_default_null_depth_stencil_state;
 static VkPipelineColorBlendAttachmentState cvm_vk_default_null_blend_state;
 static VkPipelineColorBlendAttachmentState cvm_vk_default_alpha_blend_state;
@@ -39,9 +40,9 @@ static VkImageViewCreateInfo cvm_vk_default_framebuffer_image_view_creation_info
 static VkFramebufferCreateInfo cvm_vk_default_framebuffer_creation_info;
 
 ///implement more variants when mesh supports vertex normas and tex-coords
-VkVertexInputBindingDescription cvm_vk_default_pos_vertex_input_binding;
-VkVertexInputAttributeDescription cvm_vk_default_pos_vertex_input_attribute;
-VkPipelineVertexInputStateCreateInfo cvm_vk_default_pos_vertex_input_state;
+static VkVertexInputBindingDescription cvm_vk_default_pos_vertex_input_binding;
+static VkVertexInputAttributeDescription cvm_vk_default_pos_vertex_input_attribute;
+static VkPipelineVertexInputStateCreateInfo cvm_vk_default_pos_vertex_input_state;
 
 VkPipelineVertexInputStateCreateInfo cvm_vk_default_empty_vertex_input_state;
 
@@ -50,7 +51,7 @@ VkPipelineVertexInputStateCreateInfo cvm_vk_default_empty_vertex_input_state;
 static VkSampler cvm_vk_fetch_sampler;
 
 
-
+#warning have 2 variants of below, 1 that ouputs depth at the near plane and 1 at the far, for use with post processing algorithms that interface with depth in some way
 static VkPipelineShaderStageCreateInfo cvm_vk_default_fullscreen_vertex_stage;
 
 
@@ -193,7 +194,7 @@ void cvm_vk_create_defaults(void)
         .alphaToOneEnable=VK_FALSE
     };
 
-    cvm_vk_default_ordered_depth_stencil_state=(VkPipelineDepthStencilStateCreateInfo)
+    cvm_vk_default_greater_depth_stencil_state=(VkPipelineDepthStencilStateCreateInfo)
     {
         .sType=VK_STRUCTURE_TYPE_PIPELINE_DEPTH_STENCIL_STATE_CREATE_INFO,
         .pNext=NULL,
@@ -201,6 +202,40 @@ void cvm_vk_create_defaults(void)
         .depthTestEnable=VK_TRUE,
         .depthWriteEnable=VK_TRUE,
         .depthCompareOp=VK_COMPARE_OP_GREATER,
+        .depthBoundsTestEnable=VK_FALSE,
+        .stencilTestEnable=VK_FALSE,
+        .front=(VkStencilOpState)
+        {
+            .failOp=VK_STENCIL_OP_KEEP,
+            .passOp=VK_STENCIL_OP_KEEP,
+            .depthFailOp=VK_STENCIL_OP_KEEP,
+            .compareOp=VK_COMPARE_OP_NEVER,
+            .compareMask=0x00,
+            .writeMask=0x00,
+            .reference=0x00
+        },
+        .back=(VkStencilOpState)
+        {
+            .failOp=VK_STENCIL_OP_KEEP,
+            .passOp=VK_STENCIL_OP_KEEP,
+            .depthFailOp=VK_STENCIL_OP_KEEP,
+            .compareOp=VK_COMPARE_OP_NEVER,
+            .compareMask=0x00,
+            .writeMask=0x00,
+            .reference=0x00
+        },
+        .minDepthBounds=0.0,
+        .maxDepthBounds=1.0,
+    };
+
+    cvm_vk_default_equal_depth_stencil_state=(VkPipelineDepthStencilStateCreateInfo)
+    {
+        .sType=VK_STRUCTURE_TYPE_PIPELINE_DEPTH_STENCIL_STATE_CREATE_INFO,
+        .pNext=NULL,
+        .flags=0,
+        .depthTestEnable=VK_TRUE,
+        .depthWriteEnable=VK_FALSE,
+        .depthCompareOp=VK_COMPARE_OP_EQUAL,
         .depthBoundsTestEnable=VK_FALSE,
         .stencilTestEnable=VK_FALSE,
         .front=(VkStencilOpState)
@@ -438,9 +473,14 @@ VkPipelineMultisampleStateCreateInfo * cvm_vk_get_default_multisample_state(void
     return &cvm_vk_default_multisample_state;
 }
 
-VkPipelineDepthStencilStateCreateInfo * cvm_vk_get_default_ordered_depth_stencil_state(void)
+VkPipelineDepthStencilStateCreateInfo * cvm_vk_get_default_greater_depth_stencil_state(void)
 {
-    return &cvm_vk_default_ordered_depth_stencil_state;
+    return &cvm_vk_default_greater_depth_stencil_state;
+}
+
+VkPipelineDepthStencilStateCreateInfo * cvm_vk_get_default_equal_depth_stencil_state(void)
+{
+    return &cvm_vk_default_equal_depth_stencil_state;
 }
 
 VkPipelineDepthStencilStateCreateInfo * cvm_vk_get_default_null_depth_stencil_state(void)

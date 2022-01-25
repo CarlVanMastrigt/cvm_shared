@@ -558,7 +558,7 @@ static void create_test_pipelines(VkSampleCountFlagBits sample_count,float min_s
                 .alphaToOneEnable=VK_FALSE
             }
         },
-        .pDepthStencilState=cvm_vk_get_default_ordered_depth_stencil_state(),
+        .pDepthStencilState=cvm_vk_get_default_greater_depth_stencil_state(),
         .pColorBlendState=(VkPipelineColorBlendStateCreateInfo[1])
         {
             {
