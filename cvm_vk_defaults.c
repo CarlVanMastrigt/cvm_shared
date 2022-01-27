@@ -627,3 +627,30 @@ VkAttachmentDescription cvm_vk_get_default_depth_stencil_attachment(VkFormat for
     };
 }
 
+VkSubpassDependency cvm_vk_get_default_colour_attachment_dependency(uint32_t srcSubpass,uint32_t dstSubpass)
+{
+    return (VkSubpassDependency)
+    {
+        .srcSubpass=srcSubpass,
+        .dstSubpass=dstSubpass,
+        .srcStageMask=VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT | VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT,
+        .dstStageMask=VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT,
+        .srcAccessMask=VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT | VK_ACCESS_COLOR_ATTACHMENT_READ_BIT,
+        .dstAccessMask=VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT | VK_ACCESS_COLOR_ATTACHMENT_READ_BIT,
+        .dependencyFlags=VK_DEPENDENCY_BY_REGION_BIT
+    };
+}
+
+VkSubpassDependency cvm_vk_get_default_depth_stencil_attachment_dependency(uint32_t srcSubpass,uint32_t dstSubpass)
+{
+    return (VkSubpassDependency)
+    {
+        .srcSubpass=srcSubpass,
+        .dstSubpass=dstSubpass,
+        .srcStageMask=VK_PIPELINE_STAGE_EARLY_FRAGMENT_TESTS_BIT | VK_PIPELINE_STAGE_LATE_FRAGMENT_TESTS_BIT,
+        .dstStageMask=VK_PIPELINE_STAGE_EARLY_FRAGMENT_TESTS_BIT | VK_PIPELINE_STAGE_LATE_FRAGMENT_TESTS_BIT,
+        .srcAccessMask=VK_ACCESS_DEPTH_STENCIL_ATTACHMENT_WRITE_BIT | VK_ACCESS_DEPTH_STENCIL_ATTACHMENT_READ_BIT,
+        .dstAccessMask= VK_ACCESS_DEPTH_STENCIL_ATTACHMENT_WRITE_BIT | VK_ACCESS_DEPTH_STENCIL_ATTACHMENT_READ_BIT,
+        .dependencyFlags=VK_DEPENDENCY_BY_REGION_BIT
+    };
+}

@@ -65,5 +65,8 @@ void cvm_vk_render_fullscreen_pass(VkCommandBuffer cb);
 VkAttachmentDescription cvm_vk_get_default_colour_attachment(VkFormat format,VkSampleCountFlagBits sample_count,bool clear,bool load,bool store);
 VkAttachmentDescription cvm_vk_get_default_depth_stencil_attachment(VkFormat format,VkSampleCountFlagBits sample_count,bool clear,bool load,bool store);
 
+VkSubpassDependency cvm_vk_get_default_colour_attachment_dependency(uint32_t srcSubpass,uint32_t dstSubpass);
+VkSubpassDependency cvm_vk_get_default_depth_stencil_attachment_dependency(uint32_t srcSubpass,uint32_t dstSubpass);
+
 #endif
 
