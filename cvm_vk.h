@@ -117,7 +117,8 @@ cvm_vk_swapchain_image_present_data;
 
 
 
-void cvm_vk_initialise(SDL_Window * window,uint32_t min_swapchain_images,uint32_t extra_swapchain_images,bool sync_compute_required);///this extra is the max extra used by any module
+void cvm_vk_initialise(SDL_Window * window,uint32_t min_swapchain_images,uint32_t extra_swapchain_images,bool sync_compute_required,const char ** requested_extensions,int requested_extension_count);
+///above extra is the max extra used by any module
 void cvm_vk_terminate(void);///also terminates swapchain dependant data at same time
 
 void cvm_vk_create_swapchain(void);

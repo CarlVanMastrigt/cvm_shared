@@ -255,11 +255,12 @@ static void cvm_vk_create_physical_device(bool sync_compute_required)
     free(present_modes);
 }
 
-static void cvm_vk_create_logical_device(void)
+static void cvm_vk_create_logical_device(const char ** requested_extensions,int requested_extension_count)
 {
-    const char * device_extensions[]={"VK_KHR_swapchain"};
     const char * layer_names[]={"VK_LAYER_KHRONOS_validation"};///VK_LAYER_LUNARG_standard_validation
     float queue_priority=1.0;
+    VkExtensionProperties * possible_extensions;
+    uint32_t possible_extension_count,i,j,found_extensions;
     ///if implementing separate transfer queue use a lower priority?
     /// should also probably try putting transfers on separate queue (when possible) even when they require the same queue family
 
@@ -308,6 +309,33 @@ static void cvm_vk_create_logical_device(void)
     };
 
 
+    vkEnumerateDeviceExtensionProperties(cvm_vk_physical_device,NULL,&possible_extension_count,NULL);
+    possible_extensions=malloc(sizeof(VkExtensionProperties)*possible_extension_count);
+    vkEnumerateDeviceExtensionProperties(cvm_vk_physical_device,NULL,&possible_extension_count,possible_extensions);
+
+
+    for(i=0;i<requested_extension_count && strcmp(requested_extensions[i],"VK_KHR_swapchain");i++);
+    if(i==requested_extension_count)
+    {
+        fprintf(stderr,"REQUESTING VK_KHR_swapchain IS MANDATORY\n");
+        exit(-1);
+    }
+
+    for(found_extensions=0,i=0;i<possible_extension_count && found_extensions<requested_extension_count;i++)
+    {
+        for(j=0;j<requested_extension_count;j++)found_extensions+=(0==strcmp(possible_extensions[i].extensionName,requested_extensions[j]));
+    }
+    if(i==possible_extension_count)
+    {
+        fprintf(stderr,"REQUESTED EXTENSION NOT FOUND\n");
+        exit(-1);
+    }
+
+    for(i=0;i<possible_extension_count;i++)
+    {
+        puts(possible_extensions[i].extensionName);
+    }
+
 
     VkDeviceCreateInfo device_creation_info=(VkDeviceCreateInfo)
     {
@@ -318,8 +346,8 @@ static void cvm_vk_create_logical_device(void)
         .pQueueCreateInfos= device_queue_creation_infos,
         .enabledLayerCount=1,///make 0 for release version (no validation), test performance diff
         .ppEnabledLayerNames=layer_names,
-        .enabledExtensionCount=1,
-        .ppEnabledExtensionNames=device_extensions,
+        .enabledExtensionCount=requested_extension_count,
+        .ppEnabledExtensionNames=requested_extensions,
         .pEnabledFeatures= &features
     };
 
@@ -656,7 +684,7 @@ VkImage cvm_vk_get_swapchain_image(uint32_t index)
 }
 
 
-void cvm_vk_initialise(SDL_Window * window,uint32_t min_swapchain_images,uint32_t extra_swapchain_images,bool sync_compute_required)
+void cvm_vk_initialise(SDL_Window * window,uint32_t min_swapchain_images,uint32_t extra_swapchain_images,bool sync_compute_required,const char ** requested_extensions,int requested_extension_count)
 {
     cvm_vk_min_swapchain_images=min_swapchain_images;
     cvm_vk_extra_swapchain_images=extra_swapchain_images;///should really always be the same as extra_transfer_slots
@@ -664,7 +692,7 @@ void cvm_vk_initialise(SDL_Window * window,uint32_t min_swapchain_images,uint32_
     cvm_vk_create_instance(window);
     cvm_vk_create_surface(window);
     cvm_vk_create_physical_device(sync_compute_required);
-    cvm_vk_create_logical_device();
+    cvm_vk_create_logical_device(requested_extensions,requested_extension_count);
     cvm_vk_create_internal_command_pools();
     cvm_vk_create_transfer_chain();
 
