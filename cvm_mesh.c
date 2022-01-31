@@ -489,6 +489,20 @@ void cvm_managed_mesh_render(cvm_managed_mesh * mm,VkCommandBuffer graphics_cb,u
     }
 }
 
+void cvm_managed_mesh_adjacency_render(cvm_managed_mesh * mm,VkCommandBuffer graphics_cb,uint32_t instance_count,uint32_t instance_offset)
+{
+    if(!mm->loaded)///should go first b/c can be used immediately on UMA systems
+    {
+        cvm_managed_mesh_load(mm);
+    }
+
+    if(mm->ready || (mm->loaded && (mm->ready=cvm_vk_availability_token_check(mm->availability_token,mm->mb->copy_update_counter,mm->mb->copy_delay))))
+    {
+        //puts("RENDER");
+        vkCmdDrawIndexed(graphics_cb,mm->data.face_count*6,instance_count,mm->adjacency_offset,mm->vertex_offset,instance_offset);
+    }
+}
+
 void cvm_managed_mesh_create(cvm_managed_mesh * mm,cvm_vk_managed_buffer * mb,char * filename,uint16_t flags,bool dynamic)
 {
     mm->filename=strdup(filename);
