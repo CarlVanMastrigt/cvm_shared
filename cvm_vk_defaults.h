@@ -63,7 +63,7 @@ VkPipelineShaderStageCreateInfo cvm_vk_get_default_fullscreen_vertex_stage(void)
 void cvm_vk_render_fullscreen_pass(VkCommandBuffer cb);
 
 VkAttachmentDescription cvm_vk_get_default_colour_attachment(VkFormat format,VkSampleCountFlagBits sample_count,bool clear,bool load,bool store);
-VkAttachmentDescription cvm_vk_get_default_depth_stencil_attachment(VkFormat format,VkSampleCountFlagBits sample_count,bool clear,bool load,bool store);
+VkAttachmentDescription cvm_vk_get_default_depth_stencil_attachment(VkFormat format,VkSampleCountFlagBits sample_count,bool depth_clear,bool depth_load,bool depth_store,bool stencil_clear,bool stencil_load,bool stencil_store);
 
 VkSubpassDependency cvm_vk_get_default_colour_attachment_dependency(uint32_t srcSubpass,uint32_t dstSubpass);
 VkSubpassDependency cvm_vk_get_default_depth_stencil_attachment_dependency(uint32_t srcSubpass,uint32_t dstSubpass);

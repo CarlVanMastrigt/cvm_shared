@@ -605,9 +605,15 @@ VkAttachmentDescription cvm_vk_get_default_colour_attachment(VkFormat format,VkS
     };
 }
 
-VkAttachmentDescription cvm_vk_get_default_depth_stencil_attachment(VkFormat format,VkSampleCountFlagBits sample_count,bool clear,bool load,bool store)
+VkAttachmentDescription cvm_vk_get_default_depth_stencil_attachment(VkFormat format,VkSampleCountFlagBits sample_count,bool depth_clear,bool depth_load,bool depth_store,bool stencil_clear,bool stencil_load,bool stencil_store)
 {
-    if(clear && load)
+    if(depth_clear && depth_load)
+    {
+        fprintf(stderr,"CANNOT CLEAR AND LOAD DEPTH ATTACHMENT UPON INPUT\n");
+        exit(-1);
+    }
+
+    if(stencil_clear && stencil_load)
     {
         fprintf(stderr,"CANNOT CLEAR AND LOAD DEPTH ATTACHMENT UPON INPUT\n");
         exit(-1);
@@ -618,11 +624,11 @@ VkAttachmentDescription cvm_vk_get_default_depth_stencil_attachment(VkFormat for
         .flags=0,
         .format=format,
         .samples=sample_count,
-        .loadOp=load?VK_ATTACHMENT_LOAD_OP_LOAD:clear?VK_ATTACHMENT_LOAD_OP_CLEAR:VK_ATTACHMENT_LOAD_OP_DONT_CARE,
-        .storeOp=store?VK_ATTACHMENT_STORE_OP_STORE:VK_ATTACHMENT_STORE_OP_DONT_CARE,
-        .stencilLoadOp=load?VK_ATTACHMENT_LOAD_OP_LOAD:clear?VK_ATTACHMENT_LOAD_OP_CLEAR:VK_ATTACHMENT_LOAD_OP_DONT_CARE,
-        .stencilStoreOp=store?VK_ATTACHMENT_STORE_OP_STORE:VK_ATTACHMENT_STORE_OP_DONT_CARE,
-        .initialLayout=load?VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL:VK_IMAGE_LAYOUT_UNDEFINED,
+        .loadOp=depth_load?VK_ATTACHMENT_LOAD_OP_LOAD:depth_clear?VK_ATTACHMENT_LOAD_OP_CLEAR:VK_ATTACHMENT_LOAD_OP_DONT_CARE,
+        .storeOp=depth_store?VK_ATTACHMENT_STORE_OP_STORE:VK_ATTACHMENT_STORE_OP_DONT_CARE,
+        .stencilLoadOp=stencil_load?VK_ATTACHMENT_LOAD_OP_LOAD:stencil_clear?VK_ATTACHMENT_LOAD_OP_CLEAR:VK_ATTACHMENT_LOAD_OP_DONT_CARE,
+        .stencilStoreOp=stencil_store?VK_ATTACHMENT_STORE_OP_STORE:VK_ATTACHMENT_STORE_OP_DONT_CARE,
+        .initialLayout=(stencil_load||depth_load)?VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL:VK_IMAGE_LAYOUT_UNDEFINED,
         .finalLayout=VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL
     };
 }

@@ -331,10 +331,10 @@ static void cvm_vk_create_logical_device(const char ** requested_extensions,int 
         exit(-1);
     }
 
-    for(i=0;i<possible_extension_count;i++)
-    {
-        puts(possible_extensions[i].extensionName);
-    }
+//    for(i=0;i<possible_extension_count;i++)
+//    {
+//        puts(possible_extensions[i].extensionName);
+//    }
 
 
     VkDeviceCreateInfo device_creation_info=(VkDeviceCreateInfo)
