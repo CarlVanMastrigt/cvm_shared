@@ -640,7 +640,8 @@ VkSubpassDependency cvm_vk_get_default_colour_attachment_dependency(uint32_t src
         .srcSubpass=srcSubpass,
         .dstSubpass=dstSubpass,
         .srcStageMask=VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT | VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT,
-        .dstStageMask=VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT,
+        .dstStageMask=VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT | VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT,
+        /// ^ image attachment needs shader stage, see VK_ACCESS_2_INPUT_ATTACHMENT_READ_BIT
         .srcAccessMask=VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT | VK_ACCESS_COLOR_ATTACHMENT_READ_BIT,
         .dstAccessMask=VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT | VK_ACCESS_COLOR_ATTACHMENT_READ_BIT,
         .dependencyFlags=VK_DEPENDENCY_BY_REGION_BIT
