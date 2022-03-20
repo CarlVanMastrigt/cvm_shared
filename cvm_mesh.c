@@ -523,7 +523,10 @@ void cvm_managed_mesh_destroy(cvm_managed_mesh * mm)
 
 
 
-
+/// add function to calculate (manifold) mesh volume?
+/// algorithm is 1/6 * cross product of 2 edges of triangle such that generated vector faces inwards (not normalised)
+/// dotted with vector to arbitrary point (origin or centre will work) summed over all faces
+/// can actually make normal face outwards, then take dot product with any point of the triangle as this is implicity from origin (negative of vector to origin, ergo facing outwards)
 
 
 

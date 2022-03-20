@@ -135,6 +135,8 @@ static bool check_physical_device_appropriate(bool dedicated_gpu_required,bool s
 
     if((dedicated_gpu_required)&&(cvm_vk_device_properties.deviceType!=VK_PHYSICAL_DEVICE_TYPE_DISCRETE_GPU))return false;
 
+    if(strstr(cvm_vk_device_properties.deviceName,"LLVM"))return false;///temp fix to exclude buggy LLVM implementation, need a better/more general way to avoid such "software" devices
+
     printf("testing GPU : %s\n",cvm_vk_device_properties.deviceName);
 
     printf("standard sample locations: %d\n",cvm_vk_device_properties.limits.standardSampleLocations);
@@ -1267,6 +1269,9 @@ uint32_t cvm_vk_get_buffer_alignment_requirements(VkBufferUsageFlags usage)
 
     if(usage & VK_BUFFER_USAGE_STORAGE_BUFFER_BIT && alignment < cvm_vk_device_properties.limits.minStorageBufferOffsetAlignment)
         alignment = cvm_vk_device_properties.limits.minStorageBufferOffsetAlignment;
+
+    if(alignment<cvm_vk_device_properties.limits.nonCoherentAtomSize)
+        alignment=cvm_vk_device_properties.limits.nonCoherentAtomSize;
 
     return alignment;
 }
