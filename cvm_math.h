@@ -652,13 +652,13 @@ static inline rotor3f r3f_from_mid_v3f(vec3f v1,vec3f v2)
 {
     ///assumes both input vectors are normalised
 
-    /// result is the geometric product of v2 and v2   (in that order; v2 v1)
+    /// result is the geometric product of v1 and v2   (in that order; v1^v2)
     return(rotor3f)
     {
-        .s=v2.x*v1.x+v2.y*v1.y+v2.z*v1.z,
-        .xy=v2.x*v1.y-v2.y*v1.x,
-        .yz=v2.y*v1.z-v2.z*v1.y,
-        .zx=v2.z*v1.x-v2.x*v1.z
+        .s=v1.x*v2.x+v1.y*v2.y+v1.z*v2.z,
+        .xy=v1.x*v2.y-v1.y*v2.x,
+        .yz=v1.y*v2.z-v1.z*v2.y,
+        .zx=v1.z*v2.x-v1.x*v2.z
     };
 }
 
@@ -668,20 +668,27 @@ static inline rotor3f r3f_from_v3f(vec3f v1,vec3f v2)
 
     /**
     ///figure out using normalised half angle
+
     \\\m is magnitude of half angle vector
     m=sqrt((v1.x+v2.x)*(v1.x+v2.x)+(v1.y+v2.y)*(v1.y+v2.y)+(v1.z+v2.z)*(v1.z+v2.z));
+    m=sqrt(v1.x*v1.x+2*v1.x*v2.x+v2.x*v2.x + v1.y*v1.y+2*v1.y*v2.y+v2.y*v2.y + v1.z*v1.z+2*v1.z*v2.z+v2.z*v2.z);
+    m=sqrt(v1.x*v1.x+v1.y*v1.y+v1.z*v1.z + v2.x*v2.x+v2.y*v2.y+v2.z*v2.z  + 2*(v1.x*v2.x+v1.y*v2.y+2*v1.z*v2.z)); dot(v1,v1)=dot(v2,v2)=1.0
     m=sqrt(2 + 2*(v1.x*v2.x + v1.y*v2.y + v1.z*v2.z));
+    \\\d is dot product of 2 vectors
     m=sqrt(2+2*d);
 
-    2+2*d   ///this is magnitude of rotor+{1,0,0,0} squared
-    s_component=d
-    planar_component_mag = sqrt(xy*xy+yz*yz+zx*zx) = sqrt(1-d*d)
-    mag(rotor+{1,0,0,0})^2 = (s_component+1)^2 + planar_component_mag^2
-    (1+d)*(1+d)+sqrt(1-d*d)*sqrt(1-d*d)
+    2+2*d   ///prove that this is magnitude of rotor+{1,0,0,0} squared
+    scalar_component = d (by definition of rotor construction, scalar is cos(angle) = dot_product of 2 vectors to rotate between)
+    geometric_component_mag ^ 2 = xy*xy+yz*yz+zx*zx = 1-d*d
+    mag(rotor+{1,0,0,0})^2 = (scalar_component+1)^2 + geometric_component_mag ^ 2
+    (1+d)*(1+d) + 1-d*d
     1+2*d+d*d + 1-d*d;
+	2+2*d +d*d-d*d;
     2+2*d;
     \\\ergo
     mag(rotor+{1,0,0,0})=sqrt(2+2*d)
+
+    now calculate v1 ^ (v1+v2)/m
 
     \\\S
     (v1.x*(v1.x+v2.x) + v1.y*(v1.y+v2.y) + v1.z*(v1.z+v2.z)) / m
@@ -692,23 +699,23 @@ static inline rotor3f r3f_from_v3f(vec3f v1,vec3f v2)
     (1+d)/mag(rotor+{1,0,0,0})
 
     \\\xy
-    (v1.y*(v1.x+v2.x)-v1.x*(v1.y+v2.y)) / m
-    (v1.y*v1.x + v1.y*v2.x - v1.x*v1.y - v1.x*v2.y) / m
-    (v1.y*v2.x-v1.x*v2.y + v1.y*v1.x-v1.x*v1.y) / m
-    (v1.y*v2.x-v1.x*v2.y) / m  ///this is the same as the regular xy component of the exterior product of v1 and v2, just divided by m, i.e. divided by mag(rotor+{1,0,0,0})
+    (v1.x*(v1.y+v2.y) - v1.y*(v1.x+v2.x)) / m
+    (v1.x*v1.y + v1.x*v2.y - v1.y*v1.x - v1.y*v2.x) / m
+    (v1.x*v2.y - v1.y*v2.x)/m    : v1 only terms cancel out
+        : this is the same as the regular xy component of the exterior product of v1 and v2, just divided by m, i.e. divided by mag(rotor+{1,0,0,0})
 
     \\\yz same logic applies as did for xy
     \\\xz same logic applies as did for xy
     */
-    float d=v2.x*v1.x+v2.y*v1.y+v2.z*v1.z;
+    float d=v1.x*v2.x + v1.y*v2.y + v1.z*v2.z;
     float m=1.0/sqrt(2.0+2.0*d);
 
     return(rotor3f)
     {
-        .s=m+m*d,
-        .xy=m*(v2.x*v1.y-v2.y*v1.x),
-        .yz=m*(v2.y*v1.z-v2.z*v1.y),
-        .zx=m*(v2.z*v1.x-v2.x*v1.z)
+        .s=m+m*d,///(1+d)*m
+        .xy=m*(v1.x*v2.y-v1.y*v2.x),
+        .yz=m*(v1.y*v2.z-v1.z*v2.y),
+        .zx=m*(v1.z*v2.x-v1.x*v2.z)
     };
 }
 
@@ -754,46 +761,82 @@ static inline rotor3f r3f_rotate_around_z_axis(rotor3f r,float a)
 static inline matrix3f r3f_to_m3f(rotor3f r)
 {
     /**
-    unoptimised included for educational purposes, is acquired by applying geometric product of rotor (r) over axis each axis(a) as -rar
-    using geometric product & exterior product rules (r is a geometic product of 2 implict vectors, comprised of a bivector and a scalar)
-    optimised using identity that xy^2+yz^2+zx^2+s^2=1
+    : unoptimised included for educational purposes, is acquired by applying geometric product of rotor (r) over axis each axis(v) as -rvr
+    : using geometric product & exterior product rules (r is a geometric product of 2 implict vectors, comprised of a bivector and a scalar)
 
-    m.x.x = r.yz*r.yz + r.s*r.s  - r.xy*r.xy - r.zx*r.zx;
-    m.x.y = r.yz*r.zx - r.s*r.xy - r.xy*r.s  + r.zx*r.yz;
-    m.x.z = r.yz*r.xy + r.s*r.zx + r.xy*r.yz + r.zx*r.s;
 
-    m.y.x = r.zx*r.yz + r.xy*r.s  + r.s*r.xy - -r.yz*r.zx;
-    m.y.y = r.zx*r.zx - r.xy*r.xy + r.s*r.s  - r.yz*r.yz;
-    m.y.z = r.zx*r.xy + r.xy*r.zx - r.s*r.yz - r.yz*r.s;
+    : here a,b,c represent the constants of their respective bivector components of the rotor; xy,yz,zx respectively
+    : and f,g,h represent basis components of vector v; x,y,z respectively
+    -r = s + ayx + bzy + cxz	:reverse order of bivector components of r to get "-r"
+    r  = s + axy + byz + czx
+    v  = fx + gy + hz
 
-    m.z.x = r.xy*r.yz - r.zx*r.s  + r.yz*r.xy - r.s*r.zx;
-    m.z.y = r.xy*r.zx + r.zx*r.xy + r.yz*r.s  + r.s*r.yz;
-    m.z.z = r.xy*r.xy - r.zx*r.zx - r.yz*r.yz + r.s*r.s;
+    -rv = s fx + s gy + s hz   +  ayx fx + ayx gy + ayx hz  +  bzy fx + bzy gy + bzy hz  +  cxz fx + cxz gy + cxz hz
+	    = sf x + sg y + sh z   +  af yxx + ag yxy + ah yxz  +  bf zyx + bg zyy + bh zyz  +  cf xzx + cg xzy + ch xzz	: separate out sclar/constant components and put geometric compoents together
+	    = sf x + sg y + sh z   +  af y   - ag x   - ah xyz  -  bf xyz + bg z   - bh y    -  cf z   - cg xyz + ch x  	: simplify and get unsimplifiable components in terms of xyz
+	    = (sf - ag + ch) x   +  (sg + af - bh) y  +  (sh + bg - cf) z  -  (ah + bf + cg) xyz 							: reorganise to group all sclaras representing the same geometric components
+
+	(-rv)r = -rvr
+	-rvr = (sf s - ag s + ch s) x     +  (sg s + af s - bh s) y     +  (sh s + bg s - cf s) z     -  (ah s + bf s + cg s) xyz
+	     + (sf a - ag a + ch a) x xy  +  (sg a + af a - bh a) y xy  +  (sh a + bg a - cf a) z xy  -  (ah a + bf a + cg a) xyz xy
+	     + (sf b - ag b + ch b) x yz  +  (sg b + af b - bh b) y yz  +  (sh b + bg b - cf b) z yz  -  (ah b + bf b + cg b) xyz yz
+	     + (sf c - ag c + ch c) x zx  +  (sg c + af c - bh c) y zx  +  (sh c + bg c - cf c) z zx  -  (ah c + bf c + cg c) xyz zx
+
+			: simplify and get unsimplifiable components in terms of xyz
+	     = (sf s - ag s + ch s) x    +  (sg s + af s - bh s) y    +  (sh s + bg s - cf s) z    -  (ah s + bf s + cg s) xyz
+	     + (sf a - ag a + ch a) y    -  (sg a + af a - bh a) x    +  (sh a + bg a - cf a) xyz  +  (ah a + bf a + cg a) z	: xyzxy -> -xyxzy -> xyxyz -> -xyyxz -> -z
+	     + (sf b - ag b + ch b) xyz  +  (sg b + af b - bh b) z    -  (sh b + bg b - cf b) y    +  (ah b + bf b + cg b) x	: xyzyz -> -xyzzy -> -x
+	     - (sf c - ag c + ch c) z    +  (sg c + af c - bh c) xyz  +  (sh c + bg c - cf c) x    +  (ah c + bf c + cg c) y	: xyzzx -> -yxzzx -> -y
+
+			: reorganise in terms of geometric components
+		 = xyz (sfb - agb + chb  +  sgc + afc - bhc  +  sha + bga - cfa  -  ahs - bfs - cgs)
+		 + x   (sfs - ags + chs  -  sga - afa + bha  +  shc + bgc - cfc  +  ahb + bfb + cgb)
+		 + y   (sfa - aga + cha  +  sgs + afs - bhs  -  shb - bgb + cfb  +  ahc + bfc + cgc)
+		 + z   (-sfc+ agc - chc  +  sgb + afb - bhb  +  shs + bgs - cfs  +  aha + bfa + cga)
+
+			: cancel terms (remember scalar components can be reordered, due to oop scalar order always flipped above)
+		 = xyz (0) : it cancels out
+		 + x   (sfs - 2 ags + 2 chs - afa + 2 bha + 2 bgc - cfc + bfb)
+		 + y   (2 sfa - aga + 2 cha + sgs - 2 bhs - bgb + 2 cfb + cgc)
+		 + z   (-2 sfc+ 2 agc - chc + 2 sgb + 2 afb - bhb + shs + aha)
+
+			: group in terms of basis components of vector (f,g,h)
+		 = x   ( f (ss - aa + bb - cc)  +  g 2 (bc - as)  +  h 2 (cs + ba) )
+		 + y   ( f 2 (sa + cb)  +  g (ss - aa - bb + cc)  +  h 2 (ca - bs) )
+		 + z   ( f 2 (ab - sc)  +  g 2 (ac + sb)  +  h (ss + aa - bb - cc) )
+
+			: substituting  ss + aa + bb + cc = 1  thus  1 - ss + aa + bb + cc = 0  to simplify
+		 = x   ( f (1 - 2 aa - 2 cc)  +  g 2 (bc - as)  +  h 2 (cs + ba) )
+		 + y   ( f 2 (sa + cb)  +  g (1 - 2 aa - 2 bb)  +  h 2 (ca - bs) )
+		 + z   ( f 2 (ab - sc)  +  g 2 (ac + sb)  +  h (1 - 2 bb - 2 cc) )
+
+	: now substite a,b,c = xy,yz,zx for rotor and f,g,h = x,y,z for vector and put in matrix form and note every rotor component is multiplied by another which are in turn multiplied by 2
     */
 
     r.s*=SQRT_2;
     r.xy*=SQRT_2;
     r.yz*=SQRT_2;
     r.zx*=SQRT_2;
+    ///why does it seem to be transposed!!!
 
     return (matrix3f)
     {
         .x=
         {
             .x=1.0 - r.xy*r.xy - r.zx*r.zx,
-            .y=r.yz*r.zx - r.s*r.xy,
-            .z=r.yz*r.xy + r.s*r.zx
+            .y=r.zx*r.yz + r.xy*r.s,
+            .z=r.xy*r.yz - r.zx*r.s
         },
         .y=
         {
-            .x=r.zx*r.yz + r.xy*r.s,
+            .x=r.yz*r.zx - r.s*r.xy,
             .y=1.0 - r.xy*r.xy - r.yz*r.yz,
-            .z=r.zx*r.xy - r.yz*r.s
+            .z=r.xy*r.zx + r.yz*r.s
         },
         .z=
         {
-            .x=r.xy*r.yz - r.zx*r.s,
-            .y=r.xy*r.zx + r.yz*r.s,
+            .x=r.yz*r.xy + r.s*r.zx,
+            .y=r.zx*r.xy - r.yz*r.s,
             .z=1.0 - r.zx*r.zx - r.yz*r.yz
         }
     };
@@ -803,9 +846,9 @@ static inline vec3f r3f_rotate_v3f(rotor3f r,vec3f v)
 {
     return(vec3f)
     {
-        .x=2.0*(v.x*(0.5 - r.xy*r.xy - r.zx*r.zx) + v.y*(r.zx*r.yz + r.xy*r.s) + v.z*(r.xy*r.yz - r.zx*r.s)),
-        .y=2.0*(v.x*(r.yz*r.zx - r.s*r.xy) + v.y*(0.5 - r.xy*r.xy - r.yz*r.yz) + v.z*(r.xy*r.zx + r.yz*r.s)),
-        .z=2.0*(v.x*(r.yz*r.xy + r.s*r.zx) + v.y*(r.zx*r.xy - r.yz*r.s) + v.z*(0.5 - r.zx*r.zx - r.yz*r.yz))
+        .x=2.0*(v.x*(0.5 - r.xy*r.xy - r.zx*r.zx) + v.y*(r.yz*r.zx - r.s*r.xy) + v.z*(r.yz*r.xy + r.s*r.zx)),
+        .y=2.0*(v.x*(r.zx*r.yz + r.xy*r.s) + v.y*(0.5 - r.xy*r.xy - r.yz*r.yz) + v.z*(r.zx*r.xy - r.yz*r.s)),
+        .z=2.0*(v.x*(r.xy*r.yz - r.zx*r.s) + v.y*(r.xy*r.zx + r.yz*r.s) + v.z*(0.5 - r.zx*r.zx - r.yz*r.yz))
     };
 }
 
@@ -816,25 +859,25 @@ static inline vec3f r3f_derotate_v3f(rotor3f r,vec3f v)
     /// and the inverse of an orthonormal matrix is just its that matrix transposed!
     return(vec3f)
     {
-        .x=2.0*(v.x*(0.5 - r.xy*r.xy - r.zx*r.zx) + v.y*(r.yz*r.zx - r.s*r.xy) + v.z*(r.yz*r.xy + r.s*r.zx)),
-        .y=2.0*(v.x*(r.zx*r.yz + r.xy*r.s) + v.y*(0.5 - r.xy*r.xy - r.yz*r.yz) + v.z*(r.zx*r.xy - r.yz*r.s)),
-        .z=2.0*(v.x*(r.xy*r.yz - r.zx*r.s) + v.y*(r.xy*r.zx + r.yz*r.s) + v.z*(0.5 - r.zx*r.zx - r.yz*r.yz))
+        .x=2.0*(v.x*(0.5 - r.xy*r.xy - r.zx*r.zx) + v.y*(r.zx*r.yz + r.xy*r.s) + v.z*(r.xy*r.yz - r.zx*r.s)),
+        .y=2.0*(v.x*(r.yz*r.zx - r.s*r.xy) + v.y*(0.5 - r.xy*r.xy - r.yz*r.yz) + v.z*(r.xy*r.zx + r.yz*r.s)),
+        .z=2.0*(v.x*(r.yz*r.xy + r.s*r.zx) + v.y*(r.zx*r.xy - r.yz*r.s) + v.z*(0.5 - r.zx*r.zx - r.yz*r.yz))
     };
 }
 
 static inline vec3f r3f_get_x_axis(rotor3f r)
 {
-    return(vec3f){.x=1.0-2.0*(r.xy*r.xy + r.zx*r.zx),.y=2.0*(r.yz*r.zx - r.s*r.xy),.z=2.0*(r.yz*r.xy + r.s*r.zx)};
+    return(vec3f){.x=1.0-2.0*(r.xy*r.xy + r.zx*r.zx),.y=2.0*(r.zx*r.yz + r.xy*r.s),.z=2.0*(r.xy*r.yz - r.zx*r.s)};
 }
 
 static inline vec3f r3f_get_y_axis(rotor3f r)
 {
-    return(vec3f){.x=2.0*(r.zx*r.yz + r.xy*r.s),.y=1.0-2.0*(r.xy*r.xy + r.yz*r.yz),.z=2.0*(r.zx*r.xy - r.yz*r.s)};
+    return(vec3f){.x=2.0*(r.yz*r.zx - r.s*r.xy),.y=1.0-2.0*(r.xy*r.xy + r.yz*r.yz),.z=2.0*(r.xy*r.zx + r.yz*r.s)};
 }
 
 static inline vec3f r3f_get_z_axis(rotor3f r)
 {
-    return(vec3f){.x=2.0*(r.xy*r.yz - r.zx*r.s),.y=2.0*(r.xy*r.zx + r.yz*r.s),.z=1.0-2.0*(r.zx*r.zx + r.yz*r.yz)};
+    return(vec3f){.x=2.0*(r.yz*r.xy + r.s*r.zx),.y=2.0*(r.zx*r.xy - r.yz*r.s),.z=1.0-2.0*(r.zx*r.zx + r.yz*r.yz)};
 }
 
 ///useful for ensuring object rotation doesn't start introducing skew as error accumulates over time
