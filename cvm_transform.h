@@ -172,12 +172,12 @@ static inline void cvm_transform_stack_rotate_around_z_axis(cvm_transform_stack 
 
 static inline void cvm_transform_stack_rotate_around_vector(cvm_transform_stack * ts,vec3f v,float a)
 {
-    ts->stack[ts->i].r=r3f_multiply(ts->stack[ts->i].r,r3f_from_v3f_and_angle(v,a));
+    ts->stack[ts->i].r=r3f_multiply(r3f_from_v3f_and_angle(v,a),ts->stack[ts->i].r);
 }
 
 static inline void cvm_transform_stack_rotate(cvm_transform_stack * ts,rotor3f r)
 {
-    ts->stack[ts->i].r=r3f_multiply(ts->stack[ts->i].r,r);
+    ts->stack[ts->i].r=r3f_multiply(r,ts->stack[ts->i].r);
 }
 
 #endif

@@ -726,6 +726,7 @@ static inline rotor3f r3f_from_v3f_and_angle(vec3f v,float a)
     return(rotor3f){.s=cosf(a*0.5),.xy=s*v.z,.yz=s*v.x,.zx=s*v.y};
 }
 
+///in terms of applying rotations, LHS gets applied first
 static inline rotor3f r3f_multiply(rotor3f r1,rotor3f r2)
 {
     /// figured out via geometric product of r1 on r2
