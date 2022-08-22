@@ -729,7 +729,7 @@ static inline rotor3f r3f_from_v3f_and_angle(vec3f v,float a)
 ///in terms of applying rotations, LHS gets applied first
 static inline rotor3f r3f_multiply(rotor3f r1,rotor3f r2)
 {
-    /// figured out via geometric product of r1 on r2
+    /// figured out via geometric product of r1 & r2
     return(rotor3f)
     {
         .s =r1.s*r2.s-r1.xy*r2.xy-r1.yz*r2.yz-r1.zx*r2.zx,
@@ -739,7 +739,8 @@ static inline rotor3f r3f_multiply(rotor3f r1,rotor3f r2)
     };
 }
 
-///for these simplify multiplication as if r1 represents a rotation about the respective axes
+/// for these simplify multiplication as if r1 represents a rotation about the respective axes
+/// treated as if a LHS multiplier (applied as rotation before extant rotation r)
 static inline rotor3f r3f_rotate_around_x_axis(rotor3f r,float a)
 {
     float s=sinf(a*0.5);

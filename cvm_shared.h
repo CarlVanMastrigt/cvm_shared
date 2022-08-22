@@ -63,6 +63,8 @@ typedef union widget widget;
 #include "cvm_thread.h"
 
 
+#include "debug_render.h"
+
 #include "test_render.h"
 
 #endif
