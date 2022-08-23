@@ -768,8 +768,8 @@ void initialise_test_swapchain_dependencies(VkSampleCountFlagBits sample_count)
     cvm_vk_resize_module_graphics_data(&test_module_data,0);
 
     uint32_t uniform_size=0;
-    uniform_size+=cvm_vk_transient_buffer_get_rounded_allocation_size(&test_transient_buffer,sizeof(test_geo_uniform_data));
-    uniform_size+=cvm_vk_transient_buffer_get_rounded_allocation_size(&test_transient_buffer,sizeof(test_post_uniform_data));
+    uniform_size+=cvm_vk_transient_buffer_get_rounded_allocation_size(&test_transient_buffer,sizeof(test_geo_uniform_data),0);
+    uniform_size+=cvm_vk_transient_buffer_get_rounded_allocation_size(&test_transient_buffer,sizeof(test_post_uniform_data),0);
     cvm_vk_transient_buffer_update(&test_transient_buffer,uniform_size,swapchain_image_count);
 
     uint32_t staging_size=65536;
@@ -848,7 +848,7 @@ cvm_vk_module_batch * test_render_frame(cvm_camera * c)
 
         test_geo_uniform_data * geo_uniforms;
 
-        geo_uniforms = cvm_vk_transient_buffer_get_allocation(&test_transient_buffer,sizeof(test_geo_uniform_data),&uniforms_offset);
+        geo_uniforms = cvm_vk_transient_buffer_get_allocation(&test_transient_buffer,sizeof(test_geo_uniform_data),0,&uniforms_offset);
         if(geo_uniforms==NULL)puts("FAILED");
 
         geo_uniforms->proj=*get_view_matrix_pointer(c);///try to avoid per item uniforms, when absolutely necessary (cant be put in push constants) use a linear allocator to distribute pre-allocated ones from here
@@ -869,7 +869,7 @@ cvm_vk_module_batch * test_render_frame(cvm_camera * c)
 
         test_post_uniform_data * post_uniforms;
 
-        post_uniforms = cvm_vk_transient_buffer_get_allocation(&test_transient_buffer,sizeof(test_post_uniform_data),&uniforms_offset);
+        post_uniforms = cvm_vk_transient_buffer_get_allocation(&test_transient_buffer,sizeof(test_post_uniform_data),0,&uniforms_offset);
         if(geo_uniforms==NULL)puts("FAILED");
 
         post_uniforms->sample_count=2;

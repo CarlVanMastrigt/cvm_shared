@@ -48,8 +48,8 @@ void create_debug_render_data(VkDescriptorSetLayout * descriptor_set_layout)
 
     cvm_vk_create_pipeline_layout(&debug_pipeline_layout,&pipeline_layout_create_info);
 
-    cvm_vk_create_shader_stage_info(&debug_vert_stage,"shaders/debug/line.vert.spv",VK_SHADER_STAGE_VERTEX_BIT);
-    cvm_vk_create_shader_stage_info(&debug_frag_stage,"shaders/debug/line.frag.spv",VK_SHADER_STAGE_FRAGMENT_BIT);
+    cvm_vk_create_shader_stage_info(&debug_vert_stage,"cvm_shared/shaders/debug/line.vert.spv",VK_SHADER_STAGE_VERTEX_BIT);
+    cvm_vk_create_shader_stage_info(&debug_frag_stage,"cvm_shared/shaders/debug/line.frag.spv",VK_SHADER_STAGE_FRAGMENT_BIT);
 }
 
 void destroy_debug_render_data(void)
@@ -63,7 +63,7 @@ void destroy_debug_render_data(void)
 void create_debug_swapchain_dependent_render_data(VkRenderPass colour_render_pass,VkSampleCountFlagBits sample_count)
 {
 
-    float line_thickness=1.0;///VK_LINE_RASTERIZATION_MODE_RECTANGULAR_SMOOTH_EXT
+    float line_thickness=1.0;
 
     VkGraphicsPipelineCreateInfo pipeline_create_info=(VkGraphicsPipelineCreateInfo)
     {
@@ -126,17 +126,6 @@ void create_debug_swapchain_dependent_render_data(VkRenderPass colour_render_pas
             {
                 .sType=VK_STRUCTURE_TYPE_PIPELINE_RASTERIZATION_STATE_CREATE_INFO,
                 .pNext=NULL,
-//                .pNext=(VkPipelineRasterizationLineStateCreateInfoEXT[1])
-//                {
-//                    {
-//                        .sType=VK_STRUCTURE_TYPE_PIPELINE_RASTERIZATION_LINE_STATE_CREATE_INFO_EXT,
-//                        .pNext=NULL,
-//                        .lineRasterizationMode=VK_LINE_RASTERIZATION_MODE_RECTANGULAR_SMOOTH_EXT,
-//                        .stippledLineEnable=VK_FALSE,
-//                        .lineStippleFactor=0,
-//                        .lineStipplePattern=0
-//                    }
-//                },
                 .flags=0,
                 .depthClampEnable=VK_FALSE,
                 .rasterizerDiscardEnable=VK_FALSE,

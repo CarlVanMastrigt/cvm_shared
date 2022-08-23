@@ -624,9 +624,9 @@ VkAttachmentDescription cvm_vk_get_default_depth_stencil_attachment(VkFormat for
         .flags=0,
         .format=format,
         .samples=sample_count,
-        .loadOp=depth_load?VK_ATTACHMENT_LOAD_OP_LOAD:depth_clear?VK_ATTACHMENT_LOAD_OP_CLEAR:VK_ATTACHMENT_LOAD_OP_DONT_CARE,
+        .loadOp=depth_load?VK_ATTACHMENT_LOAD_OP_LOAD:(depth_clear?VK_ATTACHMENT_LOAD_OP_CLEAR:VK_ATTACHMENT_LOAD_OP_DONT_CARE),
         .storeOp=depth_store?VK_ATTACHMENT_STORE_OP_STORE:VK_ATTACHMENT_STORE_OP_DONT_CARE,
-        .stencilLoadOp=stencil_load?VK_ATTACHMENT_LOAD_OP_LOAD:stencil_clear?VK_ATTACHMENT_LOAD_OP_CLEAR:VK_ATTACHMENT_LOAD_OP_DONT_CARE,
+        .stencilLoadOp=stencil_load?VK_ATTACHMENT_LOAD_OP_LOAD:(stencil_clear?VK_ATTACHMENT_LOAD_OP_CLEAR:VK_ATTACHMENT_LOAD_OP_DONT_CARE),
         .stencilStoreOp=stencil_store?VK_ATTACHMENT_STORE_OP_STORE:VK_ATTACHMENT_STORE_OP_DONT_CARE,
         .initialLayout=(stencil_load||depth_load)?VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL:VK_IMAGE_LAYOUT_UNDEFINED,
         .finalLayout=VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL

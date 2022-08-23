@@ -887,9 +887,9 @@ void cvm_vk_transient_buffer_destroy(cvm_vk_transient_buffer * tb)
     cvm_vk_destroy_buffer(tb->buffer,tb->memory,tb->mapping);
 }
 
-uint32_t cvm_vk_transient_buffer_get_rounded_allocation_size(cvm_vk_transient_buffer * tb,uint32_t allocation_size)
+uint32_t cvm_vk_transient_buffer_get_rounded_allocation_size(cvm_vk_transient_buffer * tb,uint32_t allocation_size,uint32_t alignment)
 {
-    return (((allocation_size-1)>>tb->alignment_size_factor)+1)<<tb->alignment_size_factor;
+    return (((allocation_size+alignment-1)>>tb->alignment_size_factor)+1)<<tb->alignment_size_factor;
 }
 
 void cvm_vk_transient_buffer_begin(cvm_vk_transient_buffer * tb,uint32_t frame_index)
@@ -919,12 +919,12 @@ void cvm_vk_transient_buffer_end(cvm_vk_transient_buffer * tb)
     tb->max_offset=0;
 }
 
-void * cvm_vk_transient_buffer_get_allocation(cvm_vk_transient_buffer * tb,uint32_t allocation_size,VkDeviceSize * acquired_offset)
+void * cvm_vk_transient_buffer_get_allocation(cvm_vk_transient_buffer * tb,uint32_t allocation_size,uint32_t alignment,VkDeviceSize * acquired_offset)
 {
-    allocation_size=(((allocation_size-1)>>tb->alignment_size_factor)+1)<<tb->alignment_size_factor;///round as required
-
     uint32_t new_remaining,offset;
     uint_fast32_t old_remaining;
+
+    allocation_size=(((allocation_size+alignment-1)>>tb->alignment_size_factor)+1)<<tb->alignment_size_factor;///round as required
 
     old_remaining=atomic_load(&tb->space_remaining);
     do
@@ -937,12 +937,26 @@ void * cvm_vk_transient_buffer_get_allocation(cvm_vk_transient_buffer * tb,uint3
 
     offset=tb->max_offset-old_remaining;
 
+    //offset-=offset%alignment;/// non-Po2 "alignment" supported
+
     *acquired_offset=offset;
     return tb->mapping+offset;
 }
 
+void cvm_vk_transient_buffer_bind_as_vertex(VkCommandBuffer cmd_buf,cvm_vk_transient_buffer * tb,uint32_t binding)
+{
+    /// vertex offset in draw assumes all verts have same offset, so it makes no sense in this paradigm to have multiple binding points from a single buffer!
+    #warning the above offset issue may become a MASSIVE hassle when isntance data gets involved, base-indexed vertex offsets may not be viable anymore
+    ///     ^ actually does have instanceOffset...
 
+    VkDeviceSize offset=0;
+    vkCmdBindVertexBuffers(cmd_buf,binding,1,&tb->buffer,&offset);
+}
 
+void cvm_vk_transient_buffer_bind_as_index(VkCommandBuffer cmd_buf,cvm_vk_transient_buffer * tb,VkIndexType type)
+{
+    vkCmdBindIndexBuffer(cmd_buf,tb->buffer,0,type);
+}
 
 /*void cvm_vk_create_upload_buffer(cvm_vk_upload_buffer * ub,VkBufferUsageFlags usage)
 {

@@ -588,8 +588,8 @@ void initialise_overlay_render_data(void)
 
     create_overlay_pipeline_layouts();
 
-    cvm_vk_create_shader_stage_info(&overlay_vertex_stage,"cvm_shared/shaders/overlay_vert.spv",VK_SHADER_STAGE_VERTEX_BIT);
-    cvm_vk_create_shader_stage_info(&overlay_fragment_stage,"cvm_shared/shaders/overlay_frag.spv",VK_SHADER_STAGE_FRAGMENT_BIT);
+    cvm_vk_create_shader_stage_info(&overlay_vertex_stage,"cvm_shared/shaders/overlay.vert.spv",VK_SHADER_STAGE_VERTEX_BIT);
+    cvm_vk_create_shader_stage_info(&overlay_fragment_stage,"cvm_shared/shaders/overlay.frag.spv",VK_SHADER_STAGE_FRAGMENT_BIT);
 
     cvm_vk_create_module_data(&overlay_module_data,0,0);
 
@@ -651,8 +651,8 @@ void initialise_overlay_swapchain_dependencies(void)
     cvm_vk_resize_module_graphics_data(&overlay_module_data,0);
 
     uint32_t uniform_size=0;
-    uniform_size+=cvm_vk_transient_buffer_get_rounded_allocation_size(&overlay_transient_buffer,sizeof(float)*4*OVERLAY_NUM_COLOURS_);
-    uniform_size+=cvm_vk_transient_buffer_get_rounded_allocation_size(&overlay_transient_buffer,max_overlay_elements*sizeof(cvm_overlay_render_data));
+    uniform_size+=cvm_vk_transient_buffer_get_rounded_allocation_size(&overlay_transient_buffer,sizeof(float)*4*OVERLAY_NUM_COLOURS_,0);
+    uniform_size+=cvm_vk_transient_buffer_get_rounded_allocation_size(&overlay_transient_buffer,max_overlay_elements*sizeof(cvm_overlay_render_data),0);
     cvm_vk_transient_buffer_update(&overlay_transient_buffer,uniform_size,swapchain_image_count);
 
     uint32_t staging_size=65536;///arbitrary
@@ -724,7 +724,7 @@ cvm_vk_module_batch * overlay_render_frame(int screen_w,int screen_h,widget * me
         ///             ^could have meta level function that inserts both barriers to appropriate queues simultaneously as necessary??? (VK_NULL_HANDLE when unit-transfer?)
         ///   module handles semaphore when necessary, perhaps it can also handle some aspect(s) of barriers?
 
-        element_render_buffer.buffer=cvm_vk_transient_buffer_get_allocation(&overlay_transient_buffer,max_overlay_elements*sizeof(cvm_overlay_render_data),&vertex_offset);
+        element_render_buffer.buffer=cvm_vk_transient_buffer_get_allocation(&overlay_transient_buffer,max_overlay_elements*sizeof(cvm_overlay_render_data),0,&vertex_offset);
         element_render_buffer.space=max_overlay_elements;
         element_render_buffer.count=0;
 
@@ -739,7 +739,7 @@ cvm_vk_module_batch * overlay_render_frame(int screen_w,int screen_h,widget * me
 
         ///start of graphics
 
-        float * colours = cvm_vk_transient_buffer_get_allocation(&overlay_transient_buffer,sizeof(float)*4*OVERLAY_NUM_COLOURS_,&uniform_offset);
+        float * colours = cvm_vk_transient_buffer_get_allocation(&overlay_transient_buffer,sizeof(float)*4*OVERLAY_NUM_COLOURS_,0,&uniform_offset);
 
         memcpy(colours,overlay_colours,sizeof(float)*4*OVERLAY_NUM_COLOURS_);
 

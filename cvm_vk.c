@@ -27,7 +27,7 @@ static VkDevice cvm_vk_device;///"logical" device
 static VkSurfaceKHR cvm_vk_surface;
 static VkPhysicalDeviceMemoryProperties cvm_vk_memory_properties;
 static VkPhysicalDeviceProperties cvm_vk_device_properties;
-static VkPhysicalDeviceFeatures cvm_vk_device_features;
+static VkPhysicalDeviceFeatures2 cvm_vk_device_features;
 
 static VkSwapchainKHR cvm_vk_swapchain=VK_NULL_HANDLE;
 static VkSurfaceFormatKHR cvm_vk_surface_format;
@@ -141,13 +141,19 @@ static bool check_physical_device_appropriate(bool dedicated_gpu_required,bool s
 
     printf("standard sample locations: %d\n",cvm_vk_device_properties.limits.standardSampleLocations);
 
+    cvm_vk_device_features.sType=VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_FEATURES_2;
+    cvm_vk_device_features.pNext=NULL;
+
     vkGetPhysicalDeviceFeatures(cvm_vk_physical_device,&cvm_vk_device_features);
+
+    ///VkPhysicalDeviceLineRasterizationFeaturesEXT
 
     #warning test for required features. need comparitor struct to do this?   enable all by default for time being?
 
     ///SIMPLE EXAMPLE TEST: printf("geometry shader: %d\n",features.geometryShader);
-    printf("geometry shader: %d\n",cvm_vk_device_features.geometryShader);
-    printf("sample rate shading: %d\n",cvm_vk_device_features.sampleRateShading);
+    printf("geometry shader: %d\n",cvm_vk_device_features.features.geometryShader);
+    printf("sample rate shading: %d\n",cvm_vk_device_features.features.sampleRateShading);
+    printf("wide lines: %d\n",cvm_vk_device_features.features.wideLines);
 
     vkGetPhysicalDeviceQueueFamilyProperties(cvm_vk_physical_device,&queue_family_count,NULL);
     queue_family_properties=malloc(sizeof(VkQueueFamilyProperties)*queue_family_count);
@@ -272,6 +278,7 @@ static void cvm_vk_create_logical_device(const char ** requested_extensions,int 
     features.sampleRateShading=VK_TRUE;
     features.fillModeNonSolid=VK_TRUE;
     features.fragmentStoresAndAtomics=VK_TRUE;
+    features.wideLines=VK_TRUE;
 //    features=cvm_vk_device_features;
 
     VkDeviceQueueCreateInfo device_queue_creation_infos[3];///3 is max queues
