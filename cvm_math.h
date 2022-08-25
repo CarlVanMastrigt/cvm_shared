@@ -329,7 +329,7 @@ static inline vec3f v3f_norm(vec3f v)
 }
 static inline float v3f_mag(vec3f v)
 {
-    return sqrt(v.x*v.x+v.y*v.y+v.z*v.z);
+    return sqrtf(v.x*v.x+v.y*v.y+v.z*v.z);
 }
 static inline float v3f_dist(vec3f v1,vec3f v2)
 {
@@ -425,7 +425,7 @@ static inline vec2f v2f_norm(vec2f v)
 }
 static inline float v2f_mag(vec2f v)
 {
-    return sqrt(v.x*v.x+v.y*v.y);
+    return sqrtf(v.x*v.x+v.y*v.y);
 }
 static inline float v2f_dist(vec2f v1,vec2f v2)
 {
@@ -708,14 +708,14 @@ static inline rotor3f r3f_from_v3f(vec3f v1,vec3f v2)
     \\\xz same logic applies as did for xy
     */
     float d=v1.x*v2.x + v1.y*v2.y + v1.z*v2.z;
-    float m=1.0/sqrt(2.0+2.0*d);
+    float im=1.0/sqrtf(2.0+2.0*d);///inverse_magnitude
 
     return(rotor3f)
     {
-        .s=m+m*d,///(1+d)*m
-        .xy=m*(v1.x*v2.y-v1.y*v2.x),
-        .yz=m*(v1.y*v2.z-v1.z*v2.y),
-        .zx=m*(v1.z*v2.x-v1.x*v2.z)
+        .s=im+im*d,///(1+d)*im
+        .xy=im*(v1.x*v2.y-v1.y*v2.x),
+        .yz=im*(v1.y*v2.z-v1.z*v2.y),
+        .zx=im*(v1.z*v2.x-v1.x*v2.z)
     };
 }
 
@@ -763,20 +763,20 @@ static inline rotor3f r3f_rotate_around_z_axis(rotor3f r,float a)
 static inline matrix3f r3f_to_m3f(rotor3f r)
 {
     /**
-    : unoptimised included for educational purposes, is acquired by applying geometric product of rotor (r) over axis each axis(v) as -rvr
-    : using geometric product & exterior product rules (r is a geometric product of 2 implict vectors, comprised of a bivector and a scalar)
+    // unoptimised included for educational purposes, is acquired by applying geometric product of rotor (r) over axis each axis(v) as -rvr
+    // using geometric product & exterior product rules (r is a geometric product of 2 implict vectors, comprised of a bivector and a scalar)
 
 
-    : here a,b,c represent the constants of their respective bivector components of the rotor; xy,yz,zx respectively
-    : and f,g,h represent basis components of vector v; x,y,z respectively
-    -r = s + ayx + bzy + cxz	:reverse order of bivector components of r to get "-r"
+    // here a,b,c represent the constants of their respective bivector components of the rotor; xy,yz,zx respectively
+    // and f,g,h represent basis components of vector v; x,y,z respectively
+    -r = s + ayx + bzy + cxz	//reverse order of bivector components of r to get "-r"
     r  = s + axy + byz + czx
     v  = fx + gy + hz
 
     -rv = s fx + s gy + s hz   +  ayx fx + ayx gy + ayx hz  +  bzy fx + bzy gy + bzy hz  +  cxz fx + cxz gy + cxz hz
-	    = sf x + sg y + sh z   +  af yxx + ag yxy + ah yxz  +  bf zyx + bg zyy + bh zyz  +  cf xzx + cg xzy + ch xzz	: separate out sclar/constant components and put geometric compoents together
-	    = sf x + sg y + sh z   +  af y   - ag x   - ah xyz  -  bf xyz + bg z   - bh y    -  cf z   - cg xyz + ch x  	: simplify and get unsimplifiable components in terms of xyz
-	    = (sf - ag + ch) x   +  (sg + af - bh) y  +  (sh + bg - cf) z  -  (ah + bf + cg) xyz 							: reorganise to group all sclaras representing the same geometric components
+	    = sf x + sg y + sh z   +  af yxx + ag yxy + ah yxz  +  bf zyx + bg zyy + bh zyz  +  cf xzx + cg xzy + ch xzz	// separate out sclar/constant components and put geometric compoents together
+	    = sf x + sg y + sh z   +  af y   - ag x   - ah xyz  -  bf xyz + bg z   - bh y    -  cf z   - cg xyz + ch x  	// simplify and get unsimplifiable components in terms of xyz
+	    = (sf - ag + ch) x   +  (sg + af - bh) y  +  (sh + bg - cf) z  -  (ah + bf + cg) xyz 							// reorganise to group all sclaras representing the same geometric components
 
 	(-rv)r = -rvr
 	-rvr = (sf s - ag s + ch s) x     +  (sg s + af s - bh s) y     +  (sh s + bg s - cf s) z     -  (ah s + bf s + cg s) xyz
@@ -784,35 +784,35 @@ static inline matrix3f r3f_to_m3f(rotor3f r)
 	     + (sf b - ag b + ch b) x yz  +  (sg b + af b - bh b) y yz  +  (sh b + bg b - cf b) z yz  -  (ah b + bf b + cg b) xyz yz
 	     + (sf c - ag c + ch c) x zx  +  (sg c + af c - bh c) y zx  +  (sh c + bg c - cf c) z zx  -  (ah c + bf c + cg c) xyz zx
 
-			: simplify and get unsimplifiable components in terms of xyz
+		// simplify and get unsimplifiable components in terms of xyz
 	     = (sf s - ag s + ch s) x    +  (sg s + af s - bh s) y    +  (sh s + bg s - cf s) z    -  (ah s + bf s + cg s) xyz
-	     + (sf a - ag a + ch a) y    -  (sg a + af a - bh a) x    +  (sh a + bg a - cf a) xyz  +  (ah a + bf a + cg a) z	: xyzxy -> -xyxzy -> xyxyz -> -xyyxz -> -z
-	     + (sf b - ag b + ch b) xyz  +  (sg b + af b - bh b) z    -  (sh b + bg b - cf b) y    +  (ah b + bf b + cg b) x	: xyzyz -> -xyzzy -> -x
-	     - (sf c - ag c + ch c) z    +  (sg c + af c - bh c) xyz  +  (sh c + bg c - cf c) x    +  (ah c + bf c + cg c) y	: xyzzx -> -yxzzx -> -y
+	     + (sf a - ag a + ch a) y    -  (sg a + af a - bh a) x    +  (sh a + bg a - cf a) xyz  +  (ah a + bf a + cg a) z	// xyzxy -> -xyxzy -> xyxyz -> -xyyxz -> -z
+	     + (sf b - ag b + ch b) xyz  +  (sg b + af b - bh b) z    -  (sh b + bg b - cf b) y    +  (ah b + bf b + cg b) x	// xyzyz -> -xyzzy -> -x
+	     - (sf c - ag c + ch c) z    +  (sg c + af c - bh c) xyz  +  (sh c + bg c - cf c) x    +  (ah c + bf c + cg c) y	// xyzzx -> -yxzzx -> -y
 
-			: reorganise in terms of geometric components
+		// reorganise in terms of geometric components
 		 = xyz (sfb - agb + chb  +  sgc + afc - bhc  +  sha + bga - cfa  -  ahs - bfs - cgs)
 		 + x   (sfs - ags + chs  -  sga - afa + bha  +  shc + bgc - cfc  +  ahb + bfb + cgb)
 		 + y   (sfa - aga + cha  +  sgs + afs - bhs  -  shb - bgb + cfb  +  ahc + bfc + cgc)
 		 + z   (-sfc+ agc - chc  +  sgb + afb - bhb  +  shs + bgs - cfs  +  aha + bfa + cga)
 
-			: cancel terms (remember scalar components can be reordered, due to oop scalar order always flipped above)
-		 = xyz (0) : it cancels out
+		// cancel terms (remember scalar components can be reordered, due to oop scalar order always flipped above)
+		 = xyz (0) // it cancels out completely
 		 + x   (sfs - 2 ags + 2 chs - afa + 2 bha + 2 bgc - cfc + bfb)
 		 + y   (2 sfa - aga + 2 cha + sgs - 2 bhs - bgb + 2 cfb + cgc)
 		 + z   (-2 sfc+ 2 agc - chc + 2 sgb + 2 afb - bhb + shs + aha)
 
-			: group in terms of basis components of vector (f,g,h)
+		// group in terms of basis components of vector (f,g,h)
 		 = x   ( f (ss - aa + bb - cc)  +  g 2 (bc - as)  +  h 2 (cs + ba) )
 		 + y   ( f 2 (sa + cb)  +  g (ss - aa - bb + cc)  +  h 2 (ca - bs) )
 		 + z   ( f 2 (ab - sc)  +  g 2 (ac + sb)  +  h (ss + aa - bb - cc) )
 
-			: substituting  ss + aa + bb + cc = 1  thus  1 - ss + aa + bb + cc = 0  to simplify
+        // substituting  ss + aa + bb + cc = 1  thus  1 - ss + aa + bb + cc = 0  to simplify
 		 = x   ( f (1 - 2 aa - 2 cc)  +  g 2 (bc - as)  +  h 2 (cs + ba) )
 		 + y   ( f 2 (sa + cb)  +  g (1 - 2 aa - 2 bb)  +  h 2 (ca - bs) )
 		 + z   ( f 2 (ab - sc)  +  g 2 (ac + sb)  +  h (1 - 2 bb - 2 cc) )
 
-	: now substite a,b,c = xy,yz,zx for rotor and f,g,h = x,y,z for vector and put in matrix form and note every rotor component is multiplied by another which are in turn multiplied by 2
+	// now substite a,b,c = xy,yz,zx for rotor and f,g,h = x,y,z for vector and put in matrix form and note every rotor component is multiplied by another which are in turn multiplied by 2
     */
 
     r.s*=SQRT_2;
@@ -882,11 +882,226 @@ static inline vec3f r3f_get_z_axis(rotor3f r)
     return(vec3f){.x=2.0*(r.yz*r.xy + r.s*r.zx),.y=2.0*(r.zx*r.xy - r.yz*r.s),.z=1.0-2.0*(r.zx*r.zx + r.yz*r.yz)};
 }
 
+
+static inline rotor3f r3f_isolate_xy_rotation(rotor3f r)/// isolates the rotation about the z axis
+{
+    /**
+    r = a + b xy + c yz + d zx
+
+    // from r3f_get_z_axis
+    z_axis = 2(cb+ad) x  +  2(db-ac) y  +  1-2(dd+cc) z
+
+
+    // calculate rotation required to get this to  1,0,0  ( use r3f_from_v3f with v1 = 0,0,1 )
+    dot_product = 1-2(dd+cc) //basically just the z component
+    im=inv_magnitude
+    im=1/sqrt(2+2(1-2(dd+cc)))
+      =1/sqrt(4-4(dd+cc))
+      =1/(2*sqrt(1-dd-cc))
+      =0.5/sqrt(1-dd-cc) // both this and following will be useful, use whichever is most useful for given situation
+      =0.5/sqrt(aa+bb) // aa+bb+cc+dd = 1   therefore   1-cc-dd = aa+bb
+
+    z_rot=
+
+    .s = (1+dot_product)*im
+       = (2-2*dd-2*cc)*0.5/sqrt(1-dd-cc)
+       = (1-dd-cc)/sqrt(1-dd-cc)
+       = sqrt(1-dd-cc)
+       = sqrt(aa+bb) // aa+bb+cc+dd = 1   therefore   1-cc-dd = aa+bb
+
+    .xy = 0 // no v1.z, makes sense as we're avoiding this component
+
+    .yz = -v2.y * im
+        = -2(db-ac) * 0.5/sqrt(aa+bb)
+        = (ac-db)/sqrt(aa+bb)
+
+    .zx = v2.x * im
+        = 2(cb+ad) * 0.5/sqrt(aa+bb)
+        = (cb+ad)/sqrt(aa+bb)
+
+
+    r3f_multiply(Ra,z_rot_inv); // z_rot_inv is just z_rot with xy,yz,zx multiplied by -1 (rotate opposite direction)
+
+    .s  = a*sqrt(aa+bb)  +  c*(ac-db)/sqrt(aa+bb)  +  d*(cb+ad)/sqrt(aa+bb)
+    .s*sqrt(aa+bb) = aaa+abb + acc-bcd + bcd+add
+    .s  = (aaa+abb + acc+add)/sqrt(aa+bb)
+        = a(aa+bb + cc+dd)/sqrt(aa+bb) //1=aa+bb+cc+dd
+        = a/sqrt(aa+bb)
+
+    .xy = b*sqrt(aa+bb)  +  c*(bc+ad)/sqrt(aa+bb)  +  d*(bd-ac)/sqrt(aa+bb)
+    .xy*sqrt(aa+bb) = aab+bbb  +  bcc+acd + bdd-acd
+    .xy = b(aa+bb+cc+dd)/sqrt(aa+bb) //1=aa+bb+cc+dd
+    .xy = b/sqrt(aa+bb)
+
+    .yz = a*(bd-ac)/sqrt(aa+bb) + b*(-bc-ad)/sqrt(aa+bb) + c*sqrt(aa+bb)
+        = (abd-aac-bbc-abd)/sqrt(aa+bb) + c*sqrt(aa+bb)
+        = (aac-bbc)/sqrt(aa+bb) + c*sqrt(aa+bb)
+    .yz*sqrt(aa+bb) = aac-bbc+c*(aa+bb)
+                    = aac-bbc+aac+bbc
+                    = 0
+
+    .zx = a*(-bc-ad)/sqrt(aa+bb) + b*(ac-bd)/sqrt(aa+bb) + d*sqrt(aa+bb)
+        = (-abc-aad+abc-bbd)/sqrt(aa+bb) + d*sqrt(aa+bb)
+        = (-aad-bbd)/sqrt(aa+bb) + d*sqrt(aa+bb)
+    .zx*sqrt(aa+bb) = -aad-bbd + d*(aa+bb)
+                    = -aad-bbd+aad+bbd
+                    = 0
+    */
+
+    float im=1.0/sqrtf(r.s*r.s+r.xy*r.xy);///inverse magnitude
+    return(rotor3f){.s=r.s*im,.xy=r.xy*im,.yz=0.0,.zx=0.0};
+}
+
+static inline rotor3f r3f_isolate_yz_rotation(rotor3f r)/// isolates the rotation about the x axis
+{
+    /// logic/maths the same as in r3f_isolate_xy_rotation, just for different bivector
+
+    float im=1.0/sqrtf(r.s*r.s+r.yz*r.yz);///inverse magnitude
+    return(rotor3f){.s=r.s*im,.xy=0.0,.yz=r.yz*im,.zx=0.0};
+}
+
+static inline rotor3f r3f_isolate_zx_rotation(rotor3f r)/// isolates the rotation about the y axis
+{
+    /// logic/maths the same as in r3f_isolate_xy_rotation, just for different bivector
+
+    float im=1.0/sqrtf(r.s*r.s+r.zx*r.zx);///inverse magnitude
+    return(rotor3f){.s=r.s*im,.xy=0.0,.yz=0.0,.zx=r.zx*im};
+}
+
+static inline rotor3f r3f_isolate_x_axis_rotation(rotor3f r)
+{
+    /**
+    r = a + b xy + c yz + d zx
+
+    // from r3f_get_y_axis
+    x_axis = 1-2(bb+dd) x  +  2(cd+ab) y  +  2(bc-ad) z
+
+
+    // calculate rotation required to get this to  1,0,0  ( use r3f_from_v3f with v1 = 1,0,0 )
+    dot_product = 1-2(bb+dd) //basically just the x component
+    im=inv_magnitude
+    im=1/sqrt(2+2(1-2(bb+dd)))
+      =1/sqrt(4-4(bb+dd))
+      =1/(2*sqrt(1-bb-dd))
+      =0.5/sqrt(1-bb-dd) // both this and following will be useful, use whichever is most useful for given situation
+      =0.5/sqrt(aa+cc) // aa+bb+cc+dd = 1   therefore   1-cc-bb = aa+dd
+
+
+    z_rot=
+
+    .s = (1+dot_product)*im
+       = (2-2*bb-2*dd)*0.5/sqrt(1-bb-dd)
+       = (1-bb-dd)/sqrt(1-bb-dd)
+       = sqrt(1-bb-dd)
+       = sqrt(aa+cc) // aa+bb+cc+dd = 1   therefore   1-cc-bb = aa+dd
+
+    .xy = v2.y * im
+        = 2(cd+ab) * 0.5/sqrt(aa+cc)
+        = (cd+ab)/sqrt(aa+cc)
+
+    .yz = 0 // no v1.y, makes sense as we're avoiding this component
+
+    .zx = -v2.z * im
+        = 2(ad-bc) * 0.5/sqrt(aa+cc)
+        = (ad-bc)/sqrt(aa+cc)
+    */
+
+    float m=sqrtf(r.s*r.s+r.yz*r.yz);
+    float im=1.0/m;///inverse magnitude
+    return(rotor3f){.s=m,.xy=(r.yz*r.zx+r.s*r.xy)*im,.yz=0.0,.zx=(r.s*r.zx-r.xy*r.yz)*im};
+}
+
+static inline rotor3f r3f_isolate_y_axis_rotation(rotor3f r)
+{
+    /**
+    r = a + b xy + c yz + d zx
+
+    // from r3f_get_y_axis
+    y_axis = 2(cd-ab) x  +  1-2(bb+cc) y  +  2(bd+ac) z
+
+
+    // calculate rotation required to get this to  0,1,0  ( use r3f_from_v3f with v1 = 0,1,0 )
+    dot_product = 1-2(dd+cc) //basically just the y component
+    im=inv_magnitude
+    im=1/sqrt(2+2(1-2(bb+cc)))
+      =1/sqrt(4-4(bb+cc))
+      =1/(2*sqrt(1-bb-cc))
+      =0.5/sqrt(1-bb-cc) // both this and following will be useful, use whichever is most useful for given situation
+      =0.5/sqrt(aa+dd) // aa+bb+cc+dd = 1   therefore   1-cc-bb = aa+dd
+
+
+    z_rot=
+
+    .s = (1+dot_product)*im
+       = (2-2*bb-2*cc)*0.5/sqrt(1-bb-cc)
+       = (1-bb-cc)/sqrt(1-bb-cc)
+       = sqrt(1-bb-cc)
+       = sqrt(aa+dd) // aa+bb+cc+dd = 1   therefore   1-cc-bb = aa+dd
+
+    .xy = -v2.x * im
+        = -2(cd-ab) * 0.5/sqrt(aa+dd)
+        = (ab-cd)/sqrt(aa+dd)
+
+    .yz = v2.z * im
+        = 2(bd+ac) * 0.5/sqrt(aa+dd)
+        = (bd+ac)/sqrt(aa+dd)
+
+    .zx = 0 // no v1.y, makes sense as we're avoiding this component
+    */
+
+    float m=sqrtf(r.s*r.s+r.zx*r.zx);
+    float im=1.0/m;///inverse magnitude
+    return(rotor3f){.s=m,.xy=(r.s*r.xy-r.yz*r.zx)*im,.yz=(r.xy*r.zx+r.s*r.yz)*im,.zx=0.0};
+}
+
+static inline rotor3f r3f_isolate_z_axis_rotation(rotor3f r)
+{
+    /**
+    r = a + b xy + c yz + d zx
+
+    // from r3f_get_z_axis
+    z_axis = 2(cb+ad) x  +  2(db-ac) y  +  1-2(dd+cc) z
+
+
+    // calculate rotation required to get this to  0,0,1  ( use r3f_from_v3f with v1 = 0,0,1 )
+    dot_product = 1-2(dd+cc) //basically just the z component
+    im=inv_magnitude
+    im=1/sqrt(2+2(1-2(dd+cc)))
+      =1/sqrt(4-4(dd+cc))
+      =1/(2*sqrt(1-dd-cc))
+      =0.5/sqrt(1-dd-cc) // both this and following will be useful, use whichever is most useful for given situation
+      =0.5/sqrt(aa+bb) // aa+bb+cc+dd = 1   therefore   1-cc-dd = aa+bb
+
+
+    z_rot=
+
+    .s = (1+dot_product)*im
+       = (2-2*dd-2*cc)*0.5/sqrt(1-dd-cc)
+       = (1-dd-cc)/sqrt(1-dd-cc)
+       = sqrt(1-dd-cc)
+       = sqrt(aa+bb) // aa+bb+cc+dd = 1   therefore   1-cc-dd = aa+bb
+
+    .xy = 0 // no v1.z, makes sense as we're avoiding this component
+
+    .yz = -v2.y * im
+        = -2(db-ac) * 0.5/sqrt(aa+bb)
+        = (ac-db)/sqrt(aa+bb)
+
+    .zx = v2.x * im
+        = 2(cb+ad) * 0.5/sqrt(aa+bb)
+        = (cb+ad)/sqrt(aa+bb)
+    */
+
+    float m=sqrtf(r.s*r.s+r.xy*r.xy);
+    float im=1.0/m;///inverse magnitude
+    return(rotor3f){.s=m,.xy=0.0,.yz=(r.s*r.yz-r.zx*r.xy)*im,.zx=(r.xy*r.yz +r.s*r.zx)*im};
+}
+
 ///useful for ensuring object rotation doesn't start introducing skew as error accumulates over time
 static inline rotor3f r3f_normalize(rotor3f r)
 {
-    float m=1.0/sqrtf(r.s*r.s+r.xy*r.xy+r.yz*r.yz+r.zx*r.zx);
-    return(rotor3f){.s=r.s*m,.xy=r.xy*m,.yz=r.yz*m,.zx=r.zx*m};
+    float im=1.0/sqrtf(r.s*r.s+r.xy*r.xy+r.yz*r.yz+r.zx*r.zx);///inverse magnitude
+    return(rotor3f){.s=r.s*im,.xy=r.xy*im,.yz=r.yz*im,.zx=r.zx*im};
 }
 
 static inline rotor3f r3f_lerp(rotor3f r1,rotor3f r2,float t)
