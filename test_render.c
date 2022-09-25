@@ -468,56 +468,56 @@ static void create_test_render_pass(VkSampleCountFlagBits sample_count)
                 .srcSubpass=VK_SUBPASS_EXTERNAL,
                 .dstSubpass=0,
                 ///not sure on specific dependencies related to swapchain images being read/written by presentation engine
-                .srcStageMask=VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT,
-                .dstStageMask=VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT,
-                .srcAccessMask=VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT | VK_ACCESS_COLOR_ATTACHMENT_READ_BIT,
-                .dstAccessMask=VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT | VK_ACCESS_COLOR_ATTACHMENT_READ_BIT,
+                .srcStageMask=VK_PIPELINE_STAGE_2_COLOR_ATTACHMENT_OUTPUT_BIT,
+                .dstStageMask=VK_PIPELINE_STAGE_2_COLOR_ATTACHMENT_OUTPUT_BIT,
+                .srcAccessMask=VK_ACCESS_2_COLOR_ATTACHMENT_WRITE_BIT | VK_ACCESS_2_COLOR_ATTACHMENT_READ_BIT,
+                .dstAccessMask=VK_ACCESS_2_COLOR_ATTACHMENT_WRITE_BIT | VK_ACCESS_2_COLOR_ATTACHMENT_READ_BIT,
                 .dependencyFlags=VK_DEPENDENCY_BY_REGION_BIT
             },
             {
                 .srcSubpass=VK_SUBPASS_EXTERNAL,
                 .dstSubpass=0,
-                .srcStageMask=VK_PIPELINE_STAGE_EARLY_FRAGMENT_TESTS_BIT | VK_PIPELINE_STAGE_LATE_FRAGMENT_TESTS_BIT,
-                .dstStageMask=VK_PIPELINE_STAGE_EARLY_FRAGMENT_TESTS_BIT | VK_PIPELINE_STAGE_LATE_FRAGMENT_TESTS_BIT,
-                .srcAccessMask=VK_ACCESS_DEPTH_STENCIL_ATTACHMENT_WRITE_BIT | VK_ACCESS_DEPTH_STENCIL_ATTACHMENT_READ_BIT,
-                .dstAccessMask=VK_ACCESS_DEPTH_STENCIL_ATTACHMENT_WRITE_BIT | VK_ACCESS_DEPTH_STENCIL_ATTACHMENT_READ_BIT,
+                .srcStageMask=VK_PIPELINE_STAGE_2_EARLY_FRAGMENT_TESTS_BIT | VK_PIPELINE_STAGE_2_LATE_FRAGMENT_TESTS_BIT,
+                .dstStageMask=VK_PIPELINE_STAGE_2_EARLY_FRAGMENT_TESTS_BIT | VK_PIPELINE_STAGE_2_LATE_FRAGMENT_TESTS_BIT,
+                .srcAccessMask=VK_ACCESS_2_DEPTH_STENCIL_ATTACHMENT_WRITE_BIT | VK_ACCESS_2_DEPTH_STENCIL_ATTACHMENT_READ_BIT,
+                .dstAccessMask=VK_ACCESS_2_DEPTH_STENCIL_ATTACHMENT_WRITE_BIT | VK_ACCESS_2_DEPTH_STENCIL_ATTACHMENT_READ_BIT,
                 .dependencyFlags=VK_DEPENDENCY_BY_REGION_BIT
             },
             {
                 .srcSubpass=0,
                 .dstSubpass=1,
-                .srcStageMask=VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT,
-                .dstStageMask=VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT,
-                .srcAccessMask=VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT | VK_ACCESS_COLOR_ATTACHMENT_READ_BIT,
-                .dstAccessMask=VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT | VK_ACCESS_COLOR_ATTACHMENT_READ_BIT,
+                .srcStageMask=VK_PIPELINE_STAGE_2_COLOR_ATTACHMENT_OUTPUT_BIT,
+                .dstStageMask=VK_PIPELINE_STAGE_2_COLOR_ATTACHMENT_OUTPUT_BIT,
+                .srcAccessMask=VK_ACCESS_2_COLOR_ATTACHMENT_WRITE_BIT | VK_ACCESS_2_COLOR_ATTACHMENT_READ_BIT,
+                .dstAccessMask=VK_ACCESS_2_COLOR_ATTACHMENT_WRITE_BIT | VK_ACCESS_2_COLOR_ATTACHMENT_READ_BIT,
                 .dependencyFlags=VK_DEPENDENCY_BY_REGION_BIT
             },
             {
                 .srcSubpass=0,
                 .dstSubpass=1,
-                .srcStageMask=VK_PIPELINE_STAGE_EARLY_FRAGMENT_TESTS_BIT | VK_PIPELINE_STAGE_LATE_FRAGMENT_TESTS_BIT,
-                .dstStageMask=VK_PIPELINE_STAGE_EARLY_FRAGMENT_TESTS_BIT | VK_PIPELINE_STAGE_LATE_FRAGMENT_TESTS_BIT,
-                .srcAccessMask=VK_ACCESS_DEPTH_STENCIL_ATTACHMENT_WRITE_BIT | VK_ACCESS_DEPTH_STENCIL_ATTACHMENT_READ_BIT,
-                .dstAccessMask=VK_ACCESS_DEPTH_STENCIL_ATTACHMENT_WRITE_BIT | VK_ACCESS_DEPTH_STENCIL_ATTACHMENT_READ_BIT,
+                .srcStageMask=VK_PIPELINE_STAGE_2_EARLY_FRAGMENT_TESTS_BIT | VK_PIPELINE_STAGE_2_LATE_FRAGMENT_TESTS_BIT,
+                .dstStageMask=VK_PIPELINE_STAGE_2_EARLY_FRAGMENT_TESTS_BIT | VK_PIPELINE_STAGE_2_LATE_FRAGMENT_TESTS_BIT,
+                .srcAccessMask=VK_ACCESS_2_DEPTH_STENCIL_ATTACHMENT_WRITE_BIT | VK_ACCESS_2_DEPTH_STENCIL_ATTACHMENT_READ_BIT,
+                .dstAccessMask=VK_ACCESS_2_DEPTH_STENCIL_ATTACHMENT_WRITE_BIT | VK_ACCESS_2_DEPTH_STENCIL_ATTACHMENT_READ_BIT,
                 .dependencyFlags=VK_DEPENDENCY_BY_REGION_BIT
             },
             {
                 .srcSubpass=1,
                 .dstSubpass=VK_SUBPASS_EXTERNAL,
                 ///not sure on specific dependencies related to swapchain images being read/written by presentation engine
-                .srcStageMask=VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT,
-                .dstStageMask=VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT,
-                .srcAccessMask=VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT | VK_ACCESS_COLOR_ATTACHMENT_READ_BIT,
-                .dstAccessMask=VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT | VK_ACCESS_COLOR_ATTACHMENT_READ_BIT,
+                .srcStageMask=VK_PIPELINE_STAGE_2_COLOR_ATTACHMENT_OUTPUT_BIT,
+                .dstStageMask=VK_PIPELINE_STAGE_2_COLOR_ATTACHMENT_OUTPUT_BIT,
+                .srcAccessMask=VK_ACCESS_2_COLOR_ATTACHMENT_WRITE_BIT | VK_ACCESS_2_COLOR_ATTACHMENT_READ_BIT,
+                .dstAccessMask=VK_ACCESS_2_COLOR_ATTACHMENT_WRITE_BIT | VK_ACCESS_2_COLOR_ATTACHMENT_READ_BIT,
                 .dependencyFlags=VK_DEPENDENCY_BY_REGION_BIT
             },
             {
                 .srcSubpass=1,
                 .dstSubpass=VK_SUBPASS_EXTERNAL,
-                .srcStageMask=VK_PIPELINE_STAGE_EARLY_FRAGMENT_TESTS_BIT | VK_PIPELINE_STAGE_LATE_FRAGMENT_TESTS_BIT,
-                .dstStageMask=VK_PIPELINE_STAGE_EARLY_FRAGMENT_TESTS_BIT | VK_PIPELINE_STAGE_LATE_FRAGMENT_TESTS_BIT,
-                .srcAccessMask=VK_ACCESS_DEPTH_STENCIL_ATTACHMENT_WRITE_BIT | VK_ACCESS_DEPTH_STENCIL_ATTACHMENT_READ_BIT,
-                .dstAccessMask=VK_ACCESS_DEPTH_STENCIL_ATTACHMENT_WRITE_BIT | VK_ACCESS_DEPTH_STENCIL_ATTACHMENT_READ_BIT,
+                .srcStageMask=VK_PIPELINE_STAGE_2_EARLY_FRAGMENT_TESTS_BIT | VK_PIPELINE_STAGE_2_LATE_FRAGMENT_TESTS_BIT,
+                .dstStageMask=VK_PIPELINE_STAGE_2_EARLY_FRAGMENT_TESTS_BIT | VK_PIPELINE_STAGE_2_LATE_FRAGMENT_TESTS_BIT,
+                .srcAccessMask=VK_ACCESS_2_DEPTH_STENCIL_ATTACHMENT_WRITE_BIT | VK_ACCESS_2_DEPTH_STENCIL_ATTACHMENT_READ_BIT,
+                .dstAccessMask=VK_ACCESS_2_DEPTH_STENCIL_ATTACHMENT_WRITE_BIT | VK_ACCESS_2_DEPTH_STENCIL_ATTACHMENT_READ_BIT,
                 .dependencyFlags=VK_DEPENDENCY_BY_REGION_BIT
             }
         }
@@ -765,7 +765,7 @@ void initialise_test_swapchain_dependencies(VkSampleCountFlagBits sample_count)
 
     create_test_descriptor_sets(swapchain_image_count);
 
-    cvm_vk_resize_module_graphics_data(&test_module_data,0);
+    cvm_vk_resize_module_graphics_data(&test_module_data);
 
     uint32_t uniform_size=0;
     uniform_size+=cvm_vk_transient_buffer_get_rounded_allocation_size(&test_transient_buffer,sizeof(test_geo_uniform_data),0);
@@ -829,11 +829,11 @@ cvm_vk_module_batch * test_render_frame(cvm_camera * c)
     if(iter==0)for(iter=0;iter<4;iter++)rots[iter]=cvm_rng_rotation_3d(&rand);
 
     ///perhaps this should return previous image index as well, such that that value can be used in cleanup (e.g. relinquishing ring buffer space)
-    batch = cvm_vk_begin_module_batch(&test_module_data,0,&swapchain_image_index);
+    batch = cvm_vk_get_module_batch(&test_module_data,&swapchain_image_index);
 
     /// look into benefit of cycling an array of framebuffer & backing images (TEST_FRAMEBUFFER_CYCLES)
 
-    if(swapchain_image_index!=CVM_VK_INVALID_IMAGE_INDEX)
+    if(batch)
     {
         cvm_vk_transient_buffer_begin(&test_transient_buffer,swapchain_image_index);
         cvm_vk_staging_buffer_begin(&test_staging_buffer);
@@ -891,20 +891,11 @@ cvm_vk_module_batch * test_render_frame(cvm_camera * c)
         if((iter&127)==0)rots[(index+2)&3]=cvm_rng_rotation_3d(&rand);
         iter++;
 
-//        r=r3f_spherical_interp(rots[index],rots[(index+1)&3],lerp);
-//        r=r3f_lerp(rots[index],rots[(index+1)&3],lerp);
         r=r3f_bezier_interp(rots[(index+3)&3],rots[index],rots[(index+1)&3],rots[(index+2)&3],lerp);
 
         cvm_transform_stack_push(&ts);
             cvm_transform_stack_rotate(&ts,r);
-//            cvm_transform_stack_offset_position(&ts,(vec3f){.x=0,.y=-0.75,.z=0});
-
-
-            //cvm_transform_stack_push(&ts);
-                //cvm_transform_stack_offset_position(&ts,((vec3f){1,1,1}));
-                //cvm_transform_stack_rotate_around_vector(&ts,((vec3f){SQRT_THIRD,SQRT_THIRD,SQRT_THIRD}),((float)(iter&31))*TAU/32);
                 cvm_transform_stack_get(&ts,transformation);
-//            cvm_transform_stack_pop(&ts);
         cvm_transform_stack_pop(&ts);
 
 
@@ -992,9 +983,19 @@ cvm_vk_module_batch * test_render_frame(cvm_camera * c)
 
         test_current_framebuffer_index++;
         test_current_framebuffer_index*= test_current_framebuffer_index<TEST_FRAMEBUFFER_CYCLES;///resets to 0
-    }
 
-    return cvm_vk_end_module_batch(&test_module_data);
+
+        cvm_vk_module_work_payload pl;
+
+        pl.wait_count=0;
+        pl.signal=NULL;
+
+        pl.command_buffer=batch->transfer_pcb;
+        cvm_vk_submit_transfer_work(&pl);
+
+        pl.command_buffer=batch->graphics_pcb;
+        cvm_vk_submit_graphics_work(&pl,CVM_VK_PAYLOAD_USES_SAWPCHAIN|CVM_VK_PAYLOAD_FIRST_SAWPCHAIN_USE|CVM_VK_PAYLOAD_LAST_SAWPCHAIN_USE);
+    }
 }
 
 void test_frame_cleanup(uint32_t swapchain_image_index)

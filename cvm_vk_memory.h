@@ -97,8 +97,7 @@ cvm_vk_available_dynamic_allocation_heap;
 
 typedef struct cvm_vk_managed_buffer_barrier_list
 {
-    VkPipelineStageFlags stage_mask;///would be nice to move VkBufferMemoryBarrier to VkBufferMemoryBarrier2KHR so that stages can be specified per barrier...
-    VkBufferMemoryBarrier * barriers;
+    VkBufferMemoryBarrier2 * barriers;
     uint32_t space;
     uint32_t count;
 }
@@ -174,8 +173,8 @@ static inline uint64_t cvm_vk_managed_buffer_get_dynamic_allocation_offset(cvm_v
 
 uint64_t cvm_vk_managed_buffer_acquire_static_allocation(cvm_vk_managed_buffer * mb,uint64_t size,uint64_t alignment);///cannot be relinquished, exists until
 
-void * cvm_vk_managed_buffer_get_dynamic_allocation_mapping(cvm_vk_managed_buffer * mb,cvm_vk_dynamic_buffer_allocation * allocation,uint64_t size,VkPipelineStageFlags stage_mask,VkAccessFlags access_mask,uint16_t * availability_token);///if size==0 returns full allocation
-void * cvm_vk_managed_buffer_get_static_allocation_mapping(cvm_vk_managed_buffer * mb,uint64_t offset,uint64_t size,VkPipelineStageFlags stage_mask,VkAccessFlags access_mask,uint16_t * availability_token);
+void * cvm_vk_managed_buffer_get_dynamic_allocation_mapping(cvm_vk_managed_buffer * mb,cvm_vk_dynamic_buffer_allocation * allocation,uint64_t size,VkPipelineStageFlags2 stage_mask,VkAccessFlags2 access_mask,uint16_t * availability_token);///if size==0 returns full allocation
+void * cvm_vk_managed_buffer_get_static_allocation_mapping(cvm_vk_managed_buffer * mb,uint64_t offset,uint64_t size,VkPipelineStageFlags2 stage_mask,VkAccessFlags2 access_mask,uint16_t * availability_token);
 
 void cvm_vk_managed_buffer_submit_all_pending_copy_actions(cvm_vk_managed_buffer * mb,VkCommandBuffer transfer_cb,VkCommandBuffer graphics_cb);///includes necessary barriers
 /// for the love of god only call this once per buffer per frame, transfer and graphics cb necessary for case of QFOT (process acquisitions for previous frames releases)

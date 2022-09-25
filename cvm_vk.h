@@ -52,6 +52,15 @@ along with cvm_shared.  If not, see <https://www.gnu.org/licenses/>.
 #define CVM_VK_INVALID_IMAGE_INDEX 0xFFFFFFFF
 
 
+typedef struct cvm_vk_timeline_semaphore
+{
+    VkSemaphore semaphore;
+    uint64_t value;
+}
+cvm_vk_timeline_semaphore;
+
+
+
 /**
 features to be cognisant of:
 
@@ -99,17 +108,19 @@ typedef struct cvm_vk_swapchain_image_present_data
     VkImage image;///theese are provided by the WSI
     VkImageView image_view;
 
-    VkFence completion_fence;
     bool in_flight;///error checking
 
     ///following only used if present and graphics are different
     ///     ^ test as best as possible with bool that forces behaviour, and maybe try different queue/queue_family when possible (o.e. when available hardware allows)
     /// timeline semaphore in renderer instead?
-    VkCommandBuffer graphics_relinquish_command_buffer;///graphics finalise will almost certianly always be the same, so create it at startup with multi submit
     VkCommandBuffer present_acquire_command_buffer;
 
-    VkSemaphore graphics_relinquish_semaphore;///only necessary when transferring to a dedicated present queue, used as part of queue transfer
     VkSemaphore present_semaphore;///needed by VkPresentInfoKHR
+
+    //VkSemaphore graphics_work_complete_semaphore;///tracks use of the swapchain image by graphics submits, timeline semaphore, effectively number of times this swapchain image has been used by a frame
+    //uint64_t graphics_work_complete_counter;
+    cvm_vk_timeline_semaphore graphics_work_tracking;
+    cvm_vk_timeline_semaphore transfer_work_tracking;
 }
 cvm_vk_swapchain_image_present_data;
 
@@ -117,7 +128,7 @@ cvm_vk_swapchain_image_present_data;
 
 
 
-void cvm_vk_initialise(SDL_Window * window,uint32_t min_swapchain_images,uint32_t extra_swapchain_images,bool sync_compute_required,const char ** requested_extensions,int requested_extension_count);
+void cvm_vk_initialise(SDL_Window * window,uint32_t min_swapchain_images,bool sync_compute_required,const char ** requested_extensions,int requested_extension_count);
 ///above extra is the max extra used by any module
 void cvm_vk_terminate(void);///also terminates swapchain dependant data at same time
 
@@ -126,6 +137,9 @@ void cvm_vk_destroy_swapchain(void);
 
 
 
+void cvm_vk_create_timeline_semaphore(cvm_vk_timeline_semaphore * timeline_semaphore);
+void cvm_vk_destroy_timeline_semaphore(cvm_vk_timeline_semaphore * timeline_semaphore);
+void cvm_vk_wait_on_timeline_semaphore(cvm_vk_timeline_semaphore * timeline_semaphore,uint64_t timeout_ns);
 
 
 
@@ -172,7 +186,7 @@ void cvm_vk_flush_buffer_memory_range(VkMappedMemoryRange * flush_range);
 uint32_t cvm_vk_get_buffer_alignment_requirements(VkBufferUsageFlags usage);
 
 
-VkPhysicalDeviceFeatures * cvm_vk_get_device_features(void);
+VkPhysicalDeviceFeatures2 * cvm_vk_get_device_features(void);
 
 VkFormat cvm_vk_get_screen_format(void);///can remove?
 uint32_t cvm_vk_get_swapchain_image_count(void);
@@ -185,6 +199,32 @@ VkImage cvm_vk_get_swapchain_image(uint32_t index);
 
 
 bool cvm_vk_format_check_optimal_feature_support(VkFormat format,VkFormatFeatureFlags flags);
+
+typedef enum
+{
+    CVM_VK_PAYLOAD_USES_SAWPCHAIN=0x00000001,
+    CVM_VK_PAYLOAD_FIRST_SAWPCHAIN_USE=0x00000002,
+    CVM_VK_PAYLOAD_LAST_SAWPCHAIN_USE=0x00000004
+}
+cvm_vk_payload_flags;
+
+typedef struct cvm_vk_module_work_payload
+{
+    cvm_vk_timeline_semaphore * waits;
+    VkPipelineStageFlags2 * wait_stages;
+    uint32_t wait_count;
+
+    cvm_vk_timeline_semaphore * signal;///will be modified (monotonically incremented) my calling this
+    VkPipelineStageFlags2 signal_stages;
+
+    VkCommandBuffer command_buffer;
+
+    ///presently only support generating 1 signal and submitting 1 command buffer, can easily change should there be justification to do so
+}
+cvm_vk_module_work_payload;
+
+void cvm_vk_submit_graphics_work(cvm_vk_module_work_payload * payload,cvm_vk_payload_flags flags);
+void cvm_vk_submit_transfer_work(cvm_vk_module_work_payload * payload);
 
 ///misc data the rendering system needs from each module, as well as container for module's per frame rendering data, should be static var in module file
 typedef struct cvm_vk_module_work_sub_batch
@@ -200,11 +240,13 @@ typedef struct cvm_vk_module_batch
 {
     cvm_vk_module_work_sub_batch main_sub_batch;///for use on same thread (main thread) as primary command buffers below
     VkCommandBuffer graphics_pcb;///primary command buffer, allocated from base pool
-    VkCommandBuffer transfer_pcb;///primary command buffer, allocated from base pool
 
     cvm_vk_module_work_sub_batch * sub_batches;
+    /// should have/use array of primary command buffers for each queue type w/ async being submitted in order w/ implicit preference for queue family
+
 
     VkCommandPool transfer_pool;/// cannot have transfers in secondary command buffer (scb's need renderpass/subpass) and they arent needed anyway, so have 1 per module batch
+    VkCommandBuffer transfer_pcb;///primary command buffer, allocated from base pool
     /// should not need to ask module how many of these there are
     /// should use same/similar logic to distribute them that was used to create them
     /// effectively allocated is max, so can have variant number actually used in any given frame depending on workload
@@ -228,31 +270,29 @@ typedef struct cvm_vk_module_batch
 
     /// also probably worth investigating whether per-frame resources are worth transferring to device local (double)buffer before using on the gpu
 
-    uint32_t has_work:1;///if this frame doesnt have work then dont issue commands! (mainly for transfer, graphics should ALWAYS have work as its responsible for transitioning images)
     uint32_t in_flight:1;///used for error checking
 }
 cvm_vk_module_batch;
 
 typedef struct cvm_vk_module_data
 {
-    cvm_vk_module_batch * batches;
+    cvm_vk_module_batch * batches;///one per swapchain image
 
-    uint32_t batch_count;
+    uint32_t batch_count;///same as swapchain image count used to initialise this
     uint32_t batch_index;
 
     uint32_t graphics_scb_count;
-
     uint32_t sub_batch_count;///effectively max number of worker threads this module will use
+
+    ///need an array of fixed, recyclable primary command buffers here and a way to sequence them with the dynamic command buffers
 }
 cvm_vk_module_data;
 ///must be called after cvm_vk_initialise
 void cvm_vk_create_module_data(cvm_vk_module_data * module_data,uint32_t sub_batch_count,uint32_t graphics_scb_count);///sub batches are basically the number of worker threads
-///extra_transfer_slots should be equal to number passed in to extra_frame_count elsewhere
-void cvm_vk_resize_module_graphics_data(cvm_vk_module_data * module_data,uint32_t extra_frame_count);///this must be called in critical section
+void cvm_vk_resize_module_graphics_data(cvm_vk_module_data * module_data);///this must be called in critical section
 void cvm_vk_destroy_module_data(cvm_vk_module_data * module_data);
 
-cvm_vk_module_batch * cvm_vk_begin_module_batch(cvm_vk_module_data * module_data,uint32_t frame_offset,uint32_t * swapchain_image_index);///have this return bool? (VkCommandBuffer through ref.)
-cvm_vk_module_batch * cvm_vk_end_module_batch(cvm_vk_module_data * module_data);
+cvm_vk_module_batch * cvm_vk_get_module_batch(cvm_vk_module_data * module_data,uint32_t * swapchain_image_index);///have this return bool? (VkCommandBuffer through ref.)
 
 VkCommandBuffer cvm_vk_module_batch_start_secondary_command_buffer(cvm_vk_module_batch * mb,uint32_t sub_batch_index,uint32_t scb_index,VkFramebuffer framebuffer,VkRenderPass render_pass,uint32_t sub_pass);
 #define CVM_VK_MAIN_SUB_BATCH_INDEX 0xFFFFFFFF
@@ -269,7 +309,6 @@ uint32_t cvm_vk_get_graphics_queue_family(void);
 
 uint32_t cvm_vk_prepare_for_next_frame(bool rendering_resources_invalid);
 void cvm_vk_transition_frame(void);///must be called in critical section!
-void cvm_vk_present_current_frame(cvm_vk_module_batch ** batches, uint32_t work_block_count);
 bool cvm_vk_recreate_rendering_resources(void);///this and operations resulting from it returning true, must be called in critical section
 bool cvm_vk_check_for_remaining_frames(uint32_t * completed_frame_index);
 

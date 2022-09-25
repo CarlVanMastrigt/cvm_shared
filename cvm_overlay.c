@@ -351,26 +351,8 @@ static void create_overlay_render_pass(void)
         .dependencyCount=2,
         .pDependencies=(VkSubpassDependency[2])
         {
-            {
-                .srcSubpass=VK_SUBPASS_EXTERNAL,
-                .dstSubpass=0,
-                ///not sure on specific dependencies related to swapchain images being read/written by presentation engine
-                .srcStageMask=VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT,
-                .dstStageMask=VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT,
-                .srcAccessMask=VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT | VK_ACCESS_COLOR_ATTACHMENT_READ_BIT,
-                .dstAccessMask=VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT | VK_ACCESS_COLOR_ATTACHMENT_READ_BIT,
-                .dependencyFlags=VK_DEPENDENCY_BY_REGION_BIT
-            },
-            {
-                .srcSubpass=0,
-                .dstSubpass=VK_SUBPASS_EXTERNAL,
-                ///not sure on specific dependencies related to swapchain images being read/written by presentation engine
-                .srcStageMask=VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT,
-                .dstStageMask=VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT,
-                .srcAccessMask=VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT | VK_ACCESS_COLOR_ATTACHMENT_READ_BIT,
-                .dstAccessMask=VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT | VK_ACCESS_COLOR_ATTACHMENT_READ_BIT,
-                .dependencyFlags=VK_DEPENDENCY_BY_REGION_BIT
-            }
+            cvm_vk_get_default_colour_attachment_dependency(VK_SUBPASS_EXTERNAL,0),
+            cvm_vk_get_default_colour_attachment_dependency(0,VK_SUBPASS_EXTERNAL)
         }
     };
 
@@ -648,7 +630,7 @@ void initialise_overlay_swapchain_dependencies(void)
 
     create_overlay_descriptor_sets(swapchain_image_count);
 
-    cvm_vk_resize_module_graphics_data(&overlay_module_data,0);
+    cvm_vk_resize_module_graphics_data(&overlay_module_data);
 
     uint32_t uniform_size=0;
     uniform_size+=cvm_vk_transient_buffer_get_rounded_allocation_size(&overlay_transient_buffer,sizeof(float)*4*OVERLAY_NUM_COLOURS_,0);
@@ -689,7 +671,7 @@ float overlay_colours[OVERLAY_NUM_COLOURS_*4]=
     0.4,0.6,0.9,0.8,///OVERLAY_TEXT_COLOUR_0
 };
 
-cvm_vk_module_batch * overlay_render_frame(int screen_w,int screen_h,widget * menu_widget)
+void overlay_render_frame(int screen_w,int screen_h,widget * menu_widget)
 {
     cvm_vk_module_batch * batch;
     uint32_t swapchain_image_index;
@@ -698,7 +680,7 @@ cvm_vk_module_batch * overlay_render_frame(int screen_w,int screen_h,widget * me
     VkDeviceSize uniform_offset,vertex_offset;
 
     ///perhaps this should return previous image index as well, such that that value can be used in cleanup (e.g. relinquishing ring buffer space)
-    batch = cvm_vk_begin_module_batch(&overlay_module_data,0,&swapchain_image_index);
+    batch = cvm_vk_get_module_batch(&overlay_module_data,&swapchain_image_index);
 
 
 
@@ -711,7 +693,7 @@ cvm_vk_module_batch * overlay_render_frame(int screen_w,int screen_h,widget * me
     /// could have a single image atlas and use different aspects of part of it (r,g,b,a via image views) for different alpha/transparent image_atlases
     /// this would be fairly inefficient to retrieve though..., probably better not to.
 
-    if(swapchain_image_index!=CVM_VK_INVALID_IMAGE_INDEX)
+    if(batch)
     {
 //        overlay_upload_command_buffer=batch->graphics_work;
 
@@ -720,7 +702,7 @@ cvm_vk_module_batch * overlay_render_frame(int screen_w,int screen_h,widget * me
         cvm_vk_transient_buffer_begin(&overlay_transient_buffer,swapchain_image_index);
         #warning need to use the appropriate queue for all following transfer ops
         ///     ^ possibly detect when they're different and use gfx directly to avoid double submission?
-        ///         ^ have cvm_vk_begin_module_batch return same command buffer?
+        ///         ^ have cvm_vk_get_module_batch return same command buffer?
         ///             ^could have meta level function that inserts both barriers to appropriate queues simultaneously as necessary??? (VK_NULL_HANDLE when unit-transfer?)
         ///   module handles semaphore when necessary, perhaps it can also handle some aspect(s) of barriers?
 
@@ -775,12 +757,21 @@ cvm_vk_module_batch * overlay_render_frame(int screen_w,int screen_h,widget * me
 
         vkCmdEndRenderPass(batch->graphics_pcb);///================
 
-        ///huh, could store this in buffer maybe as it occurrs once per frame...
-        cvm_vk_transient_buffer_end(&overlay_transient_buffer);
         cvm_vk_staging_buffer_end(&overlay_staging_buffer,swapchain_image_index);
-    }
+        cvm_vk_transient_buffer_end(&overlay_transient_buffer);
 
-    return cvm_vk_end_module_batch(&overlay_module_data);
+
+        cvm_vk_module_work_payload pl;
+
+        pl.wait_count=0;
+        pl.signal=NULL;
+
+        pl.command_buffer=batch->graphics_pcb;
+        cvm_vk_submit_graphics_work(&pl,CVM_VK_PAYLOAD_USES_SAWPCHAIN|CVM_VK_PAYLOAD_LAST_SAWPCHAIN_USE);
+
+        pl.command_buffer=batch->transfer_pcb;///really need to make existence of transfer CB conditional
+        cvm_vk_submit_transfer_work(&pl);
+    }
 }
 
 void overlay_frame_cleanup(uint32_t swapchain_image_index)

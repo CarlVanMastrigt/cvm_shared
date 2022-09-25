@@ -79,13 +79,11 @@ void cvm_vk_managed_buffer_create(cvm_vk_managed_buffer * mb,uint32_t buffer_siz
     mb->pending_copy_space=16;
     mb->pending_copy_count=0;
 
-    mb->copy_release_barriers.stage_mask=0;
-    mb->copy_release_barriers.barriers=malloc(sizeof(VkBufferMemoryBarrier)*16);
+    mb->copy_release_barriers.barriers=malloc(sizeof(VkBufferMemoryBarrier2)*16);
     mb->copy_release_barriers.space=16;
     mb->copy_release_barriers.count=0;
 
-    mb->copy_acquire_barriers.stage_mask=0;
-    mb->copy_acquire_barriers.barriers=malloc(sizeof(VkBufferMemoryBarrier)*16);
+    mb->copy_acquire_barriers.barriers=malloc(sizeof(VkBufferMemoryBarrier2)*16);
     mb->copy_acquire_barriers.space=16;
     mb->copy_acquire_barriers.count=0;
 
@@ -462,7 +460,7 @@ uint64_t cvm_vk_managed_buffer_acquire_static_allocation(cvm_vk_managed_buffer *
     return e-size;
 }
 
-static inline void * stage_copy_action(cvm_vk_managed_buffer * mb,uint64_t offset,uint64_t size,VkPipelineStageFlags stage_mask,VkAccessFlags access_mask)
+static inline void * stage_copy_action(cvm_vk_managed_buffer * mb,uint64_t offset,uint64_t size,VkPipelineStageFlags2 stage_mask,VkAccessFlags2 access_mask)
 {
     VkDeviceSize staging_offset;
     uint_fast32_t lock;
@@ -496,12 +494,14 @@ static inline void * stage_copy_action(cvm_vk_managed_buffer * mb,uint64_t offse
         .size=size
     };
 
-    if(mb->copy_release_barriers.count==mb->copy_release_barriers.space)mb->copy_release_barriers.barriers=realloc(mb->copy_release_barriers.barriers,sizeof(VkBufferMemoryBarrier)*(mb->copy_release_barriers.space*=2));
-    mb->copy_release_barriers.barriers[mb->copy_release_barriers.count++]=(VkBufferMemoryBarrier)
+    if(mb->copy_release_barriers.count==mb->copy_release_barriers.space)mb->copy_release_barriers.barriers=realloc(mb->copy_release_barriers.barriers,sizeof(VkBufferMemoryBarrier2)*(mb->copy_release_barriers.space*=2));
+    mb->copy_release_barriers.barriers[mb->copy_release_barriers.count++]=(VkBufferMemoryBarrier2)
     {
-        .sType=VK_STRUCTURE_TYPE_BUFFER_MEMORY_BARRIER,
+        .sType=VK_STRUCTURE_TYPE_BUFFER_MEMORY_BARRIER_2,
         .pNext=NULL,
-        .srcAccessMask=VK_ACCESS_TRANSFER_WRITE_BIT,
+        .srcStageMask=VK_PIPELINE_STAGE_2_TRANSFER_BIT,
+        .srcAccessMask=VK_ACCESS_2_TRANSFER_WRITE_BIT,
+        .dstStageMask=stage_mask,
         .dstAccessMask=access_mask,/// staging/copy only ever writes
         .srcQueueFamilyIndex=mb->copy_src_queue_family,
         .dstQueueFamilyIndex=mb->copy_dst_queue_family,
@@ -509,14 +509,13 @@ static inline void * stage_copy_action(cvm_vk_managed_buffer * mb,uint64_t offse
         .offset=offset,
         .size=size
     };
-    mb->copy_release_barriers.stage_mask|=stage_mask;
 
     if(mb->multithreaded) atomic_store(&mb->copy_spinlock,0);
 
     return ptr;
 }
 
-void * cvm_vk_managed_buffer_get_dynamic_allocation_mapping(cvm_vk_managed_buffer * mb,cvm_vk_dynamic_buffer_allocation * allocation,uint64_t size,VkPipelineStageFlags stage_mask,VkAccessFlags access_mask,uint16_t * availability_token)
+void * cvm_vk_managed_buffer_get_dynamic_allocation_mapping(cvm_vk_managed_buffer * mb,cvm_vk_dynamic_buffer_allocation * allocation,uint64_t size,VkPipelineStageFlags2 stage_mask,VkAccessFlags2 access_mask,uint16_t * availability_token)
 {
     *availability_token=mb->copy_update_counter;///could technically go after the early exit as mapped buffers (so far) don't need to be transferred
 
@@ -528,7 +527,7 @@ void * cvm_vk_managed_buffer_get_dynamic_allocation_mapping(cvm_vk_managed_buffe
     return stage_copy_action(mb,offset,size,stage_mask,access_mask);
 }
 
-void * cvm_vk_managed_buffer_get_static_allocation_mapping(cvm_vk_managed_buffer * mb,uint64_t offset,uint64_t size,VkPipelineStageFlags stage_mask,VkAccessFlags access_mask,uint16_t * availability_token)
+void * cvm_vk_managed_buffer_get_static_allocation_mapping(cvm_vk_managed_buffer * mb,uint64_t offset,uint64_t size,VkPipelineStageFlags2 stage_mask,VkAccessFlags2 access_mask,uint16_t * availability_token)
 {
     *availability_token=mb->copy_update_counter;///could technically go after the early exit as mapped buffers (so far) don't need to be transferre
 
@@ -563,21 +562,24 @@ void cvm_vk_managed_buffer_submit_all_pending_copy_actions(cvm_vk_managed_buffer
 
         if(mb->copy_acquire_barriers.count)
         {
+
+            VkDependencyInfo copy_aquire_dependencies=
+            {
+                .sType=VK_STRUCTURE_TYPE_DEPENDENCY_INFO,
+                .pNext=NULL,
+                .dependencyFlags=0,
+                .memoryBarrierCount=0,
+                .pMemoryBarriers=NULL,
+                .bufferMemoryBarrierCount=mb->copy_acquire_barriers.count,
+                .pBufferMemoryBarriers=mb->copy_acquire_barriers.barriers,
+                .imageMemoryBarrierCount=0,
+                .pImageMemoryBarriers=NULL
+            };
             //puts("BARRIER");
-            vkCmdPipelineBarrier
-            (
-                graphics_cb,
-                VK_PIPELINE_STAGE_TRANSFER_BIT,
-                mb->copy_acquire_barriers.stage_mask,
-                0,
-                0,NULL,
-                mb->copy_acquire_barriers.count,mb->copy_acquire_barriers.barriers,
-                0,NULL
-            );
+            vkCmdPipelineBarrier2(graphics_cb,&copy_aquire_dependencies);
 
             ///rest now that we're done with it
             mb->copy_acquire_barriers.count=0;
-            mb->copy_acquire_barriers.stage_mask=0;
         }
 
         if(mb->pending_copy_count) /// mb->pending_copy_count should be the same as mb->copy_release_barriers.count
@@ -591,16 +593,20 @@ void cvm_vk_managed_buffer_submit_all_pending_copy_actions(cvm_vk_managed_buffer
 
             if(mb->copy_src_queue_family!=mb->copy_dst_queue_family)///first barrier is only needed when QFOT is necessary
             {
-                vkCmdPipelineBarrier
-                (
-                    transfer_cb,
-                    VK_PIPELINE_STAGE_TRANSFER_BIT,
-                    mb->copy_release_barriers.stage_mask,
-                    0,
-                    0,NULL,
-                    mb->copy_release_barriers.count,mb->copy_release_barriers.barriers,
-                    0,NULL
-                );
+                VkDependencyInfo copy_release_dependencies=
+                {
+                    .sType=VK_STRUCTURE_TYPE_DEPENDENCY_INFO,
+                    .pNext=NULL,
+                    .dependencyFlags=0,
+                    .memoryBarrierCount=0,
+                    .pMemoryBarriers=NULL,
+                    .bufferMemoryBarrierCount=mb->copy_release_barriers.count,
+                    .pBufferMemoryBarriers=mb->copy_release_barriers.barriers,
+                    .imageMemoryBarrierCount=0,
+                    .pImageMemoryBarriers=NULL
+                };
+                //puts("BARRIER");
+                vkCmdPipelineBarrier2(graphics_cb,&copy_release_dependencies);
             }
 
             tmp=mb->copy_acquire_barriers;
