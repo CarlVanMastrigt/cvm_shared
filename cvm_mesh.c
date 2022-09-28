@@ -406,7 +406,7 @@ bool cvm_managed_mesh_load(cvm_managed_mesh * mm)
         }
 
         #warning should probably be more specific with the stage and flags bits... (if possible)
-        ptr=cvm_vk_managed_buffer_get_dynamic_allocation_mapping(mm->mb,mm->dynamic_allocation,size,VK_PIPELINE_STAGE_2_VERTEX_INPUT_BIT,VK_ACCESS_2_INDEX_READ_BIT|VK_ACCESS_2_VERTEX_ATTRIBUTE_READ_BIT,&mm->availability_token);
+        ptr=cvm_vk_managed_buffer_get_dynamic_allocation_mapping(mm->mb,mm->dynamic_allocation,size,VK_PIPELINE_STAGE_VERTEX_INPUT_BIT,VK_ACCESS_INDEX_READ_BIT|VK_ACCESS_VERTEX_ATTRIBUTE_READ_BIT,&mm->availability_token);
         if(!ptr)return false;///could not allocate staging space!
         base_offset = current_offset = cvm_vk_managed_buffer_get_dynamic_allocation_offset(mm->mb,mm->dynamic_allocation);
     }
@@ -426,7 +426,7 @@ bool cvm_managed_mesh_load(cvm_managed_mesh * mm)
         }
 
         #warning should probably be more specific with the stage and flags bits... (if possible)
-        ptr=cvm_vk_managed_buffer_get_static_allocation_mapping(mm->mb,mm->static_offset,size,VK_PIPELINE_STAGE_2_VERTEX_INPUT_BIT,VK_ACCESS_2_INDEX_READ_BIT|VK_ACCESS_2_VERTEX_ATTRIBUTE_READ_BIT,&mm->availability_token);
+        ptr=cvm_vk_managed_buffer_get_static_allocation_mapping(mm->mb,mm->static_offset,size,VK_PIPELINE_STAGE_VERTEX_INPUT_BIT,VK_ACCESS_INDEX_READ_BIT|VK_ACCESS_VERTEX_ATTRIBUTE_READ_BIT,&mm->availability_token);
         if(!ptr)return false;///could not allocate staging space!
         base_offset = current_offset = mm->static_offset;
     }

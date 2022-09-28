@@ -789,7 +789,7 @@ void cvm_vk_image_atlas_submit_all_pending_copy_actions(cvm_vk_image_atlas * ia,
     if(ia->multithreaded)do lock=atomic_load(&ia->copy_spinlock);
     while(lock!=0 || !atomic_compare_exchange_weak(&ia->copy_spinlock,&lock,1));
 
-
+    #warning might be worth looking into making this support different queues... (probably not possible if copies need to be handled promptly)
     if(ia->pending_copy_count || !ia->initialised)
     {
         VkDependencyInfo copy_acquire_dependencies=
@@ -807,10 +807,10 @@ void cvm_vk_image_atlas_submit_all_pending_copy_actions(cvm_vk_image_atlas * ia,
                 {
                     .sType=VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER_2,
                     .pNext=NULL,
-                    .srcStageMask=ia->initialised?VK_PIPELINE_STAGE_2_FRAGMENT_SHADER_BIT:VK_PIPELINE_STAGE_2_TOP_OF_PIPE_BIT,
-                    .srcAccessMask=ia->initialised?VK_ACCESS_2_SHADER_READ_BIT:0,
-                    .dstStageMask=VK_PIPELINE_STAGE_2_TRANSFER_BIT,
-                    .dstAccessMask=VK_ACCESS_2_TRANSFER_WRITE_BIT,
+                    .srcStageMask=ia->initialised?VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT:VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT,
+                    .srcAccessMask=ia->initialised?VK_ACCESS_SHADER_READ_BIT:0,
+                    .dstStageMask=VK_PIPELINE_STAGE_TRANSFER_BIT,
+                    .dstAccessMask=VK_ACCESS_TRANSFER_WRITE_BIT,
                     .oldLayout=ia->initialised?VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL:VK_IMAGE_LAYOUT_UNDEFINED,
                     .newLayout=VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
                     .srcQueueFamilyIndex=VK_QUEUE_FAMILY_IGNORED,
@@ -828,7 +828,7 @@ void cvm_vk_image_atlas_submit_all_pending_copy_actions(cvm_vk_image_atlas * ia,
             }
         };
 
-        vkCmdPipelineBarrier2(transfer_cb,&copy_acquire_dependencies);
+        vkCmdPipelineBarrier2_cvm_test(transfer_cb,&copy_acquire_dependencies);
 
         ///actually execute the copies!
         ///unfortunately need another test here in case initialised path is being taken
@@ -851,10 +851,10 @@ void cvm_vk_image_atlas_submit_all_pending_copy_actions(cvm_vk_image_atlas * ia,
                 {
                     .sType=VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER_2,
                     .pNext=NULL,
-                    .srcStageMask=VK_PIPELINE_STAGE_2_TRANSFER_BIT,
-                    .srcAccessMask=VK_ACCESS_2_TRANSFER_WRITE_BIT,
-                    .dstStageMask=VK_PIPELINE_STAGE_2_FRAGMENT_SHADER_BIT,
-                    .dstAccessMask=VK_ACCESS_2_SHADER_READ_BIT,
+                    .srcStageMask=VK_PIPELINE_STAGE_TRANSFER_BIT,
+                    .srcAccessMask=VK_ACCESS_TRANSFER_WRITE_BIT,
+                    .dstStageMask=VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT,
+                    .dstAccessMask=VK_ACCESS_SHADER_READ_BIT,
                     .oldLayout=VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
                     .newLayout=VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL,
                     .srcQueueFamilyIndex=VK_QUEUE_FAMILY_IGNORED,
@@ -872,7 +872,7 @@ void cvm_vk_image_atlas_submit_all_pending_copy_actions(cvm_vk_image_atlas * ia,
             }
         };
 
-        vkCmdPipelineBarrier2(transfer_cb,&copy_release_dependencies);
+        vkCmdPipelineBarrier2_cvm_test(transfer_cb,&copy_release_dependencies);
     }
 
     if(ia->multithreaded) atomic_store(&ia->copy_spinlock,0);

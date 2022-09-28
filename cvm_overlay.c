@@ -736,6 +736,8 @@ void overlay_render_frame(int screen_w,int screen_h,widget * menu_widget)
 
         vkCmdBindDescriptorSets(batch->graphics_pcb,VK_PIPELINE_BIND_POINT_GRAPHICS,overlay_pipeline_layout,1,1,&overlay_consistent_descriptor_set,0,NULL);
 
+        VkClearValue colour_clear={.color=(VkClearColorValue){.float32={0.2f,0.2f,0.0f,0.0f}}};
+
         VkRenderPassBeginInfo render_pass_begin_info=(VkRenderPassBeginInfo)
         {
             .sType=VK_STRUCTURE_TYPE_RENDER_PASS_BEGIN_INFO,
@@ -766,11 +768,11 @@ void overlay_render_frame(int screen_w,int screen_h,widget * menu_widget)
         pl.wait_count=0;
         pl.signal=NULL;
 
-        pl.command_buffer=batch->graphics_pcb;
-        cvm_vk_submit_graphics_work(&pl,CVM_VK_PAYLOAD_USES_SAWPCHAIN|CVM_VK_PAYLOAD_LAST_SAWPCHAIN_USE);
-
         pl.command_buffer=batch->transfer_pcb;///really need to make existence of transfer CB conditional
         cvm_vk_submit_transfer_work(&pl);
+
+        pl.command_buffer=batch->graphics_pcb;
+        cvm_vk_submit_graphics_work(&pl,CVM_VK_PAYLOAD_LAST_SWAPCHAIN_USE);
     }
 }
 

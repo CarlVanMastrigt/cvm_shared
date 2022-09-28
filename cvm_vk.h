@@ -90,17 +90,6 @@ going to have to rely on acquire op failing to know when to recreate swapchain
 
 ///could move these structs to the c file? - they should only ever be used by cvm_vk internally
 ///this struct contains the data needed to be known upfront when acquiring swapchain image (cvm_vk_swapchain_frame), some data could go in either struct though...
-typedef struct cvm_vk_swapchain_image_acquisition_data
-{
-    ///would be good to have a way to specify other semaphores &c. here for more complex interdependency
-
-    VkSemaphore acquire_semaphore;///first module should test against this in its submit
-    /// need a way to signal this semaphore when we aren't going to render with this image for some reason (e.g. swapchain destruction)
-    ///     ^ WAIT, are semaphores used at submit time and can 2 semaphores be used to cycle module submissions if they affect the same stage???)
-    ///         ^ probably not possible, multiple frames can be in flight at once! (could do 2 semaphores per frame?? even then probably needless)
-    uint32_t image_index;/// set to CVM_VK_INVALID_IMAGE_INDEX to indicate failure to acquire
-}
-cvm_vk_swapchain_image_acquisition_data;
 
 
 typedef struct cvm_vk_swapchain_image_present_data
@@ -108,7 +97,11 @@ typedef struct cvm_vk_swapchain_image_present_data
     VkImage image;///theese are provided by the WSI
     VkImageView image_view;
 
-    bool in_flight;///error checking
+    VkSemaphore acquire_semaphore;///held temporarily by this struct, not owner, not created or destroyed as part of it
+
+    //bool in_flight;///error checking
+    uint32_t successfully_acquired:1;
+    uint32_t successfully_submitted:1;
 
     ///following only used if present and graphics are different
     ///     ^ test as best as possible with bool that forces behaviour, and maybe try different queue/queue_family when possible (o.e. when available hardware allows)
@@ -121,6 +114,8 @@ typedef struct cvm_vk_swapchain_image_present_data
     //uint64_t graphics_work_complete_counter;
     cvm_vk_timeline_semaphore graphics_work_tracking;
     cvm_vk_timeline_semaphore transfer_work_tracking;
+
+    VkFence completion_fence;
 }
 cvm_vk_swapchain_image_present_data;
 
@@ -202,9 +197,8 @@ bool cvm_vk_format_check_optimal_feature_support(VkFormat format,VkFormatFeature
 
 typedef enum
 {
-    CVM_VK_PAYLOAD_USES_SAWPCHAIN=0x00000001,
-    CVM_VK_PAYLOAD_FIRST_SAWPCHAIN_USE=0x00000002,
-    CVM_VK_PAYLOAD_LAST_SAWPCHAIN_USE=0x00000004
+    CVM_VK_PAYLOAD_FIRST_SWAPCHAIN_USE=0x00000001,
+    CVM_VK_PAYLOAD_LAST_SWAPCHAIN_USE=0x00000002,
 }
 cvm_vk_payload_flags;
 
@@ -308,11 +302,11 @@ uint32_t cvm_vk_get_graphics_queue_family(void);
 
 
 uint32_t cvm_vk_prepare_for_next_frame(bool rendering_resources_invalid);
-void cvm_vk_transition_frame(void);///must be called in critical section!
 bool cvm_vk_recreate_rendering_resources(void);///this and operations resulting from it returning true, must be called in critical section
 bool cvm_vk_check_for_remaining_frames(uint32_t * completed_frame_index);
 
-
+void vkCmdPipelineBarrier2_cvm_test(VkCommandBuffer commandBuffer,const VkDependencyInfo* pDependencyInfo);
+VkResult vkQueueSubmit2_cvm_test(VkQueue queue,uint32_t submitCount,const VkSubmitInfo2* pSubmits,VkFence fence);
 
 #include "cvm_vk_memory.h"
 #include "cvm_vk_image.h"

@@ -494,13 +494,15 @@ static inline void * stage_copy_action(cvm_vk_managed_buffer * mb,uint64_t offse
         .size=size
     };
 
+    #warning this probably doesnt work... needs another look (i believe the image variant does work)
+    ///will probably need src and dst component swapped in pass-back variant
     if(mb->copy_release_barriers.count==mb->copy_release_barriers.space)mb->copy_release_barriers.barriers=realloc(mb->copy_release_barriers.barriers,sizeof(VkBufferMemoryBarrier2)*(mb->copy_release_barriers.space*=2));
     mb->copy_release_barriers.barriers[mb->copy_release_barriers.count++]=(VkBufferMemoryBarrier2)
     {
         .sType=VK_STRUCTURE_TYPE_BUFFER_MEMORY_BARRIER_2,
         .pNext=NULL,
-        .srcStageMask=VK_PIPELINE_STAGE_2_TRANSFER_BIT,
-        .srcAccessMask=VK_ACCESS_2_TRANSFER_WRITE_BIT,
+        .srcStageMask=VK_PIPELINE_STAGE_TRANSFER_BIT,
+        .srcAccessMask=VK_ACCESS_TRANSFER_WRITE_BIT,
         .dstStageMask=stage_mask,
         .dstAccessMask=access_mask,/// staging/copy only ever writes
         .srcQueueFamilyIndex=mb->copy_src_queue_family,
@@ -576,7 +578,7 @@ void cvm_vk_managed_buffer_submit_all_pending_copy_actions(cvm_vk_managed_buffer
                 .pImageMemoryBarriers=NULL
             };
             //puts("BARRIER");
-            vkCmdPipelineBarrier2(graphics_cb,&copy_aquire_dependencies);
+            vkCmdPipelineBarrier2_cvm_test(graphics_cb,&copy_aquire_dependencies);
 
             ///rest now that we're done with it
             mb->copy_acquire_barriers.count=0;
@@ -606,7 +608,7 @@ void cvm_vk_managed_buffer_submit_all_pending_copy_actions(cvm_vk_managed_buffer
                     .pImageMemoryBarriers=NULL
                 };
                 //puts("BARRIER");
-                vkCmdPipelineBarrier2(graphics_cb,&copy_release_dependencies);
+                vkCmdPipelineBarrier2_cvm_test(graphics_cb,&copy_release_dependencies);
             }
 
             tmp=mb->copy_acquire_barriers;
@@ -677,7 +679,7 @@ void cvm_vk_staging_buffer_update(cvm_vk_staging_buffer * sb,uint32_t space_per_
 {
     if(atomic_load(&sb->space_remaining)!=sb->total_space)
     {
-        fprintf(stderr,"NOT ALL STAGING BUFFER SPACE RELINQUISHED BEFORE RECREATION!\n");
+        fprintf(stderr,"NOT ALL STAGING BUFFER SPACE RELINQUISHED BEFORE RECREATION! %u\n",atomic_load(&sb->space_remaining));
         exit(-1);
     }
 
@@ -715,7 +717,7 @@ void cvm_vk_staging_buffer_destroy(cvm_vk_staging_buffer * sb)
 {
     if(atomic_load(&sb->space_remaining)!=sb->total_space)
     {
-        fprintf(stderr,"NOT ALL STAGING BUFFER SPACE RELINQUISHED BEFORE DESTRUCTION!\n");
+        fprintf(stderr,"NOT ALL STAGING BUFFER SPACE RELINQUISHED BEFORE DESTRUCTION! %u\n",atomic_load(&sb->space_remaining));
         exit(-1);
     }
 
@@ -810,11 +812,17 @@ void * cvm_vk_staging_buffer_get_allocation(cvm_vk_staging_buffer * sb,uint32_t 
 ///should only ever be called during cleanup, not thread safe
 void cvm_vk_staging_buffer_relinquish_space(cvm_vk_staging_buffer * sb,uint32_t frame_index)
 {
+    #warning relied on swapchain images (frame indices) being acquired in order! must fix
     sb->max_offset+=sb->acquisitions[frame_index];
     sb->max_offset-=sb->total_space*(sb->max_offset>=sb->total_space);
 
     atomic_fetch_add(&sb->space_remaining,sb->acquisitions[frame_index]);
     sb->acquisitions[frame_index]=0;
+
+    if(sb->space_remaining!=sb->total_space)
+    {
+        exit(5);///make sure this is unused
+    }
 }
 
 
@@ -943,8 +951,6 @@ void * cvm_vk_transient_buffer_get_allocation(cvm_vk_transient_buffer * tb,uint3
 
     offset=tb->max_offset-old_remaining;
 
-    //offset-=offset%alignment;/// non-Po2 "alignment" supported
-
     *acquired_offset=offset;
     return tb->mapping+offset;
 }
@@ -963,263 +969,4 @@ void cvm_vk_transient_buffer_bind_as_index(VkCommandBuffer cmd_buf,cvm_vk_transi
 {
     vkCmdBindIndexBuffer(cmd_buf,tb->buffer,0,type);
 }
-
-/*void cvm_vk_create_upload_buffer(cvm_vk_upload_buffer * ub,VkBufferUsageFlags usage)
-{
-    ///size really needn't be a PO2, when overrunning we need to detect that anyway, ergo can probably just allocate exact amount desired
-    /// if taking above approach probably want to round everything in buffer to some base allocation offset to make amount of mem available constant across acquisition order
-    /// will have to pass requests for size through per buffer filter or generalised "across the board" filter that rounds to required alignment sizes
-
-    ub->usage=usage;
-
-    ub->frame_count=0;
-    ub->current_frame=0;
-
-    uint32_t required_alignment=cvm_vk_get_buffer_alignment_requirements(usage);
-
-    for(ub->alignment_size_factor=0;1<<ub->alignment_size_factor < required_alignment;ub->alignment_size_factor++);///alignment_size_factor expected to be small, ~6
-    ///can catastrophically fail if required_alignment is greater than 2^31, but w/e
-
-    if(1<<ub->alignment_size_factor != required_alignment)
-    {
-        fprintf(stderr,"NON POWER OF 2 ALIGNMENTS NOT SUPPORTED!\n");
-        exit(-1);
-    }
-
-    ub->mapping=NULL;
-
-
-    ub->transient_space_per_frame=0;
-    atomic_init(&ub->transient_space_remaining,0);
-    ub->transient_offsets=NULL;
-
-
-
-    ub->staging_space_per_frame=0;
-    ub->staging_space=0;
-    ub->max_staging_offset=0;
-    atomic_init(&ub->staging_space_remaining,0);
-    ub->initial_staging_space_remaining=0;
-    ub->staging_buffer_acquisitions=NULL;
-}
-
-void cvm_vk_update_upload_buffer(cvm_vk_upload_buffer * ub,uint32_t staging_space_per_frame,uint32_t transient_space_per_frame,uint32_t frame_count)
-{
-    uint32_t i;
-
-    if(atomic_load(&ub->staging_space_remaining)!=ub->staging_space)
-    {
-        fprintf(stderr,"NOT ALL UPLOAD BUFFER STAGNG SPACE RELINQUISHED BEFORE RECREATION!\n");
-        exit(-1);
-    }
-
-    if(staging_space_per_frame & ((1<<ub->alignment_size_factor)-1))
-    {
-        fprintf(stderr,"REQUESTED UNALIGNED UPLOAD STAGING SIZE!\n");
-        exit(-1);
-    }
-
-    if(transient_space_per_frame & ((1<<ub->alignment_size_factor)-1))
-    {
-        fprintf(stderr,"REQUESTED UNALIGNED TRANSIENT STAGING SIZE!\n");
-        exit(-1);
-    }
-
-    if(frame_count!=ub->frame_count)
-    {
-        ub->transient_offsets=realloc(ub->transient_offsets,frame_count*sizeof(uint32_t));
-        ub->staging_buffer_acquisitions=realloc(ub->staging_buffer_acquisitions,frame_count*sizeof(uint32_t));
-    }
-
-
-
-    if(staging_space_per_frame!=ub->staging_space_per_frame || transient_space_per_frame!=ub->transient_space_per_frame || frame_count!=ub->frame_count)///recreate buffer
-    {
-        if((ub->staging_space_per_frame || ub->transient_space_per_frame) && ub->frame_count)
-        {
-            cvm_vk_destroy_buffer(ub->buffer,ub->memory,ub->mapping);
-            ub->mapping=NULL;
-        }
-
-        if((staging_space_per_frame || transient_space_per_frame) && frame_count)
-        {
-            ub->mapping=cvm_vk_create_buffer(&ub->buffer,&ub->memory,ub->usage,(staging_space_per_frame+transient_space_per_frame)*frame_count,true);
-        }
-    }
-
-    ub->frame_count=frame_count;
-    ub->current_frame=0;
-
-    ub->transient_space_per_frame=transient_space_per_frame;
-    atomic_store(&ub->transient_space_remaining,0);
-
-    ub->staging_space_per_frame=staging_space_per_frame;
-    ub->staging_space=staging_space_per_frame*frame_count;
-    ub->max_staging_offset=0;
-    atomic_store(&ub->staging_space_remaining,staging_space_per_frame*frame_count);
-    ub->initial_staging_space_remaining=0;
-
-    for(i=0;i<frame_count;i++)
-    {
-        ub->staging_buffer_acquisitions[i]=0;
-        ub->transient_offsets[i]=staging_space_per_frame*frame_count + transient_space_per_frame*i;
-    }
-}
-
-void cvm_vk_destroy_upload_buffer(cvm_vk_upload_buffer * ub)
-{
-    if(atomic_load(&ub->staging_space_remaining)!=ub->staging_space)
-    {
-        fprintf(stderr,"NOT ALL UPLOAD BUFFER STAGNG SPACE RELINQUISHED BEFORE DESTRUCTION!\n");
-        exit(-1);
-    }
-
-    cvm_vk_destroy_buffer(ub->buffer,ub->memory,ub->mapping);
-}
-
-uint32_t cvm_vk_upload_buffer_get_rounded_allocation_size(cvm_vk_upload_buffer * ub,uint32_t allocation_size)
-{
-    return (((allocation_size-1)>>ub->alignment_size_factor)+1)<<ub->alignment_size_factor;
-}
-
-void cvm_vk_begin_upload_buffer_frame(cvm_vk_upload_buffer * ub,uint32_t frame_index)
-{
-    ub->initial_staging_space_remaining=atomic_load(&ub->staging_space_remaining);
-
-    atomic_store(&ub->transient_space_remaining,ub->transient_space_per_frame);
-
-    ub->current_frame=frame_index;
-}
-
-void cvm_vk_end_upload_buffer_frame(cvm_vk_upload_buffer * ub)
-{
-    uint32_t acquired_staging_space,current_staging_offset,acquired_transient_space;
-
-    ///flush transient space
-    acquired_transient_space=ub->transient_space_per_frame - atomic_load(&ub->transient_space_remaining);
-    if(acquired_transient_space)
-    {
-        VkMappedMemoryRange flush_range=(VkMappedMemoryRange)
-        {
-            .sType=VK_STRUCTURE_TYPE_MAPPED_MEMORY_RANGE,
-            .pNext=NULL,
-            .memory=ub->memory,
-            .offset=ub->transient_offsets[ub->current_frame],
-            .size=acquired_transient_space
-        };
-
-        cvm_vk_flush_buffer_memory_range(&flush_range);
-        atomic_store(&ub->transient_space_remaining,0);
-    }
-
-    ///flush staging space
-    acquired_staging_space = ub->initial_staging_space_remaining - atomic_load(&ub->staging_space_remaining);
-    ub->staging_buffer_acquisitions[ub->current_frame] = acquired_staging_space;
-
-    current_staging_offset = ub->max_staging_offset - ub->initial_staging_space_remaining + ub->staging_space * (ub->initial_staging_space_remaining > ub->max_staging_offset);///offset before this frame
-
-    if(current_staging_offset+acquired_staging_space >= ub->staging_space)///if the buffer wrapped between begin and end
-    {
-        VkMappedMemoryRange flush_range=(VkMappedMemoryRange)
-        {
-            .sType=VK_STRUCTURE_TYPE_MAPPED_MEMORY_RANGE,
-            .pNext=NULL,
-            .memory=ub->memory,
-            .offset=current_staging_offset,
-            .size=ub->staging_space-current_staging_offset
-        };
-
-        cvm_vk_flush_buffer_memory_range(&flush_range);
-
-        acquired_staging_space-=ub->staging_space-current_staging_offset;
-        current_staging_offset=0;
-    }
-
-    if(acquired_staging_space)///if anything was written that wasnt handled by the previous branch
-    {
-        VkMappedMemoryRange flush_range=(VkMappedMemoryRange)
-        {
-            .sType=VK_STRUCTURE_TYPE_MAPPED_MEMORY_RANGE,
-            .pNext=NULL,
-            .memory=ub->memory,
-            .offset=current_staging_offset,
-            .size=acquired_staging_space
-        };
-
-        cvm_vk_flush_buffer_memory_range(&flush_range);
-    }
-}
-
-///should only ever be called during cleanup, not thread safe
-void cvm_vk_relinquish_upload_buffer_space(cvm_vk_upload_buffer * ub,uint32_t frame_index)
-{
-    ub->max_staging_offset+=ub->staging_buffer_acquisitions[frame_index];
-    ub->max_staging_offset-=ub->staging_space*(ub->max_staging_offset>=ub->staging_space);
-
-    atomic_fetch_add(&ub->staging_space_remaining,ub->staging_buffer_acquisitions[frame_index]);
-    ub->staging_buffer_acquisitions[frame_index]=0;
-}
-
-void * cvm_vk_get_upload_buffer_staging_allocation(cvm_vk_upload_buffer * ub,uint32_t allocation_size,VkDeviceSize * acquired_offset)
-{
-    allocation_size=(((allocation_size-1)>>ub->alignment_size_factor)+1)<<ub->alignment_size_factor;///round as required
-
-    uint32_t offset,new_remaining;
-    uint_fast32_t old_remaining;
-
-    old_remaining=atomic_load(&ub->staging_space_remaining);
-    do
-    {
-        if(allocation_size>old_remaining)return NULL;
-
-        new_remaining=old_remaining;
-
-        offset=ub->max_staging_offset-old_remaining + ub->staging_space*(old_remaining > ub->max_staging_offset);
-
-        if(offset+allocation_size > ub->staging_space)
-        {
-            new_remaining-=ub->staging_space-offset;
-            offset=0;
-        }
-
-        if(allocation_size>new_remaining) return NULL;
-
-        new_remaining-=allocation_size;
-    }
-    while(!atomic_compare_exchange_weak(&ub->staging_space_remaining,&old_remaining,new_remaining));
-
-    *acquired_offset=offset;
-    return ub->mapping+offset;
-}
-
-
-void * cvm_vk_get_upload_buffer_transient_allocation(cvm_vk_upload_buffer * ub,uint32_t allocation_size,VkDeviceSize * acquired_offset)
-{
-    allocation_size=(((allocation_size-1)>>ub->alignment_size_factor)+1)<<ub->alignment_size_factor;///round as required
-
-    uint32_t new_remaining,offset;
-    uint_fast32_t old_remaining;
-
-    old_remaining=atomic_load(&ub->transient_space_remaining);
-    do
-    {
-        if(allocation_size>old_remaining)return NULL;
-
-        new_remaining=old_remaining-allocation_size;
-    }
-    while(!atomic_compare_exchange_weak(&ub->transient_space_remaining,&old_remaining,new_remaining));
-
-    offset=ub->transient_offsets[ub->current_frame]+ub->transient_space_per_frame-old_remaining;
-
-    *acquired_offset=offset;
-    return ub->mapping+offset;
-}*/
-
-
-
-
-
-
-
-
 

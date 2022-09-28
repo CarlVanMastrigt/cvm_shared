@@ -639,11 +639,11 @@ VkSubpassDependency cvm_vk_get_default_colour_attachment_dependency(uint32_t src
     {
         .srcSubpass=src_subpass,
         .dstSubpass=dst_subpass,
-        .srcStageMask=VK_PIPELINE_STAGE_2_COLOR_ATTACHMENT_OUTPUT_BIT | VK_PIPELINE_STAGE_2_FRAGMENT_SHADER_BIT,
-        .dstStageMask=VK_PIPELINE_STAGE_2_COLOR_ATTACHMENT_OUTPUT_BIT | VK_PIPELINE_STAGE_2_FRAGMENT_SHADER_BIT,
-        /// ^ image attachment needs shader stage, see VK_ACCESS_2_INPUT_ATTACHMENT_READ_BIT
-        .srcAccessMask=VK_ACCESS_2_COLOR_ATTACHMENT_WRITE_BIT | VK_ACCESS_2_COLOR_ATTACHMENT_READ_BIT,
-        .dstAccessMask=VK_ACCESS_2_COLOR_ATTACHMENT_WRITE_BIT | VK_ACCESS_2_COLOR_ATTACHMENT_READ_BIT,
+        .srcStageMask=VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT | VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT,
+        .dstStageMask=VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT | VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT,
+        /// ^ image attachment needs shader stage, see VK_ACCESS_INPUT_ATTACHMENT_READ_BIT
+        .srcAccessMask=VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT | VK_ACCESS_COLOR_ATTACHMENT_READ_BIT,
+        .dstAccessMask=VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT | VK_ACCESS_COLOR_ATTACHMENT_READ_BIT,
         .dependencyFlags=VK_DEPENDENCY_BY_REGION_BIT
     };
 }
@@ -654,11 +654,11 @@ VkSubpassDependency cvm_vk_get_default_colour_attachment_dependency_specialised(
     {
         .srcSubpass=src_subpass,
         .dstSubpass=dst_subpass,
-        .srcStageMask=VK_PIPELINE_STAGE_2_COLOR_ATTACHMENT_OUTPUT_BIT | !!src_input_attachment*VK_PIPELINE_STAGE_2_FRAGMENT_SHADER_BIT,
-        .dstStageMask=VK_PIPELINE_STAGE_2_COLOR_ATTACHMENT_OUTPUT_BIT | !!dst_input_attachment*VK_PIPELINE_STAGE_2_FRAGMENT_SHADER_BIT,
-        /// ^ image attachment needs shader stage, see VK_ACCESS_2_INPUT_ATTACHMENT_READ_BIT
-        .srcAccessMask=VK_ACCESS_2_COLOR_ATTACHMENT_WRITE_BIT | (src_input_attachment||src_blended)*VK_ACCESS_2_COLOR_ATTACHMENT_READ_BIT,
-        .dstAccessMask=VK_ACCESS_2_COLOR_ATTACHMENT_WRITE_BIT | (dst_input_attachment||dst_blended)*VK_ACCESS_2_COLOR_ATTACHMENT_READ_BIT,
+        .srcStageMask=VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT | !!src_input_attachment*VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT,
+        .dstStageMask=VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT | !!dst_input_attachment*VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT,
+        /// ^ image attachment needs shader stage, see VK_ACCESS_INPUT_ATTACHMENT_READ_BIT
+        .srcAccessMask=VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT | (src_input_attachment||src_blended)*VK_ACCESS_COLOR_ATTACHMENT_READ_BIT,
+        .dstAccessMask=VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT | (dst_input_attachment||dst_blended)*VK_ACCESS_COLOR_ATTACHMENT_READ_BIT,
         .dependencyFlags=VK_DEPENDENCY_BY_REGION_BIT
     };
 }
@@ -669,10 +669,10 @@ VkSubpassDependency cvm_vk_get_default_depth_stencil_attachment_dependency(uint3
     {
         .srcSubpass=src_subpass,
         .dstSubpass=dst_subpass,
-        .srcStageMask=VK_PIPELINE_STAGE_2_EARLY_FRAGMENT_TESTS_BIT | VK_PIPELINE_STAGE_2_LATE_FRAGMENT_TESTS_BIT,
-        .dstStageMask=VK_PIPELINE_STAGE_2_EARLY_FRAGMENT_TESTS_BIT | VK_PIPELINE_STAGE_2_LATE_FRAGMENT_TESTS_BIT,
-        .srcAccessMask=VK_ACCESS_2_DEPTH_STENCIL_ATTACHMENT_WRITE_BIT | VK_ACCESS_2_DEPTH_STENCIL_ATTACHMENT_READ_BIT,
-        .dstAccessMask= VK_ACCESS_2_DEPTH_STENCIL_ATTACHMENT_WRITE_BIT | VK_ACCESS_2_DEPTH_STENCIL_ATTACHMENT_READ_BIT,
+        .srcStageMask=VK_PIPELINE_STAGE_EARLY_FRAGMENT_TESTS_BIT | VK_PIPELINE_STAGE_LATE_FRAGMENT_TESTS_BIT,
+        .dstStageMask=VK_PIPELINE_STAGE_EARLY_FRAGMENT_TESTS_BIT | VK_PIPELINE_STAGE_LATE_FRAGMENT_TESTS_BIT,
+        .srcAccessMask=VK_ACCESS_DEPTH_STENCIL_ATTACHMENT_WRITE_BIT | VK_ACCESS_DEPTH_STENCIL_ATTACHMENT_READ_BIT,
+        .dstAccessMask= VK_ACCESS_DEPTH_STENCIL_ATTACHMENT_WRITE_BIT | VK_ACCESS_DEPTH_STENCIL_ATTACHMENT_READ_BIT,
         .dependencyFlags=VK_DEPENDENCY_BY_REGION_BIT
     };
 }
