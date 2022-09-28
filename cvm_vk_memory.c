@@ -501,8 +501,8 @@ static inline void * stage_copy_action(cvm_vk_managed_buffer * mb,uint64_t offse
     {
         .sType=VK_STRUCTURE_TYPE_BUFFER_MEMORY_BARRIER_2,
         .pNext=NULL,
-        .srcStageMask=VK_PIPELINE_STAGE_TRANSFER_BIT,
-        .srcAccessMask=VK_ACCESS_TRANSFER_WRITE_BIT,
+        .srcStageMask=VK_PIPELINE_STAGE_2_TRANSFER_BIT,
+        .srcAccessMask=VK_ACCESS_2_TRANSFER_WRITE_BIT,
         .dstStageMask=stage_mask,
         .dstAccessMask=access_mask,/// staging/copy only ever writes
         .srcQueueFamilyIndex=mb->copy_src_queue_family,

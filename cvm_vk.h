@@ -115,7 +115,7 @@ typedef struct cvm_vk_swapchain_image_present_data
     cvm_vk_timeline_semaphore graphics_work_tracking;
     cvm_vk_timeline_semaphore transfer_work_tracking;
 
-    VkFence completion_fence;
+    //VkFence completion_fence;
 }
 cvm_vk_swapchain_image_present_data;
 

@@ -419,16 +419,16 @@ static void cvm_vk_create_logical_device(const char ** requested_extensions,int 
     VkPhysicalDeviceVulkan12Features features_12=
     {
         .sType=VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_VULKAN_1_2_FEATURES,
-//        .pNext=&s2,
-        .pNext=NULL,
+        .pNext=&s2,
+//        .pNext=NULL,
         .timelineSemaphore=VK_TRUE
     };
 
     VkDeviceCreateInfo device_creation_info=(VkDeviceCreateInfo)
     {
         .sType=VK_STRUCTURE_TYPE_DEVICE_CREATE_INFO,
-        //.pNext=&features_12,
-        .pNext=NULL,
+        .pNext=&features_12,
+//        .pNext=NULL,
         .flags=0,
         .queueCreateInfoCount=queue_family_count,
         .pQueueCreateInfos= device_queue_creation_infos,
@@ -579,13 +579,13 @@ void cvm_vk_create_swapchain(void)
         cvm_vk_create_timeline_semaphore(&cvm_vk_presenting_images[i].transfer_work_tracking);
         cvm_vk_presenting_images[i].acquire_semaphore=VK_NULL_HANDLE;
 
-        VkFenceCreateInfo fence_create_info=(VkFenceCreateInfo)
-        {
-            .sType=VK_STRUCTURE_TYPE_FENCE_CREATE_INFO,
-            .pNext=NULL,
-            .flags=0
-        };
-        CVM_VK_CHECK(vkCreateFence(cvm_vk_device,&fence_create_info,NULL,&cvm_vk_presenting_images[i].completion_fence));
+//        VkFenceCreateInfo fence_create_info=(VkFenceCreateInfo)
+//        {
+//            .sType=VK_STRUCTURE_TYPE_FENCE_CREATE_INFO,
+//            .pNext=NULL,
+//            .flags=0
+//        };
+//        CVM_VK_CHECK(vkCreateFence(cvm_vk_device,&fence_create_info,NULL,&cvm_vk_presenting_images[i].completion_fence));
 
 
         /// swapchain frames
@@ -723,7 +723,7 @@ void cvm_vk_destroy_swapchain(void)
         cvm_vk_destroy_timeline_semaphore(&cvm_vk_presenting_images[i].graphics_work_tracking);
         cvm_vk_destroy_timeline_semaphore(&cvm_vk_presenting_images[i].transfer_work_tracking);
 
-        vkDestroyFence(cvm_vk_device,cvm_vk_presenting_images[i].completion_fence,NULL);
+        //vkDestroyFence(cvm_vk_device,cvm_vk_presenting_images[i].completion_fence,NULL);
 
         /// swapchain frames
         vkDestroyImageView(cvm_vk_device,cvm_vk_presenting_images[i].image_view,NULL);
@@ -740,42 +740,42 @@ void cvm_vk_destroy_swapchain(void)
 
 void cvm_vk_create_timeline_semaphore(cvm_vk_timeline_semaphore * timeline_semaphore)
 {
-//    VkSemaphoreCreateInfo timeline_semaphore_create_info=(VkSemaphoreCreateInfo)
-//    {
-//        .sType=VK_STRUCTURE_TYPE_SEMAPHORE_CREATE_INFO,
-//        .pNext=(VkSemaphoreTypeCreateInfo[1])
-//        {
-//            {
-//                .sType=VK_STRUCTURE_TYPE_SEMAPHORE_TYPE_CREATE_INFO,
-//                .pNext=NULL,
-//                .semaphoreType=VK_SEMAPHORE_TYPE_TIMELINE,
-//                .initialValue=0,
-//            }
-//        },
-//        .flags=0
-//    };
-//
-//    CVM_VK_CHECK(vkCreateSemaphore(cvm_vk_device,&timeline_semaphore_create_info,NULL,&timeline_semaphore->semaphore));
-//    timeline_semaphore->value=0;
+    VkSemaphoreCreateInfo timeline_semaphore_create_info=(VkSemaphoreCreateInfo)
+    {
+        .sType=VK_STRUCTURE_TYPE_SEMAPHORE_CREATE_INFO,
+        .pNext=(VkSemaphoreTypeCreateInfo[1])
+        {
+            {
+                .sType=VK_STRUCTURE_TYPE_SEMAPHORE_TYPE_CREATE_INFO,
+                .pNext=NULL,
+                .semaphoreType=VK_SEMAPHORE_TYPE_TIMELINE,
+                .initialValue=0,
+            }
+        },
+        .flags=0
+    };
+
+    CVM_VK_CHECK(vkCreateSemaphore(cvm_vk_device,&timeline_semaphore_create_info,NULL,&timeline_semaphore->semaphore));
+    timeline_semaphore->value=0;
 }
 
 void cvm_vk_destroy_timeline_semaphore(cvm_vk_timeline_semaphore * timeline_semaphore)
 {
-//    vkDestroySemaphore(cvm_vk_device,timeline_semaphore->semaphore,NULL);
+    vkDestroySemaphore(cvm_vk_device,timeline_semaphore->semaphore,NULL);
 }
 
 void cvm_vk_wait_on_timeline_semaphore(cvm_vk_timeline_semaphore * timeline_semaphore,uint64_t timeout_ns)
 {
-//    VkSemaphoreWaitInfo graphics_wait=
-//    {
-//        .sType=VK_STRUCTURE_TYPE_SEMAPHORE_WAIT_INFO,
-//        .pNext=NULL,
-//        .flags=0,
-//        .semaphoreCount=1,
-//        .pSemaphores=&timeline_semaphore->semaphore,
-//        .pValues=&timeline_semaphore->value
-//    };
-//    CVM_VK_CHECK(vkWaitSemaphores(cvm_vk_device,&graphics_wait,timeout_ns));
+    VkSemaphoreWaitInfo graphics_wait=
+    {
+        .sType=VK_STRUCTURE_TYPE_SEMAPHORE_WAIT_INFO,
+        .pNext=NULL,
+        .flags=0,
+        .semaphoreCount=1,
+        .pSemaphores=&timeline_semaphore->semaphore,
+        .pValues=&timeline_semaphore->value
+    };
+    CVM_VK_CHECK(vkWaitSemaphores(cvm_vk_device,&graphics_wait,timeout_ns));
 }
 
 
@@ -875,8 +875,8 @@ uint32_t cvm_vk_prepare_for_next_frame(bool rendering_resources_invalid)
                 }
                 cvm_vk_wait_on_timeline_semaphore(&presenting_image->graphics_work_tracking,1000000000);
                 cvm_vk_wait_on_timeline_semaphore(&presenting_image->transfer_work_tracking,1000000000);
-                CVM_VK_CHECK(vkWaitForFences(cvm_vk_device,1,&presenting_image->completion_fence,VK_TRUE,1000000000));
-                CVM_VK_CHECK(vkResetFences(cvm_vk_device,1,&presenting_image->completion_fence));
+//                CVM_VK_CHECK(vkWaitForFences(cvm_vk_device,1,&presenting_image->completion_fence,VK_TRUE,1000000000));
+//                CVM_VK_CHECK(vkResetFences(cvm_vk_device,1,&presenting_image->completion_fence));
             }
             if(presenting_image->successfully_acquired)///if it was acquired, cleanup is in order
             {
@@ -979,7 +979,7 @@ void cvm_vk_submit_graphics_work(cvm_vk_module_work_payload * payload,cvm_vk_pay
         ///add initial semaphore
         wait_semaphores[submit_info.waitSemaphoreInfoCount].semaphore=presenting_image->acquire_semaphore;
         wait_semaphores[submit_info.waitSemaphoreInfoCount].value=0;///binary semaphore
-        wait_semaphores[submit_info.waitSemaphoreInfoCount].stageMask=VK_PIPELINE_STAGE_ALL_GRAPHICS_BIT;
+        wait_semaphores[submit_info.waitSemaphoreInfoCount].stageMask=VK_PIPELINE_STAGE_2_COLOR_ATTACHMENT_OUTPUT_BIT;
         submit_info.waitSemaphoreInfoCount++;
     }
 
@@ -990,7 +990,7 @@ void cvm_vk_submit_graphics_work(cvm_vk_module_work_payload * payload,cvm_vk_pay
         {
             signal_semaphores[submit_info.signalSemaphoreInfoCount].semaphore=presenting_image->present_semaphore;
             signal_semaphores[submit_info.signalSemaphoreInfoCount].value=0;///binary semaphore
-            signal_semaphores[submit_info.signalSemaphoreInfoCount].stageMask=VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT;///is this correct?
+            signal_semaphores[submit_info.signalSemaphoreInfoCount].stageMask=VK_PIPELINE_STAGE_2_COLOR_ATTACHMENT_OUTPUT_BIT;///is this correct?
             submit_info.signalSemaphoreInfoCount++;
         }
         else ///requires QFOT
@@ -1010,9 +1010,9 @@ void cvm_vk_submit_graphics_work(cvm_vk_module_work_payload * payload,cvm_vk_pay
                     {
                         .sType=VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER_2,
                         .pNext=NULL,
-                        .srcStageMask=VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT,
-                        .srcAccessMask=VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT,
-                        .dstStageMask=0,///no relevant stage representing present... (afaik), maybe VK_PIPELINE_STAGE_BOTTOM_OF_PIPE_BIT ??
+                        .srcStageMask=VK_PIPELINE_STAGE_2_COLOR_ATTACHMENT_OUTPUT_BIT,
+                        .srcAccessMask=VK_ACCESS_2_COLOR_ATTACHMENT_WRITE_BIT,
+                        .dstStageMask=0,///no relevant stage representing present... (afaik), maybe VK_PIPELINE_STAGE_2_BOTTOM_OF_PIPE_BIT ??
                         .dstAccessMask=0,///should be 0 by spec
                         .oldLayout=VK_IMAGE_LAYOUT_PRESENT_SRC_KHR,///colour attachment optimal? modify  renderpasses as necessary to accommodate this (must match present acquire)
                         .newLayout=VK_IMAGE_LAYOUT_PRESENT_SRC_KHR,
@@ -1035,10 +1035,10 @@ void cvm_vk_submit_graphics_work(cvm_vk_module_work_payload * payload,cvm_vk_pay
         }
 
         ///either semaphore used to determine work has finished or one used to acquire ownership on
-//        signal_semaphores[submit_info.signalSemaphoreInfoCount].semaphore=presenting_image->graphics_work_tracking.semaphore;
-//        signal_semaphores[submit_info.signalSemaphoreInfoCount].value=++presenting_image->graphics_work_tracking.value;
-//        signal_semaphores[submit_info.signalSemaphoreInfoCount].stageMask=VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT;///is this correct?
-//        submit_info.signalSemaphoreInfoCount++;
+        signal_semaphores[submit_info.signalSemaphoreInfoCount].semaphore=presenting_image->graphics_work_tracking.semaphore;
+        signal_semaphores[submit_info.signalSemaphoreInfoCount].value=++presenting_image->graphics_work_tracking.value;
+        signal_semaphores[submit_info.signalSemaphoreInfoCount].stageMask=VK_PIPELINE_STAGE_2_COLOR_ATTACHMENT_OUTPUT_BIT;///is this correct?
+        submit_info.signalSemaphoreInfoCount++;
 
         //printf("%u\n",presenting_image->graphics_work_tracking.value);
     }
@@ -1071,7 +1071,8 @@ void cvm_vk_submit_graphics_work(cvm_vk_module_work_payload * payload,cvm_vk_pay
     command_buffer.commandBuffer=payload->command_buffer;
     CVM_VK_CHECK(vkEndCommandBuffer(payload->command_buffer));///must be ended here in case QFOT barrier needed to be injected!
 
-    CVM_VK_CHECK(vkQueueSubmit2_cvm_test(cvm_vk_graphics_queue,1,&submit_info,(flags&CVM_VK_PAYLOAD_LAST_SWAPCHAIN_USE)?presenting_image->completion_fence:VK_NULL_HANDLE));
+//    CVM_VK_CHECK(vkQueueSubmit2_cvm_test(cvm_vk_graphics_queue,1,&submit_info,(flags&CVM_VK_PAYLOAD_LAST_SWAPCHAIN_USE)?presenting_image->completion_fence:VK_NULL_HANDLE));
+    CVM_VK_CHECK(vkQueueSubmit2_cvm_test(cvm_vk_graphics_queue,1,&submit_info,VK_NULL_HANDLE));
 //vkDeviceWaitIdle(cvm_vk_device);
 
 
@@ -1086,18 +1087,18 @@ void cvm_vk_submit_graphics_work(cvm_vk_module_work_payload * payload,cvm_vk_pay
 
             wait_semaphores[0].semaphore=presenting_image->graphics_work_tracking.semaphore;
             wait_semaphores[0].value=presenting_image->graphics_work_tracking.value;
-            wait_semaphores[0].stageMask=VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT;///questionable
+            wait_semaphores[0].stageMask=VK_PIPELINE_STAGE_2_COLOR_ATTACHMENT_OUTPUT_BIT;///questionable
 
 
             submit_info.signalSemaphoreInfoCount=2;
 
             signal_semaphores[0].semaphore=presenting_image->present_semaphore;
             signal_semaphores[0].value=0;///binary semaphore
-            signal_semaphores[0].stageMask=VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT;/// almost certainly isnt necessary
+            signal_semaphores[0].stageMask=VK_PIPELINE_STAGE_2_COLOR_ATTACHMENT_OUTPUT_BIT;/// almost certainly isnt necessary
 
             signal_semaphores[1].semaphore=presenting_image->graphics_work_tracking.semaphore;
             signal_semaphores[1].value=++presenting_image->graphics_work_tracking.value;
-            signal_semaphores[1].stageMask=VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT;///is this correct?
+            signal_semaphores[1].stageMask=VK_PIPELINE_STAGE_2_COLOR_ATTACHMENT_OUTPUT_BIT;///is this correct?
 
 
             command_buffer.commandBuffer=presenting_image->present_acquire_command_buffer;
@@ -1214,7 +1215,7 @@ void cvm_vk_submit_transfer_work(cvm_vk_module_work_payload * payload)
     ///signal that transfer work has completed for cpu synchronisation (and potentially gpu in some use cases)
     signal_semaphores[submit_info.signalSemaphoreInfoCount].semaphore=presenting_image->transfer_work_tracking.semaphore;
     signal_semaphores[submit_info.signalSemaphoreInfoCount].value=++presenting_image->transfer_work_tracking.value;
-    signal_semaphores[submit_info.signalSemaphoreInfoCount].stageMask=VK_PIPELINE_STAGE_TRANSFER_BIT;///is this correct?
+    signal_semaphores[submit_info.signalSemaphoreInfoCount].stageMask=VK_PIPELINE_STAGE_2_TRANSFER_BIT;///is this correct?
     submit_info.signalSemaphoreInfoCount++;
 
     ///load payload data into submit info!
@@ -1245,7 +1246,7 @@ void cvm_vk_submit_transfer_work(cvm_vk_module_work_payload * payload)
     CVM_VK_CHECK(vkEndCommandBuffer(payload->command_buffer));///must be ended here in case QFOT barrier needed to be injected!
     command_buffer.commandBuffer=payload->command_buffer;
 
-    ///CVM_VK_CHECK(vkQueueSubmit2_cvm_test(cvm_vk_graphics_queue,1,&submit_info,VK_NULL_HANDLE));
+    CVM_VK_CHECK(vkQueueSubmit2_cvm_test(cvm_vk_graphics_queue,1,&submit_info,VK_NULL_HANDLE));
 }
 
 bool cvm_vk_recreate_rendering_resources(void) /// this should be made unnecessary id change noted in cvm_vk_transition_frame is implemented
@@ -1274,8 +1275,8 @@ bool cvm_vk_check_for_remaining_frames(uint32_t * completed_frame_index)
             {
                 cvm_vk_wait_on_timeline_semaphore(&cvm_vk_presenting_images[i].graphics_work_tracking,1000000000);
                 cvm_vk_wait_on_timeline_semaphore(&cvm_vk_presenting_images[i].transfer_work_tracking,1000000000);
-                CVM_VK_CHECK(vkWaitForFences(cvm_vk_device,1,&cvm_vk_presenting_images[i].completion_fence,VK_TRUE,1000000000));
-                CVM_VK_CHECK(vkResetFences(cvm_vk_device,1,&cvm_vk_presenting_images[i].completion_fence));
+//                CVM_VK_CHECK(vkWaitForFences(cvm_vk_device,1,&cvm_vk_presenting_images[i].completion_fence,VK_TRUE,1000000000));
+//                CVM_VK_CHECK(vkResetFences(cvm_vk_device,1,&cvm_vk_presenting_images[i].completion_fence));
             }
             cvm_vk_presenting_images[i].successfully_acquired=false;
             cvm_vk_presenting_images[i].successfully_submitted=false;
@@ -1722,14 +1723,6 @@ void cvm_vk_resize_module_graphics_data(cvm_vk_module_data * module_data)
         module_data->batches[i].in_flight=false;
         module_data->batches[i].sub_batches=malloc(sizeof(cvm_vk_module_work_sub_batch)*module_data->sub_batch_count);
 
-//        VkSemaphoreCreateInfo semaphore_create_info=(VkSemaphoreCreateInfo)
-//        {
-//            .sType=VK_STRUCTURE_TYPE_SEMAPHORE_CREATE_INFO,
-//            .pNext=NULL,
-//            .flags=0
-//        };
-
-
         cvm_vk_create_work_sub_batch(module_data,&module_data->batches[i].main_sub_batch);
         for(j=0;j<module_data->sub_batch_count;j++)cvm_vk_create_work_sub_batch(module_data,module_data->batches[i].sub_batches+j);
 
@@ -1889,104 +1882,105 @@ uint32_t cvm_vk_get_graphics_queue_family(void)
 
 void vkCmdPipelineBarrier2_cvm_test(VkCommandBuffer commandBuffer,const VkDependencyInfo* pDependencyInfo)
 {
-    uint32_t i;
-    //vkCmdPipelineBarrier2(commandBuffer,pDependencyInfo);
+    vkCmdPipelineBarrier2(commandBuffer,pDependencyInfo);
 
-    if(pDependencyInfo->memoryBarrierCount)
-    {
-        exit(7);
-    }
-
-    for(i=0;i<pDependencyInfo->bufferMemoryBarrierCount;i++)
-    {
-        VkBufferMemoryBarrier bmb=
-        {
-            .sType=VK_STRUCTURE_TYPE_BUFFER_MEMORY_BARRIER,
-            .pNext=NULL,
-            .srcAccessMask=pDependencyInfo->pBufferMemoryBarriers[i].srcAccessMask,
-            .dstAccessMask=pDependencyInfo->pBufferMemoryBarriers[i].dstAccessMask,
-            .srcQueueFamilyIndex=pDependencyInfo->pBufferMemoryBarriers[i].srcQueueFamilyIndex,
-            .dstQueueFamilyIndex=pDependencyInfo->pBufferMemoryBarriers[i].dstQueueFamilyIndex,
-            .buffer=pDependencyInfo->pBufferMemoryBarriers[i].buffer,
-            .offset=pDependencyInfo->pBufferMemoryBarriers[i].offset,
-            .size=pDependencyInfo->pBufferMemoryBarriers[i].size,
-        };
-
-        vkCmdPipelineBarrier(commandBuffer,
-                             pDependencyInfo->pBufferMemoryBarriers[i].srcStageMask,
-                             pDependencyInfo->pBufferMemoryBarriers[i].dstStageMask,
-                             pDependencyInfo->dependencyFlags,
-                             0,NULL,
-                             1,&bmb,
-                             0,NULL);
-    }
-
-    for(i=0;i<pDependencyInfo->imageMemoryBarrierCount;i++)
-    {
-        VkImageMemoryBarrier imb=
-        {
-            .sType=VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER,
-            .pNext=NULL,
-            .srcAccessMask=pDependencyInfo->pImageMemoryBarriers[i].srcAccessMask,
-            .dstAccessMask=pDependencyInfo->pImageMemoryBarriers[i].dstAccessMask,
-            .oldLayout=pDependencyInfo->pImageMemoryBarriers[i].oldLayout,
-            .newLayout=pDependencyInfo->pImageMemoryBarriers[i].newLayout,
-            .srcQueueFamilyIndex=pDependencyInfo->pImageMemoryBarriers[i].srcQueueFamilyIndex,
-            .dstQueueFamilyIndex=pDependencyInfo->pImageMemoryBarriers[i].dstQueueFamilyIndex,
-            .image=pDependencyInfo->pImageMemoryBarriers[i].image,
-            .subresourceRange=pDependencyInfo->pImageMemoryBarriers[i].subresourceRange,
-        };
-
-        vkCmdPipelineBarrier(commandBuffer,
-                             pDependencyInfo->pImageMemoryBarriers[i].srcStageMask,
-                             pDependencyInfo->pImageMemoryBarriers[i].dstStageMask,
-                             pDependencyInfo->dependencyFlags,
-                             0,NULL,
-                             0,NULL,
-                             1,&imb);
-    }
+//    uint32_t i;
+//    if(pDependencyInfo->memoryBarrierCount)
+//    {
+//        exit(7);
+//    }
+//
+//    for(i=0;i<pDependencyInfo->bufferMemoryBarrierCount;i++)
+//    {
+//        VkBufferMemoryBarrier bmb=
+//        {
+//            .sType=VK_STRUCTURE_TYPE_BUFFER_MEMORY_BARRIER,
+//            .pNext=NULL,
+//            .srcAccessMask=pDependencyInfo->pBufferMemoryBarriers[i].srcAccessMask,
+//            .dstAccessMask=pDependencyInfo->pBufferMemoryBarriers[i].dstAccessMask,
+//            .srcQueueFamilyIndex=pDependencyInfo->pBufferMemoryBarriers[i].srcQueueFamilyIndex,
+//            .dstQueueFamilyIndex=pDependencyInfo->pBufferMemoryBarriers[i].dstQueueFamilyIndex,
+//            .buffer=pDependencyInfo->pBufferMemoryBarriers[i].buffer,
+//            .offset=pDependencyInfo->pBufferMemoryBarriers[i].offset,
+//            .size=pDependencyInfo->pBufferMemoryBarriers[i].size,
+//        };
+//
+//        vkCmdPipelineBarrier(commandBuffer,
+//                             pDependencyInfo->pBufferMemoryBarriers[i].srcStageMask,
+//                             pDependencyInfo->pBufferMemoryBarriers[i].dstStageMask,
+//                             pDependencyInfo->dependencyFlags,
+//                             0,NULL,
+//                             1,&bmb,
+//                             0,NULL);
+//    }
+//
+//    for(i=0;i<pDependencyInfo->imageMemoryBarrierCount;i++)
+//    {
+//        VkImageMemoryBarrier imb=
+//        {
+//            .sType=VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER,
+//            .pNext=NULL,
+//            .srcAccessMask=pDependencyInfo->pImageMemoryBarriers[i].srcAccessMask,
+//            .dstAccessMask=pDependencyInfo->pImageMemoryBarriers[i].dstAccessMask,
+//            .oldLayout=pDependencyInfo->pImageMemoryBarriers[i].oldLayout,
+//            .newLayout=pDependencyInfo->pImageMemoryBarriers[i].newLayout,
+//            .srcQueueFamilyIndex=pDependencyInfo->pImageMemoryBarriers[i].srcQueueFamilyIndex,
+//            .dstQueueFamilyIndex=pDependencyInfo->pImageMemoryBarriers[i].dstQueueFamilyIndex,
+//            .image=pDependencyInfo->pImageMemoryBarriers[i].image,
+//            .subresourceRange=pDependencyInfo->pImageMemoryBarriers[i].subresourceRange,
+//        };
+//
+//        vkCmdPipelineBarrier(commandBuffer,
+//                             pDependencyInfo->pImageMemoryBarriers[i].srcStageMask,
+//                             pDependencyInfo->pImageMemoryBarriers[i].dstStageMask,
+//                             pDependencyInfo->dependencyFlags,
+//                             0,NULL,
+//                             0,NULL,
+//                             1,&imb);
+//    }
 }
 
 VkResult vkQueueSubmit2_cvm_test(VkQueue queue,uint32_t submitCount,const VkSubmitInfo2* pSubmits,VkFence fence)
 {
-    //return vkQueueSubmit2(queue,submitCount,pSubmits,fence);
-    VkSubmitInfo subs[4];
-    VkSemaphore w_sems[4][16];
-    VkPipelineStageFlags w_stgs[4][16];
-    VkSemaphore s_sems[4][16];
-    VkCommandBuffer cbs[4][16];
-    uint32_t i,j;
+    return vkQueueSubmit2(queue,submitCount,pSubmits,fence);
 
-
-    for(i=0;i<submitCount;i++)
-    {
-        for(j=0;j<pSubmits[i].waitSemaphoreInfoCount;j++)
-        {
-            w_sems[i][j]=pSubmits[i].pWaitSemaphoreInfos[j].semaphore;
-            w_stgs[i][j]=pSubmits[i].pWaitSemaphoreInfos[j].stageMask;
-        }
-        for(j=0;j<pSubmits[i].commandBufferInfoCount;j++)
-        {
-            cbs[i][j]=pSubmits[i].pCommandBufferInfos[j].commandBuffer;
-        }
-        for(j=0;j<pSubmits[i].signalSemaphoreInfoCount;j++)
-        {
-            s_sems[i][j]=pSubmits[i].pSignalSemaphoreInfos[j].semaphore;
-        }
-
-        subs[i]=(VkSubmitInfo)
-        {
-            .sType=VK_STRUCTURE_TYPE_SUBMIT_INFO,
-            .pNext=NULL,
-            .waitSemaphoreCount=pSubmits[i].waitSemaphoreInfoCount,
-            .pWaitSemaphores=w_sems[i],
-            .pWaitDstStageMask=w_stgs[i],
-            .commandBufferCount=pSubmits[i].commandBufferInfoCount,
-            .pCommandBuffers=cbs[i],
-            .signalSemaphoreCount=pSubmits[i].signalSemaphoreInfoCount,
-            .pSignalSemaphores=s_sems[i],
-        };
-    }
-
-    return vkQueueSubmit(queue,submitCount,subs,fence);
+//    VkSubmitInfo subs[4];
+//    VkSemaphore w_sems[4][16];
+//    VkPipelineStageFlags w_stgs[4][16];
+//    VkSemaphore s_sems[4][16];
+//    VkCommandBuffer cbs[4][16];
+//    uint32_t i,j;
+//
+//
+//    for(i=0;i<submitCount;i++)
+//    {
+//        for(j=0;j<pSubmits[i].waitSemaphoreInfoCount;j++)
+//        {
+//            w_sems[i][j]=pSubmits[i].pWaitSemaphoreInfos[j].semaphore;
+//            w_stgs[i][j]=pSubmits[i].pWaitSemaphoreInfos[j].stageMask;
+//        }
+//        for(j=0;j<pSubmits[i].commandBufferInfoCount;j++)
+//        {
+//            cbs[i][j]=pSubmits[i].pCommandBufferInfos[j].commandBuffer;
+//        }
+//        for(j=0;j<pSubmits[i].signalSemaphoreInfoCount;j++)
+//        {
+//            s_sems[i][j]=pSubmits[i].pSignalSemaphoreInfos[j].semaphore;
+//        }
+//
+//        subs[i]=(VkSubmitInfo)
+//        {
+//            .sType=VK_STRUCTURE_TYPE_SUBMIT_INFO,
+//            .pNext=NULL,
+//            .waitSemaphoreCount=pSubmits[i].waitSemaphoreInfoCount,
+//            .pWaitSemaphores=w_sems[i],
+//            .pWaitDstStageMask=w_stgs[i],
+//            .commandBufferCount=pSubmits[i].commandBufferInfoCount,
+//            .pCommandBuffers=cbs[i],
+//            .signalSemaphoreCount=pSubmits[i].signalSemaphoreInfoCount,
+//            .pSignalSemaphores=s_sems[i],
+//        };
+//    }
+//
+//    return vkQueueSubmit(queue,submitCount,subs,fence);
 }
