@@ -283,11 +283,7 @@ static void contiguous_text_button_widget_render(overlay_theme * theme,widget * 
 
     bool valid=get_ancestor_contiguous_box_data(w,&otslrd.box_r,&otslrd.box_status);
 
-    if(!valid)
-    {
-        fprintf(stderr,"CONTIGUOUS BUTTON SHOULD BE IN CONTIGUOUS BOX\n");
-        exit(-1);
-    }
+    assert(valid);///CONTIGUOUS BUTTON SHOULD BE IN CONTIGUOUS BOX
 
     if((w->button.toggle_status)&&(w->button.toggle_status(w)))
     {

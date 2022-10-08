@@ -26,11 +26,7 @@ void blank_enterbox_function(widget * w)
 
 static inline void enterbox_delete_selection(overlay_theme * theme,widget * w,char * s_begin,char * s_end)
 {
-    if(s_begin>s_end)
-    {
-        fprintf(stderr,"ATTEMPTING TO DELETE INVERTED SELECTION FROM ENTERBOX\n");
-        exit(-1);
-    }
+    assert(s_begin<=s_end);///ATTEMPTING TO DELETE INVERTED SELECTION FROM ENTERBOX
 
     if(s_begin!=s_end)
     {
@@ -487,11 +483,7 @@ widget * create_enterbox(int max_strlen,int max_glyphs,int min_glyphs_visible,ch
 void set_enterbox_text(widget * w,char * text)
 {
     ///error checking, don't put in release?
-    if(strlen(text)>w->enterbox.max_strlen)
-    {
-        fprintf(stderr,"ATTEMPTING TO SET A STRING WITHOUT PROVIDING ENOUGH CAPACITY\n");
-        exit(-1);
-    }
+    assert(strlen(text)<=w->enterbox.max_strlen);///ATTEMPTING TO SET A STRING WITHOUT PROVIDING ENOUGH CAPACITY
 
     int gc;
     if(text && cvm_overlay_utf8_validate_string_and_count_glyphs(text,&gc) && gc<=w->enterbox.max_glyphs && strlen(text)<=w->enterbox.max_strlen)

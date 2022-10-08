@@ -306,11 +306,8 @@ int cvm_mesh_generate_file_from_objs(const char * name,uint16_t flags)
 
 size_t cvm_mesh_get_vertex_data_size(uint16_t flags)
 {
-    if(flags & (CVM_MESH_VERTEX_NORMALS|CVM_MESH_TEXTURE_COORDS))
-    {
-        fprintf(stderr,"MESH NORMALS AND TEX-COORDS NYI\n");
-        exit(-1);
-    }
+    assert(!(flags & (CVM_MESH_VERTEX_NORMALS|CVM_MESH_TEXTURE_COORDS)));///MESH NORMALS AND TEX-COORDS NYI
+
     ///will (conditionally) change when texture coordinates and normals are implemented
     return 3*sizeof(float);
 }
@@ -321,18 +318,10 @@ void cvm_mesh_load_file_header(FILE * f,cvm_mesh * mesh)
     uint16_t tmp;
 
     fread(&tmp,sizeof(uint16_t),1,f);
-    if(tmp!=cvm_mesh_file_signiature)
-    {
-        fprintf(stderr,"ATTEMPTED TO LOAD NON MESH FILE AS MESH FILE (SIGNIATURE MISMATCH)\n");
-        exit(-1);
-    }
+    assert(tmp==cvm_mesh_file_signiature);///ATTEMPTED TO LOAD NON MESH FILE AS MESH FILE (SIGNIATURE MISMATCH)
 
     fread(&tmp,sizeof(uint16_t),1,f);
-    if(tmp>cvm_mesh_version_number)
-    {
-        fprintf(stderr,"MESH FILE VERSION MISMATCH\n");
-        exit(-1);
-    }
+    assert(tmp<=cvm_mesh_version_number);///MESH FILE VERSION MISMATCH
 
     fread(&mesh->flags,sizeof(uint16_t),1,f);
     fread(&mesh->vertex_count,sizeof(uint16_t),1,f);
@@ -361,24 +350,16 @@ bool cvm_managed_mesh_load(cvm_managed_mesh * mm)
     size_t vertex_data_size;
     uint32_t size;
     FILE * f;
-    VkDeviceSize sb_offset;
 
     f=fopen(mm->filename,"rb");
-    if(!f)
-    {
-        fprintf(stderr,"MESH FILE MISSING: %s\n",mm->filename);
-        exit(-1);
-    }
+
+    assert(f || !fprintf(stderr,"MESH FILE MISSING: %s\n",mm->filename));
 
     desired_flags=mm->data.flags;
 
     cvm_mesh_load_file_header(f,&mm->data);
 
-    if(mm->data.flags!=desired_flags)
-    {
-        fprintf(stderr,"ATTEMPTED TO LOAD MESH FILE WITH FLAGS DIFFERENT TO THOSE IT WAS CREATED WITH\n");
-        exit(-1);
-    }
+    assert(mm->data.flags==desired_flags);///ATTEMPTED TO LOAD MESH FILE WITH FLAGS DIFFERENT TO THOSE IT WAS CREATED WITH
 
     mm->data.flags=desired_flags;
 
@@ -396,11 +377,8 @@ bool cvm_managed_mesh_load(cvm_managed_mesh * mm)
         {
             mm->dynamic_allocation=cvm_vk_managed_buffer_acquire_dynamic_allocation(mm->mb,size);
 
-            if(!mm->dynamic_allocation)
-            {
-                fprintf(stderr,"INSUFFICIENT SPACE REMAINING IN BUFFER FOR MESH: %s\n",mm->filename);
-                exit(-1);
-            }
+            #warning, probably want to handle this case "elegantly"
+            assert(mm->dynamic_allocation || !fprintf(stderr,"INSUFFICIENT SPACE REMAINING IN BUFFER FOR MESH: %s\n",mm->filename));
 
             mm->allocated=true;
         }
@@ -416,11 +394,8 @@ bool cvm_managed_mesh_load(cvm_managed_mesh * mm)
         {
             mm->static_offset = cvm_vk_managed_buffer_acquire_static_allocation(mm->mb,size,2);
 
-            if(!mm->static_offset)
-            {
-                fprintf(stderr,"INSUFFICIENT SPACE REMAINING IN BUFFER FOR MESH: %s\n",mm->filename);
-                exit(-1);
-            }
+            #warning, probably want to handle this case "elegantly"
+            assert(mm->static_offset || !fprintf(stderr,"INSUFFICIENT SPACE REMAINING IN BUFFER FOR MESH: %s\n",mm->filename));
 
             mm->allocated=true;
         }

@@ -31,11 +31,7 @@ along with cvm_shared.  If not, see <https://www.gnu.org/licenses/>.
 //    uint8_t *s;
 //    uint8_t *data;
 //
-//    if(ro>640)
-//    {
-//        fprintf(stderr,"CUBIC OVERLAY ELEMENTS OF THIS SIZE NOT SUPPORTED\n");
-//        exit(-1);
-//    }
+//    assert(ro<=640);///CUBIC OVERLAY ELEMENTS OF THIS SIZE NOT SUPPORTED
 //
 //    r4=(((ro>>4)-1)&~3)+4;///convert outer radius to pixels (not 1/16ths pixels) and round up to multiple of 4
 //
@@ -124,11 +120,7 @@ static void cubic_create_shape(cvm_vk_image_atlas_tile ** tile,uint16_t ** selec
     uint8_t * data;
     uint16_t * grid;
 
-    if(r>40)
-    {
-        fprintf(stderr,"CUBIC OVERLAY ELEMENTS OF THIS SIZE NOT SUPPORTED\n");
-        exit(-1);
-    }
+    assert(r<=40);///CUBIC OVERLAY ELEMENTS OF THIS SIZE NOT SUPPORTED
 
     *tile=overlay_create_transparent_image_tile_with_staging((void**)(&data),r*2,r*2);
 

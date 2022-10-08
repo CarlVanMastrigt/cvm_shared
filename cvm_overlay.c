@@ -513,7 +513,7 @@ static void create_overlay_images(uint32_t t_w,uint32_t t_h,uint32_t c_w,uint32_
     cvm_vk_create_image(&overlay_colour_image,&image_creation_info);
 
     VkImage images[2]={overlay_transparent_image,overlay_colour_image};
-    cvm_vk_create_and_bind_memory_for_images(&overlay_image_memory,images,2);
+    cvm_vk_create_and_bind_memory_for_images(&overlay_image_memory,images,2,0);
 
 
 
@@ -766,7 +766,7 @@ void overlay_render_frame(int screen_w,int screen_h,widget * menu_widget)
         cvm_vk_module_work_payload pl;
 
         pl.wait_count=0;
-        pl.signal=NULL;
+        pl.signal_count=0;
 
         pl.command_buffer=batch->transfer_pcb;///really need to make existence of transfer CB conditional
         cvm_vk_submit_transfer_work(&pl);

@@ -23,21 +23,13 @@ void cvm_vk_create_image_atlas(cvm_vk_image_atlas * ia,VkImage image,VkImageView
 {
     uint32_t i,j;
 
-    if(width<1<<CVM_VK_BASE_TILE_SIZE_FACTOR||height<1<<CVM_VK_BASE_TILE_SIZE_FACTOR)
-    {
-        fprintf(stderr,"IMAGE ATLAS TOO SMALL\n");
-        exit(-1);
-    }
+    assert(width > 1<<CVM_VK_BASE_TILE_SIZE_FACTOR && height > 1<<CVM_VK_BASE_TILE_SIZE_FACTOR);///IMAGE ATLAS TOO SMALL
 
     ia->image=image;
     ia->image_view=image_view;
     ia->bytes_per_pixel=bytes_per_pixel;
 
-    if(width & (width-1) || height & (height-1))
-    {
-        fprintf(stderr,"IMAGE ATLAS MUST BE CREATED AT POWER OF 2 WIDTH AND HEIGHT\n");
-        exit(-1);
-    }
+    assert(!(width & (width-1)) && !(height & (height-1)));///IMAGE ATLAS MUST BE CREATED AT POWER OF 2 WIDTH AND HEIGHT
 
     for(i=0;width>1<<i;i++);
     ia->num_tile_sizes_h=i-CVM_VK_BASE_TILE_SIZE_FACTOR+1;
@@ -118,12 +110,8 @@ void cvm_vk_destroy_image_atlas(cvm_vk_image_atlas * ia)
     uint32_t i,j;
     cvm_vk_image_atlas_tile *first,*last,*current,*next;
 
-    if(ia->available_tiles[ia->num_tile_sizes_h-1][ia->num_tile_sizes_v-1].count!=1)
-    {
-        fprintf(stderr,"TRYING TO DESTROY AN IMAGE ATLAS WITH ACTIVE TILES\n");
-        exit(-1);
-        ///could instead just rightmost to offload all active buffers to the unused linked list
-    }
+    ///one tile of max size is below, represent fully relinquished / empty atlas
+    assert(ia->available_tiles[ia->num_tile_sizes_h-1][ia->num_tile_sizes_v-1].count==1);///TRYING TO DESTROY AN IMAGE ATLAS WITH ACTIVE TILES
 
     first=ia->available_tiles[ia->num_tile_sizes_h-1][ia->num_tile_sizes_v-1].heap[0];///return the last, base tile to the list to be processed (unused tiles)
     first->next_h=ia->first_unused_tile;
@@ -658,17 +646,8 @@ cvm_vk_image_atlas_tile * cvm_vk_acquire_image_atlas_tile_with_staging(cvm_vk_im
     uint_fast32_t lock;
     cvm_vk_image_atlas_tile * tile;
 
-    if(!ia->staging_buffer)
-    {
-        fprintf(stderr,"IMAGE ATLAS STAGING BUFFER NOT SET\n");
-        exit(-1);
-    }
-
-    if(ia->bytes_per_pixel*width*height > ia->staging_buffer->total_space)
-    {
-        fprintf(stderr,"ATTEMPTED TO ACQUIRE STAGING SPACE FOR IMAGE GREATER THAN STAGING BUFFER TOTAL\n");
-        exit(-1);
-    }
+    assert(ia->staging_buffer);///IMAGE ATLAS STAGING BUFFER NOT SET
+    assert(ia->bytes_per_pixel*width*height <= ia->staging_buffer->total_space);///ATTEMPTED TO ACQUIRE STAGING SPACE FOR IMAGE GREATER THAN STAGING BUFFER TOTAL
 
     *staging = cvm_vk_staging_buffer_get_allocation(ia->staging_buffer,ia->bytes_per_pixel*width*height,&upload_offset);
 
@@ -676,11 +655,7 @@ cvm_vk_image_atlas_tile * cvm_vk_acquire_image_atlas_tile_with_staging(cvm_vk_im
 
     tile=cvm_vk_acquire_image_atlas_tile(ia,width,height);
 
-    if(!tile)
-    {
-        fprintf(stderr,"NO SPACE LEFT IN IMAGE ATLAS\n");
-        exit(-1);
-    }
+    assert(tile);///NO SPACE LEFT IN IMAGE ATLAS
 
     if(ia->multithreaded)do lock=atomic_load(&ia->copy_spinlock);
     while(lock!=0 || !atomic_compare_exchange_weak(&ia->copy_spinlock,&lock,1));
@@ -727,17 +702,8 @@ void * cvm_vk_acquire_staging_for_image_atlas_tile(cvm_vk_image_atlas * ia,cvm_v
     uint_fast32_t lock;
     void * staging;
 
-    if(!ia->staging_buffer)
-    {
-        fprintf(stderr,"IMAGE ATLAS STAGING BUFFER NOT SET\n");
-        exit(-1);
-    }
-
-    if(ia->bytes_per_pixel*width*height > ia->staging_buffer->total_space)
-    {
-        fprintf(stderr,"ATTEMPTED TO ACQUIRE STAGING SPACE FOR IMAGE GREATER THAN STAGING BUFFER TOTAL\n");
-        exit(-1);
-    }
+    assert(ia->staging_buffer);///IMAGE ATLAS STAGING BUFFER NOT SET
+    assert(ia->bytes_per_pixel*width*height <= ia->staging_buffer->total_space);///ATTEMPTED TO ACQUIRE STAGING SPACE FOR IMAGE GREATER THAN STAGING BUFFER TOTAL
 
     staging = cvm_vk_staging_buffer_get_allocation(ia->staging_buffer,ia->bytes_per_pixel*width*height,&upload_offset);
 
@@ -828,7 +794,7 @@ void cvm_vk_image_atlas_submit_all_pending_copy_actions(cvm_vk_image_atlas * ia,
             }
         };
 
-        vkCmdPipelineBarrier2_cvm_test(transfer_cb,&copy_acquire_dependencies);
+        vkCmdPipelineBarrier2(transfer_cb,&copy_acquire_dependencies);
 
         ///actually execute the copies!
         ///unfortunately need another test here in case initialised path is being taken
@@ -872,7 +838,7 @@ void cvm_vk_image_atlas_submit_all_pending_copy_actions(cvm_vk_image_atlas * ia,
             }
         };
 
-        vkCmdPipelineBarrier2_cvm_test(transfer_cb,&copy_release_dependencies);
+        vkCmdPipelineBarrier2(transfer_cb,&copy_release_dependencies);
     }
 
     if(ia->multithreaded) atomic_store(&ia->copy_spinlock,0);

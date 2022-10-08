@@ -30,6 +30,7 @@ along with cvm_shared.  If not, see <https://www.gnu.org/licenses/>.
 #include <math.h>
 #include <threads.h>
 #include <time.h>
+#include <assert.h>
 
 
 #include <SDL2/SDL.h>

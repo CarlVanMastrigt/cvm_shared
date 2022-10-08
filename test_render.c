@@ -594,7 +594,7 @@ static void create_test_pipelines(VkSampleCountFlagBits sample_count,float min_s
     else
     {
         fprintf(stderr,"SELECTED TEST MSAA MODE NOT SUPPORTED\n");
-        exit(-1);
+        post_frag=test_post_fragment_stage_1;
     }
 
 
@@ -681,7 +681,7 @@ static void create_test_framebuffer_images(VkSampleCountFlagBits sample_count)
         test_framebuffer_depth_images[0],test_framebuffer_depth_images[1],
         test_framebuffer_colour_images[0],test_framebuffer_colour_images[1],
         test_framebuffer_normal_images[0],test_framebuffer_normal_images[1]};
-    cvm_vk_create_and_bind_memory_for_images(&test_framebuffer_image_memory,images,3);
+    cvm_vk_create_and_bind_memory_for_images(&test_framebuffer_image_memory,images,3,0);
 
     cvm_vk_create_default_framebuffer_image_views(test_framebuffer_depth_stencil_views,test_framebuffer_depth_images,test_depth_format,VK_IMAGE_ASPECT_DEPTH_BIT|VK_IMAGE_ASPECT_STENCIL_BIT,TEST_FRAMEBUFFER_CYCLES);
     cvm_vk_create_default_framebuffer_image_views(test_framebuffer_depth_only_views,test_framebuffer_depth_images,test_depth_format,VK_IMAGE_ASPECT_DEPTH_BIT,TEST_FRAMEBUFFER_CYCLES);
@@ -988,7 +988,7 @@ cvm_vk_module_batch * test_render_frame(cvm_camera * c)
         cvm_vk_module_work_payload pl;
 
         pl.wait_count=0;
-        pl.signal=NULL;
+        pl.signal_count=0;
 
         pl.command_buffer=batch->transfer_pcb;
         cvm_vk_submit_transfer_work(&pl);

@@ -28,6 +28,13 @@ along with cvm_shared.  If not, see <https://www.gnu.org/licenses/>.
 #define CVM_VK_RESERVED_DYNAMIC_BUFFER_ALLOCATION_COUNT 256
 
 
+typedef struct cvm_vk_staging_buffer_region
+{
+    uint32_t start;
+    uint32_t end;
+}
+cvm_vk_staging_buffer_region;
+
 typedef struct cvm_vk_staging_buffer
 {
     VkBuffer buffer;
@@ -35,20 +42,22 @@ typedef struct cvm_vk_staging_buffer
 
     VkBufferUsageFlags usage;
 
-    uint32_t total_space;///round to PO2
-    uint32_t max_offset;///fence, should be updated before multithreading becomes applicable this frame
+    uint32_t total_space;
     uint32_t alignment_size_factor;
-    atomic_uint_fast32_t space_remaining;
-    uint32_t initial_space_remaining;
-    ///need to test atomic version isn't (significatly) slower than non-atomic
-    uint32_t * acquisitions;
+
+    cvm_vk_staging_buffer_region active_region;///region selected for this frame
+    atomic_uint_fast32_t active_offset;///need to test atomic version isn't (significatly) slower than non-atomic for single threaded applications
+
+    cvm_vk_staging_buffer_region * acquired_regions;///one per swapchain image
+    cvm_vk_staging_buffer_region * available_regions;///will always be less than swapchain image count of these
+    uint32_t available_region_count;
 
     void * mapping;
 }
 cvm_vk_staging_buffer;
 
 void cvm_vk_staging_buffer_create(cvm_vk_staging_buffer * sb,VkBufferUsageFlags usage);
-void cvm_vk_staging_buffer_update(cvm_vk_staging_buffer * sb,uint32_t space_per_frame, uint32_t frame_count);
+void cvm_vk_staging_buffer_update(cvm_vk_staging_buffer * sb,uint32_t space_per_frame,uint32_t frame_count);
 void cvm_vk_staging_buffer_destroy(cvm_vk_staging_buffer * sb);
 
 uint32_t cvm_vk_staging_buffer_get_rounded_allocation_size(cvm_vk_staging_buffer * sb,uint32_t allocation_size);

@@ -60,7 +60,7 @@ void destroy_debug_render_data(void)
     cvm_vk_destroy_pipeline_layout(debug_pipeline_layout);
 }
 
-void create_debug_swapchain_dependent_render_data(VkRenderPass colour_render_pass,VkSampleCountFlagBits sample_count)
+void create_debug_swapchain_dependent_render_data(VkRenderPass render_pass,uint32_t subpass,VkSampleCountFlagBits sample_count)
 {
 
     float line_thickness=1.0;
@@ -172,8 +172,8 @@ void create_debug_swapchain_dependent_render_data(VkRenderPass colour_render_pas
         },
         .pDynamicState=NULL,
         .layout=debug_pipeline_layout,
-        .renderPass=colour_render_pass,
-        .subpass=0,
+        .renderPass=render_pass,
+        .subpass=subpass,
         .basePipelineHandle=VK_NULL_HANDLE,
         .basePipelineIndex=-1
     };

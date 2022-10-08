@@ -126,8 +126,7 @@ static inline type * name##_list_ensure_space                                   
 
 
 
-
-
+/// CVM_BIN_HEAP_CMP(a,b) must be declared with true resulting in the value a moving UP the heap
 
 #ifndef CVM_BIN_HEAP
 #define CVM_BIN_HEAP(type,name)                                                 \

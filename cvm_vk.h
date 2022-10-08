@@ -29,11 +29,8 @@ along with cvm_shared.  If not, see <https://www.gnu.org/licenses/>.
 #define CVM_VK_CHECK(f)                                                         \
 {                                                                               \
     VkResult r=f;                                                               \
-    if(r!=VK_SUCCESS)                                                           \
-    {                                                                           \
-        fprintf(stderr,"VULKAN FUNCTION FAILED : %d :%s\n",r,#f);               \
-        exit(-1);                                                               \
-    }                                                                           \
+    assert(r==VK_SUCCESS ||                                                     \
+           !fprintf(stderr,"VULKAN FUNCTION FAILED : %d : %s\n",r,#f));         \
 }
 
 #endif
@@ -50,14 +47,6 @@ along with cvm_shared.  If not, see <https://www.gnu.org/licenses/>.
 ///need 1 more than this for each extra layer of cycling (e.g. thread-sync-separation, that is written in thread then passed to main thread before being rendered with)
 
 #define CVM_VK_INVALID_IMAGE_INDEX 0xFFFFFFFF
-
-
-typedef struct cvm_vk_timeline_semaphore
-{
-    VkSemaphore semaphore;
-    uint64_t value;
-}
-cvm_vk_timeline_semaphore;
 
 
 
@@ -91,6 +80,12 @@ going to have to rely on acquire op failing to know when to recreate swapchain
 ///could move these structs to the c file? - they should only ever be used by cvm_vk internally
 ///this struct contains the data needed to be known upfront when acquiring swapchain image (cvm_vk_swapchain_frame), some data could go in either struct though...
 
+typedef struct cvm_vk_timeline_semaphore
+{
+    VkSemaphore semaphore;
+    uint64_t value;
+}
+cvm_vk_timeline_semaphore;
 
 typedef struct cvm_vk_swapchain_image_present_data
 {
@@ -110,10 +105,10 @@ typedef struct cvm_vk_swapchain_image_present_data
 
     VkSemaphore present_semaphore;///needed by VkPresentInfoKHR
 
-    //VkSemaphore graphics_work_complete_semaphore;///tracks use of the swapchain image by graphics submits, timeline semaphore, effectively number of times this swapchain image has been used by a frame
-    //uint64_t graphics_work_complete_counter;
-    cvm_vk_timeline_semaphore graphics_work_tracking;
-    cvm_vk_timeline_semaphore transfer_work_tracking;
+    ///semaphore values
+    uint64_t graphics_wait_value;
+    uint64_t present_wait_value;
+    uint64_t transfer_wait_value;///should move this to the transferchain when that becomes a thing
 
     //VkFence completion_fence;
 }
@@ -132,10 +127,9 @@ void cvm_vk_destroy_swapchain(void);
 
 
 
-void cvm_vk_create_timeline_semaphore(cvm_vk_timeline_semaphore * timeline_semaphore);
-void cvm_vk_destroy_timeline_semaphore(cvm_vk_timeline_semaphore * timeline_semaphore);
-void cvm_vk_wait_on_timeline_semaphore(cvm_vk_timeline_semaphore * timeline_semaphore,uint64_t timeout_ns);
-
+//void cvm_vk_create_timeline_semaphore(cvm_vk_timeline_semaphore * timeline_semaphore);
+//void cvm_vk_destroy_timeline_semaphore(cvm_vk_timeline_semaphore * timeline_semaphore);
+void cvm_vk_wait_on_timeline_semaphore(cvm_vk_timeline_semaphore * timeline_semaphore,uint64_t value,uint64_t timeout_ns);
 
 
 void cvm_vk_create_render_pass(VkRenderPass * render_pass,VkRenderPassCreateInfo * info);
@@ -165,7 +159,7 @@ void cvm_vk_write_descriptor_sets(VkWriteDescriptorSet * writes,uint32_t count);
 void cvm_vk_create_image(VkImage * image,VkImageCreateInfo * info);
 void cvm_vk_destroy_image(VkImage image);
 
-void cvm_vk_create_and_bind_memory_for_images(VkDeviceMemory * memory,VkImage * images,uint32_t image_count);
+void cvm_vk_create_and_bind_memory_for_images(VkDeviceMemory * memory,VkImage * images,uint32_t image_count,VkMemoryPropertyFlags extra_flags);
 
 void cvm_vk_create_image_view(VkImageView * image_view,VkImageViewCreateInfo * info);
 void cvm_vk_destroy_image_view(VkImageView image_view);
@@ -190,9 +184,6 @@ VkImage cvm_vk_get_swapchain_image(uint32_t index);
 
 
 
-
-
-
 bool cvm_vk_format_check_optimal_feature_support(VkFormat format,VkFormatFeatureFlags flags);
 
 typedef enum
@@ -204,14 +195,19 @@ cvm_vk_payload_flags;
 
 typedef struct cvm_vk_module_work_payload
 {
-    cvm_vk_timeline_semaphore * waits;
-    VkPipelineStageFlags2 * wait_stages;
-    uint32_t wait_count;
+    const cvm_vk_timeline_semaphore * waits;
+    const VkPipelineStageFlags2 * wait_stages;
 
-    cvm_vk_timeline_semaphore * signal;///will be modified (monotonically incremented) my calling this
-    VkPipelineStageFlags2 signal_stages;
+    ///consider making signal singular... signalling pipeline stages out of order has the potential for bad results, and allowing different stages has very little benefit
+    /// output/results, used as input to subsequent commands, will all have the same semaphore, just different values
+    cvm_vk_timeline_semaphore * signals;
+    /// stages at which signals are generated for
+    const VkPipelineStageFlags2 * signal_stages;
 
     VkCommandBuffer command_buffer;
+
+    uint32_t wait_count;
+    uint32_t signal_count;
 
     ///presently only support generating 1 signal and submitting 1 command buffer, can easily change should there be justification to do so
 }
@@ -304,9 +300,6 @@ uint32_t cvm_vk_get_graphics_queue_family(void);
 uint32_t cvm_vk_prepare_for_next_frame(bool rendering_resources_invalid);
 bool cvm_vk_recreate_rendering_resources(void);///this and operations resulting from it returning true, must be called in critical section
 bool cvm_vk_check_for_remaining_frames(uint32_t * completed_frame_index);
-
-void vkCmdPipelineBarrier2_cvm_test(VkCommandBuffer commandBuffer,const VkDependencyInfo* pDependencyInfo);
-VkResult vkQueueSubmit2_cvm_test(VkQueue queue,uint32_t submitCount,const VkSubmitInfo2* pSubmits,VkFence fence);
 
 #include "cvm_vk_memory.h"
 #include "cvm_vk_image.h"

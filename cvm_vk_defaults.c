@@ -585,11 +585,7 @@ void cvm_vk_render_fullscreen_pass(VkCommandBuffer cb)
 
 VkAttachmentDescription cvm_vk_get_default_colour_attachment(VkFormat format,VkSampleCountFlagBits sample_count,bool clear,bool load,bool store)
 {
-    if(clear && load)
-    {
-        fprintf(stderr,"CANNOT CLEAR AND LOAD COLOUR ATTACHMENT UPON INPUT\n");
-        exit(-1);
-    }
+    assert(!clear || !load);///CANNOT CLEAR AND LOAD COLOUR ATTACHMENT UPON INPUT
 
     return (VkAttachmentDescription)
     {
@@ -607,17 +603,9 @@ VkAttachmentDescription cvm_vk_get_default_colour_attachment(VkFormat format,VkS
 
 VkAttachmentDescription cvm_vk_get_default_depth_stencil_attachment(VkFormat format,VkSampleCountFlagBits sample_count,bool depth_clear,bool depth_load,bool depth_store,bool stencil_clear,bool stencil_load,bool stencil_store)
 {
-    if(depth_clear && depth_load)
-    {
-        fprintf(stderr,"CANNOT CLEAR AND LOAD DEPTH ATTACHMENT UPON INPUT\n");
-        exit(-1);
-    }
+    assert(!depth_clear || !depth_load);///CANNOT CLEAR AND LOAD DEPTH ATTACHMENT UPON INPUT
 
-    if(stencil_clear && stencil_load)
-    {
-        fprintf(stderr,"CANNOT CLEAR AND LOAD DEPTH ATTACHMENT UPON INPUT\n");
-        exit(-1);
-    }
+    assert(!stencil_clear || !stencil_load);///CANNOT CLEAR AND LOAD DEPTH ATTACHMENT UPON INPUT
 
     return (VkAttachmentDescription)
     {

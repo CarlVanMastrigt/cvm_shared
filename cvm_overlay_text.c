@@ -23,45 +23,32 @@ static FT_Library overlay_freetype_library;
 
 void cvm_overlay_open_freetype(void)
 {
-    if(FT_Init_FreeType(&overlay_freetype_library))
-    {
-        fprintf(stderr,"COULD NOT INITIALISE FREETYPE LIBRARY\n");
-        exit(-1);
-    }
+    int r=FT_Init_FreeType(&overlay_freetype_library);
+    assert(!r);///COULD NOT INITIALISE FREETYPE LIBRARY
 }
 
 void cvm_overlay_close_freetype(void)
 {
-    if(FT_Done_FreeType(overlay_freetype_library))
-    {
-        fprintf(stderr,"COULD NOT DESTROY FREETYPE LIBRARY\n");
-        exit(-1);
-    }
+    int r=FT_Done_FreeType(overlay_freetype_library);
+    assert(!r);///COULD NOT DESTROY FREETYPE LIBRARY
 }
 
 void cvm_overlay_create_font(cvm_overlay_font * font,char * filename,int pixel_size)
 {
-    if(FT_New_Face(overlay_freetype_library,filename,0,&font->face))
-    {
-        fprintf(stderr,"COULD NOT LOAD FONT FACE FILE %s\n",filename);
-        exit(-1);
-    }
+    int r;
 
-    if(FT_Set_Pixel_Sizes(font->face,0,pixel_size))
-    {
-        fprintf(stderr,"COULD NOT SET FONT FACE SIZE %s %d\n",filename,pixel_size);
-        exit(-1);
-    }
+    r=FT_New_Face(overlay_freetype_library,filename,0,&font->face);
+    assert(!r || !fprintf(stderr,"COULD NOT LOAD FONT FACE FILE %s\n",filename));
+
+    r=FT_Set_Pixel_Sizes(font->face,0,pixel_size);
+    assert(!r || !fprintf(stderr,"COULD NOT SET FONT FACE SIZE %s %d\n",filename,pixel_size));
 
     font->glyph_size=pixel_size;
 
     font->space_character_index=FT_Get_Char_Index(font->face,' ');
 
-    if(FT_Load_Glyph(font->face,font->space_character_index,0))
-    {
-        fprintf(stderr,"FONT DOES NOT CONTAIN SPACE CHARACTER %s\n",filename);
-        exit(-1);
-    }
+    r=FT_Load_Glyph(font->face,font->space_character_index,0);
+    assert(!r || !fprintf(stderr,"FONT DOES NOT CONTAIN SPACE CHARACTER %s\n",filename));
 
     font->space_advance=font->face->glyph->advance.x>>6;
     font->max_advance= font->face->size->metrics.max_advance>>6;
@@ -75,11 +62,8 @@ void cvm_overlay_create_font(cvm_overlay_font * font,char * filename,int pixel_s
 void cvm_overlay_destroy_font(cvm_overlay_font * font)
 {
     uint32_t i;
-    if(FT_Done_Face(font->face))
-    {
-        fprintf(stderr,"COULD NOT DESTROY FONT FACE\n");
-        exit(-1);
-    }
+    int r=FT_Done_Face(font->face);
+    assert(!r);///COULD NOT DESTROY FONT FACE
 
     for(i=0;i<font->glyph_count;i++)
     {
@@ -102,23 +86,14 @@ static inline uint32_t cvm_overlay_get_utf8_glyph_index(FT_Face face,uint8_t * t
         cp=0;
         while(*text & (0x80 >> *incr))
         {
-            ///error check, dont put in release version
-            if((text[*incr]&0xC0) != 0x80)
-            {
-                fprintf(stderr,"ATTEMPTING TO RENDER AN INVALID UTF-8 STRING (TOP BIT MISMATCH)\n");
-                exit(-1);
-            }
+            assert((text[*incr]&0xC0) == 0x80);///ATTEMPTING TO RENDER AN INVALID UTF-8 STRING (TOP BIT MISMATCH)
             cp<<=6;
             cp|=text[*incr]&0x3F;
             (*incr)++;
         }
         cp|=(*text&((1<<(7-*incr))-1))<<(6u* *incr-6u);
-        ///error check, dont put in release version
-        if(*incr==1)
-        {
-            fprintf(stderr,"ATTEMPTING TO RENDER AN INVALID UTF-8 STRING (INVALID LENGTH SPECIFIED)\n");
-            exit(-1);
-        }
+
+        assert(*incr!=1);///ATTEMPTING TO RENDER AN INVALID UTF-8 STRING (INVALID LENGTH SPECIFIED)\n");
 
         /// check for variation sequence
         if(text[*incr]==0xEF && text[*incr+1]==0xB8 && (text[*incr+2]&0xF0)==0x80)
@@ -203,7 +178,7 @@ bool cvm_overlay_utf8_validate_string_and_count_glyphs(char * text,int * c)
             }
             text+=i;
 
-            //text+=3*(text[0]==0xEF && text[1]==0xB8 && (text[2]&0xF0)==0x80);///variation sequences dont count as a glyph
+            ///text+=3*(text[0]==0xEF && text[1]==0xB8 && (text[2]&0xF0)==0x80);///variation sequences don't count as a glyph
         }
         else text++;
 
@@ -214,7 +189,7 @@ bool cvm_overlay_utf8_validate_string_and_count_glyphs(char * text,int * c)
 
 char * cvm_overlay_utf8_get_previous_glyph(char * base,char * t)
 {
-    //offset-= 3* (offset>2 && text[offset-3]==0xEF && text[offset-2]==0xB8 && (text[offset-1]&0xF0)==0x80);///skip over variation sequence
+    ///offset-= 3* (offset>2 && text[offset-3]==0xEF && text[offset-2]==0xB8 && (text[offset-1]&0xF0)==0x80);///skip over variation sequence
 
     if(t==base)return base;
 
@@ -223,19 +198,15 @@ char * cvm_overlay_utf8_get_previous_glyph(char * base,char * t)
 
     do t--;
     while(t!=base && (*t & 0xC0) == 0x80);
-
-    if(*t & 0x80)///error checking, exclude from final build
+#ifndef	NDEBUG
+    if(*t & 0x80)
     {
         for(tt=t+1;tt<to;tt++)///0 implicitly checked above
         {
-            if(!(*((uint8_t*)t)<<(tt-t) & 0x80))
-            {
-                fprintf(stderr,"GET PREVIOUS DETECTED INVALID UTF-8 CHAR IN STRING (INVALID LENGTH SPECIFIED)\n");
-                exit(-1);
-            }
+            assert(*((uint8_t*)t)<<(tt-t) & 0x80);///GET PREVIOUS DETECTED INVALID UTF-8 CHAR IN STRING (INVALID LENGTH SPECIFIED)\n");
         }
     }
-
+#endif
     return t;
 }
 
@@ -249,22 +220,14 @@ char * cvm_overlay_utf8_get_next_glyph(char * t)
         for(i=1;*t & (0x80 >> i);i++)
         {
             ///error check, dont put in release version
-            if((t[i]&0xC0) != 0x80)
-            {
-                fprintf(stderr,"GET NEXT DETECTED INVALID UTF-8 CHAR IN STRING (TOP BIT MISMATCH)\n");
-                exit(-1);
-            }
+            assert((t[i]&0xC0) == 0x80);///GET NEXT DETECTED INVALID UTF-8 CHAR IN STRING (TOP BIT MISMATCH)
         }
         ///error check, dont put in release version
-        if(i==1)
-        {
-            fprintf(stderr,"GET NEXT DETECTED INVALID UTF-8 CHAR IN STRING (INVALID LENGTH SPECIFIED)\n");
-            exit(-1);
-        }
+        assert(i!=1);///GET NEXT DETECTED INVALID UTF-8 CHAR IN STRING (INVALID LENGTH SPECIFIED)
 
         t+=i;
 
-        //offset+=3*(text[offset]==0xEF && text[offset+1]==0xB8 && (text[offset+2]&0xF0)==0x80);///skip over variation sequence
+        ///offset+=3*(text[offset]==0xEF && text[offset+1]==0xB8 && (text[offset+2]&0xF0)==0x80);///skip over variation sequence
     }
     else t++;
 
@@ -350,11 +313,7 @@ static inline void cvm_overlay_prepare_glyph_render_data(cvm_overlay_font * font
                 g->pos.y2=h+(g->pos.y1=(font->face->size->metrics.ascender>>6) - gs->bitmap_top);
             }
 
-            if(g->advance && g->advance!= gs->advance.x>>6)
-            {
-                fprintf(stderr,"ATTEMPTING TO RENDER AN INVALID UTF-8 STRING (TOP BIT MISMATCH)\n");
-                exit(-1);
-            }
+            assert(!g->advance || g->advance == gs->advance.x>>6);///ADVANCE ALREADY SET BUT WITH DIFFERENT VALUE
 
             g->advance=gs->advance.x>>6;///probably NOT needed as never render before calculating widget size and calculating size requires knowing text size (may be edge cases though so leave this in
         }
@@ -367,18 +326,17 @@ static inline int cvm_overlay_get_glyph_advance(cvm_overlay_font * font,cvm_over
 
     if(!g->advance)
     {
-        if(!FT_Get_Advance(font->face,g->glyph_index,0,&advance))g->advance=advance>>16;
-        else
-        {
-            fprintf(stderr,"UNABLE TO GET GLYPH ADVANCE FOR CHARACTER POINT%u\n",g->glyph_index);
-            exit(-1);
-        }
+        advance=0;
+        int r=FT_Get_Advance(font->face,g->glyph_index,0,&advance);
+        assert(!r);
+        g->advance=advance>>16;
         if(!g->advance)g->advance=1;///ensure nonzero advance if advance is actually zero
     }
 
     return g->advance;
 }
 
+///implement with macros?
 
 #define SINGLE_LINE_RENDER( SINGLE_LINE_CONSTRAINED , SINGLE_LINE_FADING , SINGLE_LINE_SELECTED) \
 if(SINGLE_LINE_FADING)\
@@ -495,8 +453,7 @@ void overlay_text_single_line_render(overlay_text_single_line_render_data* restr
         break;
 
     default:
-        fprintf(stderr,"UNHANDLED SINGLE LINE TEXT RENDER TYPE: %u\n",data->flags);
-        exit(-1);
+        assert(0);///UNHANDLED FLAGS
     }
 }
 

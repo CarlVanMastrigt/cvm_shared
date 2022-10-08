@@ -44,7 +44,7 @@ debug_render_data;
 void create_debug_render_data(VkDescriptorSetLayout * descriptor_set_layout);
 void destroy_debug_render_data(void);
 
-void create_debug_swapchain_dependent_render_data(VkRenderPass colour_render_pass,VkSampleCountFlagBits sample_count);
+void create_debug_swapchain_dependent_render_data(VkRenderPass render_pass,uint32_t subpass,VkSampleCountFlagBits sample_count);
 void destroy_debug_swapchain_dependent_render_data(void);
 
 static inline uint32_t debug_render_get_transient_buffer_allocation_size(cvm_vk_transient_buffer * tb,uint32_t vert_count)

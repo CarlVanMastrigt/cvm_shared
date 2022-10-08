@@ -364,25 +364,25 @@ widget * create_contiguous_box_scrollbar(widget * box)
 
 bool get_ancestor_contiguous_box_data(widget * w,rectangle * r,uint32_t * status)
 {
+    bool found=false;
     while(w->base.parent)
     {
         w=w->base.parent;
 
         if(w->base.status&WIDGET_IS_CONTIGUOUS_BOX)
         {
-            if(0)return false;
             int cbx,cby;
             get_widgets_global_coordinates(w,&cbx,&cby);
             *r=rectangle_add_offset(w->base.r,cbx,cby);
             *status=w->base.status;
-            return true;
+            found=true;
         }
     }
 
-    fprintf(stderr,"SEARCHING FOR NONEXISTANT ANCESTOR CONTIGUOUS BOX\n");///do we even want this??? should return false be an acceptable way to test?
-    exit(-1);
+    assert(found);///SEARCHING FOR NONEXISTANT ANCESTOR CONTIGUOUS BOX
+    ///do we even want this??? should return false be an acceptable way to test?
 
-    return false;
+    return found;
 }
 
 
