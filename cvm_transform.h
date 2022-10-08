@@ -38,7 +38,7 @@ cvm_transform_frame;
 
 typedef struct cvm_transform_stack
 {
-    cvm_transform_frame stack[VIEW_STACK_SIZE];
+    cvm_transform_frame stack[CVM_TRANSFORM_STACK_SIZE];
     uint32_t i;
 }
 cvm_transform_stack;
@@ -55,6 +55,7 @@ static inline void cvm_transform_stack_push(cvm_transform_stack * ts)
 {
     ts->stack[ts->i+1]=ts->stack[ts->i];
     ts->i++;
+    assert(ts->i < CVM_TRANSFORM_STACK_SIZE);
 }
 
 static inline void cvm_transform_stack_pop(cvm_transform_stack * ts)

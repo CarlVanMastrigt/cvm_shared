@@ -106,16 +106,6 @@ typedef struct rectangle
 }
 rectangle;
 
-typedef struct quaternion
-{
-    float r;
-
-    float x;
-    float y;
-    float z;
-}
-quaternion;
-
 ///not sure bivectors are necessary yet.
 typedef struct bivec3f
 {
@@ -548,71 +538,6 @@ static inline bool rectangles_overlap(rectangle r1,rectangle r2)
     //return !(r1.x1>=r2.x2 || r2.x1>=r1.x2 || r1.y1>=r2.y2 || r2.y1>=r1.y2);
     return r1.x1<r2.x2 && r2.x1<r1.x2 && r1.y1<r2.y2 && r2.y1<r1.y2;
 }
-
-
-
-static inline quaternion quaternion_multiply(quaternion l,quaternion r)
-{
-    return (quaternion){.r=l.r*r.r-l.x*r.x-l.y*r.y-l.z*r.z,
-                        .x=l.r*r.x+l.x*r.r+l.y*r.z-l.z*r.y,
-                        .y=l.r*r.y-l.x*r.z+l.y*r.r+l.z*r.x,
-                        .z=l.r*r.z+l.x*r.y-l.y*r.x+l.z*r.r};
-}
-
-static inline vec3f quaternion_get_x_axis(quaternion q)
-{
-    return (vec3f){.x=1.0-2.0*(q.y*q.y+q.z*q.z),.y=2.0*(q.x*q.y+q.r*q.z),.z=2.0*(q.x*q.z-q.r*q.y)};
-}
-static inline vec3f quaternion_get_y_axis(quaternion q)
-{
-    return (vec3f){.x=2.0*(q.x*q.y-q.r*q.z),.y=1.0-2.0*(q.x*q.x+q.z*q.z),.z=2.0*(q.y*q.z+q.r*q.x)};
-}
-static inline vec3f quaternion_get_z_axis(quaternion q)
-{
-    return (vec3f){.x=2.0*(q.x*q.z+q.r*q.y),.y=2.0*(q.y*q.z-q.r*q.x),.z=1.0-2.0*(q.x*q.x+q.y*q.y)};
-}
-static inline quaternion get_quaternion_from_vector(vec3f v,float angle)
-{
-    float s=sinf(angle*0.5);
-    return (quaternion){.r=cosf(angle*0.5),.x=v.x*s,.y=v.y*s,.z=v.z*s};
-}
-static inline vec3f rotate_vector_by_quaternion(quaternion q,vec3f v)
-{
-    return (vec3f)
-    {
-        .x=2.0f*((0.5f-q.y*q.y-q.z*q.z)*v.x + (q.x*q.y-q.r*q.z)*v.y + (q.x*q.z+q.r*q.y)*v.z),
-        .y=2.0f*((q.x*q.y+q.r*q.z)*v.x + (0.5f-q.x*q.x-q.z*q.z)*v.y + (q.y*q.z-q.r*q.x)*v.z),
-        .z=2.0f*((q.x*q.z-q.r*q.y)*v.x + (q.y*q.z+q.r*q.x)*v.y + (0.5f-q.x*q.x-q.y*q.y)*v.z)
-    };
-}
-static inline vec3f rotate_vector_by_quaternion_inverse(quaternion q,vec3f v)
-{
-    return (vec3f)
-    {
-        .x=2.0f*((0.5f-q.y*q.y-q.z*q.z)*v.x + (q.x*q.y+q.r*q.z)*v.y + (q.x*q.z-q.r*q.y)*v.z),
-        .y=2.0f*((q.x*q.y-q.r*q.z)*v.x + (0.5f-q.x*q.x-q.z*q.z)*v.y + (q.y*q.z+q.r*q.x)*v.z),
-        .z=2.0f*((q.x*q.z+q.r*q.y)*v.x + (q.y*q.z-q.r*q.x)*v.y + (0.5f-q.x*q.x-q.y*q.y)*v.z)
-    };
-}
-static inline quaternion quat_rot_x_axis(quaternion q,float angle)
-{
-    float s=sinf(angle*0.5);
-    float c=cosf(angle*0.5);
-    return (quaternion){ .r=q.r*c-q.x*s , .x=q.r*s+q.x*c , .y=q.y*c+q.z*s , .z=q.z*c-q.y*s };
-}
-static inline quaternion quat_rot_y_axis(quaternion q,float angle)
-{
-    float s=sinf(angle*0.5);
-    float c=cosf(angle*0.5);
-    return (quaternion){ .r=q.r*c-q.y*s , .x=q.x*c-q.z*s , .y=q.r*s+q.y*c , .z=q.x*s+q.z*c };
-}
-static inline quaternion quat_rot_z_axis(quaternion q,float angle)
-{
-    float s=sinf(angle*0.5);
-    float c=cosf(angle*0.5);
-    return (quaternion){ .r=q.r*c-q.z*s , .x=q.x*c+q.y*s , .y=q.y*c-q.x*s , .z=q.r*s+q.z*c };
-}
-
 
 
 
