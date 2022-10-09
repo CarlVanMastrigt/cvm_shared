@@ -1195,20 +1195,21 @@ static void file_search_filter_type_button_widget_render(overlay_theme * theme,w
     rectangle r=rectangle_add_offset(w->base.r,x_off,y_off);
 	theme->h_bar_render(erb,theme,bounds,r,w->base.status,OVERLAY_MAIN_COLOUR_);
 
-    overlay_text_single_line_render_data otslrd;
-    otslrd.flags=OVERLAY_TEXT_NORMAL_RENDER;
-    otslrd.erb=erb;
-    otslrd.theme=theme;
-    otslrd.bounds=bounds;
-    otslrd.text="All Files";
-    otslrd.x=r.x1+theme->h_bar_text_offset;
-    otslrd.y=(r.y1+r.y2-theme->font_.glyph_size)>>1;
-    otslrd.colour=OVERLAY_TEXT_COLOUR_0_;
+    overlay_text_single_line_render_data otslrd=
+    {
+        .flags=OVERLAY_TEXT_NORMAL_RENDER,
+        .theme=theme,
+        .bounds=bounds,
+        .text="All Files",
+        .x=r.x1+theme->h_bar_text_offset,
+        .y=(r.y1+r.y2-theme->font_.glyph_size)>>1,
+        .colour=OVERLAY_TEXT_COLOUR_0_
+    };
 
     if(fsi->active_type_filter>=0) otslrd.text=fsi->sfsd->types[fsi->active_type_filter].name;
     if(widget_active(fsi->type_filter_popup))otslrd.text=NULL;
 
-    overlay_text_single_line_render(&otslrd);
+    overlay_text_single_line_render(&otslrd,erb);
 }
 
 static widget * file_search_filter_type_button_widget_select(overlay_theme * theme,widget * w,int x_in,int y_in)
@@ -1322,19 +1323,20 @@ static void file_search_export_type_button_widget_render(overlay_theme * theme,w
     rectangle r=rectangle_add_offset(w->base.r,x_off,y_off);
 	theme->h_bar_render(erb,theme,bounds,r,w->base.status,OVERLAY_MAIN_COLOUR_);
 
-    overlay_text_single_line_render_data otslrd;
-    otslrd.flags=OVERLAY_TEXT_NORMAL_RENDER;
-    otslrd.erb=erb;
-    otslrd.theme=theme;
-    otslrd.bounds=bounds;
-    otslrd.text=NULL;
-    otslrd.x=r.x1+theme->h_bar_text_offset;
-    otslrd.y=(r.y1+r.y2-theme->font_.glyph_size)>>1;
-    otslrd.colour=OVERLAY_TEXT_COLOUR_0_;
+    overlay_text_single_line_render_data otslrd=
+    {
+        .flags=OVERLAY_TEXT_NORMAL_RENDER,
+        .theme=theme,
+        .bounds=bounds,
+        .text=NULL,
+        .x=r.x1+theme->h_bar_text_offset,
+        .y=(r.y1+r.y2-theme->font_.glyph_size)>>1,
+        .colour=OVERLAY_TEXT_COLOUR_0_
+    };
 
     if(fsi->export_formats) otslrd.text=fsi->export_formats[fsi->active_export_format];
 
-    overlay_text_single_line_render(&otslrd);
+    overlay_text_single_line_render(&otslrd,erb);
 }
 
 static widget * file_search_export_type_button_widget_select(overlay_theme * theme,widget * w,int x_in,int y_in)

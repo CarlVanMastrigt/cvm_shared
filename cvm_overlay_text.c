@@ -364,26 +364,22 @@ while(*text)\
     cvm_overlay_prepare_glyph_render_data(&data->theme->font_,g);\
     if(prev_gi && !FT_Get_Kerning(data->theme->font_.face,prev_gi,gi,0,&kern))\
     {\
+        x+=kern.x>>6;\
         if(SINGLE_LINE_SELECTED)\
         {\
-            x+=kern.x>>6;\
-            if(kern.x)\
-            {\
-                if(text==data->selection_begin) sb=x;\
-                if(text==data->selection_end) se=x;\
-            }\
+            if(text==data->selection_begin) sb=x;\
+            if(text==data->selection_end) se=x;\
         }\
-        else x+=kern.x>>6;\
     }\
     prev_gi=gi;\
     if(g->tile)\
     {\
         if(SINGLE_LINE_CONSTRAINED)\
-            if(SINGLE_LINE_FADING) data->theme->shaded_fading_over_box_render(data->erb,data->theme,data->bounds,rectangle_add_offset(g->pos,x,data->y),data->colour,g->tile->x_pos<<2,g->tile->y_pos<<2,data->text_area,fade_r,data->box_r,data->box_status);\
-            else data->theme->shaded_over_box_render(data->erb,data->theme,data->bounds,rectangle_add_offset(g->pos,x,data->y),data->colour,g->tile->x_pos<<2,g->tile->y_pos<<2,data->box_r,data->box_status);\
+            if(SINGLE_LINE_FADING) data->theme->shaded_fading_over_box_render(erb,data->theme,data->bounds,rectangle_add_offset(g->pos,x,data->y),data->colour,g->tile->x_pos<<2,g->tile->y_pos<<2,data->text_area,fade_r,data->box_r,data->box_status);\
+            else data->theme->shaded_over_box_render(erb,data->theme,data->bounds,rectangle_add_offset(g->pos,x,data->y),data->colour,g->tile->x_pos<<2,g->tile->y_pos<<2,data->box_r,data->box_status);\
         else\
-            if(SINGLE_LINE_FADING) cvm_render_shaded_fading_overlay_element(data->erb,data->bounds,rectangle_add_offset(g->pos,x,data->y),data->colour,g->tile->x_pos<<2,g->tile->y_pos<<2,data->text_area,fade_r);\
-            else cvm_render_shaded_overlay_element(data->erb,data->bounds,rectangle_add_offset(g->pos,x,data->y),data->colour,g->tile->x_pos<<2,g->tile->y_pos<<2);\
+            if(SINGLE_LINE_FADING) cvm_render_shaded_fading_overlay_element(erb,data->bounds,rectangle_add_offset(g->pos,x,data->y),data->colour,g->tile->x_pos<<2,g->tile->y_pos<<2,data->text_area,fade_r);\
+            else cvm_render_shaded_overlay_element(erb,data->bounds,rectangle_add_offset(g->pos,x,data->y),data->colour,g->tile->x_pos<<2,g->tile->y_pos<<2);\
     }\
     x+=cvm_overlay_get_glyph_advance(&data->theme->font_,g);\
     text+=incr;\
@@ -394,15 +390,15 @@ if(SINGLE_LINE_SELECTED) \
     if(text==data->selection_end) se=x;\
     se+=data->selection_end==data->selection_begin;\
     if(SINGLE_LINE_CONSTRAINED)\
-        if(SINGLE_LINE_FADING) data->theme->fill_fading_over_box_render(data->erb,data->theme,data->bounds,((rectangle){.x1=sb,.y1=data->y,.x2=se,.y2=data->y+data->theme->font_.glyph_size}),OVERLAY_TEXT_HIGHLIGHT_COLOUR_,data->text_area,fade_r,data->box_r,data->box_status);\
-        else data->theme->fill_over_box_render(data->erb,data->theme,data->bounds,((rectangle){.x1=sb,.y1=data->y,.x2=se,.y2=data->y+data->theme->font_.glyph_size}),OVERLAY_TEXT_HIGHLIGHT_COLOUR_,data->box_r,data->box_status);\
+        if(SINGLE_LINE_FADING) data->theme->fill_fading_over_box_render(erb,data->theme,data->bounds,((rectangle){.x1=sb,.y1=data->y,.x2=se,.y2=data->y+data->theme->font_.glyph_size}),OVERLAY_TEXT_HIGHLIGHT_COLOUR_,data->text_area,fade_r,data->box_r,data->box_status);\
+        else data->theme->fill_over_box_render(erb,data->theme,data->bounds,((rectangle){.x1=sb,.y1=data->y,.x2=se,.y2=data->y+data->theme->font_.glyph_size}),OVERLAY_TEXT_HIGHLIGHT_COLOUR_,data->box_r,data->box_status);\
     else\
-        if(SINGLE_LINE_FADING) cvm_render_fill_fading_overlay_element(data->erb,data->bounds,((rectangle){.x1=sb,.y1=data->y,.x2=se,.y2=data->y+data->theme->font_.glyph_size}),OVERLAY_TEXT_HIGHLIGHT_COLOUR_,data->text_area,fade_r);\
-        else cvm_render_fill_overlay_element(data->erb,data->bounds,((rectangle){.x1=sb,.y1=data->y,.x2=se,.y2=data->y+data->theme->font_.glyph_size}),OVERLAY_TEXT_HIGHLIGHT_COLOUR_);\
+        if(SINGLE_LINE_FADING) cvm_render_fill_fading_overlay_element(erb,data->bounds,((rectangle){.x1=sb,.y1=data->y,.x2=se,.y2=data->y+data->theme->font_.glyph_size}),OVERLAY_TEXT_HIGHLIGHT_COLOUR_,data->text_area,fade_r);\
+        else cvm_render_fill_overlay_element(erb,data->bounds,((rectangle){.x1=sb,.y1=data->y,.x2=se,.y2=data->y+data->theme->font_.glyph_size}),OVERLAY_TEXT_HIGHLIGHT_COLOUR_);\
 }
 
 
-void overlay_text_single_line_render(overlay_text_single_line_render_data* restrict data)
+void overlay_text_single_line_render(const overlay_text_single_line_render_data * restrict data,cvm_overlay_element_render_buffer * erb)
 {
     uint32_t gi,prev_gi,incr;
     FT_Vector kern;

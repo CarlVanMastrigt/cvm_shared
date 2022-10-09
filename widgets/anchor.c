@@ -98,17 +98,18 @@ static void text_anchor_widget_render(overlay_theme * theme,widget * w,int x_off
 	rectangle r=rectangle_add_offset(w->base.r,x_off,y_off);
 	theme->h_bar_render(erb,theme,bounds,r,w->base.status,OVERLAY_ALTERNATE_MAIN_COLOUR_);
 
-	overlay_text_single_line_render_data otslrd;
-    otslrd.flags=OVERLAY_TEXT_NORMAL_RENDER;
-    otslrd.erb=erb;
-    otslrd.theme=theme;
-    otslrd.bounds=bounds;
-    otslrd.text=w->anchor.text;
-    otslrd.x=r.x1+theme->h_bar_text_offset;
-    otslrd.y=(r.y1+r.y2-theme->font_.glyph_size)>>1;
-    otslrd.colour=OVERLAY_TEXT_COLOUR_0_;
+	overlay_text_single_line_render_data otslrd=
+	{
+	    .flags=OVERLAY_TEXT_NORMAL_RENDER,
+        .theme=theme,
+        .bounds=bounds,
+        .text=w->anchor.text,
+        .x=r.x1+theme->h_bar_text_offset,
+        .y=(r.y1+r.y2-theme->font_.glyph_size)>>1,
+        .colour=OVERLAY_TEXT_COLOUR_0_
+	};
 
-    overlay_text_single_line_render(&otslrd);
+    overlay_text_single_line_render(&otslrd,erb);
 }
 
 static widget * text_anchor_widget_select(overlay_theme * theme,widget * w,int x_in,int y_in)

@@ -105,7 +105,6 @@ char * cvm_overlay_utf8_get_next_word(char * t);
 
 typedef struct overlay_text_single_line_render_data
 {
-    cvm_overlay_element_render_buffer * erb;
     overlay_theme * theme;
     rectangle bounds;
     char * text;
@@ -126,7 +125,7 @@ typedef struct overlay_text_single_line_render_data
 }
 overlay_text_single_line_render_data;
 
-void overlay_text_single_line_render(overlay_text_single_line_render_data* restrict data);
+void overlay_text_single_line_render(const overlay_text_single_line_render_data * restrict data,cvm_overlay_element_render_buffer * erb);
 
 int overlay_text_single_line_get_pixel_length(cvm_overlay_font * font,char * text);
 char * overlay_text_single_line_find_offset(cvm_overlay_font * font,char * text,int relative_x);

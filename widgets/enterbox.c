@@ -358,11 +358,12 @@ static void enterbox_widget_render(overlay_theme * theme,widget * w,int x_off,in
         w->enterbox.recalculate_text_size=false;
     }
 
-    overlay_text_single_line_render_data otslrd;
-    otslrd.flags=OVERLAY_TEXT_NORMAL_RENDER;
-    otslrd.erb=erb;
-    otslrd.theme=theme;
-    otslrd.bounds=bounds;
+    overlay_text_single_line_render_data otslrd=
+    {
+        .flags=OVERLAY_TEXT_NORMAL_RENDER,
+        .theme=theme,
+        .bounds=bounds
+    };
 
 
 	if(*w->enterbox.composition_text)
@@ -401,7 +402,7 @@ static void enterbox_widget_render(overlay_theme * theme,widget * w,int x_off,in
         otslrd.text_length=w->enterbox.text_pixel_length;
     }
 
-    overlay_text_single_line_render(&otslrd);
+    overlay_text_single_line_render(&otslrd,erb);
 
 //    if(w->enterbox.min_glyphs_visible<w->enterbox.max_glyphs)
 //    {
