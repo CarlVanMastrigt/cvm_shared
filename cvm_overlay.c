@@ -267,7 +267,7 @@ static void update_overlay_uniforms(uint32_t swapchain_image,VkDeviceSize offset
                 {
                     .buffer=overlay_transient_buffer.buffer,
                     .offset=offset,
-                    .range=OVERLAY_NUM_COLOURS_*4*sizeof(float)
+                    .range=OVERLAY_NUM_COLOURS*4*sizeof(float)
                 }
             },
             .pTexelBufferView=NULL
@@ -633,7 +633,7 @@ void initialise_overlay_swapchain_dependencies(void)
     cvm_vk_resize_module_graphics_data(&overlay_module_data);
 
     uint32_t uniform_size=0;
-    uniform_size+=cvm_vk_transient_buffer_get_rounded_allocation_size(&overlay_transient_buffer,sizeof(float)*4*OVERLAY_NUM_COLOURS_,0);
+    uniform_size+=cvm_vk_transient_buffer_get_rounded_allocation_size(&overlay_transient_buffer,sizeof(float)*4*OVERLAY_NUM_COLOURS,0);
     uniform_size+=cvm_vk_transient_buffer_get_rounded_allocation_size(&overlay_transient_buffer,max_overlay_elements*sizeof(cvm_overlay_render_data),0);
     cvm_vk_transient_buffer_update(&overlay_transient_buffer,uniform_size,swapchain_image_count);
 
@@ -659,15 +659,15 @@ void terminate_overlay_swapchain_dependencies(void)
     free(overlay_framebuffers);
 }
 
-float overlay_colours[OVERLAY_NUM_COLOURS_*4]=
+float overlay_colours[OVERLAY_NUM_COLOURS*4]=
 {
     1.0,0.1,0.1,1.0,///OVERLAY_NO_COLOUR (error)
     0.24,0.24,0.6,0.9,///OVERLAY_BACKGROUND_COLOUR
     0.12,0.12,0.36,0.85,///OVERLAY_MAIN_COLOUR
     0.12,0.12,0.48,0.85,///OVERLAY_MAIN_ALTERNATE_COLOUR
     0.3,0.3,1.0,0.2,///OVERLAY_HIGHLIGHTING_COLOUR
-    0.4,0.6,0.9,0.3,///OVERLAY_TEXT_HIGHLIGHT_COLOUR_
-    0.2,0.3,1.0,0.8,///OVERLAY_TEXT_COMPOSITION_COLOUR_0_
+    0.4,0.6,0.9,0.3,///OVERLAY_TEXT_HIGHLIGHT_COLOUR
+    0.2,0.3,1.0,0.8,///OVERLAY_TEXT_COMPOSITION_COLOUR_0
     0.4,0.6,0.9,0.8,///OVERLAY_TEXT_COLOUR_0
 };
 
@@ -721,9 +721,9 @@ void overlay_render_frame(int screen_w,int screen_h,widget * menu_widget)
 
         ///start of graphics
 
-        float * colours = cvm_vk_transient_buffer_get_allocation(&overlay_transient_buffer,sizeof(float)*4*OVERLAY_NUM_COLOURS_,0,&uniform_offset);
+        float * colours = cvm_vk_transient_buffer_get_allocation(&overlay_transient_buffer,sizeof(float)*4*OVERLAY_NUM_COLOURS,0,&uniform_offset);
 
-        memcpy(colours,overlay_colours,sizeof(float)*4*OVERLAY_NUM_COLOURS_);
+        memcpy(colours,overlay_colours,sizeof(float)*4*OVERLAY_NUM_COLOURS);
 
         update_overlay_uniforms(swapchain_image_index,uniform_offset);///should really build buffer acquisition into update uniforms function
 

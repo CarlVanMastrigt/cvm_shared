@@ -1191,25 +1191,15 @@ void create_file_search_error_popup(widget * menu_widget,file_search_instance * 
 static void file_search_filter_type_button_widget_render(overlay_theme * theme,widget * w,int x_off,int y_off,cvm_overlay_element_render_buffer * erb,rectangle bounds)
 {
     file_search_instance * fsi=w->button.data;
+    char * text="All Files";
 
     rectangle r=rectangle_add_offset(w->base.r,x_off,y_off);
-	theme->h_bar_render(erb,theme,bounds,r,w->base.status,OVERLAY_MAIN_COLOUR_);
+	theme->h_bar_render(erb,theme,bounds,r,w->base.status,OVERLAY_MAIN_COLOUR);
 
-    overlay_text_single_line_render_data otslrd=
-    {
-        .flags=OVERLAY_TEXT_NORMAL_RENDER,
-        .theme=theme,
-        .bounds=bounds,
-        .text="All Files",
-        .x=r.x1+theme->h_bar_text_offset,
-        .y=(r.y1+r.y2-theme->font_.glyph_size)>>1,
-        .colour=OVERLAY_TEXT_COLOUR_0_
-    };
+    if(fsi->active_type_filter>=0) text=fsi->sfsd->types[fsi->active_type_filter].name;
+    if(widget_active(fsi->type_filter_popup))text=NULL;
 
-    if(fsi->active_type_filter>=0) otslrd.text=fsi->sfsd->types[fsi->active_type_filter].name;
-    if(widget_active(fsi->type_filter_popup))otslrd.text=NULL;
-
-    overlay_text_single_line_render(&otslrd,erb);
+    overlay_text_single_line_render_(erb,theme,bounds,OVERLAY_TEXT_COLOUR_0,text,r.x1+theme->h_bar_text_offset,(r.y1+r.y2-theme->font_.glyph_size)>>1);
 }
 
 static widget * file_search_filter_type_button_widget_select(overlay_theme * theme,widget * w,int x_in,int y_in)
@@ -1319,24 +1309,14 @@ widget * create_file_search_filter_type_button(widget * menu_widget,file_search_
 static void file_search_export_type_button_widget_render(overlay_theme * theme,widget * w,int x_off,int y_off,cvm_overlay_element_render_buffer * erb,rectangle bounds)
 {
     file_search_instance * fsi=w->button.data;
+    char * text=NULL;
 
     rectangle r=rectangle_add_offset(w->base.r,x_off,y_off);
-	theme->h_bar_render(erb,theme,bounds,r,w->base.status,OVERLAY_MAIN_COLOUR_);
+	theme->h_bar_render(erb,theme,bounds,r,w->base.status,OVERLAY_MAIN_COLOUR);
 
-    overlay_text_single_line_render_data otslrd=
-    {
-        .flags=OVERLAY_TEXT_NORMAL_RENDER,
-        .theme=theme,
-        .bounds=bounds,
-        .text=NULL,
-        .x=r.x1+theme->h_bar_text_offset,
-        .y=(r.y1+r.y2-theme->font_.glyph_size)>>1,
-        .colour=OVERLAY_TEXT_COLOUR_0_
-    };
+    if(fsi->export_formats) text=fsi->export_formats[fsi->active_export_format];
 
-    if(fsi->export_formats) otslrd.text=fsi->export_formats[fsi->active_export_format];
-
-    overlay_text_single_line_render(&otslrd,erb);
+    overlay_text_single_line_render_(erb,theme,bounds,OVERLAY_TEXT_COLOUR_0,text,r.x1+theme->h_bar_text_offset,(r.y1+r.y2-theme->font_.glyph_size)>>1);
 }
 
 static widget * file_search_export_type_button_widget_select(overlay_theme * theme,widget * w,int x_in,int y_in)

@@ -96,36 +96,26 @@ char * cvm_overlay_utf8_get_previous_word(char * base,char * t);
 char * cvm_overlay_utf8_get_next_word(char * t);
 
 
-#define OVERLAY_TEXT_NORMAL_RENDER      0x00000000
-#define OVERLAY_TEXT_CONSTRAINED_RENDER 0x00000001
-#define OVERLAY_TEXT_FADING_RENDER      0x00000002
-#define OVERLAY_TEXT_SELECTED_RENDER    0x00000004
+#define CVM_OT_SINGLE_LINE_RENDER_DECLARATION(NAME,SI,FI,BCI)\
+void NAME(cvm_overlay_element_render_buffer * restrict erb,overlay_theme * restrict theme,rectangle bounds,overlay_colour colour,const char * restrict text,int x,int y SI FI BCI);\
 
+#define CVM_OT_SELECTION_INPUTS ,const char * restrict selection_begin,const char * restrict selection_end
+#define CVM_OT_FADING_INPUTS ,rectangle text_area,int text_length
+#define CVM_OT_BOX_CONSTRAINED_INPUTS ,rectangle box_r,uint32_t box_status
 
+CVM_OT_SINGLE_LINE_RENDER_DECLARATION(overlay_text_single_line_render_,,,)
+CVM_OT_SINGLE_LINE_RENDER_DECLARATION(overlay_text_single_line_render_selection,CVM_OT_SELECTION_INPUTS,,)
+CVM_OT_SINGLE_LINE_RENDER_DECLARATION(overlay_text_single_line_render_fading,,CVM_OT_FADING_INPUTS,)
+CVM_OT_SINGLE_LINE_RENDER_DECLARATION(overlay_text_single_line_render_selection_fading,CVM_OT_SELECTION_INPUTS,CVM_OT_FADING_INPUTS,)
+CVM_OT_SINGLE_LINE_RENDER_DECLARATION(overlay_text_single_line_render_box_constrained,,,CVM_OT_BOX_CONSTRAINED_INPUTS)
+CVM_OT_SINGLE_LINE_RENDER_DECLARATION(overlay_text_single_line_render_selection_box_constrained,CVM_OT_SELECTION_INPUTS,,CVM_OT_BOX_CONSTRAINED_INPUTS)
+CVM_OT_SINGLE_LINE_RENDER_DECLARATION(overlay_text_single_line_render_fading_box_constrained,,CVM_OT_FADING_INPUTS,CVM_OT_BOX_CONSTRAINED_INPUTS)
+CVM_OT_SINGLE_LINE_RENDER_DECLARATION(overlay_text_single_line_render_selection_fading_box_constrained,CVM_OT_SELECTION_INPUTS,CVM_OT_FADING_INPUTS,CVM_OT_BOX_CONSTRAINED_INPUTS)
 
-typedef struct overlay_text_single_line_render_data
-{
-    overlay_theme * theme;
-    rectangle bounds;
-    char * text;
-    int x;
-    int y;
-    overlay_colour_ colour;
-
-    uint32_t box_status;
-    rectangle box_r;
-
-    rectangle text_area;
-    int text_length;
-
-    char * selection_begin;
-    char * selection_end;
-
-    uint32_t flags;///selection,fade,constrained
-}
-overlay_text_single_line_render_data;
-
-void overlay_text_single_line_render(const overlay_text_single_line_render_data * restrict data,cvm_overlay_element_render_buffer * erb);
+#undef CVM_OT_BOX_CONSTRAINED_INPUTS
+#undef CVM_OT_FADING_INPUTS
+#undef CVM_OT_SELECTION_INPUTS
+#undef CVM_OT_SINGLE_LINE_RENDER_DECLARATION
 
 int overlay_text_single_line_get_pixel_length(cvm_overlay_font * font,char * text);
 char * overlay_text_single_line_find_offset(cvm_overlay_font * font,char * text,int relative_x);
@@ -135,8 +125,8 @@ char * overlay_text_single_line_find_offset(cvm_overlay_font * font,char * text,
 
 void overlay_text_multiline_processing(cvm_overlay_font * font,cvm_overlay_text_block * block,char * text,int wrapping_width);
 
-void overlay_text_multiline_render(cvm_overlay_element_render_buffer * erb,cvm_overlay_font * font,rectangle bounds,cvm_overlay_text_block * block,int x,int y,overlay_colour_ colour);
-void overlay_text_multiline_selection_render(cvm_overlay_element_render_buffer * erb,cvm_overlay_font * font,rectangle bounds,cvm_overlay_text_block * block,int x,int y,overlay_colour_ colour,char * selection_start,char * selection_end);
+void overlay_text_multiline_render(cvm_overlay_element_render_buffer * erb,cvm_overlay_font * font,rectangle bounds,cvm_overlay_text_block * block,int x,int y,overlay_colour colour);
+void overlay_text_multiline_selection_render(cvm_overlay_element_render_buffer * erb,cvm_overlay_font * font,rectangle bounds,cvm_overlay_text_block * block,int x,int y,overlay_colour colour,char * selection_start,char * selection_end);
 
 char * overlay_text_multiline_find_offset(cvm_overlay_font * font,cvm_overlay_text_block * block,int relative_x,int relative_y);
 
@@ -152,8 +142,8 @@ static inline rectangle overlay_text_single_line_get_text_area(rectangle r,int g
 
 cvm_overlay_glyph * overlay_get_glyph(cvm_overlay_font * font,char * text);///assumes a single glyph in text
 
-void overlay_text_centred_glyph_render(cvm_overlay_element_render_buffer * erb,cvm_overlay_font * font,rectangle bounds,rectangle r,char * icon_glyph,overlay_colour_ colour);
-void overlay_text_centred_glyph_box_constrained_render(cvm_overlay_element_render_buffer * erb,overlay_theme * theme,rectangle bounds,rectangle r,char * icon_glyph,overlay_colour_ colour,rectangle box_r,uint32_t box_status);
+void overlay_text_centred_glyph_render(cvm_overlay_element_render_buffer * erb,cvm_overlay_font * font,rectangle bounds,rectangle r,char * icon_glyph,overlay_colour colour);
+void overlay_text_centred_glyph_box_constrained_render(cvm_overlay_element_render_buffer * erb,overlay_theme * theme,rectangle bounds,rectangle r,char * icon_glyph,overlay_colour colour,rectangle box_r,uint32_t box_status);
 ///need way to blend out text towards end of textbox
 
 #endif

@@ -71,8 +71,8 @@ static void all_visible_contiguous_box_widget_render(overlay_theme * theme,widge
     rectangle r=rectangle_add_offset(w->base.r,x_off,y_off);
     //r.y1+=7+(int)(11.0*sin(SDL_GetTicks()*0.004));
     //r.x1+=65+(int)(11.0*sin(SDL_GetTicks()*0.001-1));
-    theme->box_render(erb,theme,bounds,r,w->base.status,OVERLAY_MAIN_COLOUR_);
-    //theme->box_render(rectangle_add_offset(w->base.r,x_off,y_off),w->base.status,theme,erb,bounds,OVERLAY_MAIN_COLOUR_);
+    theme->box_render(erb,theme,bounds,r,w->base.status,OVERLAY_MAIN_COLOUR);
+    //theme->box_render(rectangle_add_offset(w->base.r,x_off,y_off),w->base.status,theme,erb,bounds,OVERLAY_MAIN_COLOUR);
 
     x_off+=w->base.r.x1;
     y_off+=w->base.r.y1;
@@ -82,7 +82,7 @@ static void all_visible_contiguous_box_widget_render(overlay_theme * theme,widge
 
 static void some_visible_contiguous_box_widget_render(overlay_theme * theme,widget * w,int x_off,int y_off,cvm_overlay_element_render_buffer * erb,rectangle bounds)
 {
-//    theme->box_render(rectangle_add_offset(w->base.r,x_off,y_off),w->base.status,theme,erb,bounds,OVERLAY_MAIN_COLOUR_);
+//    theme->box_render(rectangle_add_offset(w->base.r,x_off,y_off),w->base.status,theme,erb,bounds,OVERLAY_MAIN_COLOUR);
 //
 //    x_off+=w->base.r.x1;
 //    y_off+=w->base.r.y1;

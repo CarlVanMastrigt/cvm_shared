@@ -96,20 +96,9 @@ static widget_behaviour_function_set anchor_behaviour_functions=
 static void text_anchor_widget_render(overlay_theme * theme,widget * w,int x_off,int y_off,cvm_overlay_element_render_buffer * erb,rectangle bounds)
 {
 	rectangle r=rectangle_add_offset(w->base.r,x_off,y_off);
-	theme->h_bar_render(erb,theme,bounds,r,w->base.status,OVERLAY_ALTERNATE_MAIN_COLOUR_);
+	theme->h_bar_render(erb,theme,bounds,r,w->base.status,OVERLAY_ALTERNATE_MAIN_COLOUR);
 
-	overlay_text_single_line_render_data otslrd=
-	{
-	    .flags=OVERLAY_TEXT_NORMAL_RENDER,
-        .theme=theme,
-        .bounds=bounds,
-        .text=w->anchor.text,
-        .x=r.x1+theme->h_bar_text_offset,
-        .y=(r.y1+r.y2-theme->font_.glyph_size)>>1,
-        .colour=OVERLAY_TEXT_COLOUR_0_
-	};
-
-    overlay_text_single_line_render(&otslrd,erb);
+    overlay_text_single_line_render_(erb,theme,bounds,OVERLAY_TEXT_COLOUR_0,w->anchor.text,r.x1+theme->h_bar_text_offset,(r.y1+r.y2-theme->font_.glyph_size)>>1);
 }
 
 static widget * text_anchor_widget_select(overlay_theme * theme,widget * w,int x_in,int y_in)

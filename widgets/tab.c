@@ -46,65 +46,55 @@ static void tab_button_func(widget * button)
 //        {
 //            if(page->base.parent->tab_folder.current_tab_page==page)
 //            {
-//                theme->h_bar_over_box_render(erb,theme,bounds,r,w->base.status,OVERLAY_HIGHLIGHTING_COLOUR_,box_r,box_status);
+//                theme->h_bar_over_box_render(erb,theme,bounds,r,w->base.status,OVERLAY_HIGHLIGHTING_COLOUR,box_r,box_status);
 //            }
 //
 //            r=overlay_simple_text_rectangle(r,theme->font_.glyph_size,theme->h_bar_text_offset);
 //            rectangle b=get_rectangle_overlap(r,bounds);
-//            if(rectangle_has_positive_area(b))overlay_text_single_line_box_constrained_render(erb,theme,b,w->button.text,r.x1,r.y1,OVERLAY_TEXT_COLOUR_0_,box_r,box_status);
+//            if(rectangle_has_positive_area(b))overlay_text_single_line_box_constrained_render(erb,theme,b,w->button.text,r.x1,r.y1,OVERLAY_TEXT_COLOUR_0,box_r,box_status);
 //        }
 //        else
 //        {
 //            if(page->base.parent->tab_folder.current_tab_page==page)
 //            {
-//                theme->h_bar_render(erb,theme,bounds,r,w->base.status,OVERLAY_HIGHLIGHTING_COLOUR_);
+//                theme->h_bar_render(erb,theme,bounds,r,w->base.status,OVERLAY_HIGHLIGHTING_COLOUR);
 //            }
 //
 //            r=overlay_simple_text_rectangle(r,theme->font_.glyph_size,theme->h_bar_text_offset);
 //            rectangle b=get_rectangle_overlap(r,bounds);
-//            if(rectangle_has_positive_area(b))overlay_text_single_line_render(erb,&theme->font_,b,w->button.text,r.x1,r.y1,OVERLAY_TEXT_COLOUR_0_);
+//            if(rectangle_has_positive_area(b))overlay_text_single_line_render(erb,&theme->font_,b,w->button.text,r.x1,r.y1,OVERLAY_TEXT_COLOUR_0);
 //        }
 //    }
 //}
 static void tab_button_widget_render(overlay_theme * theme,widget * w,int x_off,int y_off,cvm_overlay_element_render_buffer * erb,rectangle bounds)
 {
+    uint32_t contiguous_box_status;
+    rectangle contiguous_box_r;
     widget * page=w->button.data;
 
     if(widget_active(page))
     {
         rectangle r=rectangle_add_offset(w->base.r,x_off,y_off);
 
-        overlay_text_single_line_render_data otslrd=
-        {
-            .theme=theme,
-            .bounds=bounds,
-            .text=w->button.text,
-            .x=r.x1+theme->h_bar_text_offset,
-            .y=(r.y1+r.y2-theme->font_.glyph_size)>>1,
-            .colour=OVERLAY_TEXT_COLOUR_0_,
-        };
-
         #warning need better check here, mainly is contiguous box "all" or "some"
-        if(get_ancestor_contiguous_box_data(w,&otslrd.box_r,&otslrd.box_status))
+        if(get_ancestor_contiguous_box_data(w,&contiguous_box_r,&contiguous_box_status))
         {
             if(page->base.parent->tab_folder.current_tab_page==page)
             {
-                theme->h_bar_over_box_render(erb,theme,bounds,r,w->base.status,OVERLAY_HIGHLIGHTING_COLOUR_,otslrd.box_r,otslrd.box_status);
+                theme->h_bar_box_constrained_render(erb,theme,bounds,r,w->base.status,OVERLAY_HIGHLIGHTING_COLOUR,contiguous_box_r,contiguous_box_status);
             }
 
-            otslrd.flags=OVERLAY_TEXT_CONSTRAINED_RENDER;
+            overlay_text_single_line_render_box_constrained(erb,theme,bounds,OVERLAY_TEXT_COLOUR_0,w->button.text,r.x1+theme->h_bar_text_offset,(r.y1+r.y2-theme->font_.glyph_size)>>1,contiguous_box_r,contiguous_box_status);
         }
         else
         {
             if(page->base.parent->tab_folder.current_tab_page==page)
             {
-                theme->h_bar_render(erb,theme,bounds,r,w->base.status,OVERLAY_HIGHLIGHTING_COLOUR_);
+                theme->h_bar_render(erb,theme,bounds,r,w->base.status,OVERLAY_HIGHLIGHTING_COLOUR);
             }
 
-            otslrd.flags=OVERLAY_TEXT_NORMAL_RENDER;
+            overlay_text_single_line_render_(erb,theme,bounds,OVERLAY_TEXT_COLOUR_0,w->button.text,r.x1+theme->h_bar_text_offset,(r.y1+r.y2-theme->font_.glyph_size)>>1);
         }
-
-        overlay_text_single_line_render(&otslrd,erb);
     }
 }
 

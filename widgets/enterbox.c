@@ -350,6 +350,11 @@ static widget_behaviour_function_set enterbox_behaviour_functions=
 
 static void enterbox_widget_render(overlay_theme * theme,widget * w,int x_off,int y_off,cvm_overlay_element_render_buffer * erb,rectangle bounds)
 {
+    overlay_colour text_colour;
+    char *text,*sb,*se;
+    int x;
+    rectangle r;
+
     if(w->enterbox.update_contents_func && !is_currently_active_widget(w))w->enterbox.update_contents_func(w);
 
     if(w->enterbox.recalculate_text_size)
@@ -358,62 +363,37 @@ static void enterbox_widget_render(overlay_theme * theme,widget * w,int x_off,in
         w->enterbox.recalculate_text_size=false;
     }
 
-    overlay_text_single_line_render_data otslrd=
-    {
-        .flags=OVERLAY_TEXT_NORMAL_RENDER,
-        .theme=theme,
-        .bounds=bounds
-    };
+    r=rectangle_add_offset(w->base.r,x_off,y_off);
+	theme->h_bar_render(erb,theme,bounds,r,w->base.status,OVERLAY_MAIN_COLOUR);
 
+    r=overlay_text_single_line_get_text_area(r,theme->font_.glyph_size,theme->h_bar_text_offset);
 
 	if(*w->enterbox.composition_text)
     {
-        otslrd.colour=OVERLAY_TEXT_COMPOSITION_COLOUR_0_;
-        otslrd.text=w->enterbox.composition_text;
-        otslrd.selection_begin=otslrd.selection_end=otslrd.text+strlen(otslrd.text);
-        otslrd.x=-w->enterbox.composition_visible_offset;
+        text_colour=OVERLAY_TEXT_COMPOSITION_COLOUR_0;
+        text=w->enterbox.composition_text;
+        sb=se=text+strlen(text);
+        x=r.x1-w->enterbox.composition_visible_offset;
     }
     else
     {
-        otslrd.colour=OVERLAY_TEXT_COLOUR_0_;
-        otslrd.text=w->enterbox.text;
-        if(w->enterbox.selection_end > w->enterbox.selection_begin) otslrd.selection_begin=w->enterbox.selection_begin, otslrd.selection_end=w->enterbox.selection_end;
-        else otslrd.selection_begin=w->enterbox.selection_end, otslrd.selection_end=w->enterbox.selection_begin;
-        otslrd.x=-w->enterbox.visible_offset;
-    }
-
-	rectangle r=rectangle_add_offset(w->base.r,x_off,y_off);
-	theme->h_bar_render(erb,theme,bounds,r,w->base.status,OVERLAY_MAIN_COLOUR_);
-
-    r=overlay_text_single_line_get_text_area(r,theme->font_.glyph_size,theme->h_bar_text_offset);
-    otslrd.x+=r.x1;
-    otslrd.y=r.y1;
-
-    #warning make is_currently_active_widget effectively part of w->base.status, would require setting flags in slightly painful manner but w/e
-    if(is_currently_active_widget(w))
-    {
-        otslrd.flags|=OVERLAY_TEXT_SELECTED_RENDER;
+        text_colour=OVERLAY_TEXT_COLOUR_0;
+        text=w->enterbox.text;
+        if(w->enterbox.selection_end > w->enterbox.selection_begin) sb=w->enterbox.selection_begin, se=w->enterbox.selection_end;
+        else sb=w->enterbox.selection_end, se=w->enterbox.selection_begin;
+        x=r.x1-w->enterbox.visible_offset;
     }
 
     if(w->enterbox.min_glyphs_visible<w->enterbox.max_glyphs)
     {
-        otslrd.flags|=OVERLAY_TEXT_FADING_RENDER;
-        otslrd.text_area=r;
-        otslrd.text_length=w->enterbox.text_pixel_length;
+        if(is_currently_active_widget(w))overlay_text_single_line_render_selection_fading(erb,theme,bounds,text_colour,text,x,r.y1,sb,se,r,w->enterbox.text_pixel_length);
+        else overlay_text_single_line_render_fading(erb,theme,bounds,text_colour,text,x,r.y1,r,w->enterbox.text_pixel_length);
     }
-
-    overlay_text_single_line_render(&otslrd,erb);
-
-//    if(w->enterbox.min_glyphs_visible<w->enterbox.max_glyphs)
-//    {
-//        if(is_currently_active_widget(w))overlay_text_single_line_fading_selection_render(erb,&theme->font_,bounds,text,r.x1-visible_offset,r.y1,colour,r,theme->h_text_fade_range,w->enterbox.text_pixel_length,sb,se);
-//        else overlay_text_single_line_fading_render(erb,&theme->font_,bounds,text,r.x1-visible_offset,r.y1,colour,r,theme->h_text_fade_range,w->enterbox.text_pixel_length);
-//    }
-//    else
-//    {
-//        if(is_currently_active_widget(w))overlay_text_single_line_selection_render(erb,&theme->font_,bounds,text,r.x1-visible_offset,r.y1,colour,sb,se);
-//        else overlay_text_single_line_render(erb,&theme->font_,bounds,text,r.x1-visible_offset,r.y1,colour);
-//    }
+    else
+    {
+        if(is_currently_active_widget(w))overlay_text_single_line_render_selection(erb,theme,bounds,text_colour,text,x,r.y1,sb,se);
+        else overlay_text_single_line_render_(erb,theme,bounds,text_colour,text,x,r.y1);
+    }
 }
 
 static widget * enterbox_widget_select(overlay_theme * theme,widget * w,int x_in,int y_in)

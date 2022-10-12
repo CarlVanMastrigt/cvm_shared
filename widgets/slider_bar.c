@@ -199,8 +199,8 @@ static void horizontal_slider_bar_widget_render(overlay_theme * theme,widget * w
 
     rectangle r=rectangle_add_offset(w->base.r,x_off,y_off);
 
-    theme->h_bar_render(erb,theme,bounds,r,w->base.status,OVERLAY_MAIN_COLOUR_);
-	theme->h_bar_slider_render(erb,theme,bounds,r,w->base.status,OVERLAY_TEXT_COLOUR_0_,abs(w->slider_bar.max_value-w->slider_bar.min_value),abs(*w->slider_bar.value_ptr-w->slider_bar.min_value),bar);
+    theme->h_bar_render(erb,theme,bounds,r,w->base.status,OVERLAY_MAIN_COLOUR);
+	theme->h_bar_slider_render(erb,theme,bounds,r,w->base.status,OVERLAY_TEXT_COLOUR_0,abs(w->slider_bar.max_value-w->slider_bar.min_value),abs(*w->slider_bar.value_ptr-w->slider_bar.min_value),bar);
 }
 
 static widget * horizontal_slider_bar_widget_select(overlay_theme * theme,widget * w,int x_in,int y_in)

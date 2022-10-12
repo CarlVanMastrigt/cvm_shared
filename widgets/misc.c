@@ -432,7 +432,7 @@ widget * create_checkbox_button_pair(char* text, void* data, widget_function fun
     widget * box=create_box(WIDGET_HORIZONTAL,WIDGET_FIRST_DISTRIBUTED);
 
     add_child_to_parent(box,create_text_button(text,data,false,func));
-    add_child_to_parent(box,create_icon_toggle_button("true","false",data,free_data,func,toggle_status));
+    add_child_to_parent(box,create_icon_toggle_button("+","-",data,free_data,func,toggle_status));
 
     return box;
 }

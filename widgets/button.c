@@ -140,37 +140,25 @@ widget * create_button(void * data,widget_function func,bool free_data)
 static void text_button_widget_render(overlay_theme * theme,widget * w,int x_off,int y_off,cvm_overlay_element_render_buffer * erb,rectangle bounds)
 {
     rectangle r=rectangle_add_offset(w->base.r,x_off,y_off);
-
-    overlay_text_single_line_render_data otslrd=
-    {
-        .flags=OVERLAY_TEXT_NORMAL_RENDER,
-        .theme=theme,
-        .bounds=bounds,
-        .text=w->button.text,
-        .x=r.x1+theme->h_bar_text_offset,
-        .y=(r.y1+r.y2-theme->font_.glyph_size)>>1,
-        .colour=OVERLAY_TEXT_COLOUR_0_
-    };
-
+    char * text=w->button.text;
     overlay_colour c=OVERLAY_MAIN_COLOUR;
 
     if((w->button.toggle_status)&&(w->button.toggle_status(w)))
     {
-        if((w->button.variant_text)&&(otslrd.text))
+        if((w->button.variant_text)&&(text))
         {
-            while(*otslrd.text)otslrd.text++;
-            otslrd.text++;
+            while(*text++);
         }
 
         if(w->button.highlight)
         {
-            c=OVERLAY_MAIN_HIGHLIGHTED_COLOUR;
+            c=OVERLAY_HIGHLIGHTING_COLOUR;
         }
     }
 
     theme->h_bar_render(erb,theme,bounds,r,w->base.status,c);
 
-    overlay_text_single_line_render(&otslrd,erb);
+    overlay_text_single_line_render_(erb,theme,bounds,OVERLAY_TEXT_COLOUR_0,text,r.x1+theme->h_bar_text_offset,(r.y1+r.y2-theme->font_.glyph_size)>>1);
 }
 
 static widget * text_button_widget_select(overlay_theme * theme,widget * w,int x_in,int y_in)
@@ -182,13 +170,14 @@ static widget * text_button_widget_select(overlay_theme * theme,widget * w,int x
 
 static void text_button_widget_min_w(overlay_theme * theme,widget * w)
 {
+    char * text;
+
     w->base.min_w = overlay_text_single_line_get_pixel_length(&theme->font_,w->button.text);
 
 	if((w->button.variant_text)&&(w->button.toggle_status))
     {
-        char * text=w->button.text;
-        while(*text)text++;
-        text++;
+        text=w->button.text;
+        while(*text++);
 
         int min_w=overlay_text_single_line_get_pixel_length(&theme->font_,text);
         if(min_w>w->base.min_w)w->base.min_w=min_w;
@@ -268,40 +257,31 @@ widget * create_text_highlight_toggle_button(char * text,void * data,bool free_d
 
 static void contiguous_text_button_widget_render(overlay_theme * theme,widget * w,int x_off,int y_off,cvm_overlay_element_render_buffer * erb,rectangle bounds)
 {
+    uint32_t contiguous_box_status;
+    rectangle contiguous_box_r;
     rectangle r=rectangle_add_offset(w->base.r,x_off,y_off);
-
-    overlay_text_single_line_render_data otslrd=
-    {
-        .flags=OVERLAY_TEXT_CONSTRAINED_RENDER,
-        .theme=theme,
-        .bounds=bounds,
-        .text=w->button.text,
-        .x=r.x1+theme->h_bar_text_offset,
-        .y=(r.y1+r.y2-theme->font_.glyph_size)>>1,
-        .colour=OVERLAY_TEXT_COLOUR_0_
-    };
+    char * text=w->button.text;
 
     #warning re-evaluate how this is done, perhaps all widgets in a contiguous box inherit that property and become "contiguous buttons" automatically?
 
-    bool valid=get_ancestor_contiguous_box_data(w,&otslrd.box_r,&otslrd.box_status);
+    bool valid=get_ancestor_contiguous_box_data(w,&contiguous_box_r,&contiguous_box_status);
 
     assert(valid);///CONTIGUOUS BUTTON SHOULD BE IN CONTIGUOUS BOX
 
     if((w->button.toggle_status)&&(w->button.toggle_status(w)))
     {
-        if((w->button.variant_text)&&(otslrd.text))
+        if((w->button.variant_text)&&(text))
         {
-            while(*otslrd.text)otslrd.text++;
-            otslrd.text++;
+            while(*text++);
         }
 
         if(w->button.highlight)
         {
-            theme->h_bar_over_box_render(erb,theme,bounds,r,w->base.status,OVERLAY_HIGHLIGHTING_COLOUR_,otslrd.box_r,otslrd.box_status);
+            theme->h_bar_box_constrained_render(erb,theme,bounds,r,w->base.status,OVERLAY_HIGHLIGHTING_COLOUR,contiguous_box_r,contiguous_box_status);
         }
     }
 
-    overlay_text_single_line_render(&otslrd,erb);
+    overlay_text_single_line_render_box_constrained(erb,theme,bounds,OVERLAY_TEXT_COLOUR_0,text,r.x1+theme->h_bar_text_offset,(r.y1+r.y2-theme->font_.glyph_size)>>1,contiguous_box_r,contiguous_box_status);
 }
 
 static void contiguous_text_button_widget_min_h(overlay_theme * theme,widget * w)
@@ -361,14 +341,13 @@ static void icon_button_widget_render(overlay_theme * theme,widget * w,int x_off
 
     if((w->button.variant_text)&&(t)&&(w->button.toggle_status)&&(w->button.toggle_status(w)))
     {
-        while(*t)t++;
-        t++;
+        while(*t++);
     }
 
     rectangle r=rectangle_add_offset(w->base.r,x_off,y_off);
 
-    theme->square_render(erb,theme,bounds,r,w->base.status,OVERLAY_MAIN_COLOUR_);
-    overlay_text_centred_glyph_render(erb,&theme->font_,bounds,r,t,OVERLAY_TEXT_COLOUR_0_);
+    theme->square_render(erb,theme,bounds,r,w->base.status,OVERLAY_MAIN_COLOUR);
+    overlay_text_centred_glyph_render(erb,&theme->font_,bounds,r,t,OVERLAY_TEXT_COLOUR_0);
 }
 
 static widget * icon_button_widget_select(overlay_theme * theme,widget * w,int x_in,int y_in)
@@ -424,10 +403,10 @@ widget * create_icon_toggle_button(char * positive_icon,char * negative_icon,voi
     if(positive_icon)len+=strlen(positive_icon);
 
     char * t=w->button.text=malloc(len*sizeof(char));
-    if(negative_icon)while(*negative_icon) *t++ = *negative_icon++;
-    *t++ = '\0';
-    if(positive_icon)while(*positive_icon) *t++ = *positive_icon++;
-    *t++ = '\0';
+    if(negative_icon)while((*t++ = *negative_icon++));
+    else *t++ = '\0';
+    if(positive_icon)while((*t++ = *positive_icon++));
+    else *t++ = '\0';
 
     return w;
 }
