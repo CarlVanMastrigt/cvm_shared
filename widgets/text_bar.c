@@ -1,5 +1,5 @@
 /**
-Copyright 2020,2021 Carl van Mastrigt
+Copyright 2020,2021,2022 Carl van Mastrigt
 
 This file is part of cvm_shared.
 
@@ -28,7 +28,6 @@ static void text_bar_widget_delete(widget * w)
 }
 
 static widget_behaviour_function_set text_bar_behaviour_functions=
-(widget_behaviour_function_set)
 {
     .l_click        =   blank_widget_left_click,
     .l_release      =   blank_widget_left_release,
@@ -48,7 +47,7 @@ static widget_behaviour_function_set text_bar_behaviour_functions=
 
 
 
-static void text_bar_widget_render(overlay_theme * theme,widget * w,int x_off,int y_off,cvm_overlay_element_render_buffer * erb,rectangle bounds)
+static void text_bar_widget_render(overlay_theme * theme,widget * w,int16_t x_off,int16_t y_off,cvm_overlay_element_render_buffer * erb,rectangle bounds)
 {
 //    int sub_x_off=0;;
 //
@@ -97,7 +96,6 @@ static void text_bar_widget_min_h(overlay_theme * theme,widget * w)
 
 
 static widget_appearence_function_set text_bar_appearence_functions=
-(widget_appearence_function_set)
 {
     .render =   text_bar_widget_render,
     .select =   blank_widget_select,
@@ -114,7 +112,7 @@ static widget_appearence_function_set text_bar_appearence_functions=
 
 widget * create_static_text_bar(int min_glyph_render_count,char * text,widget_text_alignment text_alignment)
 {
-	widget * w=create_widget(TEXT_BAR_WIDGET);
+	widget * w=create_widget();
 
 	w->base.appearence_functions=&text_bar_appearence_functions;
 	w->base.behaviour_functions=&text_bar_behaviour_functions;
@@ -137,7 +135,7 @@ widget * create_static_text_bar(int min_glyph_render_count,char * text,widget_te
 
 widget * create_dynamic_text_bar(int min_glyph_render_count,widget_function set_text,bool free_text,void * data,bool free_data,widget_text_alignment text_alignment)
 {
-	widget * w=create_widget(TEXT_BAR_WIDGET);
+	widget * w=create_widget();
 
 	w->base.appearence_functions=&text_bar_appearence_functions;
 	w->base.behaviour_functions=&text_bar_behaviour_functions;

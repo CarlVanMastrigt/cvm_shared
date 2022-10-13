@@ -1,5 +1,5 @@
 /**
-Copyright 2020,2021 Carl van Mastrigt
+Copyright 2020,2021,2022 Carl van Mastrigt
 
 This file is part of cvm_shared.
 
@@ -378,8 +378,6 @@ static void create_overlay_pipelines(void)
                 .sType=VK_STRUCTURE_TYPE_PIPELINE_VERTEX_INPUT_STATE_CREATE_INFO,
                 .pNext=NULL,
                 .flags=0,
-                .vertexBindingDescriptionCount=0,
-                .pVertexBindingDescriptions=NULL,
                 .vertexBindingDescriptionCount=1,
                 .pVertexBindingDescriptions= (VkVertexInputBindingDescription[1])
                 {
@@ -389,8 +387,6 @@ static void create_overlay_pipelines(void)
                         .inputRate=VK_VERTEX_INPUT_RATE_INSTANCE
                     }
                 },
-                .vertexAttributeDescriptionCount=0,
-                .pVertexAttributeDescriptions=NULL,
                 .vertexAttributeDescriptionCount=3,
                 .pVertexAttributeDescriptions=(VkVertexInputAttributeDescription[3])
                 {
@@ -736,8 +732,6 @@ void overlay_render_frame(int screen_w,int screen_h,widget * menu_widget)
 
         vkCmdBindDescriptorSets(batch->graphics_pcb,VK_PIPELINE_BIND_POINT_GRAPHICS,overlay_pipeline_layout,1,1,&overlay_consistent_descriptor_set,0,NULL);
 
-        VkClearValue colour_clear={.color=(VkClearColorValue){.float32={0.2f,0.2f,0.0f,0.0f}}};
-
         VkRenderPassBeginInfo render_pass_begin_info=(VkRenderPassBeginInfo)
         {
             .sType=VK_STRUCTURE_TYPE_RENDER_PASS_BEGIN_INFO,
@@ -798,12 +792,12 @@ void overlay_destroy_transparent_image_tile(cvm_vk_image_atlas_tile * tile)
 
 cvm_vk_image_atlas_tile * overlay_create_colour_image_tile_with_staging(void ** staging,uint32_t w, uint32_t h)
 {
-    return NULL;
+    return cvm_vk_acquire_image_atlas_tile_with_staging(&overlay_colour_image_atlas,w,h,staging);
 }
 
 void overlay_destroy_colour_image_tile(cvm_vk_image_atlas_tile * tile)
 {
-    //
+    cvm_vk_relinquish_image_atlas_tile(&overlay_colour_image_atlas,tile);
 }
 
 

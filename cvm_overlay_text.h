@@ -37,7 +37,7 @@ typedef struct cvm_overlay_glyph
     uint32_t usage_counter;///when hitting 0 it gets deleted? (or scheduled for deletion) is this even necessary?
     ///perhaps need better way to handle unused overlay elements and glyphs (could just agressively delete...)
     rectangle pos;
-    int advance;
+    int16_t advance;
 }
 cvm_overlay_glyph;///hmmm, glyph vs string based rendering... glyph has more potential to be loaded at once and is faster in worst case, but slower in average
 
@@ -45,14 +45,14 @@ typedef struct cvm_overlay_font
 {
     FT_Face face;
 
-    int glyph_size;
+    int16_t glyph_size;
 
-    int space_advance;
-    int space_character_index;
+    int16_t space_advance;
+    int16_t space_character_index;
 
-    int line_spacing;
+    int16_t line_spacing;
 
-    int max_advance;
+    int16_t max_advance;
 
     ///not a great solution but bubble sort new glyphs from end?, is rare enough op and gives low enough cache use to justify?
     cvm_overlay_glyph * glyphs;
@@ -86,9 +86,9 @@ void cvm_overlay_destroy_font(cvm_overlay_font * font);
 
 ///some generic
 bool cvm_overlay_utf8_validate_string(char * text);
-int cvm_overlay_utf8_count_glyphs(char * text);
-int cvm_overlay_utf8_count_glyphs_outside_range(char * text,char * begin,char * end);///end is uninclusive offset, start is inclusive offset
-bool cvm_overlay_utf8_validate_string_and_count_glyphs(char * text,int * c);
+uint32_t cvm_overlay_utf8_count_glyphs(char * text);
+uint32_t cvm_overlay_utf8_count_glyphs_outside_range(char * text,char * begin,char * end);///end is uninclusive offset, start is inclusive offset
+bool cvm_overlay_utf8_validate_string_and_count_glyphs(char * text,uint32_t * c);
 ///following also check for variation sequences, assumes string is valid utf8 already
 char * cvm_overlay_utf8_get_previous_glyph(char * base,char * t);
 char * cvm_overlay_utf8_get_next_glyph(char * t);
@@ -97,13 +97,13 @@ char * cvm_overlay_utf8_get_next_word(char * t);
 
 
 #define CVM_OT_SINGLE_LINE_RENDER_DECLARATION(NAME,SI,FI,BCI)\
-void NAME(cvm_overlay_element_render_buffer * restrict erb,overlay_theme * restrict theme,rectangle bounds,overlay_colour colour,const char * restrict text,int x,int y SI FI BCI);\
+void NAME(cvm_overlay_element_render_buffer * restrict erb,overlay_theme * restrict theme,rectangle bounds,overlay_colour colour,const char * restrict text,int16_t x,int16_t y SI FI BCI);\
 
 #define CVM_OT_SELECTION_INPUTS ,const char * restrict selection_begin,const char * restrict selection_end
 #define CVM_OT_FADING_INPUTS ,rectangle text_area,int text_length
 #define CVM_OT_BOX_CONSTRAINED_INPUTS ,rectangle box_r,uint32_t box_status
 
-CVM_OT_SINGLE_LINE_RENDER_DECLARATION(overlay_text_single_line_render_,,,)
+CVM_OT_SINGLE_LINE_RENDER_DECLARATION(overlay_text_single_line_render,,,)
 CVM_OT_SINGLE_LINE_RENDER_DECLARATION(overlay_text_single_line_render_selection,CVM_OT_SELECTION_INPUTS,,)
 CVM_OT_SINGLE_LINE_RENDER_DECLARATION(overlay_text_single_line_render_fading,,CVM_OT_FADING_INPUTS,)
 CVM_OT_SINGLE_LINE_RENDER_DECLARATION(overlay_text_single_line_render_selection_fading,CVM_OT_SELECTION_INPUTS,CVM_OT_FADING_INPUTS,)
@@ -117,7 +117,7 @@ CVM_OT_SINGLE_LINE_RENDER_DECLARATION(overlay_text_single_line_render_selection_
 #undef CVM_OT_SELECTION_INPUTS
 #undef CVM_OT_SINGLE_LINE_RENDER_DECLARATION
 
-int overlay_text_single_line_get_pixel_length(cvm_overlay_font * font,char * text);
+int16_t overlay_text_single_line_get_pixel_length(cvm_overlay_font * font,char * text);
 char * overlay_text_single_line_find_offset(cvm_overlay_font * font,char * text,int relative_x);
 
 
@@ -131,7 +131,7 @@ void overlay_text_multiline_selection_render(cvm_overlay_element_render_buffer *
 char * overlay_text_multiline_find_offset(cvm_overlay_font * font,cvm_overlay_text_block * block,int relative_x,int relative_y);
 
 
-static inline rectangle overlay_text_single_line_get_text_area(rectangle r,int glyph_size,int x_border)
+static inline rectangle overlay_text_single_line_get_text_area(rectangle r,int16_t glyph_size,int16_t x_border)
 {
     r.y1=(r.y1+r.y2-glyph_size)>>1;
     r.y2=r.y1+glyph_size;

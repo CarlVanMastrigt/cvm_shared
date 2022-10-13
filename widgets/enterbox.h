@@ -1,5 +1,5 @@
 /**
-Copyright 2020,2021 Carl van Mastrigt
+Copyright 2020,2021,2022 Carl van Mastrigt
 
 This file is part of cvm_shared.
 
@@ -29,9 +29,9 @@ typedef struct widget_enterbox
     widget_base base;
 
     char * text;
-    int max_strlen;
-    int max_glyphs;
-    int min_glyphs_visible;
+    uint32_t max_strlen;
+    uint32_t max_glyphs;
+    uint32_t min_glyphs_visible;
     int visible_offset;
     int text_pixel_length;
     widget_function activation_func;
@@ -54,7 +54,7 @@ widget_enterbox;
 
 //widget * create_enterbox(int text_max_length,int text_min_visible,char * initial_text,widget_function activation_func,void * data,widget_function update_contents_func,bool activate_upon_deselect,bool free_data);
 
-widget * create_enterbox(int max_strlen,int max_glyphs,int min_glyphs_visible,char * initial_text,widget_function activation_func,void * data,widget_function update_contents_func,bool activate_upon_deselect,bool free_data);
+widget * create_enterbox(uint32_t max_strlen,uint32_t max_glyphs,uint32_t min_glyphs_visible,char * initial_text,widget_function activation_func,void * data,widget_function update_contents_func,bool activate_upon_deselect,bool free_data);
 #define create_enterbox_simple(glyph_count,initial_text,activation_func,data,update_contents_func,activate_upon_deselect,free_data)\
 create_enterbox(glyph_count * CVM_OVERLAY_MAX_UNICODE_BYTES,glyph_count,glyph_count,initial_text,activation_func,data,update_contents_func,activate_upon_deselect,free_data)
 

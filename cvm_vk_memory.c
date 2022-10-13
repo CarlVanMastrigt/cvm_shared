@@ -128,7 +128,7 @@ cvm_vk_dynamic_buffer_allocation * cvm_vk_managed_buffer_acquire_dynamic_allocat
     uint_fast32_t lock;
 
     ///linear search should be fine as its assumed the vast majority of buffers will have size factor less than 3 (ergo better than binary search)
-    for(size_factor=mb->base_dynamic_allocation_size_factor;0x0000000000000001<<size_factor < size;size_factor++);
+    for(size_factor=mb->base_dynamic_allocation_size_factor;0x0000000000000001u<<size_factor < size;size_factor++);
 
     size_factor-=mb->base_dynamic_allocation_size_factor;
 
@@ -339,7 +339,7 @@ void cvm_vk_managed_buffer_relinquish_dynamic_allocation(cvm_vk_managed_buffer *
     }
     else /// the difficult one...
     {
-        while(a->size_factor+1 < mb->num_dynamic_allocation_sizes)/// combine allocations in aligned way
+        while(a->size_factor+1u < mb->num_dynamic_allocation_sizes)/// combine allocations in aligned way
         {
             ///neighbouring allocation for this alignment
             n = a->offset&1<<a->size_factor ? a->prev : a->next;/// will never be NULL (if a was last other branch would be taken, if first (offset is 0) n will always be set to next)
@@ -635,10 +635,10 @@ void cvm_vk_staging_buffer_create(cvm_vk_staging_buffer * sb,VkBufferUsageFlags 
 
     uint32_t required_alignment=cvm_vk_get_buffer_alignment_requirements(usage);
 
-    for(sb->alignment_size_factor=0;1<<sb->alignment_size_factor < required_alignment;sb->alignment_size_factor++);///alignment_size_factor expected to be small, ~6
+    for(sb->alignment_size_factor=0;1u<<sb->alignment_size_factor < required_alignment;sb->alignment_size_factor++);///alignment_size_factor expected to be small, ~6
     ///can catastrophically fail if required_alignment is greater than 2^31, but w/e
 
-    assert(1<<sb->alignment_size_factor == required_alignment);///NON POWER OF 2 ALIGNMENTS NOT SUPPORTED
+    assert(1u<<sb->alignment_size_factor == required_alignment);///NON POWER OF 2 ALIGNMENTS NOT SUPPORTED
 }
 
 void cvm_vk_staging_buffer_update(cvm_vk_staging_buffer * sb,uint32_t space_per_frame, uint32_t frame_count)
@@ -867,10 +867,10 @@ void cvm_vk_transient_buffer_create(cvm_vk_transient_buffer * tb,VkBufferUsageFl
 
     uint32_t required_alignment=cvm_vk_get_buffer_alignment_requirements(usage);
 
-    for(tb->alignment_size_factor=0;1<<tb->alignment_size_factor < required_alignment;tb->alignment_size_factor++);///alignment_size_factor expected to be small, ~6
+    for(tb->alignment_size_factor=0;1u<<tb->alignment_size_factor < required_alignment;tb->alignment_size_factor++);///alignment_size_factor expected to be small, ~6
     ///can catastrophically fail if required_alignment is greater than 2^31, but w/e
 
-    assert(1<<tb->alignment_size_factor == required_alignment);///NON POWER OF 2 ALIGNMENTS NOT SUPPORTED
+    assert(1u<<tb->alignment_size_factor == required_alignment);///NON POWER OF 2 ALIGNMENTS NOT SUPPORTED
 }
 
 void cvm_vk_transient_buffer_update(cvm_vk_transient_buffer * tb,uint32_t space_per_frame, uint32_t frame_count)

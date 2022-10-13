@@ -1,5 +1,5 @@
 /**
-Copyright 2020,2021 Carl van Mastrigt
+Copyright 2020,2021,2022 Carl van Mastrigt
 
 This file is part of cvm_shared.
 
@@ -37,7 +37,7 @@ void adjuster_pair_enterbox_function(widget * w);
 void toggle_widget(widget * w);
 void toggle_widget_button_func(widget * w);
 
-widget * create_empty_widget(int min_w,int min_h);
+widget * create_empty_widget(int16_t min_w,int16_t min_h);
 widget * create_separator_widget(void);
 widget * create_unit_separator_widget(void);
 

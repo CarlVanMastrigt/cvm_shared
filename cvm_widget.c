@@ -1,5 +1,5 @@
 /**
-Copyright 2020,2021 Carl van Mastrigt
+Copyright 2020,2021,2022 Carl van Mastrigt
 
 This file is part of cvm_shared.
 
@@ -37,12 +37,12 @@ void render_widget_overlay(cvm_overlay_element_render_buffer * erb,widget * menu
 }
 
 
-static void base_widget_render(overlay_theme * theme,widget * w,int x_off,int y_off,cvm_overlay_element_render_buffer * erb,rectangle bounds)
+static void base_widget_render(overlay_theme * theme,widget * w,int16_t x_off,int16_t y_off,cvm_overlay_element_render_buffer * erb,rectangle bounds)
 {
     puts("error calling base: render");
 }
 
-static widget * base_widget_select(overlay_theme * theme,widget * w,int x_in,int y_in)
+static widget * base_widget_select(overlay_theme * theme,widget * w,int16_t x_in,int16_t y_in)
 {
     puts("error calling base: select");
     return NULL;
@@ -70,7 +70,6 @@ static void base_widget_set_h(overlay_theme * theme,widget * w)
 
 
 static widget_appearence_function_set base_appearence_functions=
-(widget_appearence_function_set)
 {
     .render =   base_widget_render,
     .select =   base_widget_select,
@@ -167,12 +166,11 @@ static widget_behaviour_function_set base_behaviour_functions =
     .wid_delete     =   base_widget_delete
 };
 
-widget * create_widget(widget_type type)
+widget * create_widget(void)
 {
     widget * w=malloc(sizeof(widget));
 
     w->base.status=WIDGET_ACTIVE;
-    w->base.type=type;
 
     w->base.next=NULL;
     w->base.prev=NULL;
@@ -351,11 +349,11 @@ void move_toplevel_widget_to_front(widget * w)
 
 
 
-void blank_widget_render(overlay_theme * theme,widget * w,int x_off,int y_off,cvm_overlay_element_render_buffer * erb,rectangle bounds)
+void blank_widget_render(overlay_theme * theme,widget * w,int16_t x_off,int16_t y_off,cvm_overlay_element_render_buffer * erb,rectangle bounds)
 {
 }
 
-widget * blank_widget_select(overlay_theme * theme,widget * w,int x_in,int y_in)
+widget * blank_widget_select(overlay_theme * theme,widget * w,int16_t x_in,int16_t y_in)
 {
     return NULL;
 }

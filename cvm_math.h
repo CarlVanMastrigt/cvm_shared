@@ -1,5 +1,5 @@
 /**
-Copyright 2020,2021 Carl van Mastrigt
+Copyright 2020,2021,2022 Carl van Mastrigt
 
 This file is part of cvm_shared.
 
@@ -99,10 +99,10 @@ vec2f;
 
 typedef struct rectangle
 {
-    int x1;
-    int y1;
-    int x2;
-    int y2;
+    int16_t x1;
+    int16_t y1;
+    int16_t x2;
+    int16_t y2;
 }
 rectangle;
 
@@ -513,12 +513,12 @@ static inline bool rectangle_has_positive_area(rectangle r)
     return r.x2 > r.x1 && r.y2 > r.y1;
 }
 
-static inline rectangle rectangle_add_offset(rectangle r,int x,int y)
+static inline rectangle rectangle_add_offset(rectangle r,int16_t x,int16_t y)
 {
     return (rectangle){.x1=r.x1+x,.y1=r.y1+y,.x2=r.x2+x,.y2=r.y2+y};
 }
 
-static inline rectangle rectangle_subtract_offset(rectangle r,int x,int y)
+static inline rectangle rectangle_subtract_offset(rectangle r,int16_t x,int16_t y)
 {
     return (rectangle){.x1=r.x1-x,.y1=r.y1-y,.x2=r.x2-x,.y2=r.y2-y};
 }

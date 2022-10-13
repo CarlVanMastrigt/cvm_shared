@@ -1,5 +1,5 @@
 /**
-Copyright 2020,2021 Carl van Mastrigt
+Copyright 2020,2021,2022 Carl van Mastrigt
 
 This file is part of cvm_shared.
 
@@ -43,7 +43,6 @@ void panel_widget_delete(widget * w)
 
 
 static widget_behaviour_function_set panel_behaviour_functions=
-(widget_behaviour_function_set)
 {
     .l_click        =   blank_widget_left_click,
     .l_release      =   blank_widget_left_release,
@@ -64,14 +63,14 @@ static widget_behaviour_function_set panel_behaviour_functions=
 
 
 
-void panel_widget_render(overlay_theme * theme,widget * w,int x_off,int y_off,cvm_overlay_element_render_buffer * erb,rectangle bounds)
+void panel_widget_render(overlay_theme * theme,widget * w,int16_t x_off,int16_t y_off,cvm_overlay_element_render_buffer * erb,rectangle bounds)
 {
     theme->panel_render(erb,theme,bounds,rectangle_add_offset(w->base.r,x_off,y_off),w->base.status,OVERLAY_BACKGROUND_COLOUR);
 
     render_widget(w->panel.contents,x_off+w->base.r.x1,y_off+w->base.r.y1,erb,bounds);
 }
 
-widget * panel_widget_select(overlay_theme * theme,widget * w,int x_in,int y_in)
+widget * panel_widget_select(overlay_theme * theme,widget * w,int16_t x_in,int16_t y_in)
 {
     widget * tmp=select_widget(w->panel.contents,x_in-w->base.r.x1,y_in-w->base.r.y1);
 	if(tmp)return tmp;
@@ -127,7 +126,6 @@ void panel_widget_set_h(overlay_theme * theme,widget * w)
 
 
 static widget_appearence_function_set panel_appearence_functions=
-(widget_appearence_function_set)
 {
     .render =   panel_widget_render,
     .select =   panel_widget_select,
@@ -140,7 +138,7 @@ static widget_appearence_function_set panel_appearence_functions=
 
 widget * create_panel(void)
 {
-    widget * w=create_widget(PANEL_WIDGET);
+    widget * w=create_widget();
 
     w->base.appearence_functions=&panel_appearence_functions;
     w->base.behaviour_functions=&panel_behaviour_functions;

@@ -1,5 +1,5 @@
 /**
-Copyright 2020,2021 Carl van Mastrigt
+Copyright 2020,2021,2022 Carl van Mastrigt
 
 This file is part of cvm_shared.
 
@@ -48,7 +48,6 @@ static void contiguous_box_widget_delete(widget * w)
 }
 
 static widget_behaviour_function_set contiguous_box_behaviour_functions=
-(widget_behaviour_function_set)
 {
     .l_click        =   blank_widget_left_click,
     .l_release      =   blank_widget_left_release,
@@ -66,7 +65,7 @@ static widget_behaviour_function_set contiguous_box_behaviour_functions=
 
 
 
-static void all_visible_contiguous_box_widget_render(overlay_theme * theme,widget * w,int x_off,int y_off,cvm_overlay_element_render_buffer * erb,rectangle bounds)
+static void all_visible_contiguous_box_widget_render(overlay_theme * theme,widget * w,int16_t x_off,int16_t y_off,cvm_overlay_element_render_buffer * erb,rectangle bounds)
 {
     rectangle r=rectangle_add_offset(w->base.r,x_off,y_off);
     //r.y1+=7+(int)(11.0*sin(SDL_GetTicks()*0.004));
@@ -80,7 +79,7 @@ static void all_visible_contiguous_box_widget_render(overlay_theme * theme,widge
     render_widget(w->contiguous_box.contained_box,x_off,y_off,erb,bounds);
 }
 
-static void some_visible_contiguous_box_widget_render(overlay_theme * theme,widget * w,int x_off,int y_off,cvm_overlay_element_render_buffer * erb,rectangle bounds)
+static void some_visible_contiguous_box_widget_render(overlay_theme * theme,widget * w,int16_t x_off,int16_t y_off,cvm_overlay_element_render_buffer * erb,rectangle bounds)
 {
 //    theme->box_render(rectangle_add_offset(w->base.r,x_off,y_off),w->base.status,theme,erb,bounds,OVERLAY_MAIN_COLOUR);
 //
@@ -100,7 +99,7 @@ static void some_visible_contiguous_box_widget_render(overlay_theme * theme,widg
 //    if(rectangle_has_positive_area(bounds))render_widget(w->contiguous_box.contained_box,x_off,y_off,erb,bounds);
 }
 
-static widget * contiguous_box_widget_select(overlay_theme * theme,widget * w,int x_in,int y_in)
+static widget * contiguous_box_widget_select(overlay_theme * theme,widget * w,int16_t x_in,int16_t y_in)
 {
     widget * tmp;
 
@@ -147,7 +146,6 @@ static void all_visible_contiguous_box_widget_set_h(overlay_theme * theme,widget
 }
 
 static widget_appearence_function_set all_visible_contiguous_box_functions=
-(widget_appearence_function_set)
 {
     .render =   all_visible_contiguous_box_widget_render,
     .select =   contiguous_box_widget_select,
@@ -295,8 +293,6 @@ widget * create_contiguous_box(widget_layout layout,int min_display_count)
 
     w->contiguous_box.contained_box=create_box(layout,WIDGET_NORMALLY_DISTRIBUTED);
     w->contiguous_box.contained_box->base.parent=w;
-
-    w->base.type=CONTIGUOUS_BOX_WIDGET;
 
     w->base.status|=WIDGET_IS_CONTIGUOUS_BOX;
 

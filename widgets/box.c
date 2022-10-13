@@ -1,5 +1,5 @@
 /**
-Copyright 2020,2021 Carl van Mastrigt
+Copyright 2020,2021,2022 Carl van Mastrigt
 
 This file is part of cvm_shared.
 
@@ -465,7 +465,6 @@ static void vertical_all_same_distributed_box_widget_set_h(overlay_theme * theme
 
 
 static widget_appearence_function_set vertical_last_distributed_box_functions=
-(widget_appearence_function_set)
 {
     .render =   container_widget_render,
     .select =   container_widget_select,
@@ -476,7 +475,6 @@ static widget_appearence_function_set vertical_last_distributed_box_functions=
 };
 
 static widget_appearence_function_set vertical_first_distributed_box_functions=
-(widget_appearence_function_set)
 {
     .render =   container_widget_render,
     .select =   container_widget_select,
@@ -487,7 +485,6 @@ static widget_appearence_function_set vertical_first_distributed_box_functions=
 };
 
 static widget_appearence_function_set vertical_evenly_distributed_box_functions=
-(widget_appearence_function_set)
 {
     .render =   container_widget_render,
     .select =   container_widget_select,
@@ -498,7 +495,6 @@ static widget_appearence_function_set vertical_evenly_distributed_box_functions=
 };
 
 static widget_appearence_function_set vertical_normally_distributed_box_functions=
-(widget_appearence_function_set)
 {
     .render =   container_widget_render,
     .select =   container_widget_select,
@@ -509,7 +505,6 @@ static widget_appearence_function_set vertical_normally_distributed_box_function
 };
 
 static widget_appearence_function_set vertical_all_same_distributed_box_functions=
-(widget_appearence_function_set)
 {
     .render =   container_widget_render,
     .select =   container_widget_select,
@@ -524,7 +519,6 @@ static widget_appearence_function_set vertical_all_same_distributed_box_function
 
 
 static widget_appearence_function_set horizontal_last_distributed_box_functions=
-(widget_appearence_function_set)
 {
     .render =   container_widget_render,
     .select =   container_widget_select,
@@ -535,7 +529,6 @@ static widget_appearence_function_set horizontal_last_distributed_box_functions=
 };
 
 static widget_appearence_function_set horizontal_first_distributed_box_functions=
-(widget_appearence_function_set)
 {
     .render =   container_widget_render,
     .select =   container_widget_select,
@@ -546,7 +539,6 @@ static widget_appearence_function_set horizontal_first_distributed_box_functions
 };
 
 static widget_appearence_function_set horizontal_evenly_distributed_box_functions=
-(widget_appearence_function_set)
 {
     .render =   container_widget_render,
     .select =   container_widget_select,
@@ -557,7 +549,6 @@ static widget_appearence_function_set horizontal_evenly_distributed_box_function
 };
 
 static widget_appearence_function_set horizontal_normally_distributed_box_functions=
-(widget_appearence_function_set)
 {
     .render =   container_widget_render,
     .select =   container_widget_select,
@@ -568,7 +559,6 @@ static widget_appearence_function_set horizontal_normally_distributed_box_functi
 };
 
 static widget_appearence_function_set horizontal_all_same_distributed_box_functions=
-(widget_appearence_function_set)
 {
     .render =   container_widget_render,
     .select =   container_widget_select,

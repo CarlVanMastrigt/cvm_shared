@@ -1,5 +1,5 @@
 /**
-Copyright 2020,2021 Carl van Mastrigt
+Copyright 2020,2021,2022 Carl van Mastrigt
 
 This file is part of cvm_shared.
 
@@ -22,11 +22,11 @@ along with cvm_shared.  If not, see <https://www.gnu.org/licenses/>.
 
 static void textbox_check_visible_offset(widget * w,overlay_theme * theme)
 {
-    int i;
+    uint32_t i;
     for(i=0;i<w->textbox.text_block.line_count && w->textbox.selection_end > w->textbox.text_block.lines[i].finish;i++);
 
-    if(w->textbox.y_offset > i*theme->font_.line_spacing) w->textbox.y_offset = i*theme->font_.line_spacing;
-    if(w->textbox.y_offset < i*theme->font_.line_spacing+theme->font_.glyph_size-w->textbox.visible_size) w->textbox.y_offset = i*theme->font_.line_spacing+theme->font_.glyph_size-w->textbox.visible_size;
+    if(w->textbox.y_offset > ((int16_t)i)*theme->font_.line_spacing) w->textbox.y_offset = i*theme->font_.line_spacing;
+    if(w->textbox.y_offset < ((int16_t)i)*theme->font_.line_spacing+theme->font_.glyph_size-w->textbox.visible_size) w->textbox.y_offset = i*theme->font_.line_spacing+theme->font_.glyph_size-w->textbox.visible_size;
 }
 
 static void textbox_copy_selection_to_clipboard(widget * w)
@@ -133,7 +133,6 @@ static void textbox_widget_delete(widget * w)
 }
 
 static widget_behaviour_function_set textbox_behaviour_functions=
-(widget_behaviour_function_set)
 {
     .l_click        =   textbox_widget_left_click,
     .l_release      =   textbox_widget_left_release,
@@ -157,7 +156,7 @@ static widget_behaviour_function_set textbox_behaviour_functions=
 
 
 
-static void textbox_widget_render(overlay_theme * theme,widget * w,int x_off,int y_off,cvm_overlay_element_render_buffer * erb,rectangle bounds)
+static void textbox_widget_render(overlay_theme * theme,widget * w,int16_t x_off,int16_t y_off,cvm_overlay_element_render_buffer * erb,rectangle bounds)
 {
     char *sb,*se;
 
@@ -183,7 +182,7 @@ static void textbox_widget_render(overlay_theme * theme,widget * w,int x_off,int
     }
 }
 
-static widget * textbox_widget_select(overlay_theme * theme,widget * w,int x_in,int y_in)
+static widget * textbox_widget_select(overlay_theme * theme,widget * w,int16_t x_in,int16_t y_in)
 {
     if(theme->box_select(theme,rectangle_subtract_offset(w->base.r,x_in,y_in),w->base.status))return w;
     return NULL;
@@ -225,7 +224,6 @@ static void textbox_widget_set_h(overlay_theme * theme,widget * w)
 
 
 static widget_appearence_function_set textbox_appearence_functions=
-(widget_appearence_function_set)
 {
     .render =   textbox_widget_render,
     .select =   textbox_widget_select,
@@ -268,7 +266,7 @@ void change_textbox_text(widget * w,char * new_text,bool owns_new_text)///use re
 
 widget * create_textbox(char * text,bool owns_text,int min_horizontal_glyphs,int min_visible_lines)///enable wrapping as input param? forces sizing and allows horizontal scrolling otherwise
 {
-    widget * w = create_widget(TEXTBOX_WIDGET);
+    widget * w = create_widget();
 
     w->base.appearence_functions = &textbox_appearence_functions;
     w->base.behaviour_functions = &textbox_behaviour_functions;

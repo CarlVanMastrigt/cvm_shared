@@ -1,5 +1,5 @@
 /**
-Copyright 2020,2021 Carl van Mastrigt
+Copyright 2020,2021,2022 Carl van Mastrigt
 
 This file is part of cvm_shared.
 
@@ -25,12 +25,12 @@ static widget * new_auto_close_popup=NULL;
 
 
 
-static void popup_widget_render(overlay_theme * theme,widget * w,int x_off,int y_off,cvm_overlay_element_render_buffer * erb,rectangle bounds)
+static void popup_widget_render(overlay_theme * theme,widget * w,int16_t x_off,int16_t y_off,cvm_overlay_element_render_buffer * erb,rectangle bounds)
 {
 	render_widget(w->popup.contents,x_off+w->base.r.x1,y_off+w->base.r.y1,erb,bounds);
 }
 
-static widget * popup_widget_select(overlay_theme * theme,widget * w,int x_in,int y_in)
+static widget * popup_widget_select(overlay_theme * theme,widget * w,int16_t x_in,int16_t y_in)
 {
 	return select_widget(w->popup.contents,x_in-w->base.r.x1,y_in-w->base.r.y1);
 }
@@ -96,7 +96,6 @@ static void popup_widget_set_h(overlay_theme * theme,widget * w)
 
 
 static widget_appearence_function_set popup_appearence_functions=
-(widget_appearence_function_set)
 {
     .render =   popup_widget_render,
     .select =   popup_widget_select,
@@ -133,7 +132,6 @@ static void popup_widget_delete(widget * w)
 }
 
 static widget_behaviour_function_set popup_behaviour_functions=
-(widget_behaviour_function_set)
 {
     .l_click        =   blank_widget_left_click,
     .l_release      =   blank_widget_left_release,
@@ -153,7 +151,7 @@ static widget_behaviour_function_set popup_behaviour_functions=
 
 widget * create_popup(widget_relative_positioning positioning,bool auto_close)
 {
-    widget * w=create_widget(POPUP_WIDGET);
+    widget * w=create_widget();
 
     w->base.appearence_functions=&popup_appearence_functions;
     w->base.behaviour_functions=&popup_behaviour_functions;

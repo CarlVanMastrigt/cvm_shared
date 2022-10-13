@@ -1,5 +1,5 @@
 /**
-Copyright 2020,2021 Carl van Mastrigt
+Copyright 2020,2021,2022 Carl van Mastrigt
 
 This file is part of cvm_shared.
 
@@ -53,66 +53,32 @@ typedef void(*widget_function)(widget*);
 
 typedef struct widget_appearence_function_set
 {
-    void    (*render)   (overlay_theme*,widget*,int,int,cvm_overlay_element_render_buffer*,rectangle);
-    widget* (*select)   (overlay_theme*,widget*,int,int);
-    void    (*min_w)    (overlay_theme*,widget*);
-    void    (*min_h)    (overlay_theme*,widget*);
-    void    (*set_w)    (overlay_theme*,widget*);
-    void    (*set_h)    (overlay_theme*,widget*);
+    void    (*const render) (overlay_theme*,widget*,int16_t,int16_t,cvm_overlay_element_render_buffer*,rectangle);
+    widget* (*const select) (overlay_theme*,widget*,int16_t,int16_t);
+    void    (*const min_w)  (overlay_theme*,widget*);
+    void    (*const min_h)  (overlay_theme*,widget*);
+    void    (*const set_w)  (overlay_theme*,widget*);
+    void    (*const set_h)  (overlay_theme*,widget*);
 }
 widget_appearence_function_set;
 
 typedef struct widget_behaviour_function_set
 {
-    void    (*l_click)      (overlay_theme*,widget*,int,int);
-    bool    (*l_release)    (overlay_theme*,widget*,widget*,int,int);
-    void    (*r_click)      (overlay_theme*,widget*,int,int);
-    void    (*m_move)       (overlay_theme*,widget*,int,int);
-    bool    (*scroll)       (overlay_theme*,widget*,int);
-    bool    (*key_down)     (overlay_theme*,widget*,SDL_Keycode,SDL_Keymod);
-    bool    (*text_input)   (overlay_theme*,widget*,char*);
-    bool    (*text_edit)    (overlay_theme*,widget*,char*,int,int);
-    void    (*click_away)   (overlay_theme*,widget*);
+    void    (*const l_click)    (overlay_theme*,widget*,int,int);
+    bool    (*const l_release)  (overlay_theme*,widget*,widget*,int,int);
+    void    (*const r_click)    (overlay_theme*,widget*,int,int);
+    void    (*const m_move)     (overlay_theme*,widget*,int,int);
+    bool    (*const scroll)     (overlay_theme*,widget*,int);
+    bool    (*const key_down)   (overlay_theme*,widget*,SDL_Keycode,SDL_Keymod);
+    bool    (*const text_input) (overlay_theme*,widget*,char*);
+    bool    (*const text_edit)  (overlay_theme*,widget*,char*,int,int);
+    void    (*const click_away) (overlay_theme*,widget*);
 
-    void    (*add_child)    (widget*,widget*);
-    void    (*remove_child) (widget*,widget*);
-    void    (*wid_delete)   (widget*);
+    void    (*const add_child)      (widget*,widget*);
+    void    (*const remove_child)   (widget*,widget*);
+    void    (*const wid_delete)     (widget*);
 }
 widget_behaviour_function_set;
-
-typedef enum ///remove this enum and type from widget, does nothing
-{
-    VOID_WIDGET=0,
-    BLANK_WIDGET,
-    BUTTON_WIDGET,
-    ANCHOR_WIDGET,
-    EMPTY_WIDGET,
-    SEPARATOR_WIDGET,
-    //MULTIPURPOSE_WIDGET,
-    RESIZE_CONSTRAINT_WIDGET,
-    ENTERBOX_WIDGET,
-    slider_bar_WIDGET,
-    TEXT_BAR_WIDGET,
-    SCREEN_WIDGET,
-    TEXTBOX_WIDGET,
-    CONTAINER_WIDGET,
-    //BOX_WIDGET,
-    //VARIABLE_BOX_WIDGET,
-    CONTIGUOUS_BOX_WIDGET,
-    //DIVIDER_WIDGET,
-    POPUP_WIDGET,
-    WINDOW_WIDGET,
-    //TAB_PAGE_WIDGET,
-    TAB_FOLDER_WIDGET,
-    //LIST_WIDGET,
-    PANEL_WIDGET,
-    FILE_SEARCH_WIDGET,
-
-    //CUSTOM_WIDGET,
-
-    NUM_WIGET_TYPES
-}
-widget_type;
 
 typedef enum
 {
@@ -165,13 +131,12 @@ widget_status_data;*/
 
 typedef struct widget_base
 {
-    widget_type type;
     uint32_t status;
 
-    rectangle r;
+    int16_t min_w;
+    int16_t min_h;
 
-    int min_w;
-    int min_h;
+    rectangle r;
 
     widget * next;
     widget * prev;
@@ -239,7 +204,7 @@ union widget
 };
 
 
-widget * create_widget(widget_type type);
+widget * create_widget(void);
 
 
 
@@ -272,8 +237,8 @@ int organise_widget_vertically(widget * w,int y_pos,int height);
 
 
 
-void        blank_widget_render         (overlay_theme * theme,widget * w,int x_off,int y_off,cvm_overlay_element_render_buffer * erb,rectangle bounds);
-widget *    blank_widget_select         (overlay_theme * theme,widget * w,int x_in,int y_in);
+void        blank_widget_render         (overlay_theme * theme,widget * w,int16_t x_off,int16_t y_off,cvm_overlay_element_render_buffer * erb,rectangle bounds);
+widget *    blank_widget_select         (overlay_theme * theme,widget * w,int16_t x_in,int16_t y_in);
 void        blank_widget_min_w          (overlay_theme * theme,widget * w);
 void        blank_widget_min_h          (overlay_theme * theme,widget * w);
 void        blank_widget_set_w          (overlay_theme * theme,widget * w);

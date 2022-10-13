@@ -1,5 +1,5 @@
 /**
-Copyright 2020,2021 Carl van Mastrigt
+Copyright 2020,2021,2022 Carl van Mastrigt
 
 This file is part of cvm_shared.
 
@@ -65,7 +65,7 @@ static void enterbox_copy_selection_to_clipboard(widget * w)
 static void enterbox_enter_text(overlay_theme * theme,widget * w,char * text)
 {
     char *s_begin,*s_end;
-    int new_glyph_count,new_strlen;
+    uint32_t new_glyph_count,new_strlen;
 
     if(w->enterbox.selection_end > w->enterbox.selection_begin) s_begin=w->enterbox.selection_begin, s_end=w->enterbox.selection_end;
     else s_begin=w->enterbox.selection_end, s_end=w->enterbox.selection_begin;
@@ -332,7 +332,6 @@ static void enterbox_widget_delete(widget * w)
 }
 
 static widget_behaviour_function_set enterbox_behaviour_functions=
-(widget_behaviour_function_set)
 {
     .l_click        =   enterbox_widget_left_click,
     .l_release      =   enterbox_widget_left_release,
@@ -348,11 +347,11 @@ static widget_behaviour_function_set enterbox_behaviour_functions=
     .wid_delete     =   enterbox_widget_delete
 };
 
-static void enterbox_widget_render(overlay_theme * theme,widget * w,int x_off,int y_off,cvm_overlay_element_render_buffer * erb,rectangle bounds)
+static void enterbox_widget_render(overlay_theme * theme,widget * w,int16_t x_off,int16_t y_off,cvm_overlay_element_render_buffer * erb,rectangle bounds)
 {
     overlay_colour text_colour;
     char *text,*sb,*se;
-    int x;
+    int16_t x;
     rectangle r;
 
     if(w->enterbox.update_contents_func && !is_currently_active_widget(w))w->enterbox.update_contents_func(w);
@@ -392,11 +391,11 @@ static void enterbox_widget_render(overlay_theme * theme,widget * w,int x_off,in
     else
     {
         if(is_currently_active_widget(w))overlay_text_single_line_render_selection(erb,theme,bounds,text_colour,text,x,r.y1,sb,se);
-        else overlay_text_single_line_render_(erb,theme,bounds,text_colour,text,x,r.y1);
+        else overlay_text_single_line_render(erb,theme,bounds,text_colour,text,x,r.y1);
     }
 }
 
-static widget * enterbox_widget_select(overlay_theme * theme,widget * w,int x_in,int y_in)
+static widget * enterbox_widget_select(overlay_theme * theme,widget * w,int16_t x_in,int16_t y_in)
 {
     if(theme->h_bar_select(theme,rectangle_subtract_offset(w->base.r,x_in,y_in),w->base.status))return w;
 
@@ -420,7 +419,6 @@ static void enterbox_widget_set_w(overlay_theme * theme,widget * w)
 }
 
 static widget_appearence_function_set enterbox_appearence_functions=
-(widget_appearence_function_set)
 {
     .render =   enterbox_widget_render,
     .select =   enterbox_widget_select,
@@ -430,9 +428,9 @@ static widget_appearence_function_set enterbox_appearence_functions=
     .set_h  =   blank_widget_set_h
 };
 
-widget * create_enterbox(int max_strlen,int max_glyphs,int min_glyphs_visible,char * initial_text,widget_function activation_func,void * data,widget_function update_contents_func,bool activate_upon_deselect,bool free_data)
+widget * create_enterbox(uint32_t max_strlen,uint32_t max_glyphs,uint32_t min_glyphs_visible,char * initial_text,widget_function activation_func,void * data,widget_function update_contents_func,bool activate_upon_deselect,bool free_data)
 {
-	widget * w=create_widget(ENTERBOX_WIDGET);
+	widget * w=create_widget();
 
 	w->enterbox.data=data;
 	w->enterbox.activation_func=activation_func;
@@ -466,7 +464,7 @@ void set_enterbox_text(widget * w,char * text)
     ///error checking, don't put in release?
     assert(strlen(text)<=w->enterbox.max_strlen);///ATTEMPTING TO SET A STRING WITHOUT PROVIDING ENOUGH CAPACITY
 
-    int gc;
+    uint32_t gc;
     if(text && cvm_overlay_utf8_validate_string_and_count_glyphs(text,&gc) && gc<=w->enterbox.max_glyphs && strlen(text)<=w->enterbox.max_strlen)
     {
         strcpy(w->enterbox.text,text);

@@ -1,5 +1,5 @@
 /**
-Copyright 2020,2021 Carl van Mastrigt
+Copyright 2020,2021,2022 Carl van Mastrigt
 
 This file is part of cvm_shared.
 
@@ -86,7 +86,6 @@ void container_widget_delete(widget * w)
 }
 
 static widget_behaviour_function_set container_behaviour_functions=
-(widget_behaviour_function_set)
 {
     .l_click        =   blank_widget_left_click,
     .l_release      =   blank_widget_left_release,
@@ -110,7 +109,7 @@ static widget_behaviour_function_set container_behaviour_functions=
 
 
 
-void container_widget_render(overlay_theme * theme,widget * w,int x_off,int y_off,cvm_overlay_element_render_buffer * erb,rectangle bounds)
+void container_widget_render(overlay_theme * theme,widget * w,int16_t x_off,int16_t y_off,cvm_overlay_element_render_buffer * erb,rectangle bounds)
 {
     x_off+=w->base.r.x1;
     y_off+=w->base.r.y1;
@@ -125,7 +124,7 @@ void container_widget_render(overlay_theme * theme,widget * w,int x_off,int y_of
     }
 }
 
-widget * container_widget_select(overlay_theme * theme,widget * w,int x_in,int y_in)
+widget * container_widget_select(overlay_theme * theme,widget * w,int16_t x_in,int16_t y_in)
 {
     widget * current=w->container.last;
     widget * tmp=NULL;
@@ -214,7 +213,6 @@ static void container_widget_set_h(overlay_theme * theme,widget * w)
 
 
 static widget_appearence_function_set container_appearence_functions=
-(widget_appearence_function_set)
 {
     .render =   container_widget_render,
     .select =   container_widget_select,
@@ -228,7 +226,7 @@ static widget_appearence_function_set container_appearence_functions=
 
 widget * create_container(void)
 {
-    widget * w=create_widget(CONTAINER_WIDGET);
+    widget * w=create_widget();
 
     w->container.first=NULL;
     w->container.last=NULL;
@@ -237,6 +235,7 @@ widget * create_container(void)
     w->base.behaviour_functions=&container_behaviour_functions;
     return w;
 }
+
 
 
 

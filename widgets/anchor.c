@@ -1,5 +1,5 @@
 /**
-Copyright 2020,2021 Carl van Mastrigt
+Copyright 2020,2021,2022 Carl van Mastrigt
 
 This file is part of cvm_shared.
 
@@ -73,7 +73,6 @@ static void anchor_widget_delete(widget * w)
 
 
 static widget_behaviour_function_set anchor_behaviour_functions=
-(widget_behaviour_function_set)
 {
     .l_click        =   anchor_widget_left_click,
     .l_release      =   blank_widget_left_release,
@@ -93,15 +92,15 @@ static widget_behaviour_function_set anchor_behaviour_functions=
 
 
 
-static void text_anchor_widget_render(overlay_theme * theme,widget * w,int x_off,int y_off,cvm_overlay_element_render_buffer * erb,rectangle bounds)
+static void text_anchor_widget_render(overlay_theme * theme,widget * w,int16_t x_off,int16_t y_off,cvm_overlay_element_render_buffer * erb,rectangle bounds)
 {
 	rectangle r=rectangle_add_offset(w->base.r,x_off,y_off);
 	theme->h_bar_render(erb,theme,bounds,r,w->base.status,OVERLAY_ALTERNATE_MAIN_COLOUR);
 
-    overlay_text_single_line_render_(erb,theme,bounds,OVERLAY_TEXT_COLOUR_0,w->anchor.text,r.x1+theme->h_bar_text_offset,(r.y1+r.y2-theme->font_.glyph_size)>>1);
+    overlay_text_single_line_render(erb,theme,bounds,OVERLAY_TEXT_COLOUR_0,w->anchor.text,r.x1+theme->h_bar_text_offset,(r.y1+r.y2-theme->font_.glyph_size)>>1);
 }
 
-static widget * text_anchor_widget_select(overlay_theme * theme,widget * w,int x_in,int y_in)
+static widget * text_anchor_widget_select(overlay_theme * theme,widget * w,int16_t x_in,int16_t y_in)
 {
     if(theme->h_bar_select(theme,rectangle_subtract_offset(w->base.r,x_in,y_in),w->base.status))return w;
 
@@ -123,7 +122,6 @@ static void text_anchor_widget_min_h(overlay_theme * theme,widget * w)
 
 
 static widget_appearence_function_set text_anchor_appearence_functions=
-(widget_appearence_function_set)
 {
     .render =   text_anchor_widget_render,
     .select =   text_anchor_widget_select,
@@ -135,7 +133,7 @@ static widget_appearence_function_set text_anchor_appearence_functions=
 
 widget * create_anchor(widget * constraint,char * title)
 {
-    widget * w=create_widget(ANCHOR_WIDGET);
+    widget * w=create_widget();
 
     w->base.behaviour_functions=&anchor_behaviour_functions;
     w->base.appearence_functions=&text_anchor_appearence_functions;

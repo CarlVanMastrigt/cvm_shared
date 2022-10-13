@@ -125,9 +125,9 @@ bool cvm_overlay_utf8_validate_string(char * text)
     return true;
 }
 
-int cvm_overlay_utf8_count_glyphs(char * text)
+uint32_t cvm_overlay_utf8_count_glyphs(char * text)
 {
-    int i,c;
+    uint32_t i,c;
     c=0;
     while(*text)
     {
@@ -145,9 +145,9 @@ int cvm_overlay_utf8_count_glyphs(char * text)
     return c;
 }
 
-int cvm_overlay_utf8_count_glyphs_outside_range(char * text,char * begin,char * end)
+uint32_t cvm_overlay_utf8_count_glyphs_outside_range(char * text,char * begin,char * end)
 {
-    int i,c;
+    uint32_t i,c;
     c=0;
     while(*text)
     {
@@ -164,9 +164,9 @@ int cvm_overlay_utf8_count_glyphs_outside_range(char * text,char * begin,char * 
     return c;
 }
 
-bool cvm_overlay_utf8_validate_string_and_count_glyphs(char * text,int * c)
+bool cvm_overlay_utf8_validate_string_and_count_glyphs(char * text,uint32_t * c)
 {
-    int i;
+    uint32_t i;
     *c=0;
     while(*text)
     {
@@ -342,7 +342,7 @@ static inline int cvm_overlay_get_glyph_advance(cvm_overlay_font * font,cvm_over
 ///use complete code? and provide implementation more directly where possible?
 
 #define SINGLE_LINE_RENDER_IMPLEMENTATION(NAME,SI,SS,SC,SR,FI,FS,BCI,GR)\
-void NAME(cvm_overlay_element_render_buffer * restrict erb,overlay_theme * restrict theme,rectangle bounds,overlay_colour colour,const char * restrict text,int x,int y SI FI BCI)\
+void NAME(cvm_overlay_element_render_buffer * restrict erb,overlay_theme * restrict theme,rectangle bounds,overlay_colour colour,const char * restrict text,int16_t x,int16_t y SI FI BCI)\
 {\
     uint32_t gi,prev_gi,incr;\
     FT_Vector kern;\
@@ -398,7 +398,7 @@ void NAME(cvm_overlay_element_render_buffer * restrict erb,overlay_theme * restr
 #define SELECTION_RENDER_FADING_BOX_CONSTRAINED theme->fill_fading_box_constrained_render(erb,theme,bounds,((rectangle){.x1=sb,.y1=y,.x2=se+(selection_end==selection_begin),.y2=y+theme->font_.glyph_size}),OVERLAY_TEXT_HIGHLIGHT_COLOUR,text_area,fade_r,box_r,box_status);
 
 
-SINGLE_LINE_RENDER_IMPLEMENTATION(overlay_text_single_line_render_,,,,,,,,GLYPH_RENDER)
+SINGLE_LINE_RENDER_IMPLEMENTATION(overlay_text_single_line_render,,,,,,,,GLYPH_RENDER)
 SINGLE_LINE_RENDER_IMPLEMENTATION(overlay_text_single_line_render_selection,SELECTION_INPUTS,SELECTION_SETUP,SELECTION_CHECK,SELECTION_RENDER,,,,GLYPH_RENDER)
 SINGLE_LINE_RENDER_IMPLEMENTATION(overlay_text_single_line_render_fading,,,,,FADING_INPUTS,FADING_SETUP,,GLYPH_RENDER_FADING)
 SINGLE_LINE_RENDER_IMPLEMENTATION(overlay_text_single_line_render_selection_fading,SELECTION_INPUTS,SELECTION_SETUP,SELECTION_CHECK,SELECTION_RENDER_FADING,FADING_INPUTS,FADING_SETUP,,GLYPH_RENDER_FADING)
@@ -425,7 +425,7 @@ SINGLE_LINE_RENDER_IMPLEMENTATION(overlay_text_single_line_render_selection_fadi
 #undef SINGLE_LINE_RENDER_IMPLEMENTATION
 
 
-int overlay_text_single_line_get_pixel_length(cvm_overlay_font * font,char * text)
+int16_t overlay_text_single_line_get_pixel_length(cvm_overlay_font * font,char * text)
 {
     uint32_t gi,prev_gi,incr;
     FT_Vector kern;
@@ -718,7 +718,7 @@ char * overlay_text_multiline_find_offset(cvm_overlay_font * font,cvm_overlay_te
     x=0;
 
     if(relative_y<0)return 0;
-    if(relative_y > (block->line_count-1)*font->line_spacing+font->glyph_size) return block->lines[block->line_count-1].finish;
+    if(relative_y > ((int16_t)(block->line_count-1))*font->line_spacing+font->glyph_size) return block->lines[block->line_count-1].finish;
 
     line=relative_y/font->line_spacing;
 

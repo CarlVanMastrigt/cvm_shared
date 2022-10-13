@@ -1,5 +1,5 @@
 /**
-Copyright 2020,2021 Carl van Mastrigt
+Copyright 2020,2021,2022 Carl van Mastrigt
 
 This file is part of cvm_shared.
 
@@ -86,7 +86,6 @@ static void button_widget_delete(widget * w)
 }
 
 static widget_behaviour_function_set button_behaviour_functions=
-(widget_behaviour_function_set)
 {
     .l_click        =   button_widget_left_click,
     .l_release      =   blank_widget_left_release,
@@ -106,7 +105,7 @@ static widget_behaviour_function_set button_behaviour_functions=
 
 widget * create_button(void * data,widget_function func,bool free_data)
 {
-    widget * w=create_widget(BUTTON_WIDGET);
+    widget * w=create_widget();
 
     w->base.behaviour_functions=&button_behaviour_functions;
 
@@ -137,7 +136,7 @@ widget * create_button(void * data,widget_function func,bool free_data)
 
 
 
-static void text_button_widget_render(overlay_theme * theme,widget * w,int x_off,int y_off,cvm_overlay_element_render_buffer * erb,rectangle bounds)
+static void text_button_widget_render(overlay_theme * theme,widget * w,int16_t x_off,int16_t y_off,cvm_overlay_element_render_buffer * erb,rectangle bounds)
 {
     rectangle r=rectangle_add_offset(w->base.r,x_off,y_off);
     char * text=w->button.text;
@@ -158,10 +157,10 @@ static void text_button_widget_render(overlay_theme * theme,widget * w,int x_off
 
     theme->h_bar_render(erb,theme,bounds,r,w->base.status,c);
 
-    overlay_text_single_line_render_(erb,theme,bounds,OVERLAY_TEXT_COLOUR_0,text,r.x1+theme->h_bar_text_offset,(r.y1+r.y2-theme->font_.glyph_size)>>1);
+    overlay_text_single_line_render(erb,theme,bounds,OVERLAY_TEXT_COLOUR_0,text,r.x1+theme->h_bar_text_offset,(r.y1+r.y2-theme->font_.glyph_size)>>1);
 }
 
-static widget * text_button_widget_select(overlay_theme * theme,widget * w,int x_in,int y_in)
+static widget * text_button_widget_select(overlay_theme * theme,widget * w,int16_t x_in,int16_t y_in)
 {
     if(theme->h_bar_select(theme,rectangle_subtract_offset(w->base.r,x_in,y_in),w->base.status))return w;
 
@@ -179,7 +178,7 @@ static void text_button_widget_min_w(overlay_theme * theme,widget * w)
         text=w->button.text;
         while(*text++);
 
-        int min_w=overlay_text_single_line_get_pixel_length(&theme->font_,text);
+        int16_t min_w=overlay_text_single_line_get_pixel_length(&theme->font_,text);
         if(min_w>w->base.min_w)w->base.min_w=min_w;
     }
 
@@ -192,7 +191,6 @@ static void text_button_widget_min_h(overlay_theme * theme,widget * w)
 }
 
 static widget_appearence_function_set text_button_appearence_functions=
-(widget_appearence_function_set)
 {
     .render =   text_button_widget_render,
     .select =   text_button_widget_select,
@@ -255,7 +253,7 @@ widget * create_text_highlight_toggle_button(char * text,void * data,bool free_d
 
 
 
-static void contiguous_text_button_widget_render(overlay_theme * theme,widget * w,int x_off,int y_off,cvm_overlay_element_render_buffer * erb,rectangle bounds)
+static void contiguous_text_button_widget_render(overlay_theme * theme,widget * w,int16_t x_off,int16_t y_off,cvm_overlay_element_render_buffer * erb,rectangle bounds)
 {
     uint32_t contiguous_box_status;
     rectangle contiguous_box_r;
@@ -290,7 +288,6 @@ static void contiguous_text_button_widget_min_h(overlay_theme * theme,widget * w
 }
 
 static widget_appearence_function_set contiguous_text_button_appearence_functions=
-(widget_appearence_function_set)
 {
     .render =   contiguous_text_button_widget_render,
     .select =   text_button_widget_select,
@@ -335,7 +332,7 @@ widget * create_contiguous_text_highlight_toggle_button(char * text,void * data,
 
 
 
-static void icon_button_widget_render(overlay_theme * theme,widget * w,int x_off,int y_off,cvm_overlay_element_render_buffer * erb,rectangle bounds)
+static void icon_button_widget_render(overlay_theme * theme,widget * w,int16_t x_off,int16_t y_off,cvm_overlay_element_render_buffer * erb,rectangle bounds)
 {
     char * t=w->button.text;
 
@@ -350,7 +347,7 @@ static void icon_button_widget_render(overlay_theme * theme,widget * w,int x_off
     overlay_text_centred_glyph_render(erb,&theme->font_,bounds,r,t,OVERLAY_TEXT_COLOUR_0);
 }
 
-static widget * icon_button_widget_select(overlay_theme * theme,widget * w,int x_in,int y_in)
+static widget * icon_button_widget_select(overlay_theme * theme,widget * w,int16_t x_in,int16_t y_in)
 {
 	if(theme->square_select(theme,rectangle_subtract_offset(w->base.r,x_in,y_in),w->base.status)) return w;
 
@@ -368,7 +365,6 @@ static void icon_button_widget_min_h(overlay_theme * theme,widget * w)
 }
 
 static widget_appearence_function_set icon_button_appearence_functions=
-(widget_appearence_function_set)
 {
     .render =   icon_button_widget_render,
     .select =   icon_button_widget_select,

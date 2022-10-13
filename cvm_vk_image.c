@@ -31,10 +31,10 @@ void cvm_vk_create_image_atlas(cvm_vk_image_atlas * ia,VkImage image,VkImageView
 
     assert(!(width & (width-1)) && !(height & (height-1)));///IMAGE ATLAS MUST BE CREATED AT POWER OF 2 WIDTH AND HEIGHT
 
-    for(i=0;width>1<<i;i++);
+    for(i=0;width>1u<<i;i++);
     ia->num_tile_sizes_h=i-CVM_VK_BASE_TILE_SIZE_FACTOR+1;
 
-    for(i=0;height>1<<i;i++);
+    for(i=0;height>1u<<i;i++);
     ia->num_tile_sizes_v=i-CVM_VK_BASE_TILE_SIZE_FACTOR+1;
 
     ia->multithreaded=multithreaded;
@@ -162,8 +162,8 @@ cvm_vk_image_atlas_tile * cvm_vk_acquire_image_atlas_tile(cvm_vk_image_atlas * i
     uint_fast32_t lock;
     cvm_vk_image_atlas_tile ** heap;
 
-    for(size_h=0;width>1<<(size_h+CVM_VK_BASE_TILE_SIZE_FACTOR);size_h++);
-    for(size_v=0;height>1<<(size_v+CVM_VK_BASE_TILE_SIZE_FACTOR);size_v++);
+    for(size_h=0;width>1u<<(size_h+CVM_VK_BASE_TILE_SIZE_FACTOR);size_h++);
+    for(size_v=0;height>1u<<(size_v+CVM_VK_BASE_TILE_SIZE_FACTOR);size_v++);
 
     if(size_h>=ia->num_tile_sizes_h || size_v>=ia->num_tile_sizes_v)return NULL;///i dont expect this to get hit so dont bother doing earlier easier test
 
@@ -192,10 +192,11 @@ cvm_vk_image_atlas_tile * cvm_vk_acquire_image_atlas_tile(cvm_vk_image_atlas * i
 
     for(i=size_h;i<ia->num_tile_sizes_h;i++)
     {
-        if(ia->available_tiles_bitmasks[i]>=1<<size_v)
+        if(ia->available_tiles_bitmasks[i]>=1u<<size_v)
         {
-            for(j=size_v;!(ia->available_tiles_bitmasks[i] & 1<<j);j++);///get lowest bitmasked entry
-            if(!base || base->size_factor_h+base->size_factor_v > i+j)
+            for(j=size_v;!(ia->available_tiles_bitmasks[i] & 1u<<j);j++);///get lowest bitmasked entry
+
+            if(!base || (uint32_t)base->size_factor_h+(uint32_t)base->size_factor_v > i+j)
             {
                 base=ia->available_tiles[i][j].heap[0];
             }

@@ -1,5 +1,5 @@
 /**
-Copyright 2020,2021 Carl van Mastrigt
+Copyright 2020,2021,2022 Carl van Mastrigt
 
 This file is part of cvm_shared.
 
@@ -120,14 +120,13 @@ void toggle_widget_button_func(widget * w)
 
 
 
-static void empty_widget_render(overlay_theme * theme,widget * w,int x_off,int y_off,cvm_overlay_element_render_buffer * erb,rectangle bounds)
+static void empty_widget_render(overlay_theme * theme,widget * w,int16_t x_off,int16_t y_off,cvm_overlay_element_render_buffer * erb,rectangle bounds)
 {
 
 }
 
 
 static widget_appearence_function_set empty_appearence_functions=
-(widget_appearence_function_set)
 {
     .render =   empty_widget_render,
     .select =   blank_widget_select,
@@ -137,9 +136,9 @@ static widget_appearence_function_set empty_appearence_functions=
     .set_h  =   blank_widget_set_h
 };
 
-widget * create_empty_widget(int min_w,int min_h)
+widget * create_empty_widget(int16_t min_w,int16_t min_h)
 {
-    widget * w = create_widget(EMPTY_WIDGET);
+    widget * w = create_widget();
 
     w->base.appearence_functions=&empty_appearence_functions;
 
@@ -164,7 +163,6 @@ static void separator_widget_min_h(overlay_theme * theme,widget * w)
 }
 
 static widget_appearence_function_set separator_appearence_functions=
-(widget_appearence_function_set)
 {
     .render =   blank_widget_render,
     .select =   blank_widget_select,
@@ -176,7 +174,7 @@ static widget_appearence_function_set separator_appearence_functions=
 
 widget * create_separator_widget(void)
 {
-    widget * w = create_widget(SEPARATOR_WIDGET);
+    widget * w = create_widget();
 
     w->base.appearence_functions=&separator_appearence_functions;
 
@@ -196,7 +194,6 @@ static void unit_separator_widget_min_h(overlay_theme * theme,widget * w)
 }
 
 static widget_appearence_function_set unit_separator_appearence_functions=
-(widget_appearence_function_set)
 {
     .render =   blank_widget_render,
     .select =   blank_widget_select,
@@ -208,7 +205,7 @@ static widget_appearence_function_set unit_separator_appearence_functions=
 
 widget * create_unit_separator_widget(void)
 {
-    widget * w = create_widget(SEPARATOR_WIDGET);
+    widget * w = create_widget();
 
     w->base.appearence_functions=&unit_separator_appearence_functions;
 

@@ -52,7 +52,7 @@ typedef struct cvm_vk_staging_buffer
     cvm_vk_staging_buffer_region * available_regions;///will always be less than swapchain image count of these
     uint32_t available_region_count;
 
-    void * mapping;
+    uint8_t * mapping;
 }
 cvm_vk_staging_buffer;
 
@@ -142,7 +142,7 @@ typedef struct cvm_vk_managed_buffer
     uint32_t base_dynamic_allocation_size_factor;
 
 
-    void * mapping;///used for device generic buffers on UMA platforms and staging/uniform buffers on all others (assuming you would event want this for those prposes...) also operates as flag as to whether staging is necessary
+    uint8_t * mapping;///used for device generic buffers on UMA platforms and staging/uniform buffers on all others (assuming you would event want this for those prposes...) also operates as flag as to whether staging is necessary
 
 /// relevant data for copying, if UMA none of what follows will be used
 
@@ -207,7 +207,7 @@ typedef struct cvm_vk_transient_buffer
     atomic_uint_fast32_t space_remaining;
     ///need to test atomic version isn't (significatly) slower than non-atomic
 
-    void * mapping;
+    uint8_t * mapping;
 }
 cvm_vk_transient_buffer;
 

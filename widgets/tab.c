@@ -1,5 +1,5 @@
 /**
-Copyright 2020,2021 Carl van Mastrigt
+Copyright 2020,2021,2022 Carl van Mastrigt
 
 This file is part of cvm_shared.
 
@@ -66,7 +66,7 @@ static void tab_button_func(widget * button)
 //        }
 //    }
 //}
-static void tab_button_widget_render(overlay_theme * theme,widget * w,int x_off,int y_off,cvm_overlay_element_render_buffer * erb,rectangle bounds)
+static void tab_button_widget_render(overlay_theme * theme,widget * w,int16_t x_off,int16_t y_off,cvm_overlay_element_render_buffer * erb,rectangle bounds)
 {
     uint32_t contiguous_box_status;
     rectangle contiguous_box_r;
@@ -93,12 +93,12 @@ static void tab_button_widget_render(overlay_theme * theme,widget * w,int x_off,
                 theme->h_bar_render(erb,theme,bounds,r,w->base.status,OVERLAY_HIGHLIGHTING_COLOUR);
             }
 
-            overlay_text_single_line_render_(erb,theme,bounds,OVERLAY_TEXT_COLOUR_0,w->button.text,r.x1+theme->h_bar_text_offset,(r.y1+r.y2-theme->font_.glyph_size)>>1);
+            overlay_text_single_line_render(erb,theme,bounds,OVERLAY_TEXT_COLOUR_0,w->button.text,r.x1+theme->h_bar_text_offset,(r.y1+r.y2-theme->font_.glyph_size)>>1);
         }
     }
 }
 
-static widget * tab_button_widget_select(overlay_theme * theme,widget * w,int x_in,int y_in)
+static widget * tab_button_widget_select(overlay_theme * theme,widget * w,int16_t x_in,int16_t y_in)
 {
     if((widget_active(w->button.data))&&(theme->h_bar_select(theme,rectangle_subtract_offset(w->base.r,x_in,y_in),w->base.status)))return w;
     return NULL;
@@ -118,7 +118,6 @@ static void tab_button_widget_min_h(overlay_theme * theme,widget * w)
 }
 
 static widget_appearence_function_set tab_button_appearence_functions=
-(widget_appearence_function_set)
 {
     .render =   tab_button_widget_render,
     .select =   tab_button_widget_select,
@@ -219,7 +218,6 @@ static void tab_folder_widget_delete(widget * w)
 }
 
 static widget_behaviour_function_set tab_folder_behaviour_functions=
-(widget_behaviour_function_set)
 {
     .l_click        =   blank_widget_left_click,
     .l_release      =   blank_widget_left_release,
@@ -245,12 +243,12 @@ static widget_behaviour_function_set tab_folder_behaviour_functions=
 
 
 
-static void tab_folder_widget_render(overlay_theme * theme,widget * w,int x_off,int y_off,cvm_overlay_element_render_buffer * erb,rectangle bounds)
+static void tab_folder_widget_render(overlay_theme * theme,widget * w,int16_t x_off,int16_t y_off,cvm_overlay_element_render_buffer * erb,rectangle bounds)
 {
     if(w->tab_folder.current_tab_page)render_widget(w->tab_folder.current_tab_page,x_off+w->base.r.x1,y_off+w->base.r.y1,erb,bounds);
 }
 
-static widget * tab_folder_widget_select(overlay_theme * theme,widget * w,int x_in,int y_in)
+static widget * tab_folder_widget_select(overlay_theme * theme,widget * w,int16_t x_in,int16_t y_in)
 {
     if(w->tab_folder.current_tab_page)return select_widget(w->tab_folder.current_tab_page,x_in-w->base.r.x1,y_in-w->base.r.y1);
     return NULL;
@@ -323,7 +321,6 @@ static void tab_folder_widget_set_h(overlay_theme * theme,widget * w)
 }
 
 static widget_appearence_function_set tab_folder_appearence_functions=
-(widget_appearence_function_set)
 {
     .render =   tab_folder_widget_render,
     .select =   tab_folder_widget_select,
@@ -337,7 +334,7 @@ static widget_appearence_function_set tab_folder_appearence_functions=
 
 widget * create_tab_folder(widget ** button_box,widget_layout button_box_layout)
 {
-    widget * w=create_widget(TAB_FOLDER_WIDGET);
+    widget * w=create_widget();
 
     *button_box=w->tab_folder.tab_button_container=create_contiguous_box(button_box_layout,0);
 

@@ -1,5 +1,5 @@
 /**
-Copyright 2020,2021 Carl van Mastrigt
+Copyright 2020,2021,2022 Carl van Mastrigt
 
 This file is part of cvm_shared.
 
@@ -127,7 +127,7 @@ static void set_file_search_directory(file_search_instance * fsi,char * director
 {
     if(directory==NULL)directory=getenv("HOME");
     if(directory==NULL)directory="";
-    int length=strlen(directory);
+    uint32_t length=strlen(directory);
 
     while((length+1) >= fsi->directory_buffer_size)fsi->directory_buffer=realloc(fsi->directory_buffer,sizeof(char)*(fsi->directory_buffer_size*=2));
     strcpy(fsi->directory_buffer,directory);
@@ -460,7 +460,7 @@ static int file_search_button_widget_h(overlay_theme * theme)
 
 
 
-static void file_search_button_widget_render(overlay_theme * theme,widget * w,int x_off,int y_off,cvm_overlay_element_render_buffer * erb,rectangle bounds)
+static void file_search_button_widget_render(overlay_theme * theme,widget * w,int16_t x_off,int16_t y_off,cvm_overlay_element_render_buffer * erb,rectangle bounds)
 {
     file_search_instance * fsi=w->button.data;
     //theme->h_text_bar_render(w->base.r,x_off,y_off,w->base.status,theme,od,bounds,OVERLAY_HIGHLIGHTING_COLOUR,w->button.text);
@@ -476,7 +476,7 @@ static void file_search_button_widget_render(overlay_theme * theme,widget * w,in
 //        icon_name,OVERLAY_TEXT_COLOUR_0);
 }
 
-static widget * file_search_button_widget_select(overlay_theme * theme,widget * w,int x_in,int y_in)
+static widget * file_search_button_widget_select(overlay_theme * theme,widget * w,int16_t x_in,int16_t y_in)
 {
     if(theme->h_bar_select(theme,rectangle_subtract_offset(w->base.r,x_in,y_in),w->base.status))return w;
     return NULL;
@@ -494,7 +494,6 @@ static void file_search_button_widget_min_h(overlay_theme * theme,widget * w)
 
 
 static widget_appearence_function_set file_search_button_appearence_functions=
-(widget_appearence_function_set)
 {
     .render =   file_search_button_widget_render,
     .select =   file_search_button_widget_select,
@@ -1188,7 +1187,7 @@ void create_file_search_error_popup(widget * menu_widget,file_search_instance * 
 
 
 
-static void file_search_filter_type_button_widget_render(overlay_theme * theme,widget * w,int x_off,int y_off,cvm_overlay_element_render_buffer * erb,rectangle bounds)
+static void file_search_filter_type_button_widget_render(overlay_theme * theme,widget * w,int16_t x_off,int16_t y_off,cvm_overlay_element_render_buffer * erb,rectangle bounds)
 {
     file_search_instance * fsi=w->button.data;
     char * text="All Files";
@@ -1199,10 +1198,10 @@ static void file_search_filter_type_button_widget_render(overlay_theme * theme,w
     if(fsi->active_type_filter>=0) text=fsi->sfsd->types[fsi->active_type_filter].name;
     if(widget_active(fsi->type_filter_popup))text=NULL;
 
-    overlay_text_single_line_render_(erb,theme,bounds,OVERLAY_TEXT_COLOUR_0,text,r.x1+theme->h_bar_text_offset,(r.y1+r.y2-theme->font_.glyph_size)>>1);
+    overlay_text_single_line_render(erb,theme,bounds,OVERLAY_TEXT_COLOUR_0,text,r.x1+theme->h_bar_text_offset,(r.y1+r.y2-theme->font_.glyph_size)>>1);
 }
 
-static widget * file_search_filter_type_button_widget_select(overlay_theme * theme,widget * w,int x_in,int y_in)
+static widget * file_search_filter_type_button_widget_select(overlay_theme * theme,widget * w,int16_t x_in,int16_t y_in)
 {
     if(theme->h_bar_select(theme,rectangle_subtract_offset(w->base.r,x_in,y_in),w->base.status))return w;
     return NULL;
@@ -1237,7 +1236,6 @@ static void file_search_filter_type_button_widget_min_h(overlay_theme * theme,wi
 
 
 static widget_appearence_function_set file_search_filter_type_button_appearence_functions=
-(widget_appearence_function_set)
 {
     .render =   file_search_filter_type_button_widget_render,
     .select =   file_search_filter_type_button_widget_select,
@@ -1306,7 +1304,7 @@ widget * create_file_search_filter_type_button(widget * menu_widget,file_search_
 
 
 
-static void file_search_export_type_button_widget_render(overlay_theme * theme,widget * w,int x_off,int y_off,cvm_overlay_element_render_buffer * erb,rectangle bounds)
+static void file_search_export_type_button_widget_render(overlay_theme * theme,widget * w,int16_t x_off,int16_t y_off,cvm_overlay_element_render_buffer * erb,rectangle bounds)
 {
     file_search_instance * fsi=w->button.data;
     char * text=NULL;
@@ -1316,10 +1314,10 @@ static void file_search_export_type_button_widget_render(overlay_theme * theme,w
 
     if(fsi->export_formats) text=fsi->export_formats[fsi->active_export_format];
 
-    overlay_text_single_line_render_(erb,theme,bounds,OVERLAY_TEXT_COLOUR_0,text,r.x1+theme->h_bar_text_offset,(r.y1+r.y2-theme->font_.glyph_size)>>1);
+    overlay_text_single_line_render(erb,theme,bounds,OVERLAY_TEXT_COLOUR_0,text,r.x1+theme->h_bar_text_offset,(r.y1+r.y2-theme->font_.glyph_size)>>1);
 }
 
-static widget * file_search_export_type_button_widget_select(overlay_theme * theme,widget * w,int x_in,int y_in)
+static widget * file_search_export_type_button_widget_select(overlay_theme * theme,widget * w,int16_t x_in,int16_t y_in)
 {
     if(theme->h_bar_select(theme,rectangle_subtract_offset(w->base.r,x_in,y_in),w->base.status))return w;
     return NULL;
@@ -1352,7 +1350,6 @@ static void file_search_export_type_button_widget_min_h(overlay_theme * theme,wi
 
 
 static widget_appearence_function_set file_search_export_type_button_appearence_functions=
-(widget_appearence_function_set)
 {
     .render =   file_search_export_type_button_widget_render,
     .select =   file_search_export_type_button_widget_select,
@@ -1423,7 +1420,7 @@ static void set_shared_file_search_data_directory(shared_file_search_data * sfsd
     if(directory==NULL)directory="";
     int length=strlen(directory);
 
-    while((length+1) >= sfsd->directory_buffer_size)sfsd->directory_buffer=realloc(sfsd->directory_buffer,sizeof(char)*(sfsd->directory_buffer_size*=2));
+    while((length+1u) >= sfsd->directory_buffer_size)sfsd->directory_buffer=realloc(sfsd->directory_buffer,sizeof(char)*(sfsd->directory_buffer_size*=2));
     strcpy(sfsd->directory_buffer,directory);
 
     while((length>0)&&(sfsd->directory_buffer[length-1]=='/'))length--;

@@ -1,5 +1,5 @@
 /**
-Copyright 2020,2021 Carl van Mastrigt
+Copyright 2020,2021,2022 Carl van Mastrigt
 
 This file is part of cvm_shared.
 
@@ -114,7 +114,6 @@ static void horizontal_slider_bar_widget_mouse_movement(overlay_theme * theme,wi
 }
 
 static widget_behaviour_function_set horizontal_slider_bar_behaviour_functions=
-(widget_behaviour_function_set)
 {
     .l_click        =   horizontal_slider_bar_widget_left_click,
     .l_release      =   blank_widget_left_release,
@@ -190,7 +189,7 @@ static widget_behaviour_function_set horizontal_slider_bar_behaviour_functions=
 
 
 
-static void horizontal_slider_bar_widget_render(overlay_theme * theme,widget * w,int x_off,int y_off,cvm_overlay_element_render_buffer * erb,rectangle bounds)
+static void horizontal_slider_bar_widget_render(overlay_theme * theme,widget * w,int16_t x_off,int16_t y_off,cvm_overlay_element_render_buffer * erb,rectangle bounds)
 {
     validate_slider_bar_range(w);
 
@@ -203,7 +202,7 @@ static void horizontal_slider_bar_widget_render(overlay_theme * theme,widget * w
 	theme->h_bar_slider_render(erb,theme,bounds,r,w->base.status,OVERLAY_TEXT_COLOUR_0,abs(w->slider_bar.max_value-w->slider_bar.min_value),abs(*w->slider_bar.value_ptr-w->slider_bar.min_value),bar);
 }
 
-static widget * horizontal_slider_bar_widget_select(overlay_theme * theme,widget * w,int x_in,int y_in)
+static widget * horizontal_slider_bar_widget_select(overlay_theme * theme,widget * w,int16_t x_in,int16_t y_in)
 {
     if(theme->h_bar_select(theme,rectangle_subtract_offset(w->base.r,x_in,y_in),w->base.status))return w;
 
@@ -221,7 +220,6 @@ static void horizontal_slider_bar_widget_min_h(overlay_theme * theme,widget * w)
 }
 
 static widget_appearence_function_set horizontal_slider_bar_appearence_functions=
-(widget_appearence_function_set)
 {
     .render =   horizontal_slider_bar_widget_render,
     .select =   horizontal_slider_bar_widget_select,
@@ -236,7 +234,7 @@ static widget_appearence_function_set horizontal_slider_bar_appearence_functions
 
 widget * create_slider_bar(int * value_ptr,int min_value,int max_value,widget_function func,void * data,bool free_data,int bar_fraction)
 {
-	widget * w=create_widget(slider_bar_WIDGET);
+	widget * w=create_widget();
 
 	w->slider_bar.data=data;
 	w->slider_bar.func=func;

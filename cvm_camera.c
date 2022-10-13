@@ -1,5 +1,5 @@
 /**
-Copyright 2020,2021 Carl van Mastrigt
+Copyright 2020,2021,2022 Carl van Mastrigt
 
 This file is part of cvm_shared.
 
@@ -112,8 +112,6 @@ void update_camera(int screen_w,int screen_h,cvm_camera * c)
     c->view_matrix=vm=m4f_mult(proj,m4f_mult(z,m4f_mult(rx,rz)));
     c->view_matrix_inverse=vmi=m4f_inv(vm);
 
-    #warning make sure z of 1.0 vs 0.0 is appropriate, not zero and not massive/infinite
-    #warning is frustrum_corners valid data to store? maybe just make local variables
     ftr=v3f_sub(m4f_v4f_mult_p(vmi,(vec4f){.x=  1.0f,.y=  1.0f,.z=1.0f,.w=1.0f}),c->position);
     ftl=v3f_sub(m4f_v4f_mult_p(vmi,(vec4f){.x= -1.0f,.y=  1.0f,.z=1.0f,.w=1.0f}),c->position);
     fbl=v3f_sub(m4f_v4f_mult_p(vmi,(vec4f){.x= -1.0f,.y= -1.0f,.z=1.0f,.w=1.0f}),c->position);

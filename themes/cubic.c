@@ -1,5 +1,5 @@
 /**
-Copyright 2020,2021 Carl van Mastrigt
+Copyright 2020,2021,2022 Carl van Mastrigt
 
 This file is part of cvm_shared.
 
@@ -18,10 +18,6 @@ along with cvm_shared.  If not, see <https://www.gnu.org/licenses/>.
 */
 
 #include "cvm_shared.h"
-
-/// how to handle non font "glyphs"? diy and actually use utf8 glyphs?
-/// need way to render misc shapes (cubic parts here) dynamically, possibly just ensure they exist and create when necessary every frame? (is kind-of expensive, but may be best way)
-
 
 
 /// "ring" (internal and external limit) variant
@@ -170,7 +166,7 @@ static void cubic_create_shape(cvm_vk_image_atlas_tile ** tile,uint16_t ** selec
     }
 }
 
-static void cubic_shaded_element_box_constrained_render(cvm_overlay_element_render_buffer * erb,overlay_theme * theme,rectangle bounds,rectangle r,overlay_colour colour,int x_off,int y_off,rectangle box_r,uint32_t box_status)
+static void cubic_shaded_element_box_constrained_render(cvm_overlay_element_render_buffer * erb,overlay_theme * theme,rectangle bounds,rectangle r,overlay_colour colour,int16_t x_off,int16_t y_off,rectangle box_r,uint32_t box_status)
 {
     cubic_theme_data * cubic;
 
@@ -179,12 +175,12 @@ static void cubic_shaded_element_box_constrained_render(cvm_overlay_element_rend
     if(!cubic->foreground_image_tile)cubic_create_shape(&cubic->foreground_image_tile,&cubic->foreground_selection_grid,cubic->foreground_r);
     if(!cubic->foreground_image_tile)return;
 
-    int radius=cubic->foreground_r;
-    int diameter=cubic->foreground_d;
-    int tile_x_pos=cubic->foreground_image_tile->x_pos<<2;
-    int tile_y_pos=cubic->foreground_image_tile->y_pos<<2;
+    int16_t radius=cubic->foreground_r;
+    int16_t diameter=cubic->foreground_d;
+    int16_t tile_x_pos=cubic->foreground_image_tile->x_pos<<2;
+    int16_t tile_y_pos=cubic->foreground_image_tile->y_pos<<2;
 
-    int y_off_p,x2_p,y1_p,y2_p;
+    int16_t y_off_p,x2_p,y1_p,y2_p;
 
     box_r.x1+=cubic->foreground_offset_x * !(box_status&WIDGET_H_FIRST);
     box_r.x2-=cubic->foreground_offset_x * !(box_status&WIDGET_H_LAST);
@@ -290,7 +286,7 @@ static void cubic_shaded_element_box_constrained_render(cvm_overlay_element_rend
     }
 }
 
-static void cubic_shaded_element_fading_box_constrained_render(cvm_overlay_element_render_buffer * erb,overlay_theme * theme,rectangle bounds,rectangle r,overlay_colour colour,int x_off,int y_off,
+static void cubic_shaded_element_fading_box_constrained_render(cvm_overlay_element_render_buffer * erb,overlay_theme * theme,rectangle bounds,rectangle r,overlay_colour colour,int16_t x_off,int16_t y_off,
                                                         rectangle fade_bound,rectangle fade_range,rectangle box_r,uint32_t box_status)
 {
     cubic_theme_data * cubic;
@@ -300,12 +296,12 @@ static void cubic_shaded_element_fading_box_constrained_render(cvm_overlay_eleme
     if(!cubic->foreground_image_tile)cubic_create_shape(&cubic->foreground_image_tile,&cubic->foreground_selection_grid,cubic->foreground_r);
     if(!cubic->foreground_image_tile)return;
 
-    int radius=cubic->foreground_r;
-    int diameter=cubic->foreground_d;
-    int tile_x_pos=cubic->foreground_image_tile->x_pos<<2;
-    int tile_y_pos=cubic->foreground_image_tile->y_pos<<2;
+    int16_t radius=cubic->foreground_r;
+    int16_t diameter=cubic->foreground_d;
+    int16_t tile_x_pos=cubic->foreground_image_tile->x_pos<<2;
+    int16_t tile_y_pos=cubic->foreground_image_tile->y_pos<<2;
 
-    int y_off_p,x2_p,y1_p,y2_p;
+    int16_t y_off_p,x2_p,y1_p,y2_p;
 
     box_r.x1+=cubic->foreground_offset_x * !(box_status&WIDGET_H_FIRST);
     box_r.x2-=cubic->foreground_offset_x * !(box_status&WIDGET_H_LAST);

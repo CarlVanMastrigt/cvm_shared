@@ -1,5 +1,5 @@
 /**
-Copyright 2020,2021 Carl van Mastrigt
+Copyright 2020,2021,2022 Carl van Mastrigt
 
 This file is part of cvm_shared.
 
@@ -169,8 +169,8 @@ struct overlay_theme
     void    (*fill_box_constrained_render)          (cvm_overlay_element_render_buffer * erb,overlay_theme * theme,rectangle bounds,rectangle r,overlay_colour colour,rectangle box_r,uint32_t box_status);
     void    (*fill_fading_box_constrained_render)   (cvm_overlay_element_render_buffer * erb,overlay_theme * theme,rectangle bounds,rectangle r,overlay_colour colour,
                                                  rectangle fade_bound,rectangle fade_range,rectangle box_r,uint32_t box_status);
-    void    (*shaded_box_constrained_render)        (cvm_overlay_element_render_buffer * erb,overlay_theme * theme,rectangle bounds,rectangle r,overlay_colour colour,int x_off,int y_off,rectangle box_r,uint32_t box_status);
-    void    (*shaded_fading_box_constrained_render) (cvm_overlay_element_render_buffer * erb,overlay_theme * theme,rectangle bounds,rectangle r,overlay_colour colour,int x_off,int y_off,rectangle fade_bound,rectangle fade_range,rectangle box_r,uint32_t box_status);
+    void    (*shaded_box_constrained_render)        (cvm_overlay_element_render_buffer * erb,overlay_theme * theme,rectangle bounds,rectangle r,overlay_colour colour,int16_t x_off,int16_t y_off,rectangle box_r,uint32_t box_status);
+    void    (*shaded_fading_box_constrained_render) (cvm_overlay_element_render_buffer * erb,overlay_theme * theme,rectangle bounds,rectangle r,overlay_colour colour,int16_t x_off,int16_t y_off,rectangle fade_bound,rectangle fade_range,rectangle box_r,uint32_t box_status);
 
     bool    (*square_select)            (overlay_theme * theme,rectangle r,uint32_t status);
     bool    (*h_bar_select)             (overlay_theme * theme,rectangle r,uint32_t status);
@@ -179,7 +179,7 @@ struct overlay_theme
 };
 
 /// x/y_off are the texture space coordinates to read data from at position r, i.e. at r the texture coordinates looked up would be x_off,y_off
-static inline void cvm_render_shaded_overlay_element(cvm_overlay_element_render_buffer * erb,rectangle b,rectangle r,overlay_colour colour,int x_off,int y_off)
+static inline void cvm_render_shaded_overlay_element(cvm_overlay_element_render_buffer * erb,rectangle b,rectangle r,overlay_colour colour,int16_t x_off,int16_t y_off)
 {
     b=get_rectangle_overlap(r,b);
 

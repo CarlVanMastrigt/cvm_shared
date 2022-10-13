@@ -1,5 +1,5 @@
 /**
-Copyright 2020,2021 Carl van Mastrigt
+Copyright 2020,2021,2022 Carl van Mastrigt
 
 This file is part of cvm_shared.
 
@@ -32,8 +32,8 @@ void panel_widget_add_child(widget * w,widget * child);
 void panel_widget_remove_child(widget * w,widget * child);
 void panel_widget_delete(widget * w);
 
-void panel_widget_render(overlay_theme * theme,widget * w,int x_off,int y_off,cvm_overlay_element_render_buffer * erb,rectangle bounds);
-widget * panel_widget_select(overlay_theme * theme,widget * w,int x_in,int y_in);
+void panel_widget_render(overlay_theme * theme,widget * w,int16_t x_off,int16_t y_off,cvm_overlay_element_render_buffer * erb,rectangle bounds);
+widget * panel_widget_select(overlay_theme * theme,widget * w,int16_t x_in,int16_t y_in);
 void panel_widget_min_w(overlay_theme * theme,widget * w);
 void panel_widget_min_h(overlay_theme * theme,widget * w);
 void panel_widget_set_w(overlay_theme * theme,widget * w);

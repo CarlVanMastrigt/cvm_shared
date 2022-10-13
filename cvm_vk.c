@@ -313,7 +313,7 @@ static void cvm_vk_create_physical_device(bool sync_compute_required)
     free(present_modes);
 }
 
-static void cvm_vk_create_logical_device(const char ** requested_extensions,int requested_extension_count)
+static void cvm_vk_create_logical_device(const char ** requested_extensions,uint32_t requested_extension_count)
 {
     const char * layer_names[]={"VK_LAYER_KHRONOS_validation"};///VK_LAYER_LUNARG_standard_validation
     float queue_priority=1.0;
@@ -322,7 +322,7 @@ static void cvm_vk_create_logical_device(const char ** requested_extensions,int 
     ///if implementing separate transfer queue use a lower priority?
     /// should also probably try putting transfers on separate queue (when possible) even when they require the same queue family
 
-    VkPhysicalDeviceFeatures features=(VkPhysicalDeviceFeatures){};
+    VkPhysicalDeviceFeatures features=(VkPhysicalDeviceFeatures){0};
     features.geometryShader=VK_TRUE;
     features.multiDrawIndirect=VK_TRUE;
     features.sampleRateShading=VK_TRUE;
@@ -382,7 +382,7 @@ static void cvm_vk_create_logical_device(const char ** requested_extensions,int 
     }
 
     assert(i!=possible_extension_count);///REQUESTED EXTENSION NOT FOUND
-    #warning could/should implement this to instead print WHICH ext wasn't found
+    #warning could/should implement this to instead print WHICH ext wasnt found
 
 //    for(i=0;i<possible_extension_count;i++)
 //    {
