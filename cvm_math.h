@@ -53,7 +53,39 @@ along with cvm_shared.  If not, see <https://www.gnu.org/licenses/>.
 #endif
 
 #ifndef SQRT_THIRD
-#define SQRT_THIRD  0.5773502691896257645091487805019574556476017512701268760186023264
+#define SQRT_THIRD  0.5f773502691896257645091487805019574556476017512701268760186023264
+#endif
+
+#ifndef TAUf
+#define TAUf        6.2831853071795864769252867665590057683943387987502116419498891846f
+#endif
+
+#ifndef PIf
+#define PIf         3.1415926535897932384626433832795028841971693993751058209749445923f
+#endif
+
+#ifndef PI_RCPf
+#define PI_RCPf     0.3183098861837906715377675267450287240689192914809128974953346881f
+#endif
+
+#ifndef EULERf
+#define EULERf      2.7182818284590452353602874713526624977572470936999595749669676277f
+#endif
+
+#ifndef SQRT_3f
+#define SQRT_3f     1.7320508075688772935274463415058723669428052538103806280558069794f
+#endif
+
+#ifndef SQRT_2f
+#define SQRT_2f     1.4142135623730950488016887242096980785696718753769480731766797379f
+#endif
+
+#ifndef SQRT_HALFf
+#define SQRT_HALFf  0.7071067811865475244008443621048490392848359376884740365883398689f
+#endif
+
+#ifndef SQRT_THIRDf
+#define SQRT_THIRDf 0.5f773502691896257645091487805019574556476017512701268760186023264f
 #endif
 
 
@@ -489,7 +521,7 @@ static inline float m3f_det(matrix3f m)
 
 static inline vec4f vec4f_blend(vec4f b,vec4f f)
 {
-    return (vec4f){.x=(1.0-f.w)*b.x+f.w*f.x,.y=(1.0-f.w)*b.y+f.w*f.y,.z=(1.0-f.w)*b.z+f.w*f.z,.w=(1.0-f.w)*b.w+f.w};
+    return (vec4f){.x=(1.0f-f.w)*b.x+f.w*f.x,.y=(1.0f-f.w)*b.y+f.w*f.y,.z=(1.0f-f.w)*b.z+f.w*f.z,.w=(1.0f-f.w)*b.w+f.w};
 }
 
 
@@ -597,7 +629,7 @@ static inline rotor3f r3f_from_v3f(vec3f v1,vec3f v2)
     \\\m is magnitude of half angle vector
     m=sqrt((v1.x+v2.x)*(v1.x+v2.x)+(v1.y+v2.y)*(v1.y+v2.y)+(v1.z+v2.z)*(v1.z+v2.z));
     m=sqrt(v1.x*v1.x+2*v1.x*v2.x+v2.x*v2.x + v1.y*v1.y+2*v1.y*v2.y+v2.y*v2.y + v1.z*v1.z+2*v1.z*v2.z+v2.z*v2.z);
-    m=sqrt(v1.x*v1.x+v1.y*v1.y+v1.z*v1.z + v2.x*v2.x+v2.y*v2.y+v2.z*v2.z  + 2*(v1.x*v2.x+v1.y*v2.y+2*v1.z*v2.z)); dot(v1,v1)=dot(v2,v2)=1.0
+    m=sqrt(v1.x*v1.x+v1.y*v1.y+v1.z*v1.z + v2.x*v2.x+v2.y*v2.y+v2.z*v2.z  + 2*(v1.x*v2.x+v1.y*v2.y+2*v1.z*v2.z)); dot(v1,v1)=dot(v2,v2)=1.0f
     m=sqrt(2 + 2*(v1.x*v2.x + v1.y*v2.y + v1.z*v2.z));
     \\\d is dot product of 2 vectors
     m=sqrt(2+2*d);
@@ -633,7 +665,7 @@ static inline rotor3f r3f_from_v3f(vec3f v1,vec3f v2)
     \\\xz same logic applies as did for xy
     */
     float d=v1.x*v2.x + v1.y*v2.y + v1.z*v2.z;
-    float im=1.0/sqrtf(2.0+2.0*d);///inverse_magnitude
+    float im=1.0f/sqrtf(2.0f+2.0f*d);///inverse_magnitude
 
     return(rotor3f)
     {
@@ -647,8 +679,8 @@ static inline rotor3f r3f_from_v3f(vec3f v1,vec3f v2)
 static inline rotor3f r3f_from_v3f_and_angle(vec3f v,float a)
 {
     ///assumes input vector is normalised
-    float s=sinf(a*0.5);
-    return(rotor3f){.s=cosf(a*0.5),.xy=s*v.z,.yz=s*v.x,.zx=s*v.y};
+    float s=sinf(a*0.5f);
+    return(rotor3f){.s=cosf(a*0.5f),.xy=s*v.z,.yz=s*v.x,.zx=s*v.y};
 }
 
 ///in terms of applying rotations, LHS gets applied first
@@ -668,20 +700,20 @@ static inline rotor3f r3f_multiply(rotor3f r1,rotor3f r2)
 /// treated as if a LHS multiplier (applied as rotation before extant rotation r)
 static inline rotor3f r3f_rotate_around_x_axis(rotor3f r,float a)
 {
-    float s=sinf(a*0.5);
-    float c=cosf(a*0.5);
+    float s=sinf(a*0.5f);
+    float c=cosf(a*0.5f);
     return (rotor3f){.s=c*r.s-s*r.yz, .xy=c*r.xy-s*r.zx, .yz=c*r.yz+s*r.s, .zx=c*r.zx+s*r.xy};
 }
 static inline rotor3f r3f_rotate_around_y_axis(rotor3f r,float a)
 {
-    float s=sinf(a*0.5);
-    float c=cosf(a*0.5);
+    float s=sinf(a*0.5f);
+    float c=cosf(a*0.5f);
     return (rotor3f){.s=c*r.s-s*r.zx, .xy=c*r.xy+s*r.yz, .yz=c*r.yz-s*r.xy, .zx=c*r.zx+s*r.s};
 }
 static inline rotor3f r3f_rotate_around_z_axis(rotor3f r,float a)
 {
-    float s=sinf(a*0.5);
-    float c=cosf(a*0.5);
+    float s=sinf(a*0.5f);
+    float c=cosf(a*0.5f);
     return (rotor3f){.s=c*r.s-s*r.xy, .xy=c*r.xy+s*r.s, .yz=c*r.yz+s*r.zx, .zx=c*r.zx-s*r.yz};
 }
 
@@ -740,31 +772,31 @@ static inline matrix3f r3f_to_m3f(rotor3f r)
 	// now substite a,b,c = xy,yz,zx for rotor and f,g,h = x,y,z for vector and put in matrix form and note every rotor component is multiplied by another which are in turn multiplied by 2
     */
 
-    r.s*=SQRT_2;
-    r.xy*=SQRT_2;
-    r.yz*=SQRT_2;
-    r.zx*=SQRT_2;
+    r.s*=SQRT_2f;
+    r.xy*=SQRT_2f;
+    r.yz*=SQRT_2f;
+    r.zx*=SQRT_2f;
     ///why does it seem to be transposed!!!
 
     return (matrix3f)
     {
         .x=
         {
-            .x=1.0 - r.xy*r.xy - r.zx*r.zx,
+            .x=1.0f - r.xy*r.xy - r.zx*r.zx,
             .y=r.zx*r.yz + r.xy*r.s,
             .z=r.xy*r.yz - r.zx*r.s
         },
         .y=
         {
             .x=r.yz*r.zx - r.s*r.xy,
-            .y=1.0 - r.xy*r.xy - r.yz*r.yz,
+            .y=1.0f - r.xy*r.xy - r.yz*r.yz,
             .z=r.xy*r.zx + r.yz*r.s
         },
         .z=
         {
             .x=r.yz*r.xy + r.s*r.zx,
             .y=r.zx*r.xy - r.yz*r.s,
-            .z=1.0 - r.zx*r.zx - r.yz*r.yz
+            .z=1.0f - r.zx*r.zx - r.yz*r.yz
         }
     };
 }
@@ -773,9 +805,9 @@ static inline vec3f r3f_rotate_v3f(rotor3f r,vec3f v)
 {
     return(vec3f)
     {
-        .x=2.0*(v.x*(0.5 - r.xy*r.xy - r.zx*r.zx) + v.y*(r.yz*r.zx - r.s*r.xy) + v.z*(r.yz*r.xy + r.s*r.zx)),
-        .y=2.0*(v.x*(r.zx*r.yz + r.xy*r.s) + v.y*(0.5 - r.xy*r.xy - r.yz*r.yz) + v.z*(r.zx*r.xy - r.yz*r.s)),
-        .z=2.0*(v.x*(r.xy*r.yz - r.zx*r.s) + v.y*(r.xy*r.zx + r.yz*r.s) + v.z*(0.5 - r.zx*r.zx - r.yz*r.yz))
+        .x=2.0f*(v.x*(0.5f - r.xy*r.xy - r.zx*r.zx) + v.y*(r.yz*r.zx - r.s*r.xy) + v.z*(r.yz*r.xy + r.s*r.zx)),
+        .y=2.0f*(v.x*(r.zx*r.yz + r.xy*r.s) + v.y*(0.5f - r.xy*r.xy - r.yz*r.yz) + v.z*(r.zx*r.xy - r.yz*r.s)),
+        .z=2.0f*(v.x*(r.xy*r.yz - r.zx*r.s) + v.y*(r.xy*r.zx + r.yz*r.s) + v.z*(0.5f - r.zx*r.zx - r.yz*r.yz))
     };
 }
 
@@ -786,25 +818,25 @@ static inline vec3f r3f_derotate_v3f(rotor3f r,vec3f v)
     /// and the inverse of an orthonormal matrix is just its that matrix transposed!
     return(vec3f)
     {
-        .x=2.0*(v.x*(0.5 - r.xy*r.xy - r.zx*r.zx) + v.y*(r.zx*r.yz + r.xy*r.s) + v.z*(r.xy*r.yz - r.zx*r.s)),
-        .y=2.0*(v.x*(r.yz*r.zx - r.s*r.xy) + v.y*(0.5 - r.xy*r.xy - r.yz*r.yz) + v.z*(r.xy*r.zx + r.yz*r.s)),
-        .z=2.0*(v.x*(r.yz*r.xy + r.s*r.zx) + v.y*(r.zx*r.xy - r.yz*r.s) + v.z*(0.5 - r.zx*r.zx - r.yz*r.yz))
+        .x=2.0f*(v.x*(0.5f - r.xy*r.xy - r.zx*r.zx) + v.y*(r.zx*r.yz + r.xy*r.s) + v.z*(r.xy*r.yz - r.zx*r.s)),
+        .y=2.0f*(v.x*(r.yz*r.zx - r.s*r.xy) + v.y*(0.5f - r.xy*r.xy - r.yz*r.yz) + v.z*(r.xy*r.zx + r.yz*r.s)),
+        .z=2.0f*(v.x*(r.yz*r.xy + r.s*r.zx) + v.y*(r.zx*r.xy - r.yz*r.s) + v.z*(0.5f - r.zx*r.zx - r.yz*r.yz))
     };
 }
 
 static inline vec3f r3f_get_x_axis(rotor3f r)
 {
-    return(vec3f){.x=1.0-2.0*(r.xy*r.xy + r.zx*r.zx),.y=2.0*(r.zx*r.yz + r.xy*r.s),.z=2.0*(r.xy*r.yz - r.zx*r.s)};
+    return(vec3f){.x=1.0f-2.0f*(r.xy*r.xy + r.zx*r.zx),.y=2.0f*(r.zx*r.yz + r.xy*r.s),.z=2.0f*(r.xy*r.yz - r.zx*r.s)};
 }
 
 static inline vec3f r3f_get_y_axis(rotor3f r)
 {
-    return(vec3f){.x=2.0*(r.yz*r.zx - r.s*r.xy),.y=1.0-2.0*(r.xy*r.xy + r.yz*r.yz),.z=2.0*(r.xy*r.zx + r.yz*r.s)};
+    return(vec3f){.x=2.0f*(r.yz*r.zx - r.s*r.xy),.y=1.0f-2.0f*(r.xy*r.xy + r.yz*r.yz),.z=2.0f*(r.xy*r.zx + r.yz*r.s)};
 }
 
 static inline vec3f r3f_get_z_axis(rotor3f r)
 {
-    return(vec3f){.x=2.0*(r.yz*r.xy + r.s*r.zx),.y=2.0*(r.zx*r.xy - r.yz*r.s),.z=1.0-2.0*(r.zx*r.zx + r.yz*r.yz)};
+    return(vec3f){.x=2.0f*(r.yz*r.xy + r.s*r.zx),.y=2.0f*(r.zx*r.xy - r.yz*r.s),.z=1.0f-2.0f*(r.zx*r.zx + r.yz*r.yz)};
 }
 
 
@@ -823,13 +855,13 @@ static inline rotor3f r3f_isolate_xy_rotation(rotor3f r)/// isolates the rotatio
     im=1/sqrt(2+2(1-2(dd+cc)))
       =1/sqrt(4-4(dd+cc))
       =1/(2*sqrt(1-dd-cc))
-      =0.5/sqrt(1-dd-cc) // both this and following will be useful, use whichever is most useful for given situation
-      =0.5/sqrt(aa+bb) // aa+bb+cc+dd = 1   therefore   1-cc-dd = aa+bb
+      =0.5f/sqrt(1-dd-cc) // both this and following will be useful, use whichever is most useful for given situation
+      =0.5f/sqrt(aa+bb) // aa+bb+cc+dd = 1   therefore   1-cc-dd = aa+bb
 
     z_rot=
 
     .s = (1+dot_product)*im
-       = (2-2*dd-2*cc)*0.5/sqrt(1-dd-cc)
+       = (2-2*dd-2*cc)*0.5f/sqrt(1-dd-cc)
        = (1-dd-cc)/sqrt(1-dd-cc)
        = sqrt(1-dd-cc)
        = sqrt(aa+bb) // aa+bb+cc+dd = 1   therefore   1-cc-dd = aa+bb
@@ -837,11 +869,11 @@ static inline rotor3f r3f_isolate_xy_rotation(rotor3f r)/// isolates the rotatio
     .xy = 0 // no v1.z, makes sense as we're avoiding this component
 
     .yz = -v2.y * im
-        = -2(db-ac) * 0.5/sqrt(aa+bb)
+        = -2(db-ac) * 0.5f/sqrt(aa+bb)
         = (ac-db)/sqrt(aa+bb)
 
     .zx = v2.x * im
-        = 2(cb+ad) * 0.5/sqrt(aa+bb)
+        = 2(cb+ad) * 0.5f/sqrt(aa+bb)
         = (cb+ad)/sqrt(aa+bb)
 
 
@@ -873,7 +905,7 @@ static inline rotor3f r3f_isolate_xy_rotation(rotor3f r)/// isolates the rotatio
                     = 0
     */
 
-    float im=1.0/sqrtf(r.s*r.s+r.xy*r.xy);///inverse magnitude
+    float im=1.0f/sqrtf(r.s*r.s+r.xy*r.xy);///inverse magnitude
     return(rotor3f){.s=r.s*im,.xy=r.xy*im,.yz=0.0,.zx=0.0};
 }
 
@@ -881,7 +913,7 @@ static inline rotor3f r3f_isolate_yz_rotation(rotor3f r)/// isolates the rotatio
 {
     /// logic/maths the same as in r3f_isolate_xy_rotation, just for different bivector
 
-    float im=1.0/sqrtf(r.s*r.s+r.yz*r.yz);///inverse magnitude
+    float im=1.0f/sqrtf(r.s*r.s+r.yz*r.yz);///inverse magnitude
     return(rotor3f){.s=r.s*im,.xy=0.0,.yz=r.yz*im,.zx=0.0};
 }
 
@@ -889,7 +921,7 @@ static inline rotor3f r3f_isolate_zx_rotation(rotor3f r)/// isolates the rotatio
 {
     /// logic/maths the same as in r3f_isolate_xy_rotation, just for different bivector
 
-    float im=1.0/sqrtf(r.s*r.s+r.zx*r.zx);///inverse magnitude
+    float im=1.0f/sqrtf(r.s*r.s+r.zx*r.zx);///inverse magnitude
     return(rotor3f){.s=r.s*im,.xy=0.0,.yz=0.0,.zx=r.zx*im};
 }
 
@@ -908,31 +940,31 @@ static inline rotor3f r3f_isolate_x_axis_rotation(rotor3f r)
     im=1/sqrt(2+2(1-2(bb+dd)))
       =1/sqrt(4-4(bb+dd))
       =1/(2*sqrt(1-bb-dd))
-      =0.5/sqrt(1-bb-dd) // both this and following will be useful, use whichever is most useful for given situation
-      =0.5/sqrt(aa+cc) // aa+bb+cc+dd = 1   therefore   1-cc-bb = aa+dd
+      =0.5f/sqrt(1-bb-dd) // both this and following will be useful, use whichever is most useful for given situation
+      =0.5f/sqrt(aa+cc) // aa+bb+cc+dd = 1   therefore   1-cc-bb = aa+dd
 
 
     z_rot=
 
     .s = (1+dot_product)*im
-       = (2-2*bb-2*dd)*0.5/sqrt(1-bb-dd)
+       = (2-2*bb-2*dd)*0.5f/sqrt(1-bb-dd)
        = (1-bb-dd)/sqrt(1-bb-dd)
        = sqrt(1-bb-dd)
        = sqrt(aa+cc) // aa+bb+cc+dd = 1   therefore   1-cc-bb = aa+dd
 
     .xy = v2.y * im
-        = 2(cd+ab) * 0.5/sqrt(aa+cc)
+        = 2(cd+ab) * 0.5f/sqrt(aa+cc)
         = (cd+ab)/sqrt(aa+cc)
 
     .yz = 0 // no v1.y, makes sense as we're avoiding this component
 
     .zx = -v2.z * im
-        = 2(ad-bc) * 0.5/sqrt(aa+cc)
+        = 2(ad-bc) * 0.5f/sqrt(aa+cc)
         = (ad-bc)/sqrt(aa+cc)
     */
 
     float m=sqrtf(r.s*r.s+r.yz*r.yz);
-    float im=1.0/m;///inverse magnitude
+    float im=1.0f/m;///inverse magnitude
     return(rotor3f){.s=m,.xy=(r.yz*r.zx+r.s*r.xy)*im,.yz=0.0,.zx=(r.s*r.zx-r.xy*r.yz)*im};
 }
 
@@ -951,31 +983,31 @@ static inline rotor3f r3f_isolate_y_axis_rotation(rotor3f r)
     im=1/sqrt(2+2(1-2(bb+cc)))
       =1/sqrt(4-4(bb+cc))
       =1/(2*sqrt(1-bb-cc))
-      =0.5/sqrt(1-bb-cc) // both this and following will be useful, use whichever is most useful for given situation
-      =0.5/sqrt(aa+dd) // aa+bb+cc+dd = 1   therefore   1-cc-bb = aa+dd
+      =0.5f/sqrt(1-bb-cc) // both this and following will be useful, use whichever is most useful for given situation
+      =0.5f/sqrt(aa+dd) // aa+bb+cc+dd = 1   therefore   1-cc-bb = aa+dd
 
 
     z_rot=
 
     .s = (1+dot_product)*im
-       = (2-2*bb-2*cc)*0.5/sqrt(1-bb-cc)
+       = (2-2*bb-2*cc)*0.5f/sqrt(1-bb-cc)
        = (1-bb-cc)/sqrt(1-bb-cc)
        = sqrt(1-bb-cc)
        = sqrt(aa+dd) // aa+bb+cc+dd = 1   therefore   1-cc-bb = aa+dd
 
     .xy = -v2.x * im
-        = -2(cd-ab) * 0.5/sqrt(aa+dd)
+        = -2(cd-ab) * 0.5f/sqrt(aa+dd)
         = (ab-cd)/sqrt(aa+dd)
 
     .yz = v2.z * im
-        = 2(bd+ac) * 0.5/sqrt(aa+dd)
+        = 2(bd+ac) * 0.5f/sqrt(aa+dd)
         = (bd+ac)/sqrt(aa+dd)
 
     .zx = 0 // no v1.y, makes sense as we're avoiding this component
     */
 
     float m=sqrtf(r.s*r.s+r.zx*r.zx);
-    float im=1.0/m;///inverse magnitude
+    float im=1.0f/m;///inverse magnitude
     return(rotor3f){.s=m,.xy=(r.s*r.xy-r.yz*r.zx)*im,.yz=(r.xy*r.zx+r.s*r.yz)*im,.zx=0.0};
 }
 
@@ -994,14 +1026,14 @@ static inline rotor3f r3f_isolate_z_axis_rotation(rotor3f r)
     im=1/sqrt(2+2(1-2(dd+cc)))
       =1/sqrt(4-4(dd+cc))
       =1/(2*sqrt(1-dd-cc))
-      =0.5/sqrt(1-dd-cc) // both this and following will be useful, use whichever is most useful for given situation
-      =0.5/sqrt(aa+bb) // aa+bb+cc+dd = 1   therefore   1-cc-dd = aa+bb
+      =0.5f/sqrt(1-dd-cc) // both this and following will be useful, use whichever is most useful for given situation
+      =0.5f/sqrt(aa+bb) // aa+bb+cc+dd = 1   therefore   1-cc-dd = aa+bb
 
 
     z_rot=
 
     .s = (1+dot_product)*im
-       = (2-2*dd-2*cc)*0.5/sqrt(1-dd-cc)
+       = (2-2*dd-2*cc)*0.5f/sqrt(1-dd-cc)
        = (1-dd-cc)/sqrt(1-dd-cc)
        = sqrt(1-dd-cc)
        = sqrt(aa+bb) // aa+bb+cc+dd = 1   therefore   1-cc-dd = aa+bb
@@ -1009,38 +1041,41 @@ static inline rotor3f r3f_isolate_z_axis_rotation(rotor3f r)
     .xy = 0 // no v1.z, makes sense as we're avoiding this component
 
     .yz = -v2.y * im
-        = -2(db-ac) * 0.5/sqrt(aa+bb)
+        = -2(db-ac) * 0.5f/sqrt(aa+bb)
         = (ac-db)/sqrt(aa+bb)
 
     .zx = v2.x * im
-        = 2(cb+ad) * 0.5/sqrt(aa+bb)
+        = 2(cb+ad) * 0.5f/sqrt(aa+bb)
         = (cb+ad)/sqrt(aa+bb)
     */
 
     float m=sqrtf(r.s*r.s+r.xy*r.xy);
-    float im=1.0/m;///inverse magnitude
+    float im=1.0f/m;///inverse magnitude
     return(rotor3f){.s=m,.xy=0.0,.yz=(r.s*r.yz-r.zx*r.xy)*im,.zx=(r.xy*r.yz +r.s*r.zx)*im};
 }
 
 ///useful for ensuring object rotation doesn't start introducing skew as error accumulates over time
 static inline rotor3f r3f_normalize(rotor3f r)
 {
-    float im=1.0/sqrtf(r.s*r.s+r.xy*r.xy+r.yz*r.yz+r.zx*r.zx);///inverse magnitude
+    float im=1.0f/sqrtf(r.s*r.s+r.xy*r.xy+r.yz*r.yz+r.zx*r.zx);///inverse magnitude
     return(rotor3f){.s=r.s*im,.xy=r.xy*im,.yz=r.yz*im,.zx=r.zx*im};
 }
 
 static inline rotor3f r3f_lerp(rotor3f r1,rotor3f r2,float t)
 {
     float u;
-    u=1.0-t;
+    u=1.0f-t;
 
     r1.s =r1.s *u+r2.s *t;
     r1.xy=r1.xy*u+r2.xy*t;
     r1.yz=r1.yz*u+r2.yz*t;
     r1.zx=r1.zx*u+r2.zx*t;
 
-    u=1.0/sqrtf(r1.s*r1.s+r1.xy*r1.xy+r1.yz*r1.yz+r1.zx*r1.zx);
-    r1.s*=u,r1.xy*=u,r1.yz*=u,r1.zx*=u;
+    u=1.0f/sqrtf(r1.s*r1.s+r1.xy*r1.xy+r1.yz*r1.yz+r1.zx*r1.zx);
+    r1.s*=u;
+    r1.xy*=u;
+    r1.yz*=u;
+    r1.zx*=u;
 
     return r1;
 }
@@ -1049,19 +1084,22 @@ static inline rotor3f r3f_bezier_interp(rotor3f r0,rotor3f r1,rotor3f r2,rotor3f
 {
     float u,uut,utt;
 
-    u=1.0-t;
-    uut=u*u*t*3.0;
-    utt=u*t*t*3.0;
+    u=1.0f-t;
+    uut=u*u*t*3.0f;
+    utt=u*t*t*3.0f;
     t*=t*t;
     u*=u*u;
 
-    r1.s =r1.s *u+(r1.s +(r2.s -r0.s )*0.1666)*uut+(r2.s +(r1.s -r3.s )*0.1666)*utt+r2.s *t;
-    r1.xy=r1.xy*u+(r1.xy+(r2.xy-r0.xy)*0.1666)*uut+(r2.xy+(r1.xy-r3.xy)*0.1666)*utt+r2.xy*t;
-    r1.yz=r1.yz*u+(r1.yz+(r2.yz-r0.yz)*0.1666)*uut+(r2.yz+(r1.yz-r3.yz)*0.1666)*utt+r2.yz*t;
-    r1.zx=r1.zx*u+(r1.zx+(r2.zx-r0.zx)*0.1666)*uut+(r2.zx+(r1.zx-r3.zx)*0.1666)*utt+r2.zx*t;
+    r1.s =r1.s *u+(r1.s +(r2.s -r0.s )*0.166666666f)*uut+(r2.s +(r1.s -r3.s )*0.166666666f)*utt+r2.s *t;
+    r1.xy=r1.xy*u+(r1.xy+(r2.xy-r0.xy)*0.166666666f)*uut+(r2.xy+(r1.xy-r3.xy)*0.166666666f)*utt+r2.xy*t;
+    r1.yz=r1.yz*u+(r1.yz+(r2.yz-r0.yz)*0.166666666f)*uut+(r2.yz+(r1.yz-r3.yz)*0.166666666f)*utt+r2.yz*t;
+    r1.zx=r1.zx*u+(r1.zx+(r2.zx-r0.zx)*0.166666666f)*uut+(r2.zx+(r1.zx-r3.zx)*0.166666666f)*utt+r2.zx*t;
 
-    u=1.0/sqrtf(r1.s*r1.s+r1.xy*r1.xy+r1.yz*r1.yz+r1.zx*r1.zx);
-    r1.s*=u,r1.xy*=u,r1.yz*=u,r1.zx*=u;
+    u=1.0f/sqrtf(r1.s*r1.s+r1.xy*r1.xy+r1.yz*r1.yz+r1.zx*r1.zx);
+    r1.s*=u;
+    r1.xy*=u;
+    r1.yz*=u;
+    r1.zx*=u;
 
     return r1;
 }
@@ -1074,10 +1112,10 @@ static inline rotor3f r3f_spherical_interp(rotor3f r1,rotor3f r2,float t)
     float u,m,d;
 
     m=acosf(r1.s*r2.s+r1.xy*r2.xy+r1.yz*r2.yz+r1.zx*r2.zx);
-    d=1.0/sin(m);
+    d=1.0f/sinf(m);
 
-    u=sin((1.0-t)*m)*d;
-    t=sin(t*m)*d;
+    u=sinf((1.0f-t)*m)*d;
+    t=sinf(t*m)*d;
 
     r1.s =r1.s *u+r2.s *t;
     r1.xy=r1.xy*u+r2.xy*t;

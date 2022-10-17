@@ -25,7 +25,7 @@ along with cvm_shared.  If not, see <https://www.gnu.org/licenses/>.
 #define FILE_SEARCH_H
 
 
-
+/*
 typedef enum
 {
     FILE_SEARCH_NO_ERROR=0,
@@ -47,11 +47,15 @@ typedef file_search_error_type(*file_search_action_function)(file_search_instanc
 
 typedef void(*file_search_end_function)(file_search_instance*);
 
+#define CVM_FS_DIRECTORY_TYPE_ID 0
+#define CVM_FS_MISCELLANEOUS_TYPE_ID 1
+#define CVM_FS_CUSTOM_TYPE_OFFSET 2
+
 typedef struct file_search_file_type
 {
-    char * name;
-    char * icon_name;
-    char ** type_extensions;
+    const char * name;
+    const char * icon;
+    const char * type_extensions;///appended character list
 }
 file_search_file_type;
 
@@ -122,7 +126,6 @@ struct file_search_instance
     uint32_t show_directories:1;///change to directory fixed???
     uint32_t show_misc_files:1;
     uint32_t show_control_entries:1;
-
     uint32_t show_hidden:1;///this is only "bool" that can change ??? how are    show all files/show_misc_files   different/differentiated ???
 };
 
@@ -186,6 +189,7 @@ widget * create_file_search_export_type_button(widget * menu_widget,file_search_
 struct shared_file_search_data
 {
     file_search_file_type * types;
+    uint32_t type_count;
 
     uint32_t update_count;
 
@@ -207,6 +211,80 @@ void update_shared_file_search_data_directory_use(shared_file_search_data * sfsd
 //file_search_instance * allocate_file_search_instance(shared_file_search_data * sfsd);
 
 
+
+
+
+
+
+
+
+
+
+
+
+//typedef struct cvm_file_search_data cvm_file_search_data;
+
+*/
+
+#define CVM_FS_MISCELLANEOUS_TYPE_ID 0
+#define CVM_FS_DIRECTORY_TYPE_ID 1
+#define CVM_FS_CUSTOM_TYPE_OFFSET 2
+
+typedef struct file_search_data file_search_data;
+
+typedef struct file_search_entry/// instead use this to load directory data, set buttons as outlined next to variables (need options to avoid deletion of button strings)
+{
+    file_search_data * fsd;
+    uint32_t filename_offset;///could be set using button.text to get text location in buffer (assuming buffer is set already and won't be resized)???
+    uint16_t type_id;///could be set using button.icon_name and button.func, 0=misc file, 1=directory, , other=(offset+2) in type list
+    //uint16_t hidden:1;///not really needed ??? alter functionality when loading directory
+}
+file_search_entry;
+
+typedef struct file_search_file_type
+{
+    const char * name;
+    const char * icon;
+    const char * type_extensions;///appended character list
+}
+file_search_file_type;
+
+
+struct file_search_data
+{
+    char * filename_buffer;
+    uint32_t filename_buffer_space;
+
+    char * directory_buffer;///current directory
+    uint32_t directory_buffer_size;
+    /// data regarding current directory, should be shared across save and load managers and synchronised, widgets should reference this and not the other way round
+
+    file_search_entry * entries;
+    uint32_t entry_space;
+    uint32_t entry_count;
+
+    file_search_file_type * types;
+    uint32_t type_count;
+
+    //uint32_t free_action_data:1;
+    //uint32_t free_end_data:1;
+
+    uint32_t show_directories:1;///change to directory fixed???
+    uint32_t show_misc_files:1;///show files not relevant to any applicable filter
+    uint32_t show_control_entries:1;/// show  ./  ../   &c.
+    uint32_t show_hidden:1;///this is only "bool" that can change ??? how are    show all files/show_misc_files   different/differentiated ???
+};
+
+void load_file_search_directory_entries(file_search_data * fsd);
+
+
+
+typedef struct file_search_widget_data
+{
+    file_search_data * fsd;
+    widget * paired_widget;
+}
+file_search_widget_data;
 
 
 #endif

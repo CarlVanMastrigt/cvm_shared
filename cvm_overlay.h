@@ -115,7 +115,7 @@ void overlay_destroy_colour_image_tile(cvm_vk_image_atlas_tile * tile);
 
 struct overlay_theme
 {
-    cvm_overlay_font font_;
+    cvm_overlay_font font;
 
     int base_unit_w;
     int base_unit_h;

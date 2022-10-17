@@ -130,45 +130,45 @@ static inline uint16_t cvm_rng_pcg_16(uint32_t * state)
 
 static inline float cvm_rng_float_16(uint32_t * s)
 {
-    return (((float)cvm_rng_pcg_16(s))+0.5)*0.0000152587890625;/// 1/65536
+    return (((float)cvm_rng_pcg_16(s))+0.5f)*0.0000152587890625f;/// 1/65536
 }
 
 ///can be called instead of above for last use of a particular sub seed (as seen below)
 static inline float cvm_rng_float_16_get(uint32_t s)
 {
-    return (((float)cvm_rng_pcg_16_get(s))+0.5)*0.0000152587890625;/// 1/65536
+    return (((float)cvm_rng_pcg_16_get(s))+0.5f)*0.0000152587890625f;/// 1/65536
 }
 
 ///following needs testing
 static inline vec3f cvm_rng_point_on_sphere(uint64_t * state)
 {
     uint32_t s=cvm_rng_pcg_a(state);
-    float z=2.0*cvm_rng_float_16(&s)-1.0;
+    float z=2.0f*cvm_rng_float_16(&s)-1.0f;
     /// acosf(2*rand-1)=zenith, calculated by probability distribution for surface of a sphere
     /// specifically inverting the integral of the relative probability of each angle over the circle (this probability is sin(angle))
     /// z from this zenith is cos(zenith) which is just 2*rand-1 !
     /// this means that every z coordinate is equally likely !
-    float p=sqrtf(1.0-z*z);
+    float p=sqrtf(1.0f-z*z);
     ///equivalent to sin(zenith)
-    float a=cvm_rng_float_16_get(s)*TAU;
+    float a=cvm_rng_float_16_get(s)*TAUf;
     return (vec3f){ .x=p*cosf(a),.y=p*sinf(a),.z=z};
 }
 
 static inline vec3f cvm_rng_point_in_ball(uint64_t * state)
 {
     uint32_t s=cvm_rng_pcg_a(state);
-    float z=2.0*cvm_rng_float_16(&s)-1.0;///see notes above
-    float p=sqrtf(1.0-z*z);
+    float z=2.0f*cvm_rng_float_16(&s)-1.0f;///see notes above
+    float p=sqrtf(1.0f-z*z);
     float a=cbrtf(cvm_rng_float_16(&s));///radius
     p*=a;
     z*=a;
-    a=cvm_rng_float_16_get(s)*TAU;
+    a=cvm_rng_float_16_get(s)*TAUf;
     return (vec3f){ .x=p*cosf(a),.y=p*sinf(a),.z=z};
 }
 
 static inline vec2f cvm_rng_point_on_circle(uint64_t * state)
 {
-    float a=TAU*cvm_rng_float_16_get(cvm_rng_pcg_a(state));
+    float a=TAUf*cvm_rng_float_16_get(cvm_rng_pcg_a(state));
     return (vec2f){ .x=cosf(a),.y=sinf(a)};
 }
 
@@ -176,7 +176,7 @@ static inline vec2f cvm_rng_point_in_disc(uint64_t * state)
 {
     uint32_t s=cvm_rng_pcg_a(state);
     float r=sqrtf(cvm_rng_float_16(&s));
-    float a=cvm_rng_float_16_get(s)*TAU;
+    float a=cvm_rng_float_16_get(s)*TAUf;
     return (vec2f){ .x=r*cosf(a),.y=r*sinf(a)};
 }
 
@@ -189,7 +189,7 @@ static inline float cvm_rng_float(uint64_t * state)
 /// can multiply by PI_RCP to get a nice 0-1 distribution that favours the centre
 static inline float cvm_rng_even_zenith(uint64_t * state)
 {
-    return acosf(2.0*cvm_rng_float_16_get(cvm_rng_pcg_a(state))-1);
+    return acosf(2.0f*cvm_rng_float_16_get(cvm_rng_pcg_a(state))-1.0f);
 }
 
 
@@ -213,13 +213,13 @@ static inline rotor3f cvm_rng_rotation_3d(uint64_t * state)
     /// only that radii are paired with the angles for the same circles is all that's important (is even this required ?)
 
     uint32_t s=cvm_rng_pcg_a(state);
-    float a1=cvm_rng_float_16(&s)*TAU;
-    float a2=cvm_rng_float_16(&s)*TAU;
+    float a1=cvm_rng_float_16(&s)*TAUf;
+    float a2=cvm_rng_float_16(&s)*TAUf;
     float r1=cvm_rng_float_16_get(s);
-    float r2=sqrtf(1-r1);
+    float r2=sqrtf(1.0f-r1);
     r1=sqrtf(r1);
 
-    return (rotor3f){.s=r1*sin(a1),.xy=r1*cos(a1),.yz=r2*sin(a2),.zx=r2*cos(a2)};
+    return (rotor3f){.s=r1*sinf(a1),.xy=r1*cosf(a1),.yz=r2*sinf(a2),.zx=r2*cosf(a2)};
 }
 
 #endif

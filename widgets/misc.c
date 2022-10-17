@@ -265,126 +265,126 @@ widget * create_window_widget(widget ** box,char * title,bool resizable,widget_f
 
 
 
-void file_search_window_end_function(file_search_instance * fsi)
-{
-    widget * win=fsi->end_data;
-    toggle_widget(win);
-}
+//void file_search_window_end_function(file_search_instance * fsi)
+//{
+//    widget * win=fsi->end_data;
+//    toggle_widget(win);
+//}
 
-file_search_error_type file_search_load_action(file_search_instance * fsi)
-{
-    printf("LOAD: %s\n",fsi->directory_buffer);
+//file_search_error_type file_search_load_action(file_search_instance * fsi)
+//{
+//    printf("LOAD: %s\n",fsi->directory_buffer);
+//
+//    return FILE_SEARCH_NO_ERROR;
+//}
 
-    return FILE_SEARCH_NO_ERROR;
-}
-
-widget * create_load_window(shared_file_search_data * sfsd,char * title,int * type_filters,file_search_action_function action,void * data,bool free_data,widget * menu_widget)
-{
-    widget *window,*box_0,*box_1,*box_2,*box_3,*list_box;
-    file_search_instance * fsi;
-
-    fsi=create_file_search_instance(sfsd,type_filters,NULL);
-
-    window=create_window_widget(&box_0,title,true,file_search_cancel_button_func,fsi,false);
-
-    if(action==NULL)action=file_search_load_action;
-
-    set_file_search_instance_action_variables(fsi,action,data,free_data);
-    set_file_search_instance_end_variables(fsi,file_search_window_end_function,window,false);
-
-
-    box_1=add_child_to_parent(box_0,create_box(WIDGET_HORIZONTAL,WIDGET_FIRST_DISTRIBUTED));
-    add_child_to_parent(box_1,create_file_search_text_bar(fsi));
-    add_child_to_parent(box_1,create_file_search_refresh_button(fsi));
-    add_child_to_parent(box_1,create_file_search_toggle_hidden_button(fsi));
-    add_child_to_parent(box_1,create_file_search_up_button(fsi));
-
-    box_1=add_child_to_parent(box_0,create_box(WIDGET_VERTICAL,WIDGET_FIRST_DISTRIBUTED));
-
-    box_2=add_child_to_parent(box_1,create_box(WIDGET_HORIZONTAL,WIDGET_FIRST_DISTRIBUTED));
-    list_box=add_child_to_parent(box_2,create_file_search_file_list(fsi));
-    add_child_to_parent(box_2,create_contiguous_box_scrollbar(list_box));
-
-    box_2=add_child_to_parent(box_1,create_box(WIDGET_HORIZONTAL,WIDGET_FIRST_DISTRIBUTED));
-    if(type_filters)
-    {
-        box_3=add_child_to_parent(box_2,create_box(WIDGET_HORIZONTAL,WIDGET_LAST_DISTRIBUTED));
-        add_child_to_parent(box_3,create_file_search_filter_type_button(menu_widget,fsi));
-        add_child_to_parent(box_3,create_empty_widget(0,0));
-    }
-    else add_child_to_parent(box_2,create_empty_widget(0,0));
-    add_child_to_parent(box_2,create_separator_widget());
-    add_child_to_parent(box_2,create_file_search_cancel_button(fsi,"Cancel"));
-    add_child_to_parent(box_2,create_file_search_accept_button(fsi,"Load"));
-
-    create_file_search_error_popup(menu_widget,fsi,box_0,"Accept");
-
-
-    return window;
-}
-
-file_search_error_type file_search_save_action(file_search_instance * fsi)
-{
-    printf("SAVE: %s\n",fsi->directory_buffer);
-
-    return FILE_SEARCH_NO_ERROR;
-    //return FILE_SEARCH_ERROR_CAN_NOT_SAVE_FILE;
-}
-
-widget * create_save_window(shared_file_search_data * sfsd,char * title,int * type_filters,file_search_action_function action,void * data,bool free_data,widget * menu_widget,char ** export_formats)
-{
-    widget *window,*box_0,*box_1,*box_2,*box_3,*list_box;
-    file_search_instance * fsi;
-
-    fsi=create_file_search_instance(sfsd,type_filters,export_formats);
-
-    window=create_window_widget(&box_0,title,true,file_search_cancel_button_func,fsi,false);
-
-    if(action==NULL)action=file_search_save_action;
-
-    set_file_search_instance_action_variables(fsi,action,data,free_data);
-    set_file_search_instance_end_variables(fsi,file_search_window_end_function,window,false);
-
-    box_1=add_child_to_parent(box_0,create_box(WIDGET_HORIZONTAL,WIDGET_FIRST_DISTRIBUTED));
-    add_child_to_parent(box_1,create_file_search_text_bar(fsi));
-    add_child_to_parent(box_1,create_file_search_refresh_button(fsi));
-    add_child_to_parent(box_1,create_file_search_toggle_hidden_button(fsi));
-    add_child_to_parent(box_1,create_file_search_up_button(fsi));
-
-    box_1=add_child_to_parent(box_0,create_box(WIDGET_VERTICAL,WIDGET_FIRST_DISTRIBUTED));
-
-    box_2=add_child_to_parent(box_1,create_box(WIDGET_HORIZONTAL,WIDGET_FIRST_DISTRIBUTED));
-    list_box=add_child_to_parent(box_2,create_file_search_file_list(fsi));
-    add_child_to_parent(box_2,create_contiguous_box_scrollbar(list_box));
-
-    box_2=add_child_to_parent(box_1,create_box(WIDGET_HORIZONTAL,WIDGET_FIRST_DISTRIBUTED));
-    add_child_to_parent(box_2,create_file_search_enterbox(fsi));
-    if((export_formats)&&(export_formats[0])&&(export_formats[1]))add_child_to_parent(box_2,create_file_search_export_type_button(menu_widget,fsi));
-
-    box_2=add_child_to_parent(box_1,create_box(WIDGET_HORIZONTAL,WIDGET_FIRST_DISTRIBUTED));
-    if(type_filters)
-    {
-        box_3=add_child_to_parent(box_2,create_box(WIDGET_HORIZONTAL,WIDGET_LAST_DISTRIBUTED));
-        add_child_to_parent(box_3,create_file_search_filter_type_button(menu_widget,fsi));
-        add_child_to_parent(box_3,create_empty_widget(0,0));
-    }
-    else add_child_to_parent(box_2,create_empty_widget(0,0));
-    add_child_to_parent(box_2,create_separator_widget());
-    add_child_to_parent(box_2,create_file_search_cancel_button(fsi,"Cancel"));
-    add_child_to_parent(box_2,create_file_search_accept_button(fsi,"Save"));
-
-
-
-
-    create_file_search_overwrite_popup(menu_widget,fsi,box_0,"File already exists, overwrite?","Yes","No");
-    create_file_search_error_popup(menu_widget,fsi,box_0,"Accept");
-
-
-
-    //add_child_to_parent(box_2,create_text_button("test",error_popup,window_toggle_button_func));
-
-    return window;
-}
+//widget * create_load_window(shared_file_search_data * sfsd,char * title,int * type_filters,file_search_action_function action,void * data,bool free_data,widget * menu_widget)
+//{
+//    widget *window,*box_0,*box_1,*box_2,*box_3,*list_box;
+//    file_search_instance * fsi;
+//
+//    fsi=create_file_search_instance(sfsd,type_filters,NULL);
+//
+//    window=create_window_widget(&box_0,title,true,file_search_cancel_button_func,fsi,false);
+//
+//    if(action==NULL)action=file_search_load_action;
+//
+//    set_file_search_instance_action_variables(fsi,action,data,free_data);
+//    set_file_search_instance_end_variables(fsi,file_search_window_end_function,window,false);
+//
+//
+//    box_1=add_child_to_parent(box_0,create_box(WIDGET_HORIZONTAL,WIDGET_FIRST_DISTRIBUTED));
+//    add_child_to_parent(box_1,create_file_search_text_bar(fsi));
+//    add_child_to_parent(box_1,create_file_search_refresh_button(fsi));
+//    add_child_to_parent(box_1,create_file_search_toggle_hidden_button(fsi));
+//    add_child_to_parent(box_1,create_file_search_up_button(fsi));
+//
+//    box_1=add_child_to_parent(box_0,create_box(WIDGET_VERTICAL,WIDGET_FIRST_DISTRIBUTED));
+//
+//    box_2=add_child_to_parent(box_1,create_box(WIDGET_HORIZONTAL,WIDGET_FIRST_DISTRIBUTED));
+//    list_box=add_child_to_parent(box_2,create_file_search_file_list(fsi));
+//    add_child_to_parent(box_2,create_contiguous_box_scrollbar(list_box));
+//
+//    box_2=add_child_to_parent(box_1,create_box(WIDGET_HORIZONTAL,WIDGET_FIRST_DISTRIBUTED));
+//    if(type_filters)
+//    {
+//        box_3=add_child_to_parent(box_2,create_box(WIDGET_HORIZONTAL,WIDGET_LAST_DISTRIBUTED));
+//        add_child_to_parent(box_3,create_file_search_filter_type_button(menu_widget,fsi));
+//        add_child_to_parent(box_3,create_empty_widget(0,0));
+//    }
+//    else add_child_to_parent(box_2,create_empty_widget(0,0));
+//    add_child_to_parent(box_2,create_separator_widget());
+//    add_child_to_parent(box_2,create_file_search_cancel_button(fsi,"Cancel"));
+//    add_child_to_parent(box_2,create_file_search_accept_button(fsi,"Load"));
+//
+//    create_file_search_error_popup(menu_widget,fsi,box_0,"Accept");
+//
+//
+//    return window;
+//}
+//
+//file_search_error_type file_search_save_action(file_search_instance * fsi)
+//{
+//    printf("SAVE: %s\n",fsi->directory_buffer);
+//
+//    return FILE_SEARCH_NO_ERROR;
+//    //return FILE_SEARCH_ERROR_CAN_NOT_SAVE_FILE;
+//}
+//
+//widget * create_save_window(shared_file_search_data * sfsd,char * title,int * type_filters,file_search_action_function action,void * data,bool free_data,widget * menu_widget,char ** export_formats)
+//{
+//    widget *window,*box_0,*box_1,*box_2,*box_3,*list_box;
+//    file_search_instance * fsi;
+//
+//    fsi=create_file_search_instance(sfsd,type_filters,export_formats);
+//
+//    window=create_window_widget(&box_0,title,true,file_search_cancel_button_func,fsi,false);
+//
+//    if(action==NULL)action=file_search_save_action;
+//
+//    set_file_search_instance_action_variables(fsi,action,data,free_data);
+//    set_file_search_instance_end_variables(fsi,file_search_window_end_function,window,false);
+//
+//    box_1=add_child_to_parent(box_0,create_box(WIDGET_HORIZONTAL,WIDGET_FIRST_DISTRIBUTED));
+//    add_child_to_parent(box_1,create_file_search_text_bar(fsi));
+//    add_child_to_parent(box_1,create_file_search_refresh_button(fsi));
+//    add_child_to_parent(box_1,create_file_search_toggle_hidden_button(fsi));
+//    add_child_to_parent(box_1,create_file_search_up_button(fsi));
+//
+//    box_1=add_child_to_parent(box_0,create_box(WIDGET_VERTICAL,WIDGET_FIRST_DISTRIBUTED));
+//
+//    box_2=add_child_to_parent(box_1,create_box(WIDGET_HORIZONTAL,WIDGET_FIRST_DISTRIBUTED));
+//    list_box=add_child_to_parent(box_2,create_file_search_file_list(fsi));
+//    add_child_to_parent(box_2,create_contiguous_box_scrollbar(list_box));
+//
+//    box_2=add_child_to_parent(box_1,create_box(WIDGET_HORIZONTAL,WIDGET_FIRST_DISTRIBUTED));
+//    add_child_to_parent(box_2,create_file_search_enterbox(fsi));
+//    if((export_formats)&&(export_formats[0])&&(export_formats[1]))add_child_to_parent(box_2,create_file_search_export_type_button(menu_widget,fsi));
+//
+//    box_2=add_child_to_parent(box_1,create_box(WIDGET_HORIZONTAL,WIDGET_FIRST_DISTRIBUTED));
+//    if(type_filters)
+//    {
+//        box_3=add_child_to_parent(box_2,create_box(WIDGET_HORIZONTAL,WIDGET_LAST_DISTRIBUTED));
+//        add_child_to_parent(box_3,create_file_search_filter_type_button(menu_widget,fsi));
+//        add_child_to_parent(box_3,create_empty_widget(0,0));
+//    }
+//    else add_child_to_parent(box_2,create_empty_widget(0,0));
+//    add_child_to_parent(box_2,create_separator_widget());
+//    add_child_to_parent(box_2,create_file_search_cancel_button(fsi,"Cancel"));
+//    add_child_to_parent(box_2,create_file_search_accept_button(fsi,"Save"));
+//
+//
+//
+//
+//    create_file_search_overwrite_popup(menu_widget,fsi,box_0,"File already exists, overwrite?","Yes","No");
+//    create_file_search_error_popup(menu_widget,fsi,box_0,"Accept");
+//
+//
+//
+//    //add_child_to_parent(box_2,create_text_button("test",error_popup,window_toggle_button_func));
+//
+//    return window;
+//}
 
 
 

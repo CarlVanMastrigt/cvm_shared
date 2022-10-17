@@ -64,7 +64,7 @@ void test_timing(bool start,char * name)
     static struct timespec tso,tsn;
     uint64_t dt;
 
-    clock_gettime(CLOCK_REALTIME,&tsn);
+    clock_gettime(0,&tsn);
 
     dt=(tsn.tv_sec-tso.tv_sec)*1000000000 + tsn.tv_nsec-tso.tv_nsec;
 

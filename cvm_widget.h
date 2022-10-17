@@ -114,21 +114,6 @@ typedef enum
 }
 widget_relative_positioning;
 
-/*typedef struct widget_status_data
-{
-    uint32_t active:1;
-    uint32_t highlighted:1;
-    uint32_t leave_popup_branch_open_upon_interaction:1;
-    uint32_t stay_at_bottom:1;
-    uint32_t delete_stored_data:1;
-
-    uint32_t h_first:1;
-    uint32_t h_last:1;
-    uint32_t v_first:1;
-    uint32_t v_last:1;
-}
-widget_status_data;*/
-
 typedef struct widget_base
 {
     uint32_t status;

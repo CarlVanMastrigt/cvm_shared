@@ -285,18 +285,11 @@ static widget * get_widgets_toplevel_ancestor(widget * w)
         {
             w=w->base.parent;
         }
-
-        if(!(w->base.parent->base.status&WIDGET_IS_MENU))
-        {
-            puts("COULD NOT FIND APPROPRIATE WIDGET TOPLEVEL ANCESTOR");
-            return NULL;
-        }
-
-        return w;
     }
 
-    puts("COULD NOT FIND WIDGET TOPLEVEL ANCESTOR");
-    return NULL;
+    assert(w && w->base.parent && w->base.parent->base.status&WIDGET_IS_MENU);///COULD NOT FIND APPROPRIATE WIDGET TOPLEVEL ANCESTOR (MENU)
+
+    return w;
 }
 
 void organise_toplevel_widget(widget * w)

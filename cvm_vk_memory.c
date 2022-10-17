@@ -1,5 +1,5 @@
 /**
-Copyright 2021 Carl van Mastrigt
+Copyright 2021,2022 Carl van Mastrigt
 
 This file is part of cvm_shared.
 

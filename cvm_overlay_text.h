@@ -1,5 +1,5 @@
 /**
-Copyright 2021 Carl van Mastrigt
+Copyright 2021,2022 Carl van Mastrigt
 
 This file is part of cvm_shared.
 
@@ -95,33 +95,45 @@ char * cvm_overlay_utf8_get_next_glyph(char * t);
 char * cvm_overlay_utf8_get_previous_word(char * base,char * t);
 char * cvm_overlay_utf8_get_next_word(char * t);
 
+#define OVERLAY_TEXT_RENDER_SELECTION       0x0001
+#define OVERLAY_TEXT_RENDER_FADING          0x0002
+#define OVERLAY_TEXT_RENDER_BOX_CONSTRAINED 0x0004
 
-#define CVM_OT_SINGLE_LINE_RENDER_DECLARATION(NAME,SI,FI,BCI)\
-void NAME(cvm_overlay_element_render_buffer * restrict erb,overlay_theme * restrict theme,rectangle bounds,overlay_colour colour,const char * restrict text,int16_t x,int16_t y SI FI BCI);\
+typedef struct overlay_text_single_line_render_data
+{
+    const char * restrict text;
 
-#define CVM_OT_SELECTION_INPUTS ,const char * restrict selection_begin,const char * restrict selection_end
-#define CVM_OT_FADING_INPUTS ,rectangle text_area,int text_length
-#define CVM_OT_BOX_CONSTRAINED_INPUTS ,rectangle box_r,uint32_t box_status
+    rectangle bounds;
 
-CVM_OT_SINGLE_LINE_RENDER_DECLARATION(overlay_text_single_line_render,,,)
-CVM_OT_SINGLE_LINE_RENDER_DECLARATION(overlay_text_single_line_render_selection,CVM_OT_SELECTION_INPUTS,,)
-CVM_OT_SINGLE_LINE_RENDER_DECLARATION(overlay_text_single_line_render_fading,,CVM_OT_FADING_INPUTS,)
-CVM_OT_SINGLE_LINE_RENDER_DECLARATION(overlay_text_single_line_render_selection_fading,CVM_OT_SELECTION_INPUTS,CVM_OT_FADING_INPUTS,)
-CVM_OT_SINGLE_LINE_RENDER_DECLARATION(overlay_text_single_line_render_box_constrained,,,CVM_OT_BOX_CONSTRAINED_INPUTS)
-CVM_OT_SINGLE_LINE_RENDER_DECLARATION(overlay_text_single_line_render_selection_box_constrained,CVM_OT_SELECTION_INPUTS,,CVM_OT_BOX_CONSTRAINED_INPUTS)
-CVM_OT_SINGLE_LINE_RENDER_DECLARATION(overlay_text_single_line_render_fading_box_constrained,,CVM_OT_FADING_INPUTS,CVM_OT_BOX_CONSTRAINED_INPUTS)
-CVM_OT_SINGLE_LINE_RENDER_DECLARATION(overlay_text_single_line_render_selection_fading_box_constrained,CVM_OT_SELECTION_INPUTS,CVM_OT_FADING_INPUTS,CVM_OT_BOX_CONSTRAINED_INPUTS)
+    overlay_colour colour;///can make u8
 
-#undef CVM_OT_BOX_CONSTRAINED_INPUTS
-#undef CVM_OT_FADING_INPUTS
-#undef CVM_OT_SELECTION_INPUTS
-#undef CVM_OT_SINGLE_LINE_RENDER_DECLARATION
+    uint16_t flags;///can make u8
+
+    int16_t x;
+    int16_t y;
+
+    /// fading inputs
+    int16_t text_length;
+    rectangle text_area;
+
+    /// selection inputs
+    /// these needn't be restrict as their contents won't be accessed, likewise as these would alias text variable above actually dereferencing either would be a violation of restrict
+    const char * selection_begin;
+    const char * selection_end;
+
+    /// box constrained inputs
+    rectangle box_r;
+    uint32_t box_status;
+
+    ///4 bytes left for packing more data
+}
+overlay_text_single_line_render_data;
+
+///theme cannot be const as glyphs will only be loaded to it as necessary
+void overlay_text_single_line_render(cvm_overlay_element_render_buffer * restrict erb,overlay_theme * restrict theme,const overlay_text_single_line_render_data * restrict data);
 
 int16_t overlay_text_single_line_get_pixel_length(cvm_overlay_font * font,char * text);
 char * overlay_text_single_line_find_offset(cvm_overlay_font * font,char * text,int relative_x);
-
-
-
 
 void overlay_text_multiline_processing(cvm_overlay_font * font,cvm_overlay_text_block * block,char * text,int wrapping_width);
 

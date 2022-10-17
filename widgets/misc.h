@@ -44,8 +44,8 @@ widget * create_unit_separator_widget(void);
 void window_toggle_button_func(widget * w);
 widget * create_window_widget(widget ** box,char * title,bool resizable,widget_function custom_exit_function,void * custom_exit_data,bool free_custom_exit_data);
 
-widget * create_load_window(shared_file_search_data * sfsd,char * title,int * type_filters,file_search_action_function action,void * data,bool free_data,widget * menu_widget);
-widget * create_save_window(shared_file_search_data * sfsd,char * title,int * type_filters,file_search_action_function action,void * data,bool free_data,widget * menu_widget,char ** export_formats);
+//widget * create_load_window(shared_file_search_data * sfsd,char * title,int * type_filters,file_search_action_function action,void * data,bool free_data,widget * menu_widget);
+//widget * create_save_window(shared_file_search_data * sfsd,char * title,int * type_filters,file_search_action_function action,void * data,bool free_data,widget * menu_widget,char ** export_formats);
 
 widget * create_popup_panel_button(widget * popup_container,widget * panel_contents,char * button_text);
 

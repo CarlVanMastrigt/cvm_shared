@@ -1,5 +1,5 @@
 /**
-Copyright 2021 Carl van Mastrigt
+Copyright 2022 Carl van Mastrigt
 
 This file is part of cvm_shared.
 
@@ -339,73 +339,68 @@ static inline int cvm_overlay_get_glyph_advance(cvm_overlay_font * font,cvm_over
 
 
 
-///use complete code? and provide implementation more directly where possible?
-
-#define SINGLE_LINE_RENDER_IMPLEMENTATION(NAME,SI,SS,SC,SR,FI,FS,BCI,GR)\
-void NAME(cvm_overlay_element_render_buffer * restrict erb,overlay_theme * restrict theme,rectangle bounds,overlay_colour colour,const char * restrict text,int16_t x,int16_t y SI FI BCI)\
+#define SINGLE_LINE_RENDER_IMPLEMENTATION(NAME,SS,SC,SR,FS,GR)\
+static void NAME(cvm_overlay_element_render_buffer * restrict erb,overlay_theme * restrict theme,const overlay_text_single_line_render_data * restrict data)\
 {\
-    uint32_t gi,prev_gi,incr;\
+    uint32_t gi,prev_gi=0,incr;\
+    int16_t x=data->x;\
+    const char * text=data->text;\
     FT_Vector kern;\
     cvm_overlay_glyph * g;\
     SS \
     if(!text)return;\
-    prev_gi=0;\
     FS \
     while(*text)\
     {\
         SC \
         if(*text==' ')\
         {\
-            x+=theme->font_.space_advance;\
-            prev_gi=theme->font_.space_character_index;\
+            x+=theme->font.space_advance;\
+            prev_gi=theme->font.space_character_index;\
             text++;\
             continue;\
         }\
-        gi=cvm_overlay_get_utf8_glyph_index(theme->font_.face,(uint8_t*)text,&incr);\
-        g=cvm_overlay_find_glpyh(&theme->font_,gi);\
-        cvm_overlay_prepare_glyph_render_data(&theme->font_,g);\
-        if(prev_gi && !FT_Get_Kerning(theme->font_.face,prev_gi,gi,0,&kern))\
+        gi=cvm_overlay_get_utf8_glyph_index(theme->font.face,(uint8_t*)text,&incr);\
+        g=cvm_overlay_find_glpyh(&theme->font,gi);\
+        cvm_overlay_prepare_glyph_render_data(&theme->font,g);\
+        if(prev_gi && !FT_Get_Kerning(theme->font.face,prev_gi,gi,0,&kern))\
         {\
             x+=kern.x>>6;\
             SC \
         }\
         prev_gi=gi;\
         if(g->tile) GR \
-        x+=cvm_overlay_get_glyph_advance(&theme->font_,g);\
+        x+=cvm_overlay_get_glyph_advance(&theme->font,g);\
         text+=incr;\
     }\
     SC \
     SR \
 }
 
-#define SELECTION_INPUTS ,const char * restrict selection_begin,const char * restrict selection_end
-#define SELECTION_SETUP int sb,se;
-#define SELECTION_CHECK if(text==selection_begin) sb=x; if(text==selection_end) se=x;
+#define SELECTION_SETUP int16_t sb,se;
+#define SELECTION_CHECK if(text==data->selection_begin) sb=x; if(text==data->selection_end) se=x;
 
-#define FADING_INPUTS ,rectangle text_area,int text_length
-#define FADING_SETUP rectangle fade_r=(rectangle){.x1=theme->h_text_fade_range*(text_area.x1>x),.y1=0,.x2=theme->h_text_fade_range*(text_area.x2<x+text_length),.y2=0};
-
-#define BOX_CONSTRAINED_INPUTS ,rectangle box_r,uint32_t box_status
-
-#define GLYPH_RENDER cvm_render_shaded_overlay_element(erb,bounds,rectangle_add_offset(g->pos,x,y),colour,g->tile->x_pos<<2,g->tile->y_pos<<2);
-#define GLYPH_RENDER_FADING cvm_render_shaded_fading_overlay_element(erb,bounds,rectangle_add_offset(g->pos,x,y),colour,g->tile->x_pos<<2,g->tile->y_pos<<2,text_area,fade_r);
-#define GLYPH_RENDER_BOX_CONSTRAINED theme->shaded_box_constrained_render(erb,theme,bounds,rectangle_add_offset(g->pos,x,y),colour,g->tile->x_pos<<2,g->tile->y_pos<<2,box_r,box_status);
-#define GLYPH_RENDER_FADING_BOX_CONSTRAINED theme->shaded_fading_box_constrained_render(erb,theme,bounds,rectangle_add_offset(g->pos,x,y),colour,g->tile->x_pos<<2,g->tile->y_pos<<2,text_area,fade_r,box_r,box_status);
-
-#define SELECTION_RENDER cvm_render_fill_overlay_element(erb,bounds,((rectangle){.x1=sb,.y1=y,.x2=se+(selection_end==selection_begin),.y2=y+theme->font_.glyph_size}),OVERLAY_TEXT_HIGHLIGHT_COLOUR);
-#define SELECTION_RENDER_FADING cvm_render_fill_fading_overlay_element(erb,bounds,((rectangle){.x1=sb,.y1=y,.x2=se+(selection_end==selection_begin),.y2=y+theme->font_.glyph_size}),OVERLAY_TEXT_HIGHLIGHT_COLOUR,text_area,fade_r);
-#define SELECTION_RENDER_BOX_CONSTRAINED theme->fill_box_constrained_render(erb,theme,bounds,((rectangle){.x1=sb,.y1=y,.x2=se+(selection_end==selection_begin),.y2=y+theme->font_.glyph_size}),OVERLAY_TEXT_HIGHLIGHT_COLOUR,box_r,box_status);
-#define SELECTION_RENDER_FADING_BOX_CONSTRAINED theme->fill_fading_box_constrained_render(erb,theme,bounds,((rectangle){.x1=sb,.y1=y,.x2=se+(selection_end==selection_begin),.y2=y+theme->font_.glyph_size}),OVERLAY_TEXT_HIGHLIGHT_COLOUR,text_area,fade_r,box_r,box_status);
+#define FADING_SETUP rectangle fade_r=(rectangle){.x1=theme->h_text_fade_range*(data->text_area.x1>x),.y1=0,.x2=theme->h_text_fade_range*(data->text_area.x2<x+data->text_length),.y2=0};
 
 
-SINGLE_LINE_RENDER_IMPLEMENTATION(overlay_text_single_line_render,,,,,,,,GLYPH_RENDER)
-SINGLE_LINE_RENDER_IMPLEMENTATION(overlay_text_single_line_render_selection,SELECTION_INPUTS,SELECTION_SETUP,SELECTION_CHECK,SELECTION_RENDER,,,,GLYPH_RENDER)
-SINGLE_LINE_RENDER_IMPLEMENTATION(overlay_text_single_line_render_fading,,,,,FADING_INPUTS,FADING_SETUP,,GLYPH_RENDER_FADING)
-SINGLE_LINE_RENDER_IMPLEMENTATION(overlay_text_single_line_render_selection_fading,SELECTION_INPUTS,SELECTION_SETUP,SELECTION_CHECK,SELECTION_RENDER_FADING,FADING_INPUTS,FADING_SETUP,,GLYPH_RENDER_FADING)
-SINGLE_LINE_RENDER_IMPLEMENTATION(overlay_text_single_line_render_box_constrained,,,,,,,BOX_CONSTRAINED_INPUTS,GLYPH_RENDER_BOX_CONSTRAINED)
-SINGLE_LINE_RENDER_IMPLEMENTATION(overlay_text_single_line_render_selection_box_constrained,SELECTION_INPUTS,SELECTION_SETUP,SELECTION_CHECK,SELECTION_RENDER_BOX_CONSTRAINED,,,BOX_CONSTRAINED_INPUTS,GLYPH_RENDER_BOX_CONSTRAINED)
-SINGLE_LINE_RENDER_IMPLEMENTATION(overlay_text_single_line_render_fading_box_constrained,,,,,FADING_INPUTS,FADING_SETUP,BOX_CONSTRAINED_INPUTS,GLYPH_RENDER_FADING_BOX_CONSTRAINED)
-SINGLE_LINE_RENDER_IMPLEMENTATION(overlay_text_single_line_render_selection_fading_box_constrained,SELECTION_INPUTS,SELECTION_SETUP,SELECTION_CHECK,SELECTION_RENDER_FADING_BOX_CONSTRAINED,FADING_INPUTS,FADING_SETUP,BOX_CONSTRAINED_INPUTS,GLYPH_RENDER_FADING_BOX_CONSTRAINED)
+#define GLYPH_RENDER cvm_render_shaded_overlay_element(erb,data->bounds,rectangle_add_offset(g->pos,x,data->y),data->colour,g->tile->x_pos<<2,g->tile->y_pos<<2);
+#define GLYPH_RENDER_FADING cvm_render_shaded_fading_overlay_element(erb,data->bounds,rectangle_add_offset(g->pos,x,data->y),data->colour,g->tile->x_pos<<2,g->tile->y_pos<<2,data->text_area,fade_r);
+#define GLYPH_RENDER_BOX_CONSTRAINED theme->shaded_box_constrained_render(erb,theme,data->bounds,rectangle_add_offset(g->pos,x,data->y),data->colour,g->tile->x_pos<<2,g->tile->y_pos<<2,data->box_r,data->box_status);
+#define GLYPH_RENDER_FADING_BOX_CONSTRAINED theme->shaded_fading_box_constrained_render(erb,theme,data->bounds,rectangle_add_offset(g->pos,x,data->y),data->colour,g->tile->x_pos<<2,g->tile->y_pos<<2,data->text_area,fade_r,data->box_r,data->box_status);
+
+#define SELECTION_RENDER cvm_render_fill_overlay_element(erb,data->bounds,((rectangle){.x1=sb,.y1=data->y,.x2=se+(data->selection_end==data->selection_begin),.y2=data->y+theme->font.glyph_size}),OVERLAY_TEXT_HIGHLIGHT_COLOUR);
+#define SELECTION_RENDER_FADING cvm_render_fill_fading_overlay_element(erb,data->bounds,((rectangle){.x1=sb,.y1=data->y,.x2=se+(data->selection_end==data->selection_begin),.y2=data->y+theme->font.glyph_size}),OVERLAY_TEXT_HIGHLIGHT_COLOUR,data->text_area,fade_r);
+#define SELECTION_RENDER_BOX_CONSTRAINED theme->fill_box_constrained_render(erb,theme,data->bounds,((rectangle){.x1=sb,.y1=data->y,.x2=se+(data->selection_end==data->selection_begin),.y2=data->y+theme->font.glyph_size}),OVERLAY_TEXT_HIGHLIGHT_COLOUR,data->box_r,data->box_status);
+#define SELECTION_RENDER_FADING_BOX_CONSTRAINED theme->fill_fading_box_constrained_render(erb,theme,data->bounds,((rectangle){.x1=sb,.y1=data->y,.x2=se+(data->selection_end==data->selection_begin),.y2=data->y+theme->font.glyph_size}),OVERLAY_TEXT_HIGHLIGHT_COLOUR,data->text_area,fade_r,data->box_r,data->box_status);
+
+SINGLE_LINE_RENDER_IMPLEMENTATION(overlay_text_single_line_render____,,,,,GLYPH_RENDER)
+SINGLE_LINE_RENDER_IMPLEMENTATION(overlay_text_single_line_render_s__,SELECTION_SETUP,SELECTION_CHECK,SELECTION_RENDER,,GLYPH_RENDER)
+SINGLE_LINE_RENDER_IMPLEMENTATION(overlay_text_single_line_render__f_,,,,FADING_SETUP,GLYPH_RENDER_FADING)
+SINGLE_LINE_RENDER_IMPLEMENTATION(overlay_text_single_line_render_sf_,SELECTION_SETUP,SELECTION_CHECK,SELECTION_RENDER_FADING,FADING_SETUP,GLYPH_RENDER_FADING)
+SINGLE_LINE_RENDER_IMPLEMENTATION(overlay_text_single_line_render___c,,,,,GLYPH_RENDER_BOX_CONSTRAINED)
+SINGLE_LINE_RENDER_IMPLEMENTATION(overlay_text_single_line_render_s_c,SELECTION_SETUP,SELECTION_CHECK,SELECTION_RENDER_BOX_CONSTRAINED,,GLYPH_RENDER_BOX_CONSTRAINED)
+SINGLE_LINE_RENDER_IMPLEMENTATION(overlay_text_single_line_render__fc,,,,FADING_SETUP,GLYPH_RENDER_FADING_BOX_CONSTRAINED)
+SINGLE_LINE_RENDER_IMPLEMENTATION(overlay_text_single_line_render_sfc,SELECTION_SETUP,SELECTION_CHECK,SELECTION_RENDER_FADING_BOX_CONSTRAINED,FADING_SETUP,GLYPH_RENDER_FADING_BOX_CONSTRAINED)
 
 
 #undef SELECTION_RENDER_FADING_BOX_CONSTRAINED
@@ -416,14 +411,28 @@ SINGLE_LINE_RENDER_IMPLEMENTATION(overlay_text_single_line_render_selection_fadi
 #undef GLYPH_RENDER_BOX_CONSTRAINED
 #undef GLYPH_RENDER_FADING
 #undef GLYPH_RENDER
-#undef BOX_CONSTRAINED_INPUTS
 #undef FADING_SETUP
-#undef FADING_INPUTS
 #undef SELECTION_CHECK
 #undef SELECTION_SETUP
-#undef SELECTION_INPUTS
 #undef SINGLE_LINE_RENDER_IMPLEMENTATION
 
+
+void (*overlay_text_single_line_render_ptrs[8])(cvm_overlay_element_render_buffer * restrict,overlay_theme * restrict,const overlay_text_single_line_render_data * restrict)=
+{
+    overlay_text_single_line_render____,
+    overlay_text_single_line_render_s__,
+    overlay_text_single_line_render__f_,
+    overlay_text_single_line_render_sf_,
+    overlay_text_single_line_render___c,
+    overlay_text_single_line_render_s_c,
+    overlay_text_single_line_render__fc,
+    overlay_text_single_line_render_sfc,
+};
+
+void overlay_text_single_line_render(cvm_overlay_element_render_buffer * restrict erb,overlay_theme * restrict theme,const overlay_text_single_line_render_data * restrict data)
+{
+    overlay_text_single_line_render_ptrs[data->flags](erb,theme,data);
+}
 
 int16_t overlay_text_single_line_get_pixel_length(cvm_overlay_font * font,char * text)
 {
@@ -799,7 +808,7 @@ void overlay_text_centred_glyph_box_constrained_render(cvm_overlay_element_rende
 {
     cvm_overlay_glyph * g;
 
-    g=overlay_get_glyph(&theme->font_,icon_glyph);
+    g=overlay_get_glyph(&theme->font,icon_glyph);
 
     if(!g || !g->tile)return;
 

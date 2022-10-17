@@ -97,7 +97,17 @@ static void text_anchor_widget_render(overlay_theme * theme,widget * w,int16_t x
 	rectangle r=rectangle_add_offset(w->base.r,x_off,y_off);
 	theme->h_bar_render(erb,theme,bounds,r,w->base.status,OVERLAY_ALTERNATE_MAIN_COLOUR);
 
-    overlay_text_single_line_render(erb,theme,bounds,OVERLAY_TEXT_COLOUR_0,w->anchor.text,r.x1+theme->h_bar_text_offset,(r.y1+r.y2-theme->font_.glyph_size)>>1);
+	overlay_text_single_line_render_data text_render_data=
+	{
+	    .flags=0,
+	    .x=r.x1+theme->h_bar_text_offset,
+	    .y=(r.y1+r.y2-theme->font.glyph_size)>>1,
+	    .text=w->anchor.text,
+	    .bounds=bounds,
+	    .colour=OVERLAY_TEXT_COLOUR_0
+	};
+
+    overlay_text_single_line_render(erb,theme,&text_render_data);
 }
 
 static widget * text_anchor_widget_select(overlay_theme * theme,widget * w,int16_t x_in,int16_t y_in)
@@ -109,7 +119,7 @@ static widget * text_anchor_widget_select(overlay_theme * theme,widget * w,int16
 
 static void text_anchor_widget_min_w(overlay_theme * theme,widget * w)
 {
-	w->base.min_w = overlay_text_single_line_get_pixel_length(&theme->font_,w->anchor.text)+2*theme->h_bar_text_offset;
+	w->base.min_w = overlay_text_single_line_get_pixel_length(&theme->font,w->anchor.text)+2*theme->h_bar_text_offset;
 }
 
 static void text_anchor_widget_min_h(overlay_theme * theme,widget * w)
@@ -140,7 +150,7 @@ widget * create_anchor(widget * constraint,char * title)
 
     w->anchor.x_clicked=0;
     w->anchor.y_clicked=0;
-    if(title)w->anchor.text=strdup(title);
+    if(title)w->anchor.text=cvm_strdup(title);
     else w->anchor.text=NULL;
     w->anchor.constraint=constraint;
 

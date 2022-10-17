@@ -480,7 +480,7 @@ void cvm_managed_mesh_adjacency_render(cvm_managed_mesh * mm,VkCommandBuffer gra
 
 void cvm_managed_mesh_create(cvm_managed_mesh * mm,cvm_vk_managed_buffer * mb,char * filename,uint16_t flags,bool dynamic)
 {
-    mm->filename=strdup(filename);
+    mm->filename=cvm_strdup(filename);
     mm->mb=mb;
     mm->data.flags=flags;
     mm->allocated=false;

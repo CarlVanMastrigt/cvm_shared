@@ -19,15 +19,22 @@ along with cvm_shared.  If not, see <https://www.gnu.org/licenses/>.
 
 #include "cvm_shared.h"
 
+#include <dirent.h>
+
+
+
+
+///implement basics of dirent?
 
 
 
 
 
+/*
 
 
-#warning have seperator character : / stored somewhere else and used for these functions ??, probably not needed as mac will likely be different
-///below are OS dependant functions
+
+
 
 static bool check_if_directory(char * filename)
 {
@@ -181,8 +188,8 @@ static void load_file_search_directory_entries(file_search_instance * fsi)
     struct dirent * e;
     struct stat sb;
 
-    int fn_len,dn_len;
-    uint32_t type;
+    uint32_t fn_len,dn_len;
+    int type;
 
 
     fsi->entry_count=0;
@@ -205,7 +212,8 @@ static void load_file_search_directory_entries(file_search_instance * fsi)
 
     dn_len=strlen(fsi->directory_buffer);
 
-    #warning alloc mem for each name and keep in entry itself (strdup)
+
+    #warning alloc mem for each name and keep in entry itself (cvm_strdup)
 
     while((e=readdir(d)))
     {
@@ -213,6 +221,7 @@ static void load_file_search_directory_entries(file_search_instance * fsi)
 
         while((dn_len+fn_len+1) >= fsi->directory_buffer_size)fsi->directory_buffer=realloc(fsi->directory_buffer,sizeof(char)*(fsi->directory_buffer_size*=2));
         strcat(fsi->directory_buffer,e->d_name);
+        printf("%s : %d\n",e->d_name,e->d_type);DT_DIR
 
         if(stat(fsi->directory_buffer,&sb) == -1)
         {
@@ -465,10 +474,10 @@ static void file_search_button_widget_render(overlay_theme * theme,widget * w,in
     file_search_instance * fsi=w->button.data;
     //theme->h_text_bar_render(w->base.r,x_off,y_off,w->base.status,theme,od,bounds,OVERLAY_HIGHLIGHTING_COLOUR,w->button.text);
 
-    char * icon_name;
-    if(fsi->entries[w->button.index].type==0)icon_name="folder";
-    else if(fsi->entries[w->button.index].type==1)icon_name="misc_file";
-    else icon_name=fsi->sfsd->types[fsi->entries[w->button.index].type-2].icon_name;
+    const char * icon;
+    if(fsi->entries[w->button.index].type==CVM_FS_DIRECTORY_TYPE_ID)icon="📁";
+    else if(fsi->entries[w->button.index].type==CVM_FS_MISCELLANEOUS_TYPE_ID)icon="misc_file";
+    else icon=fsi->sfsd->types[fsi->entries[w->button.index].type-CVM_FS_CUSTOM_TYPE_OFFSET].icon;
 
 //    theme->h_icon_text_bar_render(w->base.r,x_off,y_off,w->base.status,theme,od,bounds,
 //        (fsi->selected_entry==w)?OVERLAY_HIGHLIGHTING_COLOUR:OVERLAY_NO_COLOUR,
@@ -677,45 +686,43 @@ static void populate_file_search_buttons(file_search_instance * fsi)
 //    organise_toplevel_widget(fsi->file_box);
 }
 
-void set_entry_type(file_search_instance * fsi,uint32_t entry_index)
-{
-    file_search_file_type * types=fsi->sfsd->types;
-    char ** f;
-    char *s,*t;
-    uint32_t j;
-
-    if(fsi->entries[entry_index].type)
-    {
-        s=fsi->entry_name_data+fsi->entries[entry_index].name_offset;
-        t=NULL;
-
-        while(*s)
-        {
-            if(*s=='.')t=s;
-            s++;
-        }
-
-        if(t)
-        {
-            t++;
-
-            for(j=0;types[j].type_extensions;j++)
-            {
-                f=types[j].type_extensions;
-
-                while(*f)
-                {
-                    if(str_lower_cmp(t,*f))
-                    {
-                        fsi->entries[entry_index].type=j+2;
-                        return;
-                    }
-                    f++;
-                }
-            }
-        }
-    }
-}
+//void set_entry_type(file_search_instance * fsi,uint32_t entry_index)
+//{
+//    file_search_file_type * types=fsi->sfsd->types;
+//    const char ** f;
+//    char *s,*t;
+//    uint32_t j,type_count;
+//
+//    if(fsi->entries[entry_index].type)
+//    {
+//        s=fsi->entry_name_data+fsi->entries[entry_index].name_offset;
+//        t=NULL;
+//
+//        while(*s)
+//        {
+//            if(*s=='.')t=s+1;///set t to string following '.'
+//            s++;
+//        }
+//
+//        if(t)
+//        {
+//            for(j=0;j<;j++)
+//            {
+//                f=types[j].type_extensions;
+//
+//                while(*f)
+//                {
+//                    if(str_lower_cmp(t,*f))
+//                    {
+//                        fsi->entries[entry_index].type=j+CVM_FS_CUSTOM_TYPE_OFFSET;
+//                        return;
+//                    }
+//                    f++;
+//                }
+//            }
+//        }
+//    }
+//}
 
 
 
@@ -758,9 +765,10 @@ static void load_file_search_directory(file_search_instance * fsi)
     load_file_search_directory_entries(fsi);///need different versions for different implementations
 
     qsort(fsi->entries,(size_t)fsi->entry_count,sizeof(widget_file_search_entry),file_search_entry_comparison);
+    /// probably want to allow variant sort systems (date modified, reversed &c)
 
     uint32_t i;
-    if(fsi->sfsd->types)for(i=0;i<fsi->entry_count;i++)set_entry_type(fsi,i);
+    //if(fsi->sfsd->types)for(i=0;i<fsi->entry_count;i++)set_entry_type(fsi,i);
 
     populate_file_search_buttons(fsi);
 }
@@ -1190,15 +1198,24 @@ void create_file_search_error_popup(widget * menu_widget,file_search_instance * 
 static void file_search_filter_type_button_widget_render(overlay_theme * theme,widget * w,int16_t x_off,int16_t y_off,cvm_overlay_element_render_buffer * erb,rectangle bounds)
 {
     file_search_instance * fsi=w->button.data;
-    char * text="All Files";
 
     rectangle r=rectangle_add_offset(w->base.r,x_off,y_off);
 	theme->h_bar_render(erb,theme,bounds,r,w->base.status,OVERLAY_MAIN_COLOUR);
 
-    if(fsi->active_type_filter>=0) text=fsi->sfsd->types[fsi->active_type_filter].name;
-    if(widget_active(fsi->type_filter_popup))text=NULL;
+    overlay_text_single_line_render_data text_render_data=
+	{
+	    .flags=0,
+	    .x=r.x1+theme->h_bar_text_offset,
+	    .y=(r.y1+r.y2-theme->font.glyph_size)>>1,
+	    .text="All Files",
+	    .bounds=bounds,
+	    .colour=OVERLAY_TEXT_COLOUR_0
+	};
 
-    overlay_text_single_line_render(erb,theme,bounds,OVERLAY_TEXT_COLOUR_0,text,r.x1+theme->h_bar_text_offset,(r.y1+r.y2-theme->font_.glyph_size)>>1);
+	if(fsi->active_type_filter>=0)text_render_data.text=fsi->sfsd->types[fsi->active_type_filter].name;
+	if(widget_active(fsi->type_filter_popup))text_render_data.text=NULL;
+
+    overlay_text_single_line_render(erb,theme,&text_render_data);
 }
 
 static widget * file_search_filter_type_button_widget_select(overlay_theme * theme,widget * w,int16_t x_in,int16_t y_in)
@@ -1210,7 +1227,7 @@ static widget * file_search_filter_type_button_widget_select(overlay_theme * the
 static void file_search_filter_type_button_widget_min_w(overlay_theme * theme,widget * w)
 {
     file_search_instance * fsi=w->button.data;
-    if(fsi->show_misc_files) w->base.min_w=overlay_text_single_line_get_pixel_length(&theme->font_,"All Files");//calculate_text_length(theme,"All Files",0);
+    if(fsi->show_misc_files) w->base.min_w=overlay_text_single_line_get_pixel_length(&theme->font,"All Files");//calculate_text_length(theme,"All Files",0);
     else w->base.min_w=0;
     int width;
 
@@ -1219,7 +1236,7 @@ static void file_search_filter_type_button_widget_min_w(overlay_theme * theme,wi
 
     if((types)&&(filter))while(*filter >= 0)
     {
-        width=overlay_text_single_line_get_pixel_length(&theme->font_,types[*filter].name);//calculate_text_length(theme,types[*filter].name,0);
+        width=overlay_text_single_line_get_pixel_length(&theme->font,types[*filter].name);//calculate_text_length(theme,types[*filter].name,0);
 
         if(width>w->base.min_w)w->base.min_w=width;
 
@@ -1306,15 +1323,22 @@ widget * create_file_search_filter_type_button(widget * menu_widget,file_search_
 
 static void file_search_export_type_button_widget_render(overlay_theme * theme,widget * w,int16_t x_off,int16_t y_off,cvm_overlay_element_render_buffer * erb,rectangle bounds)
 {
-    file_search_instance * fsi=w->button.data;
-    char * text=NULL;
-
     rectangle r=rectangle_add_offset(w->base.r,x_off,y_off);
+    file_search_instance * fsi=w->button.data;
+
+    overlay_text_single_line_render_data text_render_data=
+	{
+	    .flags=0,
+	    .x=r.x1+theme->h_bar_text_offset,
+	    .y=(r.y1+r.y2-theme->font.glyph_size)>>1,
+	    .text=(fsi->export_formats)?fsi->export_formats[fsi->active_export_format]:NULL,
+	    .bounds=bounds,
+	    .colour=OVERLAY_TEXT_COLOUR_0
+	};
+
 	theme->h_bar_render(erb,theme,bounds,r,w->base.status,OVERLAY_MAIN_COLOUR);
 
-    if(fsi->export_formats) text=fsi->export_formats[fsi->active_export_format];
-
-    overlay_text_single_line_render(erb,theme,bounds,OVERLAY_TEXT_COLOUR_0,text,r.x1+theme->h_bar_text_offset,(r.y1+r.y2-theme->font_.glyph_size)>>1);
+    overlay_text_single_line_render(erb,theme,&text_render_data);
 }
 
 static widget * file_search_export_type_button_widget_select(overlay_theme * theme,widget * w,int16_t x_in,int16_t y_in)
@@ -1333,7 +1357,7 @@ static void file_search_export_type_button_widget_min_w(overlay_theme * theme,wi
 
     if(formats)while(*formats)
     {
-        width=overlay_text_single_line_get_pixel_length(&theme->font_,*formats);//calculate_text_length(theme,*formats,0);
+        width=overlay_text_single_line_get_pixel_length(&theme->font,*formats);//calculate_text_length(theme,*formats,0);
 
         if(width>w->base.min_w)w->base.min_w=width;
 
@@ -1414,19 +1438,22 @@ widget * create_file_search_export_type_button(widget * menu_widget,file_search_
 
 
 
+
 static void set_shared_file_search_data_directory(shared_file_search_data * sfsd,char * directory)
 {
     if(directory==NULL)directory=getenv("HOME");
     if(directory==NULL)directory="";
-    int length=strlen(directory);
+    uint32_t length=strlen(directory);
 
-    while((length+1u) >= sfsd->directory_buffer_size)sfsd->directory_buffer=realloc(sfsd->directory_buffer,sizeof(char)*(sfsd->directory_buffer_size*=2));
+    while((length+1) >= sfsd->directory_buffer_size)sfsd->directory_buffer=realloc(sfsd->directory_buffer,sizeof(char)*(sfsd->directory_buffer_size*=2));
     strcpy(sfsd->directory_buffer,directory);
 
     while((length>0)&&(sfsd->directory_buffer[length-1]=='/'))length--;
 
     sfsd->directory_buffer[length]='/';
     sfsd->directory_buffer[length+1]='\0';
+
+    puts(sfsd->directory_buffer);
 }
 
 
@@ -1441,17 +1468,14 @@ shared_file_search_data * create_shared_file_search_data(char * initial_director
     sfsd->directory_buffer_size=4;
     sfsd->directory_buffer=malloc(sizeof(char)*sfsd->directory_buffer_size);
 
-    //sfsd->filename_buffer_size=4;
-    //sfsd->filename_buffer=malloc(sizeof(char)*sfsd->filename_buffer_size);
-
     sfsd->error_count=FILE_SEARCH_ERROR_COUNT;
     sfsd->error_messages=malloc(sizeof(char*)*FILE_SEARCH_ERROR_COUNT);
     sfsd->error_messages[FILE_SEARCH_NO_ERROR]=NULL;
-    sfsd->error_messages[FILE_SEARCH_ERROR_INVALID_FILE]=strdup("Invalid file selected");
-    sfsd->error_messages[FILE_SEARCH_ERROR_INVALID_DIRECTORY]=strdup("Invalid directory selected");
-    sfsd->error_messages[FILE_SEARCH_ERROR_CAN_NOT_CHANGE_DIRECTORY]=strdup("Directory change not permitted");
-    sfsd->error_messages[FILE_SEARCH_ERROR_CAN_NOT_SAVE_FILE]=strdup("Could not save file");
-    sfsd->error_messages[FILE_SEARCH_ERROR_CAN_NOT_LOAD_FILE]=strdup("Could not load file");
+    sfsd->error_messages[FILE_SEARCH_ERROR_INVALID_FILE]=cvm_strdup("Invalid file selected");
+    sfsd->error_messages[FILE_SEARCH_ERROR_INVALID_DIRECTORY]=cvm_strdup("Invalid directory selected");
+    sfsd->error_messages[FILE_SEARCH_ERROR_CAN_NOT_CHANGE_DIRECTORY]=cvm_strdup("Directory change not permitted");
+    sfsd->error_messages[FILE_SEARCH_ERROR_CAN_NOT_SAVE_FILE]=cvm_strdup("Could not save file");
+    sfsd->error_messages[FILE_SEARCH_ERROR_CAN_NOT_LOAD_FILE]=cvm_strdup("Could not load file");
 
     sfsd->first=NULL;
 
@@ -1509,4 +1533,196 @@ void update_shared_file_search_data_directory_use(shared_file_search_data * sfsd
 
         fsi=fsi->next;
     }
+}*/
+
+#warning better name for str_lower_cmp ??? use standardised function ???
+int str_lower_cmp(const char * s1,const char * s2)
+{
+    char c1,c2;
+
+    do
+    {
+        c1=*(s1++);
+        c2=*(s2++);
+
+        if((c1>='A')&&(c1<='Z'))c1-='A'-'a';
+        if((c2>='A')&&(c2<='Z'))c2-='A'-'a';
+
+        if(c1!=c2)return c1-c2;
+    }
+    while((c1)&&(c2));
+
+    return 0;
+}
+
+static void clean_file_search_directory(char * directory)
+{
+    char *r,*w;
+
+    r=w=directory;
+
+    while(*r)
+    {
+        while(*r=='/')
+        {
+            if((r[1]=='.')&&(r[2]=='.')&&(r[3]=='/'))///go up a layer when encountering ../
+            {
+                r+=3;
+                if(w>directory)w--;///reverse over '/'
+                while((w>directory)&&(*w!='/')) w--;
+            }
+            else if((r[1]=='.')&&(r[2]=='/'))r+=2;///remove ./
+            else if(r[1]=='/')r++;/// remove multiple /
+            else break;
+        }
+
+        if(w!=r)*w=*r;
+
+        r++;
+        w++;
+    }
+
+    *w='\0';
+}
+
+static inline bool is_hidden_file(const char * filename)
+{
+    return filename && *filename=='.' && strcmp(filename,".") && strcmp(filename,"..");///exists, first entry is '.' and isnt just "." and isnt just ".."
+}
+
+static void set_file_search_directory(file_search_data * fsd,char * directory)
+{
+    if(directory==NULL)directory=getenv("HOME");
+    if(directory==NULL)directory="";
+    uint32_t length=strlen(directory);
+
+    while((length+1) >= fsd->directory_buffer_size)fsd->directory_buffer=realloc(fsd->directory_buffer,sizeof(char)*(fsd->directory_buffer_size*=2));
+    strcpy(fsd->directory_buffer,directory);
+
+    while((length>0)&&(fsd->directory_buffer[length-1]=='/'))length--;
+
+    fsd->directory_buffer[length]='/';
+    fsd->directory_buffer[length+1]='\0';
+
+    clean_file_search_directory(fsd->directory_buffer);
+}
+
+#ifndef DT_DIR
+#define DT_DIR 4
+#endif // DT_DIR
+
+#ifndef DT_REG
+#define DT_REG 8
+#endif // DT_REG
+
+
+#warning make static ??
+void load_file_search_directory_entries(file_search_data * fsd)
+{
+    return;
+    DIR * directory;
+    struct dirent * entry;
+
+    uint32_t i,filename_buffer_offset,filename_length;
+    uint16_t type_id;
+    bool valid;
+
+    const char *filename,*ext,*type_ext;
+
+
+    fsd->entry_count=0;
+    filename_buffer_offset=0;
+
+    directory = opendir(fsd->directory_buffer);
+
+    if(!directory)
+    {
+        printf("SUPPLIED DIRECTORY INVALID :%s:\n",fsd->directory_buffer);
+        set_file_search_directory(fsd,getenv("HOME"));
+
+        directory = opendir(fsd->directory_buffer);
+        if(!directory)
+        {
+            puts("HOME DIRECTORY INVALID");
+            return;
+        }
+    }
+
+    #warning alloc mem for each name and keep in entry itself (cvm_strdup)
+
+    while((entry=readdir(directory)))
+    {
+        if(fsd->show_hidden || !is_hidden_file(entry->d_name))
+        {
+            valid=false;
+
+            if(entry->d_type==DT_DIR)
+            {
+                type_id=CVM_FS_DIRECTORY_TYPE_ID;
+                valid = fsd->show_control_entries || (strcmp(entry->d_name,".") && strcmp(entry->d_name,".."));/// dont show . or .. unless showing control entries
+
+                ///check hidden files
+            }
+            else if(entry->d_type==DT_REG)
+            {
+                type_id=CVM_FS_MISCELLANEOUS_TYPE_ID;
+
+                ///check hidden files
+
+                ext=NULL;
+                filename=entry->d_name;
+                while(*filename)
+                {
+                    if(*filename=='.')ext=filename+1;
+                    filename++;
+                }
+
+                if(ext)for(i=0;i<fsd->type_count && type_id==CVM_FS_MISCELLANEOUS_TYPE_ID;i++)
+                {
+                    type_ext=fsd->types[i].type_extensions;
+
+                    while(*type_ext)
+                    {
+                        if(!str_lower_cmp(type_ext,ext))
+                        {
+                            type_id=i+CVM_FS_CUSTOM_TYPE_OFFSET;
+                            break;
+                        }
+                        while(*type_ext++);///move to next in concatenated extension list
+                    }
+                }
+
+                valid=fsd->show_misc_files || type_id!=CVM_FS_MISCELLANEOUS_TYPE_ID;
+            }
+
+            if(valid)
+            {
+                filename_length=strlen(entry->d_name)+1;
+
+                printf("%u %s\n",type_id,entry->d_name);
+
+    //            while((filename_buffer_offset+filename_length+1)>fsd->filename_buffer_space)
+    //            {
+    //                fsd->filename_buffer=realloc(fsd->filename_buffer,(fsd->filename_buffer_space*=2));
+    //            }
+    //
+    //            if(fsd->entry_count==fsd->entry_space)
+    //            {
+    //                fsd->entries=realloc(fsd->entries,sizeof(file_search_entry)*(fsd->entry_space*=2));
+    //            }
+    //
+    //            fsd->entries[fsd->entry_count++]=(file_search_entry)
+    //            {
+    //                .fsd=fsd,
+    //                .filename_offset=filename_buffer_offset,
+    //                .type_id=type_id
+    //            };
+    //
+    //            strcpy(fsd->filename_buffer+filename_buffer_offset,entry->d_name);
+    //            filename_buffer_offset+=filename_length;
+            }
+        }
+    }
+
+    closedir(directory);
 }

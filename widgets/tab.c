@@ -30,61 +30,34 @@ static void tab_button_func(widget * button)
     page->base.parent->tab_folder.current_tab_page=page;
 }
 
-//
-//static void tab_button_widget_render(overlay_theme * theme,widget * w,int x_off,int y_off,cvm_overlay_element_render_buffer * erb,rectangle bounds)
-//{
-//    widget * page=w->button.data;
-//
-//    if(widget_active(page))
-//    {
-//        rectangle r=rectangle_add_offset(w->base.r,x_off,y_off);
-//
-//        rectangle box_r;
-//        uint32_t box_status;
-//
-//        if(get_ancestor_contiguous_box_data(w,&box_r,&box_status))
-//        {
-//            if(page->base.parent->tab_folder.current_tab_page==page)
-//            {
-//                theme->h_bar_over_box_render(erb,theme,bounds,r,w->base.status,OVERLAY_HIGHLIGHTING_COLOUR,box_r,box_status);
-//            }
-//
-//            r=overlay_simple_text_rectangle(r,theme->font_.glyph_size,theme->h_bar_text_offset);
-//            rectangle b=get_rectangle_overlap(r,bounds);
-//            if(rectangle_has_positive_area(b))overlay_text_single_line_box_constrained_render(erb,theme,b,w->button.text,r.x1,r.y1,OVERLAY_TEXT_COLOUR_0,box_r,box_status);
-//        }
-//        else
-//        {
-//            if(page->base.parent->tab_folder.current_tab_page==page)
-//            {
-//                theme->h_bar_render(erb,theme,bounds,r,w->base.status,OVERLAY_HIGHLIGHTING_COLOUR);
-//            }
-//
-//            r=overlay_simple_text_rectangle(r,theme->font_.glyph_size,theme->h_bar_text_offset);
-//            rectangle b=get_rectangle_overlap(r,bounds);
-//            if(rectangle_has_positive_area(b))overlay_text_single_line_render(erb,&theme->font_,b,w->button.text,r.x1,r.y1,OVERLAY_TEXT_COLOUR_0);
-//        }
-//    }
-//}
+///the only if page is active paradigm is great for automatically enabling/disabling tabs based on availability
 static void tab_button_widget_render(overlay_theme * theme,widget * w,int16_t x_off,int16_t y_off,cvm_overlay_element_render_buffer * erb,rectangle bounds)
 {
-    uint32_t contiguous_box_status;
-    rectangle contiguous_box_r;
+    rectangle r=rectangle_add_offset(w->base.r,x_off,y_off);
+
     widget * page=w->button.data;
+
+    overlay_text_single_line_render_data text_render_data=
+	{
+	    .flags=0,
+	    .x=r.x1+theme->h_bar_text_offset,
+	    .y=(r.y1+r.y2-theme->font.glyph_size)>>1,
+	    .text=w->button.text,
+	    .bounds=bounds,
+	    .colour=OVERLAY_TEXT_COLOUR_0
+	};
 
     if(widget_active(page))
     {
-        rectangle r=rectangle_add_offset(w->base.r,x_off,y_off);
-
+        #warning better to have page set button as highlighted and represent that in contiguous box?
         #warning need better check here, mainly is contiguous box "all" or "some"
-        if(get_ancestor_contiguous_box_data(w,&contiguous_box_r,&contiguous_box_status))
+        if(get_ancestor_contiguous_box_data(w,&text_render_data.box_r,&text_render_data.box_status))
         {
             if(page->base.parent->tab_folder.current_tab_page==page)
             {
-                theme->h_bar_box_constrained_render(erb,theme,bounds,r,w->base.status,OVERLAY_HIGHLIGHTING_COLOUR,contiguous_box_r,contiguous_box_status);
+                theme->h_bar_box_constrained_render(erb,theme,bounds,r,w->base.status,OVERLAY_HIGHLIGHTING_COLOUR,text_render_data.box_r,text_render_data.box_status);
             }
-
-            overlay_text_single_line_render_box_constrained(erb,theme,bounds,OVERLAY_TEXT_COLOUR_0,w->button.text,r.x1+theme->h_bar_text_offset,(r.y1+r.y2-theme->font_.glyph_size)>>1,contiguous_box_r,contiguous_box_status);
+            text_render_data.flags|=OVERLAY_TEXT_RENDER_BOX_CONSTRAINED;
         }
         else
         {
@@ -92,9 +65,8 @@ static void tab_button_widget_render(overlay_theme * theme,widget * w,int16_t x_
             {
                 theme->h_bar_render(erb,theme,bounds,r,w->base.status,OVERLAY_HIGHLIGHTING_COLOUR);
             }
-
-            overlay_text_single_line_render(erb,theme,bounds,OVERLAY_TEXT_COLOUR_0,w->button.text,r.x1+theme->h_bar_text_offset,(r.y1+r.y2-theme->font_.glyph_size)>>1);
         }
+        overlay_text_single_line_render(erb,theme,&text_render_data);
     }
 }
 
@@ -106,7 +78,7 @@ static widget * tab_button_widget_select(overlay_theme * theme,widget * w,int16_
 
 static void tab_button_widget_min_w(overlay_theme * theme,widget * w)
 {
-    if(widget_active(w->button.data))w->base.min_w = overlay_text_single_line_get_pixel_length(&theme->font_,w->button.text)+2*theme->h_bar_text_offset;//calculate_text_length(theme,w->button.text,0)+2*theme->h_bar_text_offset;
+    if(widget_active(w->button.data))w->base.min_w = overlay_text_single_line_get_pixel_length(&theme->font,w->button.text)+2*theme->h_bar_text_offset;//calculate_text_length(theme,w->button.text,0)+2*theme->h_bar_text_offset;
     else w->base.min_w = 0;
 }
 

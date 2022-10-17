@@ -1,5 +1,5 @@
 /**
-Copyright 2021 Carl van Mastrigt
+Copyright 2021,2022 Carl van Mastrigt
 
 This file is part of cvm_shared.
 
@@ -47,7 +47,7 @@ cvm_transform_stack;
 static inline void cvm_transform_stack_reset(cvm_transform_stack * ts)
 {
     ts->i=0;
-    ts->stack[0].r=(rotor3f){.s=1.0,.xy=0.0f,.yz=0.0f,.zx=0.0f};
+    ts->stack[0].r=(rotor3f){.s=1.0f,.xy=0.0f,.yz=0.0f,.zx=0.0f};
     ts->stack[0].p=(vec3f){.x=0.0f,.y=0.0f,.z=0.0f};
 }
 
@@ -66,28 +66,28 @@ static inline void cvm_transform_stack_pop(cvm_transform_stack * ts)
 static inline void cvm_transform_construct_from_rotor_and_position(float * transform_data,rotor3f r,vec3f p)
 {
     ///multiplying by SQRT_2 four times here removes 18 future multiplications by 2
-    r.s*=SQRT_2;
-    r.xy*=SQRT_2;
-    r.yz*=SQRT_2;
-    r.zx*=SQRT_2;
+    r.s*=SQRT_2f;
+    r.xy*=SQRT_2f;
+    r.yz*=SQRT_2f;
+    r.zx*=SQRT_2f;
 
     ///essentially just copied from r3f_to_m3f
     ///results stored as row major for more efficient access on device side
     ///     ^just need to declare values as row_major, which ONLY affects how data is READ from, not how matrix access operations are interpreted in shader
     /// written in memory order for better streaming results
-    transform_data[0 ]= 1.0 - r.xy*r.xy - r.zx*r.zx;
+    transform_data[0 ]= 1.0f - r.xy*r.xy - r.zx*r.zx;
     transform_data[1 ]= r.yz*r.zx - r.s*r.xy;
     transform_data[2 ]= r.yz*r.xy + r.s*r.zx;
     transform_data[3 ]=p.x;
 
     transform_data[4 ]= r.zx*r.yz + r.xy*r.s;
-    transform_data[5 ]= 1.0 - r.xy*r.xy - r.yz*r.yz;
+    transform_data[5 ]= 1.0f - r.xy*r.xy - r.yz*r.yz;
     transform_data[6 ]= r.zx*r.xy - r.yz*r.s;
     transform_data[7 ]=p.y;
 
     transform_data[8 ]= r.xy*r.yz - r.zx*r.s;
     transform_data[9 ]= r.xy*r.zx + r.yz*r.s;
-    transform_data[10]= 1.0 - r.zx*r.zx - r.yz*r.yz;
+    transform_data[10]= 1.0f - r.zx*r.zx - r.yz*r.yz;
     transform_data[11]=p.z;
 }
 
@@ -101,28 +101,28 @@ static inline void cvm_transform_stack_get_scaled(cvm_transform_stack * ts,float
     rotor3f r=ts->stack[ts->i].r;
     vec3f p=ts->stack[ts->i].p;
 
-    r.s*=SQRT_2;
-    r.xy*=SQRT_2;
-    r.yz*=SQRT_2;
-    r.zx*=SQRT_2;
+    r.s*=SQRT_2f;
+    r.xy*=SQRT_2f;
+    r.yz*=SQRT_2f;
+    r.zx*=SQRT_2f;
 
     ///essentially just copied from r3f_to_m3f
     ///results stored as row major for more efficient access on device side
     ///     ^just need to declare values as row_major, which ONLY affects how data is READ from, not how matrix access operations are interpreted in shader
     /// written in memory order for better streaming results
-    transform_data[0 ]= scale*(1.0 - r.xy*r.xy -r.zx*r.zx);
+    transform_data[0 ]= scale*(1.0f - r.xy*r.xy -r.zx*r.zx);
     transform_data[1 ]= scale*(r.yz*r.zx - r.s*r.xy);
     transform_data[2 ]= scale*(r.yz*r.xy + r.s*r.zx);
     transform_data[3 ]= p.x;
 
     transform_data[4 ]= scale*(r.zx*r.yz + r.xy*r.s);
-    transform_data[5 ]= scale*(1.0- r.xy*r.xy - r.yz*r.yz);
+    transform_data[5 ]= scale*(1.0f- r.xy*r.xy - r.yz*r.yz);
     transform_data[6 ]= scale*(r.zx*r.xy - r.yz*r.s);
     transform_data[7 ]= p.y;
 
     transform_data[8 ]= scale*(r.xy*r.yz - r.zx*r.s);
     transform_data[9 ]= scale*(r.xy*r.zx + r.yz*r.s);
-    transform_data[10]= scale*(1.0 - r.zx*r.zx - r.yz*r.yz);
+    transform_data[10]= scale*(1.0f - r.zx*r.zx - r.yz*r.yz);
     transform_data[11]= p.z;
 }
 

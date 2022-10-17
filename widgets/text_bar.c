@@ -127,7 +127,7 @@ widget * create_static_text_bar(int min_glyph_render_count,char * text,widget_te
 
 	w->text_bar.text_alignment=text_alignment;
 
-	if(text) w->text_bar.text=strdup(text);
+	if(text) w->text_bar.text=cvm_strdup(text);
     else w->text_bar.text=NULL;
 
 	return w;
@@ -175,7 +175,7 @@ widget * create_dynamic_text_bar(int min_glyph_render_count,widget_function set_
 //
 //    if(text_to_copy)
 //    {
-//        w->text_bar.text=strdup(text_to_copy);
+//        w->text_bar.text=cvm_strdup(text_to_copy);
 //        w->text_bar.owns_text=true;
 //    }
 //    else

@@ -1277,7 +1277,7 @@ overlay_theme * create_cubic_theme(void)
     cubic->internal_r=8;
     cubic->internal_d=16;
 
-    cvm_overlay_create_font(&theme->font_,"cvm_shared/resources/cvm_font_1.ttf",16);
+    cvm_overlay_create_font(&theme->font,"cvm_shared/resources/cvm_font_1.ttf",16);
 
     return theme;
 
@@ -1297,7 +1297,7 @@ void destroy_cubic_theme(overlay_theme * theme)
 
     if(cubic->internal_image_tile)overlay_destroy_transparent_image_tile(cubic->internal_image_tile);
 
-    cvm_overlay_destroy_font(&theme->font_);
+    cvm_overlay_destroy_font(&theme->font);
 
     free(theme->other_data);
 

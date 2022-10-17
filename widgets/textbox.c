@@ -25,8 +25,8 @@ static void textbox_check_visible_offset(widget * w,overlay_theme * theme)
     uint32_t i;
     for(i=0;i<w->textbox.text_block.line_count && w->textbox.selection_end > w->textbox.text_block.lines[i].finish;i++);
 
-    if(w->textbox.y_offset > ((int16_t)i)*theme->font_.line_spacing) w->textbox.y_offset = i*theme->font_.line_spacing;
-    if(w->textbox.y_offset < ((int16_t)i)*theme->font_.line_spacing+theme->font_.glyph_size-w->textbox.visible_size) w->textbox.y_offset = i*theme->font_.line_spacing+theme->font_.glyph_size-w->textbox.visible_size;
+    if(w->textbox.y_offset > ((int16_t)i)*theme->font.line_spacing) w->textbox.y_offset = i*theme->font.line_spacing;
+    if(w->textbox.y_offset < ((int16_t)i)*theme->font.line_spacing+theme->font.glyph_size-w->textbox.visible_size) w->textbox.y_offset = i*theme->font.line_spacing+theme->font.glyph_size-w->textbox.visible_size;
 }
 
 static void textbox_copy_selection_to_clipboard(widget * w)
@@ -66,7 +66,7 @@ static bool textbox_widget_scroll(overlay_theme * theme,widget * w,int delta)
 static void textbox_widget_left_click(overlay_theme * theme,widget * w,int x,int y)
 {
     adjust_coordinates_to_widget_local(w,&x,&y);
-    w->textbox.selection_end=w->textbox.selection_begin=overlay_text_multiline_find_offset(&theme->font_,&w->textbox.text_block,
+    w->textbox.selection_end=w->textbox.selection_begin=overlay_text_multiline_find_offset(&theme->font,&w->textbox.text_block,
         x-theme->x_box_offset-w->textbox.x_offset,y-theme->y_box_offset+w->textbox.y_offset);
 }
 
@@ -84,7 +84,7 @@ static bool textbox_widget_left_release(overlay_theme * theme,widget * clicked,w
 static void textbox_widget_mouse_movement(overlay_theme * theme,widget * w,int x,int y)
 {
     adjust_coordinates_to_widget_local(w,&x,&y);
-    w->textbox.selection_end=overlay_text_multiline_find_offset(&theme->font_,&w->textbox.text_block,
+    w->textbox.selection_end=overlay_text_multiline_find_offset(&theme->font,&w->textbox.text_block,
         x-theme->x_box_offset-w->textbox.x_offset,y-theme->y_box_offset+w->textbox.y_offset);
 
     textbox_check_visible_offset(w,theme);
@@ -171,13 +171,13 @@ static void textbox_widget_render(overlay_theme * theme,widget * w,int16_t x_off
     rectangle b=get_rectangle_overlap(r,bounds);
     if(rectangle_has_positive_area(b))
     {
-        if(w->textbox.selection_begin==w->textbox.selection_end)overlay_text_multiline_render(erb,&theme->font_,b,&w->textbox.text_block,r.x1,r.y1-w->textbox.y_offset,OVERLAY_TEXT_COLOUR_0);
+        if(w->textbox.selection_begin==w->textbox.selection_end)overlay_text_multiline_render(erb,&theme->font,b,&w->textbox.text_block,r.x1,r.y1-w->textbox.y_offset,OVERLAY_TEXT_COLOUR_0);
         else
         {
             if(w->textbox.selection_end > w->textbox.selection_begin) sb=w->textbox.selection_begin, se=w->textbox.selection_end;
             else sb=w->textbox.selection_end, se=w->textbox.selection_begin;
 
-            overlay_text_multiline_selection_render(erb,&theme->font_,b,&w->textbox.text_block,r.x1,r.y1-w->textbox.y_offset,OVERLAY_TEXT_COLOUR_0,sb,se);
+            overlay_text_multiline_selection_render(erb,&theme->font,b,&w->textbox.text_block,r.x1,r.y1-w->textbox.y_offset,OVERLAY_TEXT_COLOUR_0,sb,se);
         }
     }
 }
@@ -190,20 +190,20 @@ static widget * textbox_widget_select(overlay_theme * theme,widget * w,int16_t x
 
 static void textbox_widget_min_w(overlay_theme * theme,widget * w)
 {
-    w->base.min_w=w->textbox.min_horizontal_glyphs * theme->font_.max_advance + 2*theme->x_box_offset;
+    w->base.min_w=w->textbox.min_horizontal_glyphs * theme->font.max_advance + 2*theme->x_box_offset;
 }
 
 static void textbox_widget_min_h(overlay_theme * theme,widget * w)
 {
-    overlay_text_multiline_processing(&theme->font_,&w->textbox.text_block,w->textbox.text,w->base.r.x2-w->base.r.x1-2*theme->x_box_offset);
+    overlay_text_multiline_processing(&theme->font,&w->textbox.text_block,w->textbox.text,w->base.r.x2-w->base.r.x1-2*theme->x_box_offset);
 
     if(w->textbox.min_visible_lines==0)
     {
-        w->base.min_h=(w->textbox.text_block.line_count-1)*theme->font_.line_spacing+theme->font_.glyph_size+theme->y_box_offset*2;
+        w->base.min_h=(w->textbox.text_block.line_count-1)*theme->font.line_spacing+theme->font.glyph_size+theme->y_box_offset*2;
     }
     else
     {
-        w->base.min_h=(w->textbox.min_visible_lines-1)*theme->font_.line_spacing+theme->font_.glyph_size+theme->y_box_offset*2;
+        w->base.min_h=(w->textbox.min_visible_lines-1)*theme->font.line_spacing+theme->font.glyph_size+theme->y_box_offset*2;
     }
 }
 
@@ -211,12 +211,12 @@ static void textbox_widget_min_h(overlay_theme * theme,widget * w)
 
 static void textbox_widget_set_h(overlay_theme * theme,widget * w)
 {
-    w->textbox.wheel_delta= -theme->font_.line_spacing;///w->textbox.font_index
+    w->textbox.wheel_delta= -theme->font.line_spacing;///w->textbox.font_index
     w->textbox.visible_size= w->base.r.y2-w->base.r.y1-2*theme->y_box_offset;
 
     if(w->textbox.min_visible_lines)
     {
-        w->textbox.max_offset=(w->textbox.text_block.line_count-1)*theme->font_.line_spacing+theme->font_.glyph_size - w->textbox.visible_size;
+        w->textbox.max_offset=(w->textbox.text_block.line_count-1)*theme->font.line_spacing+theme->font.glyph_size - w->textbox.visible_size;
         if(w->textbox.max_offset < 0)w->textbox.max_offset=0;
         if(w->textbox.y_offset > w->textbox.max_offset)w->textbox.y_offset = w->textbox.max_offset;
     }
@@ -245,7 +245,7 @@ void change_textbox_text(widget * w,char * new_text,bool owns_new_text)///use re
     free(w->textbox.text);
 
     if(owns_new_text) w->textbox.text=new_text;
-    else w->textbox.text=strdup(new_text);
+    else w->textbox.text=cvm_strdup(new_text);
 
     w->textbox.y_offset=0;
     w->textbox.text_block.line_count=0;
@@ -272,7 +272,7 @@ widget * create_textbox(char * text,bool owns_text,int min_horizontal_glyphs,int
     w->base.behaviour_functions = &textbox_behaviour_functions;
 
     if(owns_text) w->textbox.text=text;
-    else w->textbox.text=strdup(text);
+    else w->textbox.text=cvm_strdup(text);
 
     w->textbox.text_block.lines=malloc(sizeof(cvm_overlay_text_line)*16);
     w->textbox.text_block.line_space=16;

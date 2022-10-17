@@ -41,12 +41,8 @@ along with cvm_shared.  If not, see <https://www.gnu.org/licenses/>.
 #include FT_FREETYPE_H
 #include FT_ADVANCES_H
 
-#include <dirent.h>
-#include <sys/stat.h>
-
 #include <GL/gl.h>///remove eventually
 #include <vulkan/vulkan.h>
-
 
 ///own headers
 typedef union widget widget;
@@ -64,6 +60,18 @@ typedef union widget widget;
 
 
 #include "cvm_debug_render.h"
+
+
+static inline char * cvm_strdup(const char * in)
+{
+    const char *in_end;
+    char *out;
+    if(!in)return NULL;
+    in_end=in;
+    while(*in_end++);
+    out=malloc(in_end-in);
+    return memcpy(out,in,in_end-in);
+}
 
 #endif
 
