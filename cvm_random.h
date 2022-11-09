@@ -150,7 +150,7 @@ static inline vec3f cvm_rng_point_on_sphere(uint64_t * state)
     /// this means that every z coordinate is equally likely !
     float p=sqrtf(1.0f-z*z);
     ///equivalent to sin(zenith)
-    float a=cvm_rng_float_16_get(s)*TAUf;
+    float a=cvm_rng_float_16_get(s)*(float)TAU;
     return (vec3f){ .x=p*cosf(a),.y=p*sinf(a),.z=z};
 }
 
@@ -162,13 +162,13 @@ static inline vec3f cvm_rng_point_in_ball(uint64_t * state)
     float a=cbrtf(cvm_rng_float_16(&s));///radius
     p*=a;
     z*=a;
-    a=cvm_rng_float_16_get(s)*TAUf;
+    a=cvm_rng_float_16_get(s)*(float)TAU;
     return (vec3f){ .x=p*cosf(a),.y=p*sinf(a),.z=z};
 }
 
 static inline vec2f cvm_rng_point_on_circle(uint64_t * state)
 {
-    float a=TAUf*cvm_rng_float_16_get(cvm_rng_pcg_a(state));
+    float a=(float)TAU*cvm_rng_float_16_get(cvm_rng_pcg_a(state));
     return (vec2f){ .x=cosf(a),.y=sinf(a)};
 }
 
@@ -176,7 +176,7 @@ static inline vec2f cvm_rng_point_in_disc(uint64_t * state)
 {
     uint32_t s=cvm_rng_pcg_a(state);
     float r=sqrtf(cvm_rng_float_16(&s));
-    float a=cvm_rng_float_16_get(s)*TAUf;
+    float a=cvm_rng_float_16_get(s)*(float)TAU;
     return (vec2f){ .x=r*cosf(a),.y=r*sinf(a)};
 }
 
@@ -213,8 +213,8 @@ static inline rotor3f cvm_rng_rotation_3d(uint64_t * state)
     /// only that radii are paired with the angles for the same circles is all that's important (is even this required ?)
 
     uint32_t s=cvm_rng_pcg_a(state);
-    float a1=cvm_rng_float_16(&s)*TAUf;
-    float a2=cvm_rng_float_16(&s)*TAUf;
+    float a1=cvm_rng_float_16(&s)*(float)TAU;
+    float a2=cvm_rng_float_16(&s)*(float)TAU;
     float r1=cvm_rng_float_16_get(s);
     float r2=sqrtf(1.0f-r1);
     r1=sqrtf(r1);

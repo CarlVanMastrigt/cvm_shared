@@ -216,7 +216,7 @@ void render_debug(VkCommandBuffer cb,VkDescriptorSet * descriptor_set,debug_rend
 {
     vkCmdBindDescriptorSets(cb,VK_PIPELINE_BIND_POINT_GRAPHICS,debug_pipeline_layout,0,1,descriptor_set,0,NULL);
 
-    cvm_vk_transient_buffer_bind_as_vertex(cb,data->transient_buffer,0);
+    cvm_vk_transient_buffer_bind_as_vertex(cb,data->transient_buffer,0,0);
 
     vkCmdBindPipeline(cb,VK_PIPELINE_BIND_POINT_GRAPHICS,debug_pipeline);
 

@@ -193,6 +193,7 @@ void cvm_vk_managed_buffer_bind_as_index(VkCommandBuffer cmd_buf,cvm_vk_managed_
 
 
 
+
 typedef struct cvm_vk_transient_buffer
 {
     VkBuffer buffer;
@@ -201,10 +202,10 @@ typedef struct cvm_vk_transient_buffer
     VkBufferUsageFlags usage;
 
     uint32_t total_space;
-    uint32_t space_per_frame;///round to PO2
+    uint32_t space_per_frame;
     uint32_t max_offset;///fence, should be updated before multithreading becomes applicable this frame
     uint32_t alignment_size_factor;
-    atomic_uint_fast32_t space_remaining;
+    atomic_uint_fast32_t current_offset;
     ///need to test atomic version isn't (significatly) slower than non-atomic
 
     uint8_t * mapping;
@@ -212,18 +213,20 @@ typedef struct cvm_vk_transient_buffer
 cvm_vk_transient_buffer;
 
 void cvm_vk_transient_buffer_create(cvm_vk_transient_buffer * tb,VkBufferUsageFlags usage);
-void cvm_vk_transient_buffer_update(cvm_vk_transient_buffer * tb,uint32_t space_per_frame, uint32_t frame_count);
+void cvm_vk_transient_buffer_update(cvm_vk_transient_buffer * tb,uint32_t space_per_frame,uint32_t frame_count);
 void cvm_vk_transient_buffer_destroy(cvm_vk_transient_buffer * tb);
 
 uint32_t cvm_vk_transient_buffer_get_rounded_allocation_size(cvm_vk_transient_buffer * tb,uint32_t allocation_size,uint32_t alignment);
+///having fixed locations wont work if non PO2 alignments are required, though this could be fixed by binding at a set offset
 
 void cvm_vk_transient_buffer_begin(cvm_vk_transient_buffer * tb,uint32_t frame_index);
 void cvm_vk_transient_buffer_end(cvm_vk_transient_buffer * tb);
 
+///alignment 0 indicates to use base buffer alignment, likely because it will be bound with this offset rather than at 0 and indexed into
 void * cvm_vk_transient_buffer_get_allocation(cvm_vk_transient_buffer * tb,uint32_t allocation_size,uint32_t alignment,VkDeviceSize * acquired_offset);
 
-void cvm_vk_transient_buffer_bind_as_vertex(VkCommandBuffer cmd_buf,cvm_vk_transient_buffer * tb,uint32_t binding);
-void cvm_vk_transient_buffer_bind_as_index(VkCommandBuffer cmd_buf,cvm_vk_transient_buffer * tb,VkIndexType type);
+void cvm_vk_transient_buffer_bind_as_vertex(VkCommandBuffer cmd_buf,cvm_vk_transient_buffer * tb,uint32_t binding,VkDeviceSize offset);
+void cvm_vk_transient_buffer_bind_as_index(VkCommandBuffer cmd_buf,cvm_vk_transient_buffer * tb,VkIndexType type,VkDeviceSize offset);
 
 
 

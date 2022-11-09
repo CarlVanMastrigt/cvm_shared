@@ -64,7 +64,7 @@ void test_timing(bool start,char * name)
     static struct timespec tso,tsn;
     uint64_t dt;
 
-    clock_gettime(0,&tsn);
+    clock_gettime(CLOCK_REALTIME,&tsn);
 
     dt=(tsn.tv_sec-tso.tv_sec)*1000000000 + tsn.tv_nsec-tso.tv_nsec;
 
@@ -747,7 +747,7 @@ void overlay_render_frame(int screen_w,int screen_h,widget * menu_widget)
 
         vkCmdBindPipeline(batch->graphics_pcb,VK_PIPELINE_BIND_POINT_GRAPHICS,overlay_pipeline);
 
-        vkCmdBindVertexBuffers(batch->graphics_pcb,0,1,&overlay_transient_buffer.buffer,&vertex_offset);
+        cvm_vk_transient_buffer_bind_as_vertex(batch->graphics_pcb,&overlay_transient_buffer,0,vertex_offset);
 
         vkCmdDraw(batch->graphics_pcb,4,element_render_buffer.count,0,0);
 

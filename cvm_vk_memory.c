@@ -417,30 +417,36 @@ void cvm_vk_managed_buffer_relinquish_dynamic_allocation(cvm_vk_managed_buffer *
     if(mb->multithreaded) atomic_store(&mb->acquire_spinlock,0);
 }
 
-uint64_t cvm_vk_managed_buffer_acquire_static_allocation(cvm_vk_managed_buffer * mb,uint64_t size,uint64_t alignment)///it is assumed alignment is power of 2, may want to ensure this is the case
+uint64_t cvm_vk_managed_buffer_acquire_static_allocation(cvm_vk_managed_buffer * mb,uint64_t size,uint64_t alignment)
 {
-    uint64_t s,e;
+    uint64_t static_offset,dynamic_offset;
     uint_fast32_t lock;
-
-    size=((size+(alignment-1))& ~(alignment-1));///round up size t multiple of alignment (not strictly necessary but w/e), assumes alignment is power of 2, should really check this is the case before using
 
     if(mb->multithreaded)do lock=atomic_load(&mb->acquire_spinlock);
     while(lock!=0 || !atomic_compare_exchange_weak(&mb->acquire_spinlock,&lock,1));
 
-    e=mb->static_offset& ~(alignment-1);
-    s=((uint64_t)mb->dynamic_offset)<<mb->base_dynamic_allocation_size_factor;
+    ///allocating at desired alignment from end of buffer, can simply "round down"
+    ///don't require power of 2 alignment (useful for base vertex use cases, so can index different sections of buffer w/o binding to different slot)
 
-    if(s+size > e || e==size)///must have enough space and cannot use whole buffer for static allocations (returning 0 is reserved for errors)
+    static_offset=mb->static_offset;
+    ///make sure there's enough space in the buffer to begin with (and avoid underflow errors), set error otherwise
+    ///also would be interpreted as an error is 0 space remained so don't allocate ALL of the remaining space
+    if(static_offset<=size)static_offset=0;
+    else
     {
-        if(mb->multithreaded) atomic_store(&mb->acquire_spinlock,0);
-        return 0;
+        static_offset-=size;
+        static_offset-=static_offset%alignment;///align allocation properly
+
+        dynamic_offset=((uint64_t)mb->dynamic_offset)<<mb->base_dynamic_allocation_size_factor;///the other end of the buffer contains a dynamic allocator, need to check this allocation wouldn't overlap with that
+        if(static_offset<dynamic_offset) static_offset=0;///ensure there's enough space available, set error otherwise
     }
 
-    mb->static_offset=e-size;
+    ///if there's precisely 0 space left that would be interpreted as an error so don't make that wasted/untracked allocation (as well as don't allocate upon error)
+    if(static_offset) mb->static_offset=static_offset;///if allocation was valid make it official
 
     if(mb->multithreaded) atomic_store(&mb->acquire_spinlock,0);
 
-    return e-size;
+    return static_offset;
 }
 
 static inline void * stage_copy_action(cvm_vk_managed_buffer * mb,uint64_t offset,uint64_t size,VkPipelineStageFlags2 stage_mask,VkAccessFlags2 access_mask)
@@ -776,7 +782,6 @@ void * cvm_vk_staging_buffer_get_allocation(cvm_vk_staging_buffer * sb,uint32_t 
 
     uint_fast32_t old_offset,new_offset,offset;
 
-
     old_offset=atomic_load(&sb->active_offset);
     do
     {
@@ -856,7 +861,7 @@ void cvm_vk_staging_buffer_relinquish_space(cvm_vk_staging_buffer * sb,uint32_t 
 
 void cvm_vk_transient_buffer_create(cvm_vk_transient_buffer * tb,VkBufferUsageFlags usage)
 {
-    atomic_init(&tb->space_remaining,0);
+    atomic_init(&tb->current_offset,0);
     tb->total_space=0;
     tb->space_per_frame=0;
     tb->max_offset=0;
@@ -870,7 +875,7 @@ void cvm_vk_transient_buffer_create(cvm_vk_transient_buffer * tb,VkBufferUsageFl
     for(tb->alignment_size_factor=0;1u<<tb->alignment_size_factor < required_alignment;tb->alignment_size_factor++);///alignment_size_factor expected to be small, ~6
     ///can catastrophically fail if required_alignment is greater than 2^31, but w/e
 
-    assert(1u<<tb->alignment_size_factor == required_alignment);///NON POWER OF 2 ALIGNMENTS NOT SUPPORTED
+    assert(1u<<tb->alignment_size_factor == required_alignment);///NON POWER OF 2 ALIGNMENTS NOT SUPPORTED (AND SHOULDN"T BE RETURNED BY VULKAN)
 }
 
 void cvm_vk_transient_buffer_update(cvm_vk_transient_buffer * tb,uint32_t space_per_frame, uint32_t frame_count)
@@ -894,7 +899,7 @@ void cvm_vk_transient_buffer_update(cvm_vk_transient_buffer * tb,uint32_t space_
         }
     }
 
-    atomic_store(&tb->space_remaining,0);
+    atomic_store(&tb->current_offset,0);
     tb->total_space=total_space;
     tb->space_per_frame=space_per_frame;
     tb->max_offset=0;
@@ -909,20 +914,29 @@ void cvm_vk_transient_buffer_destroy(cvm_vk_transient_buffer * tb)
 
 uint32_t cvm_vk_transient_buffer_get_rounded_allocation_size(cvm_vk_transient_buffer * tb,uint32_t allocation_size,uint32_t alignment)
 {
+    /// if aligned to base (alignment==0) then just need enough to round up as that should cover itself
+    /// if aligned to own alignment, need enough to align to oneself and to align next (potentially base aligned) allocation
+
+    ///base alignment requirements handle specific alignment requirements when base alignment is a multiple of specific alignment, and base alignment is always a Po2 so in this case specific must also be smaller Po2
+    if( !(alignment&(alignment-1)) && alignment<(1u<<tb->alignment_size_factor) )alignment=0;
+
     return (((allocation_size+alignment-1)>>tb->alignment_size_factor)+1)<<tb->alignment_size_factor;
 }
 
 void cvm_vk_transient_buffer_begin(cvm_vk_transient_buffer * tb,uint32_t frame_index)
 {
     tb->max_offset=(frame_index+1)*tb->space_per_frame;
-    atomic_store(&tb->space_remaining,tb->space_per_frame);
+    atomic_store(&tb->current_offset,frame_index*tb->space_per_frame);
 }
 
 void cvm_vk_transient_buffer_end(cvm_vk_transient_buffer * tb)
 {
-    uint32_t acquired_space=tb->space_per_frame-atomic_load(&tb->space_remaining);
+    uint32_t acquired_space=tb->space_per_frame - (tb->max_offset-atomic_load(&tb->current_offset)); /// max space - space remaining
+
     if(acquired_space)
     {
+        acquired_space=(((acquired_space-1)>>tb->alignment_size_factor)+1)<<tb->alignment_size_factor;
+
         VkMappedMemoryRange flush_range=(VkMappedMemoryRange)
         {
             .sType=VK_STRUCTURE_TYPE_MAPPED_MEMORY_RANGE,
@@ -935,44 +949,40 @@ void cvm_vk_transient_buffer_end(cvm_vk_transient_buffer * tb)
         cvm_vk_flush_buffer_memory_range(&flush_range);
     }
 
-    atomic_store(&tb->space_remaining,0);
-    tb->max_offset=0;
+    tb->max_offset=0;///indicates this buffer is no longer in use
 }
 
 void * cvm_vk_transient_buffer_get_allocation(cvm_vk_transient_buffer * tb,uint32_t allocation_size,uint32_t alignment,VkDeviceSize * acquired_offset)
 {
-    uint32_t new_remaining,offset;
-    uint_fast32_t old_remaining;
+    VkDeviceSize offset;
+    uint_fast32_t old_offset,new_offset,oas;
 
-    allocation_size=(((allocation_size+alignment-1)>>tb->alignment_size_factor)+1)<<tb->alignment_size_factor;///round as required
-
-    old_remaining=atomic_load(&tb->space_remaining);
+    old_offset=atomic_load(&tb->current_offset);
     do
     {
-        if(allocation_size>old_remaining)return NULL;
+        offset=(old_offset+alignment-1);
+        if(alignment) offset-=offset%alignment;
+        else offset=((offset>>tb->alignment_size_factor)+1)<<tb->alignment_size_factor;
 
-        new_remaining=old_remaining-allocation_size;
+        new_offset=offset+allocation_size;
+        if(new_offset>tb->max_offset)
+        {
+            return NULL;
+        }
     }
-    while(!atomic_compare_exchange_weak(&tb->space_remaining,&old_remaining,new_remaining));
-
-    offset=tb->max_offset-old_remaining;
+    while(!atomic_compare_exchange_weak(&tb->current_offset,&old_offset,new_offset));
 
     *acquired_offset=offset;
     return tb->mapping+offset;
 }
 
-void cvm_vk_transient_buffer_bind_as_vertex(VkCommandBuffer cmd_buf,cvm_vk_transient_buffer * tb,uint32_t binding)
+void cvm_vk_transient_buffer_bind_as_vertex(VkCommandBuffer cmd_buf,cvm_vk_transient_buffer * tb,uint32_t binding,VkDeviceSize offset)
 {
-    /// vertex offset in draw assumes all verts have same offset, so it makes no sense in this paradigm to have multiple binding points from a single buffer!
-    #warning the above offset issue may become a MASSIVE hassle when isntance data gets involved, base-indexed vertex offsets may not be viable anymore
-    ///     ^ actually does have instanceOffset...
-
-    VkDeviceSize offset=0;
     vkCmdBindVertexBuffers(cmd_buf,binding,1,&tb->buffer,&offset);
 }
 
-void cvm_vk_transient_buffer_bind_as_index(VkCommandBuffer cmd_buf,cvm_vk_transient_buffer * tb,VkIndexType type)
+void cvm_vk_transient_buffer_bind_as_index(VkCommandBuffer cmd_buf,cvm_vk_transient_buffer * tb,VkIndexType type,VkDeviceSize offset)
 {
-    vkCmdBindIndexBuffer(cmd_buf,tb->buffer,0,type);
+    vkCmdBindIndexBuffer(cmd_buf,tb->buffer,offset,type);
 }
 

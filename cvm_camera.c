@@ -22,15 +22,15 @@ along with cvm_shared.  If not, see <https://www.gnu.org/licenses/>.
 void change_camera_azimuthal_angle(float delta,cvm_camera * c)
 {
     c->azimuthal_angle+=delta;
-    if(c->azimuthal_angle>PI)c->azimuthal_angle-=2.0*PI;
-    if(c->azimuthal_angle<-PI)c->azimuthal_angle+=2.0*PI;
+    if(c->azimuthal_angle>PI)c->azimuthal_angle-=2.0f*(float)PI;
+    if(c->azimuthal_angle<-PI)c->azimuthal_angle+=2.0f*(float)PI;
 }
 
 void change_camera_zenith_angle(float delta,cvm_camera * c)
 {
     c->zenith_angle+=delta;
-    if(c->zenith_angle>PI)c->zenith_angle=PI;
-    if(c->zenith_angle<0.0)c->zenith_angle=0.0;
+    if(c->zenith_angle>(float)PI)c->zenith_angle=(float)PI;
+    if(c->zenith_angle<0.0f)c->zenith_angle=0.0f;
 }
 
 void change_camera_zoom(int delta,cvm_camera * c)
@@ -47,8 +47,8 @@ void initialise_camera(int screen_w,int screen_h,float fov, float near,int zoom_
 
     c->max_zoom_step=zoom_steps;
     c->current_zoom_step=zoom_steps/2;
-    c->azimuthal_angle=0.0;//PI*-0.25;
-    c->zenith_angle=PI*0.75;//-fov*0.5;
+    c->azimuthal_angle=0.0f;//PI*-0.25;
+    c->zenith_angle=PI*0.75f;//-fov*0.5;
 
 
     c->fov=fov;

@@ -56,39 +56,6 @@ along with cvm_shared.  If not, see <https://www.gnu.org/licenses/>.
 #define SQRT_THIRD  0.5f773502691896257645091487805019574556476017512701268760186023264
 #endif
 
-#ifndef TAUf
-#define TAUf        6.2831853071795864769252867665590057683943387987502116419498891846f
-#endif
-
-#ifndef PIf
-#define PIf         3.1415926535897932384626433832795028841971693993751058209749445923f
-#endif
-
-#ifndef PI_RCPf
-#define PI_RCPf     0.3183098861837906715377675267450287240689192914809128974953346881f
-#endif
-
-#ifndef EULERf
-#define EULERf      2.7182818284590452353602874713526624977572470936999595749669676277f
-#endif
-
-#ifndef SQRT_3f
-#define SQRT_3f     1.7320508075688772935274463415058723669428052538103806280558069794f
-#endif
-
-#ifndef SQRT_2f
-#define SQRT_2f     1.4142135623730950488016887242096980785696718753769480731766797379f
-#endif
-
-#ifndef SQRT_HALFf
-#define SQRT_HALFf  0.7071067811865475244008443621048490392848359376884740365883398689f
-#endif
-
-#ifndef SQRT_THIRDf
-#define SQRT_THIRDf 0.5f773502691896257645091487805019574556476017512701268760186023264f
-#endif
-
-
 
 typedef struct vec3i
 {
@@ -772,10 +739,10 @@ static inline matrix3f r3f_to_m3f(rotor3f r)
 	// now substite a,b,c = xy,yz,zx for rotor and f,g,h = x,y,z for vector and put in matrix form and note every rotor component is multiplied by another which are in turn multiplied by 2
     */
 
-    r.s*=SQRT_2f;
-    r.xy*=SQRT_2f;
-    r.yz*=SQRT_2f;
-    r.zx*=SQRT_2f;
+    r.s*=(float)SQRT_2;
+    r.xy*=(float)SQRT_2;
+    r.yz*=(float)SQRT_2;
+    r.zx*=(float)SQRT_2;
     ///why does it seem to be transposed!!!
 
     return (matrix3f)

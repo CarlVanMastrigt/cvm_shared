@@ -66,10 +66,10 @@ static inline void cvm_transform_stack_pop(cvm_transform_stack * ts)
 static inline void cvm_transform_construct_from_rotor_and_position(float * transform_data,rotor3f r,vec3f p)
 {
     ///multiplying by SQRT_2 four times here removes 18 future multiplications by 2
-    r.s*=SQRT_2f;
-    r.xy*=SQRT_2f;
-    r.yz*=SQRT_2f;
-    r.zx*=SQRT_2f;
+    r.s*=(float)SQRT_2;
+    r.xy*=(float)SQRT_2;
+    r.yz*=(float)SQRT_2;
+    r.zx*=(float)SQRT_2;
 
     ///essentially just copied from r3f_to_m3f
     ///results stored as row major for more efficient access on device side
@@ -101,10 +101,10 @@ static inline void cvm_transform_stack_get_scaled(cvm_transform_stack * ts,float
     rotor3f r=ts->stack[ts->i].r;
     vec3f p=ts->stack[ts->i].p;
 
-    r.s*=SQRT_2f;
-    r.xy*=SQRT_2f;
-    r.yz*=SQRT_2f;
-    r.zx*=SQRT_2f;
+    r.s*=(float)SQRT_2;
+    r.xy*=(float)SQRT_2;
+    r.yz*=(float)SQRT_2;
+    r.zx*=(float)SQRT_2;
 
     ///essentially just copied from r3f_to_m3f
     ///results stored as row major for more efficient access on device side
