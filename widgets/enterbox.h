@@ -32,8 +32,8 @@ typedef struct widget_enterbox
     uint32_t max_strlen;
     uint32_t max_glyphs;
     uint32_t min_glyphs_visible;
-    int visible_offset;
-    int text_pixel_length;
+    int32_t visible_offset;
+    int32_t text_pixel_length;
     widget_function activation_func;
     widget_function update_contents_func;
     widget_function upon_input;

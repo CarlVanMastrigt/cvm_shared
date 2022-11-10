@@ -122,10 +122,12 @@ struct overlay_theme
 
     int h_bar_text_offset;
 
+    int h_bar_icon_text_offset;///need a variant of this for contiguous elements (h_bar_icon_text_offset = contigouus_h_bar_icon_text_offset + contiguous_box_x_offset)
+
     int h_text_fade_range;
     int v_text_fade_range;
 
-    int h_slider_bar_lost_w;///horizontal space tied up in visual elements (not part of range)
+    //int h_slider_bar_lost_w;///horizontal space tied up in visual elements (not part of range)
     //int v_slider_bar_lost_h;///vertical space tied up in visual elements (not part of range)
     ///int slider_bar_bar_fraction;
 
@@ -144,6 +146,16 @@ struct overlay_theme
 
     int border_resize_selection_range;
 
+
+    ///worth assessing whether a lack of separation is even worth it or desirable..., perhaps "contiguous" should just refer to graphical elements
+    int base_contiguous_unit_w;
+    int base_contiguous_unit_h;
+
+    int contiguous_box_x_offset;
+    int contiguous_box_y_offset;
+
+
+    ///remove these?
     int contiguous_all_box_x_offset;
     int contiguous_all_box_y_offset;
     int contiguous_some_box_x_offset;
@@ -154,9 +166,9 @@ struct overlay_theme
 
     void    (*square_render)            (cvm_overlay_element_render_buffer * erb,overlay_theme * theme,rectangle bounds,rectangle r,uint32_t status,overlay_colour colour);
     void    (*h_bar_render)             (cvm_overlay_element_render_buffer * erb,overlay_theme * theme,rectangle bounds,rectangle r,uint32_t status,overlay_colour colour);
-    void    (*h_bar_slider_render)      (cvm_overlay_element_render_buffer * erb,overlay_theme * theme,rectangle bounds,rectangle r,uint32_t status,overlay_colour colour,int range,int value,int bar);
-    void    (*h_adjactent_slider_render)(cvm_overlay_element_render_buffer * erb,overlay_theme * theme,rectangle bounds,rectangle r,uint32_t status,overlay_colour colour,int range,int value,int bar);///usually/always tacked onto box
-    void    (*v_adjactent_slider_render)(cvm_overlay_element_render_buffer * erb,overlay_theme * theme,rectangle bounds,rectangle r,uint32_t status,overlay_colour colour,int range,int value,int bar);///usually/always tacked onto box
+    void    (*h_bar_slider_render)      (cvm_overlay_element_render_buffer * erb,overlay_theme * theme,rectangle bounds,rectangle r,uint32_t status,overlay_colour colour,int32_t before,int32_t bar,int32_t after);
+    void    (*h_adjactent_slider_render)(cvm_overlay_element_render_buffer * erb,overlay_theme * theme,rectangle bounds,rectangle r,uint32_t status,overlay_colour colour,int32_t before,int32_t bar,int32_t after);///usually/always tacked onto box
+    void    (*v_adjactent_slider_render)(cvm_overlay_element_render_buffer * erb,overlay_theme * theme,rectangle bounds,rectangle r,uint32_t status,overlay_colour colour,int32_t before,int32_t bar,int32_t after);///usually/always tacked onto box
     void    (*box_render)               (cvm_overlay_element_render_buffer * erb,overlay_theme * theme,rectangle bounds,rectangle r,uint32_t status,overlay_colour colour);
     void    (*panel_render)             (cvm_overlay_element_render_buffer * erb,overlay_theme * theme,rectangle bounds,rectangle r,uint32_t status,overlay_colour colour);
     ///                                 (cvm_overlay_element_render_buffer * erb,overlay_theme * theme,rectangle bounds,rectangle r,uint32_t status,overlay_colour colour)
@@ -176,6 +188,8 @@ struct overlay_theme
     bool    (*h_bar_select)             (overlay_theme * theme,rectangle r,uint32_t status);
     bool    (*box_select)               (overlay_theme * theme,rectangle r,uint32_t status);
     bool    (*panel_select)             (overlay_theme * theme,rectangle r,uint32_t status);
+
+    rectangle   (*get_sliderbar_offsets)(overlay_theme * theme,uint32_t status);///returns offsets from each respective side
 };
 
 /// x/y_off are the texture space coordinates to read data from at position r, i.e. at r the texture coordinates looked up would be x_off,y_off

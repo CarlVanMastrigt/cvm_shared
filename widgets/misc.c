@@ -60,7 +60,7 @@ void adjuster_pair_enterbox_update_contents_function(widget * w)
     set_enterbox_text(w,buffer);
 }
 
-widget * create_adjuster_pair(int * value_ptr,int min_value,int max_value,int text_space,int bar_fraction)
+widget * create_adjuster_pair(int * value_ptr,int min_value,int max_value,int text_space,int bar_fraction,int scroll_fraction)
 {
     widget * box=create_box(WIDGET_HORIZONTAL,WIDGET_FIRST_DISTRIBUTED);
 
@@ -70,7 +70,7 @@ widget * create_adjuster_pair(int * value_ptr,int min_value,int max_value,int te
     #warning revise adjuster_pair, does it have any real practical use, will probably always need extended functionality to what is provided, instead package above to be called by propper function
     /// specifically doesnt allow some specialised operation to be called upon update of value, may be useful in most cases though, just reading value externally whenever its needed/used
 
-    widget * slider_bar=add_child_to_parent(box,create_slider_bar(value_ptr,min_value,max_value,adjuster_pair_slider_bar_function,NULL,false,bar_fraction));
+    widget * slider_bar=add_child_to_parent(box,create_slider_bar_fixed(value_ptr,min_value,max_value,bar_fraction,scroll_fraction,adjuster_pair_slider_bar_function,NULL,false));
 
 	//slider_bar->slider_bar.data=add_child_to_parent(box,create_enterbox(text_space,text_space,text_space,text,adjuster_pair_enterbox_function,slider_bar,adjuster_pair_enterbox_update_contents_function,true,false));
 	slider_bar->slider_bar.data=add_child_to_parent(box,create_enterbox_simple(text_space,text,adjuster_pair_enterbox_function,slider_bar,adjuster_pair_enterbox_update_contents_function,true,false));

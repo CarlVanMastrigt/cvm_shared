@@ -180,7 +180,7 @@ union widget
     widget_panel                panel;
     widget_resize_constraint    resize_constraint;
     widget_popup                popup;
-    //widget_file_search          file_search;
+    widget_file_list            file_list;
 
     widget_tab_folder           tab_folder;
 

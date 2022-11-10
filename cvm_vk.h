@@ -110,7 +110,7 @@ typedef struct cvm_vk_swapchain_image_present_data
     uint64_t present_wait_value;
     uint64_t transfer_wait_value;///should move this to the transferchain when that becomes a thing
 
-    //VkFence completion_fence;
+    VkFence completion_fence;
 }
 cvm_vk_swapchain_image_present_data;
 

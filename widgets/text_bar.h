@@ -29,25 +29,30 @@ typedef struct widget_text_bar
 {
     widget_base base;
 
-    widget_function set_text;
-    void * data;
-
 	char * text;
 
-	uint32_t free_data:1;
-	uint32_t free_text:1;
+	char * selection_begin;
+    char * selection_end;
 
-	int min_glyph_render_count;
-	widget_text_alignment text_alignment;
+	uint32_t free_text:1;
+	uint32_t allow_selection:1;
+	uint32_t recalculate_text_size:1;
+
+	int32_t visible_offset;///usually based on text_alignment, alternatively can be based on selection
+    int32_t text_pixel_length;
+
+	int32_t min_glyph_render_count;
+	///uint32_t max_strlen;needed if handling text internally (compositing internally, not sure this is desirable functionality though)
+	widget_text_alignment text_alignment;///when selection not active?
 }
 widget_text_bar;
 
-//widget * create_text_bar(int min_glyph_space,char * initial_text,widget_function set_text,void * data,bool free_data,widget_text_alignment text_alignment);
-widget * create_static_text_bar(int min_glyph_render_count,char * text,widget_text_alignment text_alignment);
-widget * create_dynamic_text_bar(int min_glyph_render_count,widget_function set_text,bool free_text,void * data,bool free_data,widget_text_alignment text_alignment);
+/// min_glyph_render_count==0  ->  render all text (doesnt really work with dynamic text though...
+widget * create_static_text_bar(char * text);
+widget * create_dynamic_text_bar(int min_glyph_render_count,widget_text_alignment text_alignment,bool allow_selection);
 
-//void set_text_bar_text_pointer(widget * w,char * text);
-//void set_text_bar_text(widget * w,char * text_to_copy);
+void set_text_bar_text_pointer(widget * w,char * text_pointer);///also marks as having been updated
+void set_text_bar_text(widget * w,char * text_to_copy);
 
 #endif
 

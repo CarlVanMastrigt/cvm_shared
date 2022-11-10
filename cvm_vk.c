@@ -552,18 +552,19 @@ void cvm_vk_create_swapchain(void)
     {
         /// acquired frames
         CVM_VK_CHECK(vkCreateSemaphore(cvm_vk_device,&binary_semaphore_create_info,NULL,&cvm_vk_presenting_images[i].present_semaphore));
+
         cvm_vk_presenting_images[i].graphics_wait_value=0;
         cvm_vk_presenting_images[i].present_wait_value=0;
         cvm_vk_presenting_images[i].transfer_wait_value=0;
         cvm_vk_presenting_images[i].acquire_semaphore=VK_NULL_HANDLE;
 
-//        VkFenceCreateInfo fence_create_info=(VkFenceCreateInfo)
-//        {
-//            .sType=VK_STRUCTURE_TYPE_FENCE_CREATE_INFO,
-//            .pNext=NULL,
-//            .flags=0
-//        };
-//        CVM_VK_CHECK(vkCreateFence(cvm_vk_device,&fence_create_info,NULL,&cvm_vk_presenting_images[i].completion_fence));
+        VkFenceCreateInfo fence_create_info=(VkFenceCreateInfo)
+        {
+            .sType=VK_STRUCTURE_TYPE_FENCE_CREATE_INFO,
+            .pNext=NULL,
+            .flags=0
+        };
+        CVM_VK_CHECK(vkCreateFence(cvm_vk_device,&fence_create_info,NULL,&cvm_vk_presenting_images[i].completion_fence));
 
 
         /// swapchain frames
@@ -679,6 +680,10 @@ void cvm_vk_create_swapchain(void)
 
 void cvm_vk_destroy_swapchain(void)
 {
+    vkDeviceWaitIdle(cvm_vk_device);
+    /// probably not the best place to put this, but so it goes, needed to ensure present workload has actually completed (and thus any batches referencing the present semaphore have completed before deleting it)
+    /// could probably just call queue wait idle on graphics and present queues?
+
     uint32_t i;
 
     cvm_vk_destroy_swapchain_dependednt_defaults();
@@ -695,7 +700,7 @@ void cvm_vk_destroy_swapchain(void)
         /// acquired frames
         vkDestroySemaphore(cvm_vk_device,cvm_vk_presenting_images[i].present_semaphore,NULL);
 
-        //vkDestroyFence(cvm_vk_device,cvm_vk_presenting_images[i].completion_fence,NULL);
+        vkDestroyFence(cvm_vk_device,cvm_vk_presenting_images[i].completion_fence,NULL);
 
         /// swapchain frames
         vkDestroyImageView(cvm_vk_device,cvm_vk_presenting_images[i].image_view,NULL);
@@ -852,6 +857,8 @@ uint32_t cvm_vk_prepare_for_next_frame(bool rendering_resources_invalid)
                 assert(presenting_image->successfully_acquired);///SOMEHOW PREPARING/CLEANING UP FRAME THAT WAS SUBMITTED BUT NOT ACQUIRED
                 cvm_vk_wait_on_timeline_semaphore(&cvm_vk_graphics_timeline,presenting_image->graphics_wait_value,1000000000);
                 cvm_vk_wait_on_timeline_semaphore(&cvm_vk_graphics_timeline,presenting_image->present_wait_value,1000000000);
+                CVM_VK_CHECK(vkWaitForFences(cvm_vk_device,1,&presenting_image->completion_fence,VK_TRUE,1000000000));
+                CVM_VK_CHECK(vkResetFences(cvm_vk_device,1,&presenting_image->completion_fence));
             }
             if(presenting_image->successfully_acquired)///if it was acquired, cleanup is in order
             {
@@ -1039,8 +1046,8 @@ void cvm_vk_submit_graphics_work(cvm_vk_module_work_payload * payload,cvm_vk_pay
     command_buffer.commandBuffer=payload->command_buffer;
     CVM_VK_CHECK(vkEndCommandBuffer(payload->command_buffer));///must be ended here in case QFOT barrier needed to be injected!
 
-//    CVM_VK_CHECK(vkQueueSubmit2_cvm_test(cvm_vk_graphics_queue,1,&submit_info,(flags&CVM_VK_PAYLOAD_LAST_SWAPCHAIN_USE)?presenting_image->completion_fence:VK_NULL_HANDLE));
-    CVM_VK_CHECK(vkQueueSubmit2(cvm_vk_graphics_queue,1,&submit_info,VK_NULL_HANDLE));
+    CVM_VK_CHECK(vkQueueSubmit2(cvm_vk_graphics_queue,1,&submit_info,(flags&CVM_VK_PAYLOAD_LAST_SWAPCHAIN_USE)?presenting_image->completion_fence:VK_NULL_HANDLE));
+//    CVM_VK_CHECK(vkQueueSubmit2(cvm_vk_graphics_queue,1,&submit_info,VK_NULL_HANDLE));
 
     /// present if last payload that uses the swapchain
     if(flags&CVM_VK_PAYLOAD_LAST_SWAPCHAIN_USE)
@@ -1234,8 +1241,8 @@ bool cvm_vk_check_for_remaining_frames(uint32_t * completed_frame_index)
             {
                 cvm_vk_wait_on_timeline_semaphore(&cvm_vk_graphics_timeline,cvm_vk_presenting_images[i].present_wait_value,1000000000);
                 cvm_vk_wait_on_timeline_semaphore(&cvm_vk_graphics_timeline,cvm_vk_presenting_images[i].transfer_wait_value,1000000000);
-//                CVM_VK_CHECK(vkWaitForFences(cvm_vk_device,1,&cvm_vk_presenting_images[i].completion_fence,VK_TRUE,1000000000));
-//                CVM_VK_CHECK(vkResetFences(cvm_vk_device,1,&cvm_vk_presenting_images[i].completion_fence));
+                CVM_VK_CHECK(vkWaitForFences(cvm_vk_device,1,&cvm_vk_presenting_images[i].completion_fence,VK_TRUE,1000000000));
+                CVM_VK_CHECK(vkResetFences(cvm_vk_device,1,&cvm_vk_presenting_images[i].completion_fence));
             }
             cvm_vk_presenting_images[i].successfully_acquired=false;
             cvm_vk_presenting_images[i].successfully_submitted=false;

@@ -922,7 +922,21 @@ static void cubic_h_bar_render(cvm_overlay_element_render_buffer * erb,overlay_t
     cvm_render_fill_overlay_element(erb,bounds,r,colour);
 }
 
-static void cubic_h_bar_slider_render(cvm_overlay_element_render_buffer * erb,overlay_theme * theme,rectangle bounds,rectangle r,uint32_t status,overlay_colour colour,int range,int value,int bar)
+static rectangle cubic_get_sliderbar_offsets(overlay_theme * theme,uint32_t status)
+{
+    cubic_theme_data * cubic;
+    cubic=theme->other_data;
+
+    return (rectangle)
+    {
+        .x1=  (cubic->foreground_r + cubic->foreground_offset_x * !(status&WIDGET_H_FIRST)),
+        .x2= -(cubic->foreground_r + cubic->foreground_offset_x * !(status&WIDGET_H_LAST)),
+        .y1=  (cubic->foreground_r + cubic->foreground_offset_y * !(status&WIDGET_V_FIRST)),
+        .y2= -(cubic->foreground_r + cubic->foreground_offset_y * !(status&WIDGET_V_LAST))
+    };
+}
+
+static void cubic_h_bar_slider_render(cvm_overlay_element_render_buffer * erb,overlay_theme * theme,rectangle bounds,rectangle r,uint32_t status,overlay_colour colour,int32_t before,int32_t bar,int32_t after)
 {
     cubic_theme_data * cubic;
 
@@ -931,25 +945,27 @@ static void cubic_h_bar_slider_render(cvm_overlay_element_render_buffer * erb,ov
     if(!cubic->internal_image_tile)cubic_create_shape(&cubic->internal_image_tile,NULL,cubic->internal_r);
     if(!cubic->internal_image_tile)return;
 
-    r.x1+= cubic->foreground_offset_x * !(status&WIDGET_H_FIRST);
-    r.x2-= cubic->foreground_offset_x * !(status&WIDGET_H_LAST);
+    r.x1+=cubic->foreground_r+cubic->foreground_offset_x * !(status&WIDGET_H_FIRST);
+    r.x2-=cubic->foreground_r+cubic->foreground_offset_x * !(status&WIDGET_H_LAST);
 
     r.y1=(r.y1+r.y2-cubic->internal_d)>>1;
     r.y2=r.y1+cubic->internal_d;
 
-    r.x1+=cubic->foreground_r;
-    r.x2-=cubic->foreground_r;
+    int32_t range_value=before+bar+after;
 
-    if(bar<0)///works like a flag, perhaps better to put in reserved status bit?
+    if(range_value<1)range_value=1;
+    int32_t range_space=r.x2-r.x1;
+
+    ///to maintain bar size and ensure before/after 0 alignment when needed, use the smaller of before/after to dictate bar placement (along with bar itself)
+    if(before<after)
     {
-        bar=(r.x2-r.x1)/ -bar;
-        r.x1+=((r.x2-r.x1-bar)*value)/range;
-        r.x2=r.x1+bar;
+        r.x1+=(range_space*before)/range_value;
+        r.x2=r.x1+(range_space*bar)/range_value;
     }
     else
     {
-        r.x1+=((r.x2-r.x1)*value)/(range+bar);
-        r.x2-=((r.x2-r.x1)*(range-value))/(range+bar);
+        r.x2-=(range_space*after)/range_value;
+        r.x1=r.x2-(range_space*bar)/range_value;
     }
 
     cvm_render_shaded_overlay_element(erb,bounds,((rectangle){.x1=r.x1-cubic->internal_r,.y1=r.y1,.x2=r.x1,.y2=r.y2}),colour,(cubic->internal_image_tile->x_pos<<2),(cubic->internal_image_tile->y_pos<<2));
@@ -1208,13 +1224,13 @@ overlay_theme * create_cubic_theme(void)
 
     theme->h_bar_text_offset=16;
 
+    theme->h_bar_icon_text_offset=12;/// (minimum) separation between icon and text sharing a bar
+
     #warning try only updating overlay when something in it changes!
 
     #warning when possible ensure offset from end of at least the fade distance
     theme->h_text_fade_range=16;///24?
     theme->v_text_fade_range=8;///8? 6? 12??
-
-    theme->h_slider_bar_lost_w=24;
 
     theme->x_box_offset=16;/// for now only text offset? any other uses?
     theme->y_box_offset=3;/// ??? figure out what this should be
@@ -1226,8 +1242,15 @@ overlay_theme * create_cubic_theme(void)
 
     theme->border_resize_selection_range=14;
 
+
+    theme->base_contiguous_unit_w=20;
+    theme->base_contiguous_unit_h=20;
+    theme->contiguous_box_x_offset=2;
+    theme->contiguous_box_y_offset=1;
+
+
     theme->contiguous_all_box_x_offset=0;
-    theme->contiguous_all_box_y_offset=1;///possibly 1 ??
+    theme->contiguous_all_box_y_offset=1;
     theme->contiguous_some_box_x_offset=12;///pretty sure this exists to allow "clean" scrolling of partial entries in a contiguous boxes, this doesn't work for horizontal contiguous boxes!
     ///instead use fade range paradigm ?? could/should work on all entry types fill shaded &c. but doesnt allow for widget specific fade ranges ad only 1 entry remains with data for fade...
     /// fade can even be used to indicate that there are more contents to a contiguous box in a particular direction
@@ -1260,6 +1283,8 @@ overlay_theme * create_cubic_theme(void)
     theme->h_bar_select=cubic_h_bar_select;
     theme->box_select=cubic_box_select;
     theme->panel_select=cubic_panel_select;
+
+    theme->get_sliderbar_offsets=cubic_get_sliderbar_offsets;
 
     cubic->foreground_image_tile=NULL;
     cubic->foreground_selection_grid=NULL;

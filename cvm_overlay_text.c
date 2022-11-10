@@ -441,6 +441,8 @@ int16_t overlay_text_single_line_get_pixel_length(cvm_overlay_font * font,char *
     cvm_overlay_glyph * g;
     int w;
 
+    if(!text)return 0;
+
     prev_gi=0;
     w=0;
 
@@ -476,6 +478,8 @@ char * overlay_text_single_line_find_offset(cvm_overlay_font * font,char * text,
     FT_Vector kern;
     cvm_overlay_glyph * g;
     int x,a;
+
+    if(!text)return NULL;
 
     prev_gi=0;
     x=0;

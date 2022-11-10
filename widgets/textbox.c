@@ -70,7 +70,6 @@ static void textbox_widget_left_click(overlay_theme * theme,widget * w,int x,int
         x-theme->x_box_offset-w->textbox.x_offset,y-theme->y_box_offset+w->textbox.y_offset);
 }
 
-#warning use again with return true; if textbox allows selecting/copying again
 static bool textbox_widget_left_release(overlay_theme * theme,widget * clicked,widget * released,int x,int y)
 {
     return true;
@@ -294,11 +293,12 @@ widget * create_textbox(char * text,bool owns_text,int min_horizontal_glyphs,int
 }
 
 
+const static int32_t scroll_bar_zero=0;
+
 widget * create_textbox_scrollbar(widget * textbox)
 {
-    widget * w=create_slider_bar(&textbox->textbox.y_offset,0,0,NULL,NULL,false,0);
+    widget * w=create_slider_bar_dynamic(&textbox->textbox.y_offset,&scroll_bar_zero,&textbox->textbox.max_offset,&textbox->textbox.visible_size,&textbox->textbox.wheel_delta,NULL,NULL,false);
     #warning replace above with adjacent slider
-    set_slider_bar_other_values(w,NULL,&textbox->textbox.max_offset,&textbox->textbox.visible_size,&textbox->textbox.wheel_delta);
 
     return w;
 }

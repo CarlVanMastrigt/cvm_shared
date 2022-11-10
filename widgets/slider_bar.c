@@ -25,31 +25,40 @@ void blank_slider_bar_function(widget * w)
 	printf("blank slider_bar: %d\n",(*w->slider_bar.value_ptr));
 }
 
-static void validate_slider_bar_range(widget * w)
-{
-    if(w->slider_bar.min_value_ptr) w->slider_bar.min_value = *w->slider_bar.min_value_ptr;
-    if(w->slider_bar.max_value_ptr) w->slider_bar.max_value = *w->slider_bar.max_value_ptr;
-}
-
 static void validate_slider_bar_value(widget * w)
 {
-    validate_slider_bar_range(w);
 
-    if(w->slider_bar.min_value < w->slider_bar.max_value)
-	{
-	    if((*w->slider_bar.value_ptr) < w->slider_bar.min_value) *w->slider_bar.value_ptr = w->slider_bar.min_value;
-        if((*w->slider_bar.value_ptr) > w->slider_bar.max_value) *w->slider_bar.value_ptr = w->slider_bar.max_value;
-	}
-	else
+    if(w->slider_bar.dynamic_range)
     {
-        if((*w->slider_bar.value_ptr) > w->slider_bar.min_value) *w->slider_bar.value_ptr = w->slider_bar.min_value;
-        if((*w->slider_bar.value_ptr) < w->slider_bar.max_value) *w->slider_bar.value_ptr = w->slider_bar.max_value;
+        if(*w->slider_bar.min_value_ptr < *w->slider_bar.max_value_ptr)
+        {
+            if(*w->slider_bar.value_ptr < *w->slider_bar.min_value_ptr) *w->slider_bar.value_ptr = *w->slider_bar.min_value_ptr;
+            else if(*w->slider_bar.value_ptr > *w->slider_bar.max_value_ptr) *w->slider_bar.value_ptr = *w->slider_bar.max_value_ptr;
+        }
+        else
+        {
+            if(*w->slider_bar.value_ptr > *w->slider_bar.min_value_ptr) *w->slider_bar.value_ptr = *w->slider_bar.min_value_ptr;
+            else if(*w->slider_bar.value_ptr < *w->slider_bar.max_value_ptr) *w->slider_bar.value_ptr = *w->slider_bar.max_value_ptr;
+        }
+    }
+    else
+    {
+        if(w->slider_bar.min_value < w->slider_bar.max_value)
+        {
+            if(*w->slider_bar.value_ptr < w->slider_bar.min_value) *w->slider_bar.value_ptr = w->slider_bar.min_value;
+            else if(*w->slider_bar.value_ptr > w->slider_bar.max_value) *w->slider_bar.value_ptr = w->slider_bar.max_value;
+        }
+        else
+        {
+            if(*w->slider_bar.value_ptr > w->slider_bar.min_value) *w->slider_bar.value_ptr = w->slider_bar.min_value;
+            else if(*w->slider_bar.value_ptr < w->slider_bar.max_value) *w->slider_bar.value_ptr = w->slider_bar.max_value;
+        }
     }
 
 	if(w->slider_bar.func) w->slider_bar.func(w);
 }
 
-int set_slider_bar_value(widget * w,int v)
+int set_slider_bar_value(widget * w,int32_t v)
 {
     *w->slider_bar.value_ptr=v;
     validate_slider_bar_value(w);
@@ -58,14 +67,17 @@ int set_slider_bar_value(widget * w,int v)
 
 static bool slider_bar_widget_scroll(overlay_theme * theme,widget * w,int delta)
 {
-	int magnitude;
+	int32_t magnitude;
 
-	validate_slider_bar_range(w);
-
-	if(w->slider_bar.wheel_delta_ptr) magnitude = *w->slider_bar.wheel_delta_ptr;
-    else magnitude=abs(w->slider_bar.max_value - w->slider_bar.min_value)/16;
-
-	if(magnitude==0)magnitude=1;
+	if(w->slider_bar.dynamic_scroll)
+    {
+        magnitude = *w->slider_bar.scroll_delta_ptr;
+    }
+	else
+    {
+        magnitude=(w->slider_bar.max_value - w->slider_bar.min_value)/w->slider_bar.scroll_fraction;
+        if(magnitude==0) magnitude = 2*(w->slider_bar.max_value >= w->slider_bar.min_value)-1;
+    }
 
 	*w->slider_bar.value_ptr += delta*magnitude;
 	validate_slider_bar_value(w);
@@ -81,26 +93,37 @@ static void slider_bar_widget_delete(widget * w)
 
 static void set_slider_bar_value_using_mouse_x(overlay_theme * theme,widget * w,int x)
 {
-    int dummy_y;
+    int32_t dummy_y,lost_width,width,range,min_v,max_v;
     adjust_coordinates_to_widget_local(w,&x,&dummy_y);
 
-    validate_slider_bar_range(w);
+    ///crop lost range from both sides (theme and bar) then map range onto relative position in remaining range
+    if(w->slider_bar.dynamic_range)
+    {
+        min_v=*w->slider_bar.min_value_ptr;
+        max_v=*w->slider_bar.max_value_ptr;
+    }
+    else
+    {
+        min_v=w->slider_bar.min_value;
+        max_v=w->slider_bar.max_value;
+    }
 
+    rectangle lost_space=theme->get_sliderbar_offsets(theme,w->base.status);
+	width=w->base.r.x2-w->base.r.x1 - (lost_space.x1-lost_space.x2);
 
-	int width=w->base.r.x2-w->base.r.x1-theme->h_slider_bar_lost_w;
-	int range=w->slider_bar.max_value-w->slider_bar.min_value;
-	int bar_width;
+	range=max_v-min_v;
 
-	if((w->slider_bar.bar_size_ptr)&&((*w->slider_bar.bar_size_ptr)+abs(range))) bar_width = ((*w->slider_bar.bar_size_ptr)*width)/((*w->slider_bar.bar_size_ptr)+abs(range));
-    else if(w->slider_bar.bar_fraction) bar_width=width/w->slider_bar.bar_fraction;
-    else bar_width=0;
+	lost_width = w->slider_bar.dynamic_bar ? ((*w->slider_bar.bar_size_ptr*width)/(*w->slider_bar.bar_size_ptr+range)) : (width/w->slider_bar.bar_fraction);///fraction of remaining width given to the bar
+	width-=lost_width;
 
-	width-=bar_width;
-	if(width<1)width=1;
+    x-=lost_width>>1;
+    x-=lost_space.x1;
 
-    *w->slider_bar.value_ptr = w->slider_bar.min_value + ((x-(theme->h_slider_bar_lost_w+bar_width)/2)*range + width/(2-4*(range<0)) )/width;
+    if(x<0) *w->slider_bar.value_ptr = min_v;
+    else if(x>width) *w->slider_bar.value_ptr = max_v;
+    else *w->slider_bar.value_ptr = min_v + (x*range+(width>>1))/width;
 
-    validate_slider_bar_value(w);
+    if(w->slider_bar.func) w->slider_bar.func(w);
 }
 
 static void horizontal_slider_bar_widget_left_click(overlay_theme * theme,widget * w,int x,int y)
@@ -191,15 +214,39 @@ static widget_behaviour_function_set horizontal_slider_bar_behaviour_functions=
 
 static void horizontal_slider_bar_widget_render(overlay_theme * theme,widget * w,int16_t x_off,int16_t y_off,cvm_overlay_element_render_buffer * erb,rectangle bounds)
 {
-    validate_slider_bar_range(w);
+    int32_t before,bar,after,range,m;
 
-    int bar=(w->slider_bar.bar_size_ptr) ? *w->slider_bar.bar_size_ptr : -w->slider_bar.bar_fraction;
-    if(bar==0)bar=1;
+    if(w->slider_bar.dynamic_range)
+    {
+        before=*w->slider_bar.value_ptr-*w->slider_bar.min_value_ptr;
+        after=*w->slider_bar.max_value_ptr-*w->slider_bar.value_ptr;
+    }
+    else
+    {
+        before=*w->slider_bar.value_ptr-w->slider_bar.min_value;
+        after=w->slider_bar.max_value-*w->slider_bar.value_ptr;
+    }
 
     rectangle r=rectangle_add_offset(w->base.r,x_off,y_off);
 
+    if(w->slider_bar.dynamic_bar)bar=*w->slider_bar.bar_size_ptr;
+    else
+    {
+        range=before+after;
+
+        m=r.x2-r.x1;
+        assert(range < 2 || m < 0x7FFFFFFF/range-1);///SLIDERBAR RANGE TOO LARGE FOR SIZE ON SCREEN, YOU SHOULD IMPOSE SOME LIMITS ON RANGE AND/OR SIZE
+        range*=m;
+        before*=m;
+        after*=m;
+
+        bar=range/(w->slider_bar.bar_fraction);
+        before=(before*(w->slider_bar.bar_fraction-1))/w->slider_bar.bar_fraction;
+        after=(after*(w->slider_bar.bar_fraction-1))/w->slider_bar.bar_fraction;
+    }
+
     theme->h_bar_render(erb,theme,bounds,r,w->base.status,OVERLAY_MAIN_COLOUR);
-	theme->h_bar_slider_render(erb,theme,bounds,r,w->base.status,OVERLAY_TEXT_COLOUR_0,abs(w->slider_bar.max_value-w->slider_bar.min_value),abs(*w->slider_bar.value_ptr-w->slider_bar.min_value),bar);
+	theme->h_bar_slider_render(erb,theme,bounds,r,w->base.status,OVERLAY_TEXT_COLOUR_0,before,bar,after);
 }
 
 static widget * horizontal_slider_bar_widget_select(overlay_theme * theme,widget * w,int16_t x_in,int16_t y_in)
@@ -232,24 +279,23 @@ static widget_appearence_function_set horizontal_slider_bar_appearence_functions
 
 
 
-widget * create_slider_bar(int * value_ptr,int min_value,int max_value,widget_function func,void * data,bool free_data,int bar_fraction)
+widget * create_slider_bar(int * value,widget_function func,void * data,bool free_data)
 {
 	widget * w=create_widget();
 
 	w->slider_bar.data=data;
 	w->slider_bar.func=func;
 
-	w->slider_bar.value_ptr=value_ptr;
+	w->slider_bar.value_ptr=value;
 
-	w->slider_bar.max_value=max_value;
-	w->slider_bar.min_value=min_value;
-	if(bar_fraction)w->slider_bar.bar_fraction=bar_fraction;
-	else w->slider_bar.bar_fraction=1;
+	w->slider_bar.min_value=0;
+	w->slider_bar.max_value=1;
+	w->slider_bar.bar_fraction=2;
+	w->slider_bar.scroll_fraction=1;
 
-	w->slider_bar.min_value_ptr=NULL;
-	w->slider_bar.max_value_ptr=NULL;
-	w->slider_bar.bar_size_ptr=NULL;
-	w->slider_bar.wheel_delta_ptr=NULL;
+	w->slider_bar.dynamic_range=false;
+	w->slider_bar.dynamic_bar=false;
+	w->slider_bar.dynamic_scroll=false;
 
 	w->slider_bar.free_data=free_data;
 
@@ -259,11 +305,57 @@ widget * create_slider_bar(int * value_ptr,int min_value,int max_value,widget_fu
 	return w;
 }
 
-
-void set_slider_bar_other_values(widget * w,int * min_value_ptr,int * max_value_ptr,int * bar_size_ptr,int * wheel_delta_ptr)
+widget * create_slider_bar_fixed(int32_t * value,int32_t min_value,int32_t max_value,int32_t bar_fraction,int32_t scroll_fraction,widget_function func,void * data,bool free_data)
 {
-    w->slider_bar.min_value_ptr=min_value_ptr;
-	w->slider_bar.max_value_ptr=max_value_ptr;
-	w->slider_bar.bar_size_ptr=bar_size_ptr;
-	w->slider_bar.wheel_delta_ptr=wheel_delta_ptr;
+	widget * w=create_widget();
+
+	assert(bar_fraction>=2);///CANNOT TAKE UP WHOLE BAR OR DIVIDE BY 0
+
+	w->slider_bar.data=data;
+	w->slider_bar.func=func;
+
+	w->slider_bar.value_ptr=value;
+
+	w->slider_bar.min_value=min_value;
+	w->slider_bar.max_value=max_value;
+	w->slider_bar.bar_fraction=bar_fraction;
+	w->slider_bar.scroll_fraction=scroll_fraction;
+
+	w->slider_bar.dynamic_range=false;
+	w->slider_bar.dynamic_bar=false;
+	w->slider_bar.dynamic_scroll=false;
+
+	w->slider_bar.free_data=free_data;
+
+    w->base.appearence_functions=&horizontal_slider_bar_appearence_functions;
+    w->base.behaviour_functions=&horizontal_slider_bar_behaviour_functions;
+
+	return w;
 }
+
+widget * create_slider_bar_dynamic(int32_t * value,const int32_t * min_value,const int32_t * max_value,const int32_t * bar_size,const int32_t * scroll_delta,widget_function func,void * data,bool free_data)
+{
+	widget * w=create_widget();
+
+	w->slider_bar.data=data;
+	w->slider_bar.func=func;
+
+	w->slider_bar.value_ptr=value;
+
+	w->slider_bar.min_value_ptr=min_value;
+	w->slider_bar.max_value_ptr=max_value;
+	w->slider_bar.bar_size_ptr=bar_size;
+	w->slider_bar.scroll_delta_ptr=scroll_delta;
+
+	w->slider_bar.dynamic_range=true;
+	w->slider_bar.dynamic_bar=true;
+	w->slider_bar.dynamic_scroll=true;
+
+	w->slider_bar.free_data=free_data;
+
+    w->base.appearence_functions=&horizontal_slider_bar_appearence_functions;
+    w->base.behaviour_functions=&horizontal_slider_bar_behaviour_functions;
+
+	return w;
+}
+

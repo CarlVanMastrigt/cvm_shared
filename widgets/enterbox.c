@@ -45,7 +45,7 @@ static void enterbox_copy_selection_to_clipboard(widget * w)
     else s_begin=w->enterbox.selection_end, s_end=w->enterbox.selection_begin;
 
 
-    /// copy all contents if nothing selected?
+    /// copy all contents if nothing selected? if so uncomment next section, i personally dont like it
     if(s_begin!=s_end)
     {
         tmp=*s_end;
@@ -55,10 +55,10 @@ static void enterbox_copy_selection_to_clipboard(widget * w)
 
         *s_end=tmp;
     }
-    else if(*w->enterbox.text)///not empty
-    {
-        SDL_SetClipboardText(w->enterbox.text);
-    }
+//    else if(*w->enterbox.text)///not empty
+//    {
+//        SDL_SetClipboardText(w->enterbox.text);
+//    }
 }
 
 /// perhaps return pass/fail such that enterbox can flash/fade a colour upon failure
@@ -85,10 +85,10 @@ static void enterbox_enter_text(overlay_theme * theme,widget * w,char * text)
     w->enterbox.text_pixel_length=overlay_text_single_line_get_pixel_length(&theme->font,w->enterbox.text);
 }
 
-static void enterbox_check_visible_offset(widget * w,overlay_theme * theme)
+static void enterbox_check_visible_offset(overlay_theme * theme,widget * w)
 {
     char tmp;
-    int current_offset,text_space;
+    int32_t current_offset,text_space,max_offset;
 
     text_space=w->base.r.x2-w->base.r.x1-2*theme->h_bar_text_offset-1;
 
@@ -107,9 +107,9 @@ static void enterbox_check_visible_offset(widget * w,overlay_theme * theme)
 
     ///special condition to put offset at middle???
     if(w->enterbox.visible_offset<0)w->enterbox.visible_offset=0;
-    current_offset=w->enterbox.text_pixel_length-text_space;///max offset
-    if(current_offset < 0) w->enterbox.visible_offset=0;
-    else if(w->enterbox.visible_offset > current_offset) w->enterbox.visible_offset=current_offset;
+    max_offset=w->enterbox.text_pixel_length-text_space;///max offset
+    if(max_offset < 0) w->enterbox.visible_offset=0;
+    else if(w->enterbox.visible_offset > max_offset) w->enterbox.visible_offset=max_offset;
 }
 
 
@@ -221,12 +221,16 @@ static bool enterbox_widget_key_down(overlay_theme * theme,widget * w,SDL_Keycod
         else w->enterbox.selection_begin = w->enterbox.selection_end = s_end;
         break;
 
+    case SDLK_KP_7:/// keypad/numpad home
+         if(mod&KMOD_NUM)break;
     case SDLK_UP:
     case SDLK_HOME:
         if(mod&KMOD_SHIFT) w->enterbox.selection_end = w->enterbox.text;
         else w->enterbox.selection_begin = w->enterbox.selection_end = w->enterbox.text;
         break;
 
+    case SDLK_KP_1:/// keypad/numpad end
+         if(mod&KMOD_NUM)break;
     case SDLK_DOWN:
     case SDLK_END:
         if(mod&KMOD_SHIFT) w->enterbox.selection_end = w->enterbox.text+strlen(w->enterbox.text);
@@ -234,6 +238,7 @@ static bool enterbox_widget_key_down(overlay_theme * theme,widget * w,SDL_Keycod
         break;
 
     case SDLK_RETURN:
+    case SDLK_KP_ENTER:
         if((w->enterbox.activation_func)&&(!w->enterbox.activate_upon_deselect))
         {
             w->enterbox.activation_func(w);
@@ -249,7 +254,7 @@ static bool enterbox_widget_key_down(overlay_theme * theme,widget * w,SDL_Keycod
         default:;
     }
 
-    enterbox_check_visible_offset(w,theme);
+    enterbox_check_visible_offset(theme,w);
 
     return true;
 }
@@ -269,6 +274,8 @@ static void enterbox_widget_left_click(overlay_theme * theme,widget * w,int x,in
     {
         w->enterbox.upon_input(w);
     }
+
+    enterbox_check_visible_offset(theme,w);
 }
 
 static bool enterbox_widget_left_release(overlay_theme * theme,widget * clicked,widget * released,int x,int y)
@@ -284,13 +291,13 @@ static void enterbox_widget_mouse_movement(overlay_theme * theme,widget * w,int 
     adjust_coordinates_to_widget_local(w,&x,&y);
     w->enterbox.selection_end=overlay_text_single_line_find_offset(&theme->font,w->enterbox.text,x-theme->h_bar_text_offset+w->enterbox.visible_offset);
 
-    enterbox_check_visible_offset(w,theme);
+    enterbox_check_visible_offset(theme,w);
 }
 
 static bool enterbox_widget_text_input(overlay_theme * theme,widget * w,char * text)
 {
     enterbox_enter_text(theme,w,text);
-    enterbox_check_visible_offset(w,theme);
+    enterbox_check_visible_offset(theme,w);
     return true;
 }
 
@@ -413,7 +420,7 @@ static void enterbox_widget_min_h(overlay_theme * theme,widget * w)
 
 static void enterbox_widget_set_w(overlay_theme * theme,widget * w)
 {
-    enterbox_check_visible_offset(w,theme);
+    enterbox_check_visible_offset(theme,w);
 }
 
 static widget_appearence_function_set enterbox_appearence_functions=

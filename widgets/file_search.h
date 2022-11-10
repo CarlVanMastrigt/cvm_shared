@@ -226,8 +226,8 @@ void update_shared_file_search_data_directory_use(shared_file_search_data * sfsd
 
 */
 
-#define CVM_FS_MISCELLANEOUS_TYPE_ID 0
-#define CVM_FS_DIRECTORY_TYPE_ID 1
+#define CVM_FS_DIRECTORY_TYPE_ID 0
+#define CVM_FS_MISCELLANEOUS_TYPE_ID 1
 #define CVM_FS_CUSTOM_TYPE_OFFSET 2
 
 typedef struct file_search_data file_search_data;
@@ -236,7 +236,10 @@ typedef struct file_search_entry/// instead use this to load directory data, set
 {
     file_search_data * fsd;
     uint32_t filename_offset;///could be set using button.text to get text location in buffer (assuming buffer is set already and won't be resized)???
-    uint16_t type_id;///could be set using button.icon_name and button.func, 0=misc file, 1=directory, , other=(offset+2) in type list
+    uint16_t type_id:15;///could be set using button.icon_name and button.func, 0=misc file, 1=directory, , other=(offset+2) in type list
+
+    uint16_t text_length_calculated:1;///could be set using button.icon_name and button.func, 0=misc file, 1=directory, , other=(offset+2) in type list
+    int16_t text_length;
     //uint16_t hidden:1;///not really needed ??? alter functionality when loading directory
 }
 file_search_entry;
@@ -245,26 +248,31 @@ typedef struct file_search_file_type
 {
     const char * name;
     const char * icon;
-    const char * type_extensions;///appended character list
+    const char * type_extensions;///appended character list, first is always preferred type when exporting
 }
 file_search_file_type;
 
 
+
+///data shared between different widgets that share a directory (e.g. save/load windows)
 struct file_search_data
 {
+    ///shared buffer for all entry names
     char * filename_buffer;
     uint32_t filename_buffer_space;
 
-    char * directory_buffer;///current directory
-    uint32_t directory_buffer_size;
+    uint32_t directory_buffer_size;///placed here for better packing
+    char * directory_buffer;///current directory, should expand dynamically to fit selected/enetered file for the different purposes that that serves, with removal
     /// data regarding current directory, should be shared across save and load managers and synchronised, widgets should reference this and not the other way round
 
     file_search_entry * entries;
     uint32_t entry_space;
     uint32_t entry_count;
 
-    file_search_file_type * types;
+    const file_search_file_type * types;
     uint32_t type_count;
+
+    //char ** error_messages;// exists to make translation easier
 
     //uint32_t free_action_data:1;
     //uint32_t free_end_data:1;
@@ -273,19 +281,43 @@ struct file_search_data
     uint32_t show_misc_files:1;///show files not relevant to any applicable filter
     uint32_t show_control_entries:1;/// show  ./  ../   &c.
     uint32_t show_hidden:1;///this is only "bool" that can change ??? how are    show all files/show_misc_files   different/differentiated ???
+    uint32_t render_type_icons:1;///should this always be true?
 };
 
 void load_file_search_directory_entries(file_search_data * fsd);
 
+void initialise_file_search_data(file_search_data * fsd,const char * directory,const file_search_file_type * types,uint32_t type_count);
 
 
-typedef struct file_search_widget_data
+/// essentially a contiguous box, consider replacing contiguous box with many ad-hoc variants of this, or adapting contiguous box as base for those variants
+typedef struct widget_file_list
 {
-    file_search_data * fsd;
-    widget * paired_widget;
-}
-file_search_widget_data;
+    widget_base base;
 
+    file_search_data * fsd;///provided at initialisation
+
+    ///link to widgets that operate in tandem with this widget, is basically saying cannot have file interaction without the file list widget (unsure this is desirable but w/e)
+    widget * enterbox;///enterbox automplete w/ tab autofill?
+    widget * directory_textbar;///displays full directory ending in current widget, fade on left hand side
+    widget * error_popup;
+    widget * type_seclect_popup;
+
+    widget * parent_widget; ///needs way to close widget should that happen, can be null to avoid
+
+    uint32_t selected_out_type;
+
+    int32_t selected_entry;
+    int32_t offset;
+    int32_t max_offset;
+    int32_t visible_height;///bar size
+
+    int16_t min_visible_rows;///minimum number of visible rows, input variable, sets min_h
+    int16_t min_visible_glyphs;///minimum number of visible glyphs per item name
+
+}
+widget_file_list;
+
+widget * create_file_list(file_search_data * fsd,int16_t min_visible_rows,int16_t min_visible_glyphs);
 
 #endif
 
