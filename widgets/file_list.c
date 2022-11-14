@@ -118,7 +118,7 @@ static int file_list_entry_comparison_basic(const void * a,const void * b)
 
     if(fse1->type_id != fse2->type_id && (fse1->type_id==CVM_FL_DIRECTORY_TYPE_ID || fse2->type_id==CVM_FL_DIRECTORY_TYPE_ID))return (((int)fse1->type_id)-((int)fse2->type_id));
 
-    return file_list_string_comparison_number_blocks(fse1->filename,fse2->filename);
+    return file_list_string_compare_number_blocks(fse1->filename,fse2->filename);
 }
 
 static int file_list_entry_comparison_type(const void * a,const void * b)
@@ -135,10 +135,28 @@ static int file_list_entry_comparison_type(const void * a,const void * b)
         return (((int)fse1->type_id)-((int)fse2->type_id));///sort lowest indexed to highest
     }
 
-    return file_list_string_comparison_number_blocks(fse1->filename,fse2->filename);
+    return file_list_string_compare_number_blocks(fse1->filename,fse2->filename);
 }
 
 
+int str_cmp_lower(const char * s1,const char * s2)
+{
+    char c1,c2;
+
+    do
+    {
+        c1=*(s1++);
+        c2=*(s2++);
+
+        if((c1>='A')&&(c1<='Z'))c1-='A'-'a';
+        if((c2>='A')&&(c2<='Z'))c2-='A'-'a';
+
+        if(c1!=c2)return c1-c2;
+    }
+    while((c1)&&(c2));
+
+    return 0;
+}
 
 static void file_list_widget_clean_directory(char * directory)
 {
@@ -282,7 +300,7 @@ static void file_list_widget_organise_entries(widget * w)
 
     fl->valid_entry_count=valid_count;
 
-    qsort(entries,valid_count,sizeof(file_list_entry),file_list_entry_comparison_type);// file_list_entry_comparison_type file_list_entry_comparison_basic
+    qsort(entries,valid_count,sizeof(file_list_entry),file_list_entry_comparison_basic);
 }
 
 
@@ -356,7 +374,7 @@ void load_file_search_directory_entries(widget * w)
 
                 while(*type_ext)
                 {
-                    if(!str_lower_cmp(type_ext,ext))
+                    if(!str_cmp_lower(type_ext,ext))
                     {
                         type_id=i+CVM_FL_CUSTOM_TYPE_OFFSET;
                         break;
