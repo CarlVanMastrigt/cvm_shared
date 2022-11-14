@@ -393,7 +393,7 @@ widget * create_dynamic_text_bar(int min_glyph_render_count,widget_text_alignmen
 }
 
 
-void set_text_bar_text_pointer(widget * w,char * text_pointer)
+void text_bar_widget_set_text_pointer(widget * w,char * text_pointer)
 {
     if(w->text_bar.free_text)free(w->text_bar.text);
 
@@ -407,7 +407,7 @@ void set_text_bar_text_pointer(widget * w,char * text_pointer)
     w->text_bar.recalculate_text_size=true;
 }
 
-void set_text_bar_text(widget * w,char * text_to_copy)
+void text_bar_widget_set_text(widget * w,char * text_to_copy)
 {
     if(w->text_bar.free_text)free(w->text_bar.text);
 

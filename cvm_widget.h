@@ -157,7 +157,7 @@ widget_custom;
 #include "widgets/resize_constraint.h"
 #include "widgets/popup.h"
 #include "widgets/tab.h"
-#include "widgets/file_search.h"
+#include "widgets/file_list.h"
 #include "widgets/contiguous_box.h"
 
 

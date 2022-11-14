@@ -51,8 +51,8 @@ widget_text_bar;
 widget * create_static_text_bar(char * text);
 widget * create_dynamic_text_bar(int min_glyph_render_count,widget_text_alignment text_alignment,bool allow_selection);
 
-void set_text_bar_text_pointer(widget * w,char * text_pointer);///also marks as having been updated
-void set_text_bar_text(widget * w,char * text_to_copy);
+void text_bar_widget_set_text_pointer(widget * w,char * text_pointer);///also marks as having been updated
+void text_bar_widget_set_text(widget * w,char * text_to_copy);
 
 #endif
 

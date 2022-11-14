@@ -132,7 +132,7 @@ overlay_text_single_line_render_data;
 ///theme cannot be const as glyphs will only be loaded to it as necessary
 void overlay_text_single_line_render(cvm_overlay_element_render_buffer * restrict erb,overlay_theme * restrict theme,const overlay_text_single_line_render_data * restrict data);
 
-int16_t overlay_text_single_line_get_pixel_length(cvm_overlay_font * font,char * text);
+int16_t overlay_text_single_line_get_pixel_length(cvm_overlay_font * font,const char * text);
 char * overlay_text_single_line_find_offset(cvm_overlay_font * font,char * text,int relative_x);
 
 void overlay_text_multiline_processing(cvm_overlay_font * font,cvm_overlay_text_block * block,char * text,int wrapping_width);
@@ -154,8 +154,8 @@ static inline rectangle overlay_text_single_line_get_text_area(rectangle r,int16
 
 cvm_overlay_glyph * overlay_get_glyph(cvm_overlay_font * font,char * text);///assumes a single glyph in text
 
-void overlay_text_centred_glyph_render(cvm_overlay_element_render_buffer * erb,cvm_overlay_font * font,rectangle bounds,rectangle r,char * icon_glyph,overlay_colour colour);
-void overlay_text_centred_glyph_box_constrained_render(cvm_overlay_element_render_buffer * erb,overlay_theme * theme,rectangle bounds,rectangle r,char * icon_glyph,overlay_colour colour,rectangle box_r,uint32_t box_status);
+void overlay_text_centred_glyph_render(cvm_overlay_element_render_buffer * erb,cvm_overlay_font * font,rectangle bounds,rectangle r,const char * icon_glyph,overlay_colour colour);
+void overlay_text_centred_glyph_box_constrained_render(cvm_overlay_element_render_buffer * erb,overlay_theme * theme,rectangle bounds,rectangle r,const char * icon_glyph,overlay_colour colour,rectangle box_r,uint32_t box_status);
 ///need way to blend out text towards end of textbox
 
 #endif

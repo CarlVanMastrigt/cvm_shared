@@ -434,7 +434,7 @@ void overlay_text_single_line_render(cvm_overlay_element_render_buffer * restric
     overlay_text_single_line_render_ptrs[data->flags](erb,theme,data);
 }
 
-int16_t overlay_text_single_line_get_pixel_length(cvm_overlay_font * font,char * text)
+int16_t overlay_text_single_line_get_pixel_length(cvm_overlay_font * font,const char * text)
 {
     uint32_t gi,prev_gi,incr;
     FT_Vector kern;
@@ -792,7 +792,7 @@ cvm_overlay_glyph * overlay_get_glyph(cvm_overlay_font * font,char * text)
     return g;
 }
 
-void overlay_text_centred_glyph_render(cvm_overlay_element_render_buffer * erb,cvm_overlay_font * font,rectangle bounds,rectangle r,char * icon_glyph,overlay_colour colour)
+void overlay_text_centred_glyph_render(cvm_overlay_element_render_buffer * erb,cvm_overlay_font * font,rectangle bounds,rectangle r,const char * icon_glyph,overlay_colour colour)
 {
     cvm_overlay_glyph * g;
 
@@ -808,7 +808,7 @@ void overlay_text_centred_glyph_render(cvm_overlay_element_render_buffer * erb,c
     cvm_render_shaded_overlay_element(erb,bounds,r,colour,g->tile->x_pos<<2,g->tile->y_pos<<2);
 }
 
-void overlay_text_centred_glyph_box_constrained_render(cvm_overlay_element_render_buffer * erb,overlay_theme * theme,rectangle bounds,rectangle r,char * icon_glyph,overlay_colour colour,rectangle box_r,uint32_t box_status)
+void overlay_text_centred_glyph_box_constrained_render(cvm_overlay_element_render_buffer * erb,overlay_theme * theme,rectangle bounds,rectangle r,const char * icon_glyph,overlay_colour colour,rectangle box_r,uint32_t box_status)
 {
     cvm_overlay_glyph * g;
 
