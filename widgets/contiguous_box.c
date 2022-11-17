@@ -109,7 +109,7 @@ static widget * contiguous_box_widget_select(overlay_theme * theme,widget * w,in
         y_in-=w->base.r.y1;
 
         tmp=select_widget(w->contiguous_box.contained_box,x_in,y_in);
-        if(tmp!=NULL)return tmp;
+        if(tmp)return tmp;
 
         return w;
     }

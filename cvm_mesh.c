@@ -252,10 +252,12 @@ int cvm_mesh_generate_file_from_objs(const char * name,uint16_t flags)
             pm=0;pa=3;n=0;
             for(k=0;k<3;k++)
             {
-                if(indices[i*3+0]==indices[j*3+k])pm+=2,pa-=k,n++;
-                if(indices[i*3+1]==indices[j*3+k])pm+=0,pa-=k,n++;
-                if(indices[i*3+2]==indices[j*3+k])pm+=4,pa-=k,n++;
+                ///should comfortably be able to be elseif, could do with some more asserts
+                if(indices[i*3+0]==indices[j*3+k])      pa-=k,n++,pm+=2;
+                else if(indices[i*3+1]==indices[j*3+k]) pa-=k,n++;//,pm+=0;
+                else if(indices[i*3+2]==indices[j*3+k]) pa-=k,n++,pm+=4;
             }
+            assert(n!=3);///technically this can occur if your geometry has 2 triangles back to back
             if(n==2)
             {
                 adj_count+=pm;

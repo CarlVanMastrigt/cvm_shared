@@ -50,6 +50,7 @@ typedef struct file_list_type
 }
 file_list_type;
 
+typedef uint16_t(*file_list_widget_action)(const char*,void*,bool);///active file (or directory?) data, force (overwrite &c.), returns 1 in top bit if should continue on force/ask permission
 
 //void load_file_search_directory_entries(file_search_data * fsd);
 
@@ -80,20 +81,25 @@ typedef struct widget_file_list
     ///can be the same or null
     const file_list_type * save_types;
     uint32_t save_type_count;
+    void * save_data;
+    file_list_widget_action save_action;
+
     const file_list_type * load_types;
     uint32_t load_type_count;
+    void * load_data;
+    file_list_widget_action load_action;
 
-    //char ** error_messages;// exists to make translation easier
+    const char *const * error_messages;// exists to make translation easier
+    uint16_t error_count;
 
-    //uint32_t free_action_data:1;
-    //uint32_t free_end_data:1;
-
-    uint32_t fixed_directory:1;///allow changing directory, show directories in file list &c.
-    uint32_t hide_misc_files:1;///show files not relevant to any applicable filter
-    uint32_t hide_control_entries:1;/// show  ./  ../   &c.
-    uint32_t hide_hidden_entries:1;///this is only "bool" that can change ??? how are    show all files/show_misc_files   different/differentiated ???
-    uint32_t render_type_icons:1;///should this always be true?
-    uint32_t save_mode_active:1;///if true; save, if false; load
+    uint16_t free_load_data:1;///allow changing directory, show directories in file list &c.
+    uint16_t free_save_data:1;///allow changing directory, show directories in file list &c.
+    uint16_t fixed_directory:1;///allow changing directory, show directories in file list &c.
+    uint16_t hide_misc_files:1;///show files not relevant to any applicable filter
+    uint16_t hide_control_entries:1;/// show  ./  ../   &c.
+    uint16_t hide_hidden_entries:1;///this is only "bool" that can change ??? how are    show all files/show_misc_files   different/differentiated ???
+    uint16_t render_type_icons:1;///should this always be true?
+    uint16_t save_mode_active:1;///if true; save, if false; load
 
     ///link to widgets that operate in tandem with this widget, is basically saying cannot have file interaction without the file list widget (unsure this is desirable but w/e)
     widget * enterbox;///enterbox automplete w/ tab autofill?
@@ -118,10 +124,15 @@ typedef struct widget_file_list
 widget_file_list;
 
 ///initial directory can be null, must handle this case
-widget * create_file_list(int16_t min_visible_rows,int16_t min_visible_glyphs,const char * initial_directory,const file_list_type * save_types,uint32_t save_type_count,const file_list_type * load_types,uint32_t load_type_count);
+widget * create_file_list(int16_t min_visible_rows,int16_t min_visible_glyphs,const char * initial_directory,const char *const * error_messages,uint16_t error_count);
+
+
+///const file_list_type * save_types,uint32_t save_type_count,const file_list_type * load_types,uint32_t load_type_count,
 
 /// prefer to avoid creating widgets, as such allowfile list to operate both as save and load? if so can combine widget_file_list and file_search_data
-void file_list_widget_set_directory_text_bar(widget * file_list,widget * text_bar);
+
+widget * create_file_list_widget_directory_text_bar(widget * file_list,uint32_t min_glyphs_visible);
+widget * create_file_list_widget_enterbox(widget * file_list,uint32_t min_glyphs_visible);
 
 #endif
 

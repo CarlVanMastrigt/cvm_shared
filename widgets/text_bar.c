@@ -167,6 +167,8 @@ static bool text_bar_widget_key_down(overlay_theme * theme,widget * w,SDL_Keycod
         }
         break;
 
+    case SDLK_KP_4:/// keypad/numpad left
+        if(mod&KMOD_NUM)break;
     case SDLK_LEFT:
         if(mod&KMOD_CTRL)///can move based on ctrl (jump word),  then set to same based on shift
         {
@@ -178,6 +180,8 @@ static bool text_bar_widget_key_down(overlay_theme * theme,widget * w,SDL_Keycod
         else w->text_bar.selection_begin = w->text_bar.selection_end = s_begin;
         break;
 
+    case SDLK_KP_6:/// keypad/numpad right
+        if(mod&KMOD_NUM)break;
     case SDLK_RIGHT:
         if(mod&KMOD_CTRL)
         {
@@ -190,16 +194,22 @@ static bool text_bar_widget_key_down(overlay_theme * theme,widget * w,SDL_Keycod
         break;
 
     case SDLK_KP_7:/// keypad/numpad home
+    case SDLK_KP_8:/// keypad/numpad up
+    case SDLK_KP_9:/// keypad/numpad page up
          if(mod&KMOD_NUM)break;
     case SDLK_UP:
+    case SDLK_PAGEUP:
     case SDLK_HOME:
         if(mod&KMOD_SHIFT) w->text_bar.selection_end = w->text_bar.text;
         else w->text_bar.selection_begin = w->text_bar.selection_end = w->text_bar.text;
         break;
 
     case SDLK_KP_1:/// keypad/numpad end
+    case SDLK_KP_2:/// keypad/numpad down
+    case SDLK_KP_3:/// keypad/numpad page down
          if(mod&KMOD_NUM)break;
     case SDLK_DOWN:
+    case SDLK_PAGEDOWN:
     case SDLK_END:
         if(mod&KMOD_SHIFT) w->text_bar.selection_end = w->text_bar.text+strlen(w->text_bar.text);
         else w->text_bar.selection_begin = w->text_bar.selection_end = w->text_bar.text+strlen(w->text_bar.text);

@@ -20,8 +20,6 @@ along with cvm_shared.  If not, see <https://www.gnu.org/licenses/>.
 #include "cvm_shared.h"
 
 #include <dirent.h>
-//#include <stdlib.h>
-
 
 
 #define CVM_FL_DIRECTORY_TYPE_ID 0
@@ -60,13 +58,15 @@ static inline int file_list_string_compare_number_blocks(const char * s1,const c
                 n2--;
                 if(n1<s1)
                 {
-                    while(n2>=s2) if(*n2-- != '0') return -1;///b is larger
+                    if(!d && n2>=s2)return -1;///n2 is the same number as n1 but has more digits so leading 0's takes precedence
+                    while(n2>=s2) if(*n2-- != '0') return -1;///n2 is larger
                     if(d) return d;
                     else break;
                 }
                 if(n2<s2)
                 {
-                    while(n1>=s1) if(*n1-- != '0') return 1;///a is larger
+                    if(!d) return 1; ///same as other branch but n1>=s1 is definitely satisfied by other branch not having been taken
+                    while(n1>=s1) if(*n1-- != '0') return 1;///n1 is larger
                     if(d) return d;
                     else break;
                 }
@@ -204,7 +204,7 @@ static inline void file_list_widget_recalculate_scroll_properties(widget * w)
 static inline void file_list_widget_set_composite_buffer(widget * w)
 {
     uint32_t s;
-    char * e,*base,*name;
+    const char * e,*base,*name;
 
     assert(w->file_list.selected_entry>=0 && w->file_list.selected_entry<(int32_t)w->file_list.valid_entry_count);///should have a selected entry if setting composite buffer
 
@@ -223,7 +223,16 @@ static inline void file_list_widget_set_composite_buffer(widget * w)
     strcpy(w->file_list.composite_buffer,base);
     strcat(w->file_list.composite_buffer,name);
 
-    if(w->file_list.directory_text_bar)text_bar_widget_set_text_pointer(w->file_list.directory_text_bar,w->file_list.composite_buffer);
+
+    if(w->file_list.entries[w->file_list.selected_entry].type_id==CVM_FL_DIRECTORY_TYPE_ID)
+    {
+        if(w->file_list.directory_text_bar)text_bar_widget_set_text_pointer(w->file_list.directory_text_bar,w->file_list.directory_buffer);
+    }
+    else
+    {
+        if(w->file_list.directory_text_bar)text_bar_widget_set_text_pointer(w->file_list.directory_text_bar,w->file_list.composite_buffer);
+        if(w->file_list.enterbox)set_enterbox_text(w->file_list.enterbox,name);
+    }
 }
 
 static inline void file_list_widget_set_selected_entry(widget * w,int32_t selected_entry_index)
@@ -245,7 +254,6 @@ static inline void file_list_widget_set_selected_entry(widget * w,int32_t select
 static void file_list_widget_deselect_entry(widget * w)
 {
     if(w->file_list.directory_text_bar)text_bar_widget_set_text_pointer(w->file_list.directory_text_bar,w->file_list.directory_buffer);
-    ///clear enterbox
     w->file_list.selected_entry=-1;
 }
 
@@ -262,10 +270,9 @@ static void file_list_widget_set_directory(widget * w,const char * directory)
     w->file_list.directory_buffer[length+1]='\0';
 
     file_list_widget_clean_directory(w->file_list.directory_buffer);
-
-    file_list_widget_deselect_entry(w);
 }
 
+///call this when altering filtering
 static void file_list_widget_organise_entries(widget * w)
 {
     uint32_t valid_count,i;
@@ -305,6 +312,7 @@ static void file_list_widget_organise_entries(widget * w)
 
 
 #warning make static ??
+///only call this when changing/refreshing directory, NOT when altering filtering
 void load_file_search_directory_entries(widget * w)
 {
     DIR * directory;
@@ -420,7 +428,10 @@ void load_file_search_directory_entries(widget * w)
     file_list_widget_organise_entries(w);
 }
 
-
+static void file_list_widget_perform_action(widget * w)
+{
+    puts("FILE LIST WIDGET ACTION");//placeholder
+}
 
 
 
@@ -496,11 +507,16 @@ static bool file_list_widget_key_down(overlay_theme * theme,widget * w,SDL_Keyco
     {
     case SDLK_KP_8:/// keypad/numpad up
         if(mod&KMOD_NUM)break;
+    case SDLK_UP:
+        if(w->file_list.selected_entry>0)file_list_widget_set_selected_entry(w,w->file_list.selected_entry-1);
+        break;
+
     case SDLK_KP_9:/// keypad/numpad page up
         if(mod&KMOD_NUM)break;
     case SDLK_PAGEUP:
-    case SDLK_UP:
-        if(w->file_list.selected_entry>0)file_list_widget_set_selected_entry(w,w->file_list.selected_entry-1);
+        w->file_list.offset-=((w->file_list.visible_height-1)/(w->file_list.entry_height*2) + 1)*w->file_list.entry_height;///shift half screen rounded up in visible entry units
+        if(w->file_list.offset<0)w->file_list.offset=0;
+        if(w->file_list.offset>w->file_list.max_offset)w->file_list.offset=w->file_list.max_offset;
         break;
 
     case SDLK_KP_7:/// keypad/numpad home
@@ -512,11 +528,16 @@ static bool file_list_widget_key_down(overlay_theme * theme,widget * w,SDL_Keyco
 
     case SDLK_KP_2:/// keypad/numpad down
         if(mod&KMOD_NUM)break;
+    case SDLK_DOWN:
+        if(w->file_list.selected_entry < (int32_t)w->file_list.valid_entry_count-1) file_list_widget_set_selected_entry(w,w->file_list.selected_entry+1);
+        break;
+
     case SDLK_KP_3:/// keypad/numpad page down
         if(mod&KMOD_NUM)break;
     case SDLK_PAGEDOWN:
-    case SDLK_DOWN:
-        if(w->file_list.selected_entry < (int32_t)w->file_list.valid_entry_count-1) file_list_widget_set_selected_entry(w,w->file_list.selected_entry+1);
+        w->file_list.offset+=((w->file_list.visible_height-1)/(w->file_list.entry_height*2) + 1)*w->file_list.entry_height;///shift half screen rounded up in visible entry units
+        if(w->file_list.offset<0)w->file_list.offset=0;
+        if(w->file_list.offset>w->file_list.max_offset)w->file_list.offset=w->file_list.max_offset;
         break;
 
     case SDLK_KP_1:/// keypad/numpad end
@@ -525,12 +546,14 @@ static bool file_list_widget_key_down(overlay_theme * theme,widget * w,SDL_Keyco
         file_list_widget_set_selected_entry(w,w->file_list.valid_entry_count-1);
         break;
 
+
     case SDLK_ESCAPE:
         set_currently_active_widget(NULL);
+        file_list_widget_deselect_entry(w);///not sure is desirable but w/e
         break;
 
     case SDLK_RETURN:
-        puts("file list perform action");///return to perform op on selected widget, same as double clicking
+        puts("file list perform action");///return/enter to perform op on selected widget, same as double clicking
         break;
 
         default:;
@@ -539,12 +562,19 @@ static bool file_list_widget_key_down(overlay_theme * theme,widget * w,SDL_Keyco
     return true;
 }
 
+static void file_list_widget_click_away(overlay_theme * theme,widget * w)
+{
+    //file_list_widget_deselect_entry(w);
+}
+
 void file_list_widget_delete(widget * w)
 {
     free(w->file_list.filename_buffer);
     free(w->file_list.directory_buffer);
     free(w->file_list.composite_buffer);
     free(w->file_list.entries);
+    if(w->file_list.free_save_data)free(w->file_list.save_data);
+    if(w->file_list.free_load_data)free(w->file_list.load_data);
 }
 
 static widget_behaviour_function_set enterbox_behaviour_functions=
@@ -557,7 +587,7 @@ static widget_behaviour_function_set enterbox_behaviour_functions=
     .key_down       =   file_list_widget_key_down,
     .text_input     =   blank_widget_text_input,
     .text_edit      =   blank_widget_text_edit,
-    .click_away     =   blank_widget_click_away,///should invalidate current selection
+    .click_away     =   file_list_widget_click_away,
     .add_child      =   blank_widget_add_child,
     .remove_child   =   blank_widget_remove_child,
     .wid_delete     =   file_list_widget_delete
@@ -682,7 +712,7 @@ static widget_appearence_function_set file_list_appearence_functions=
     .set_h  =   file_list_widget_set_h
 };
 
-widget * create_file_list(int16_t min_visible_rows,int16_t min_visible_glyphs,const char * initial_directory,const file_list_type * save_types,uint32_t save_type_count,const file_list_type * load_types,uint32_t load_type_count)
+widget * create_file_list(int16_t min_visible_rows,int16_t min_visible_glyphs,const char * initial_directory,const char *const * error_messages,uint16_t error_count)
 {
     widget * w=create_widget();
 
@@ -703,10 +733,20 @@ widget * create_file_list(int16_t min_visible_rows,int16_t min_visible_glyphs,co
     w->file_list.entry_space=8;
     w->file_list.entries=malloc(sizeof(file_list_entry)*w->file_list.entry_space);
 
-    w->file_list.save_types=save_types;
-    w->file_list.save_type_count=save_type_count;
-    w->file_list.load_types=load_types;
-    w->file_list.load_type_count=load_type_count;
+    w->file_list.save_types=NULL;
+    w->file_list.save_type_count=0;
+    w->file_list.save_data=NULL;
+    w->file_list.free_save_data=false;
+    w->file_list.save_action=NULL;
+
+    w->file_list.load_types=NULL;
+    w->file_list.load_type_count=0;
+    w->file_list.load_data=NULL;
+    w->file_list.free_load_data=false;
+    w->file_list.load_action=NULL;
+
+    w->file_list.error_messages=error_messages;
+    w->file_list.error_count=error_count;
 
     w->file_list.fixed_directory=false;
     w->file_list.hide_misc_files=false;
@@ -738,11 +778,36 @@ widget * create_file_list(int16_t min_visible_rows,int16_t min_visible_glyphs,co
     return w;
 }
 
-void file_list_widget_set_directory_text_bar(widget * file_list,widget * text_bar)
+widget * create_file_list_widget_directory_text_bar(widget * file_list,uint32_t min_glyphs_visible)
 {
+    widget * text_bar=create_dynamic_text_bar(min_glyphs_visible,WIDGET_TEXT_RIGHT_ALIGNED,true);
+
     file_list->file_list.directory_text_bar=text_bar;
 
     if(file_list->file_list.selected_entry<0)text_bar_widget_set_text_pointer(text_bar,file_list->file_list.directory_buffer);
     else file_list_widget_set_composite_buffer(file_list);
+
+    return text_bar;
 }
 
+static void file_list_widget_enterbox_input_function(widget * enterbox)
+{
+    widget * file_list=enterbox->enterbox.data;
+    file_list_widget_deselect_entry(file_list);
+}
+
+static void file_list_widget_enterbox_action_function(widget * enterbox)
+{
+    widget * file_list=enterbox->enterbox.data;
+    file_list_widget_perform_action(file_list);
+}
+
+
+
+//void file_list_widget_set_directory_enterbox(widget * file_list,widget * enterbox)
+widget * create_file_list_widget_enterbox(widget * file_list,uint32_t min_glyphs_visible)
+{
+    widget * enterbox=create_enterbox(256,256,min_glyphs_visible,NULL,file_list_widget_enterbox_action_function,NULL,file_list_widget_enterbox_input_function,file_list,false,false);
+    file_list->file_list.enterbox=enterbox;
+    return enterbox;
+}

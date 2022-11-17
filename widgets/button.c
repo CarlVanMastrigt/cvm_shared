@@ -51,7 +51,7 @@ bool button_widget_status_func(widget * w)
 
 static void button_widget_left_click(overlay_theme * theme,widget * w,int x,int y)
 {
-    /*if(w->button.double_click_action!=NULL)
+    /*if(w->button.double_click_action)
     {
         if(check_widget_double_click(w))
         {
@@ -60,7 +60,7 @@ static void button_widget_left_click(overlay_theme * theme,widget * w,int x,int 
         }
     }*/
 
-    if(w->button.func!=NULL)
+    if(w->button.func)
 	{
 		w->button.func(w);
 	}
@@ -70,7 +70,7 @@ static void button_widget_left_click(overlay_theme * theme,widget * w,int x,int 
 {
     if(clicked==released)
     {
-        if(clicked->button.func!=NULL)
+        if(clicked->button.func)
         {
             clicked->button.func(clicked);
         }

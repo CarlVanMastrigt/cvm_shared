@@ -73,7 +73,7 @@ widget * create_adjuster_pair(int * value_ptr,int min_value,int max_value,int te
     widget * slider_bar=add_child_to_parent(box,create_slider_bar_fixed(value_ptr,min_value,max_value,bar_fraction,scroll_fraction,adjuster_pair_slider_bar_function,NULL,false));
 
 	//slider_bar->slider_bar.data=add_child_to_parent(box,create_enterbox(text_space,text_space,text_space,text,adjuster_pair_enterbox_function,slider_bar,adjuster_pair_enterbox_update_contents_function,true,false));
-	slider_bar->slider_bar.data=add_child_to_parent(box,create_enterbox_simple(text_space,text,adjuster_pair_enterbox_function,slider_bar,adjuster_pair_enterbox_update_contents_function,true,false));
+	slider_bar->slider_bar.data=add_child_to_parent(box,create_enterbox_simple(text_space,text,adjuster_pair_enterbox_function,adjuster_pair_enterbox_update_contents_function,slider_bar,false,true));
 
     return box;
 }

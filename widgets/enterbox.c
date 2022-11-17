@@ -199,6 +199,8 @@ static bool enterbox_widget_key_down(overlay_theme * theme,widget * w,SDL_Keycod
         }
         break;
 
+    case SDLK_KP_4:/// keypad/numpad left
+        if(mod&KMOD_NUM)break;
     case SDLK_LEFT:
         if(mod&KMOD_CTRL)///can move based on ctrl (jump word),  then set to same based on shift
         {
@@ -210,6 +212,8 @@ static bool enterbox_widget_key_down(overlay_theme * theme,widget * w,SDL_Keycod
         else w->enterbox.selection_begin = w->enterbox.selection_end = s_begin;
         break;
 
+    case SDLK_KP_6:/// keypad/numpad right
+        if(mod&KMOD_NUM)break;
     case SDLK_RIGHT:
         if(mod&KMOD_CTRL)
         {
@@ -222,16 +226,22 @@ static bool enterbox_widget_key_down(overlay_theme * theme,widget * w,SDL_Keycod
         break;
 
     case SDLK_KP_7:/// keypad/numpad home
+    case SDLK_KP_8:/// keypad/numpad up
+    case SDLK_KP_9:/// keypad/numpad page up
          if(mod&KMOD_NUM)break;
     case SDLK_UP:
+    case SDLK_PAGEUP:
     case SDLK_HOME:
         if(mod&KMOD_SHIFT) w->enterbox.selection_end = w->enterbox.text;
         else w->enterbox.selection_begin = w->enterbox.selection_end = w->enterbox.text;
         break;
 
     case SDLK_KP_1:/// keypad/numpad end
+    case SDLK_KP_2:/// keypad/numpad down
+    case SDLK_KP_3:/// keypad/numpad page down
          if(mod&KMOD_NUM)break;
     case SDLK_DOWN:
+    case SDLK_PAGEDOWN:
     case SDLK_END:
         if(mod&KMOD_SHIFT) w->enterbox.selection_end = w->enterbox.text+strlen(w->enterbox.text);
         else w->enterbox.selection_begin = w->enterbox.selection_end = w->enterbox.text+strlen(w->enterbox.text);
@@ -270,9 +280,9 @@ static void enterbox_widget_left_click(overlay_theme * theme,widget * w,int x,in
     adjust_coordinates_to_widget_local(w,&x,&y);
     w->enterbox.selection_begin=w->enterbox.selection_end=overlay_text_single_line_find_offset(&theme->font,w->enterbox.text,x-theme->h_bar_text_offset+w->enterbox.visible_offset);
 
-    if(w->enterbox.upon_input!=NULL)
+    if(w->enterbox.upon_input_func)
     {
-        w->enterbox.upon_input(w);
+        w->enterbox.upon_input_func(w);
     }
 
     enterbox_check_visible_offset(theme,w);
@@ -433,20 +443,20 @@ static widget_appearence_function_set enterbox_appearence_functions=
     .set_h  =   blank_widget_set_h
 };
 
-widget * create_enterbox(uint32_t max_strlen,uint32_t max_glyphs,uint32_t min_glyphs_visible,char * initial_text,widget_function activation_func,void * data,widget_function update_contents_func,bool activate_upon_deselect,bool free_data)
+widget * create_enterbox(uint32_t max_strlen,uint32_t max_glyphs,uint32_t min_glyphs_visible,char * initial_text,widget_function activation_func,widget_function update_contents_func,widget_function upon_input_func,void * data,bool free_data,bool activate_upon_deselect)
 {
 	widget * w=create_widget();
 
 	w->enterbox.data=data;
 	w->enterbox.activation_func=activation_func;
 	w->enterbox.update_contents_func=update_contents_func;
+	w->enterbox.upon_input_func=upon_input_func;
 
 	w->enterbox.max_strlen=max_strlen;
 	w->enterbox.max_glyphs=max_glyphs;
 	w->enterbox.min_glyphs_visible=min_glyphs_visible;
 
 	w->enterbox.text=malloc(max_strlen+1);///multiply by max unicode character size
-	w->enterbox.upon_input=NULL;
 
     w->enterbox.activate_upon_deselect=activate_upon_deselect;
 	w->enterbox.free_data=free_data;
@@ -467,7 +477,7 @@ widget * create_enterbox(uint32_t max_strlen,uint32_t max_glyphs,uint32_t min_gl
 void set_enterbox_text(widget * w,char * text)
 {
     ///error checking, don't put in release?
-    assert(strlen(text)<=w->enterbox.max_strlen);///ATTEMPTING TO SET A STRING WITHOUT PROVIDING ENOUGH CAPACITY
+    assert(!text || strlen(text)<=w->enterbox.max_strlen);///ATTEMPTING TO SET A STRING WITHOUT PROVIDING ENOUGH CAPACITY
 
     uint32_t gc;
     if(text && cvm_overlay_utf8_validate_string_and_count_glyphs(text,&gc) && gc<=w->enterbox.max_glyphs && strlen(text)<=w->enterbox.max_strlen)
@@ -482,7 +492,4 @@ void set_enterbox_text(widget * w,char * text)
     w->enterbox.recalculate_text_size=true;
 }
 
-void set_enterbox_action_upon_input(widget * w,widget_function func)
-{
-    w->enterbox.upon_input=func;
-}
+

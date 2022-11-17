@@ -75,7 +75,7 @@ void container_widget_delete(widget * w)
 
     current=w->container.first;
 
-    while(current!=NULL)
+    while(current)
     {
         next=current->base.next;
 
@@ -116,7 +116,7 @@ void container_widget_render(overlay_theme * theme,widget * w,int16_t x_off,int1
 
     widget * current=w->container.first;
 
-    while(current!=NULL)
+    while(current)
     {
         render_widget(current,x_off,y_off,erb,bounds);
 
@@ -132,11 +132,11 @@ widget * container_widget_select(overlay_theme * theme,widget * w,int16_t x_in,i
     x_in-=w->base.r.x1;
     y_in-=w->base.r.y1;
 
-    while(current!=NULL)
+    while(current)
     {
         tmp=select_widget(current,x_in,y_in);
 
-        if(tmp!=NULL) return tmp;
+        if(tmp) return tmp;
 
         current=current->base.prev;
     }

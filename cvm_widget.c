@@ -226,7 +226,7 @@ bool widget_active(widget * w)
 
 void adjust_coordinates_to_widget_local(widget * w,int * x,int * y)
 {
-    while(w->base.parent!=NULL)
+    while(w->base.parent)
     {
         *x-=w->base.r.x1;
         *y-=w->base.r.y1;
@@ -240,7 +240,7 @@ void get_widgets_global_coordinates(widget * w,int * x,int * y)
 	*x=0;
 	*y=0;
 
-    while(w->base.parent!=NULL)
+    while(w->base.parent)
     {
         w=w->base.parent;
 
@@ -303,17 +303,17 @@ void move_toplevel_widget_to_front(widget * w)
 {
     w=get_widgets_toplevel_ancestor(w);
 
-    if((w==NULL)||(w->base.parent->container.last==w))/// ||(w->base.status & WIDGET_STAYS_AT_BOTTOM)
+    if((!w)||(w->base.parent->container.last==w))/// ||(w->base.status & WIDGET_STAYS_AT_BOTTOM)
     {
         return;
     }
 
-    if(w->base.prev!=NULL)
+    if(w->base.prev)
     {
         w->base.prev->base.next=w->base.next;
     }
 
-    if(w->base.next!=NULL)
+    if(w->base.next)
     {
         w->base.next->base.prev=w->base.prev;
     }
@@ -691,7 +691,7 @@ widget * add_child_to_parent(widget * parent,widget * child)
 void remove_child_from_parent(widget * child)
 {
     widget * parent=child->base.parent;
-    if(parent!=NULL)parent->base.behaviour_functions->remove_child(parent,child);
+    if(parent)parent->base.behaviour_functions->remove_child(parent,child);
 }
 
 void delete_widget(widget * w)
