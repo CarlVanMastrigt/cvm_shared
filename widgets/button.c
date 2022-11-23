@@ -116,8 +116,6 @@ widget * create_button(void * data,widget_function func,bool free_data)
 
     w->button.toggle_status=NULL;
 
-    w->button.index=0;
-
     w->button.free_data=free_data;
 
     w->button.variant_text=false;

@@ -132,6 +132,20 @@ static void text_bar_widget_mouse_movement(overlay_theme * theme,widget * w,int 
     text_bar_check_visible_offset(theme,w);
 }
 
+static bool text_bar_widget_scroll(overlay_theme * theme,widget * w,int delta)
+{
+    int32_t max_offset;
+    max_offset=w->text_bar.text_pixel_length - (w->base.r.x2-w->base.r.x1-2*theme->h_bar_text_offset-1);///text length - max offset
+    if(max_offset < 0) max_offset=0;
+
+    w->text_bar.visible_offset-=delta*theme->font.max_advance;
+
+    if(w->text_bar.visible_offset<0)w->text_bar.visible_offset=0;
+    else if(w->text_bar.visible_offset > max_offset) w->text_bar.visible_offset=max_offset;
+
+    return true;
+}
+
 static bool text_bar_widget_key_down(overlay_theme * theme,widget * w,SDL_Keycode keycode,SDL_Keymod mod)
 {
     char *s_begin,*s_end,*s;
@@ -245,7 +259,7 @@ static widget_behaviour_function_set text_bar_behaviour_functions=
     .l_release      =   text_bar_widget_left_release,
     .r_click        =   blank_widget_right_click,
     .m_move         =   text_bar_widget_mouse_movement,
-    .scroll         =   blank_widget_scroll,
+    .scroll         =   text_bar_widget_scroll,
     .key_down       =   text_bar_widget_key_down,
     .text_input     =   blank_widget_text_input,
     .text_edit      =   blank_widget_text_edit,
@@ -306,7 +320,7 @@ static void text_bar_widget_min_w(overlay_theme * theme,widget * w)
         ///also need to set flag to recalculate text size here b/c that functionality won't be provoked upon theme change but this function will be called and the product of the change will be necessary
         w->text_bar.recalculate_text_size=true;
     }
-    else w->base.min_w = 2*theme->h_bar_text_offset + overlay_text_single_line_get_pixel_length(theme,w->text_bar.text);
+    else w->base.min_w = 2*theme->h_bar_text_offset + overlay_text_single_line_get_pixel_length(&theme->font,w->text_bar.text);
 
 }
 

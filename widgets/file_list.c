@@ -139,7 +139,7 @@ static int file_list_entry_comparison_type(const void * a,const void * b)
 }
 
 
-int str_cmp_lower(const char * s1,const char * s2)
+static int cvm_strcmp_lower(const char * s1,const char * s2)
 {
     char c1,c2;
 
@@ -160,6 +160,7 @@ int str_cmp_lower(const char * s1,const char * s2)
 
 static void file_list_widget_clean_directory(char * directory)
 {
+    ///will only ever shorten directory so no need to alter buffer max size
     char *r,*w;
 
     r=w=directory;
@@ -206,36 +207,40 @@ static inline void file_list_widget_set_composite_buffer(widget * w)
     uint32_t s;
     const char * e,*base,*name;
 
-    assert(w->file_list.selected_entry>=0 && w->file_list.selected_entry<(int32_t)w->file_list.valid_entry_count);///should have a selected entry if setting composite buffer
+    printf("%d %d\n",w->file_list.selected_entry_index,w->file_list.valid_entry_count);
+
+    assert(w->file_list.selected_entry_index>=0 && w->file_list.selected_entry_index<(int32_t)w->file_list.valid_entry_count);///should have a selected entry if setting composite buffer
 
     base=w->file_list.directory_buffer;
     for(e=base;*e;e++);
     s=e-base;
 
-    name=w->file_list.entries[w->file_list.selected_entry].filename;
+    name=w->file_list.entries[w->file_list.selected_entry_index].filename;
     for(e=name;*e;e++);
     s+=e-name;
 
     s+=2;///terminating null char, and space to add and ending / should it become necessary
 
-    while(w->file_list.composite_buffer_size < s)w->file_list.composite_buffer=realloc(w->file_list.composite_buffer,sizeof(char)*(w->file_list.composite_buffer_size*=2));
+    if(w->file_list.composite_buffer_size < s)w->file_list.composite_buffer=realloc(w->file_list.composite_buffer,sizeof(char)*(w->file_list.composite_buffer_size=s));
 
     strcpy(w->file_list.composite_buffer,base);
     strcat(w->file_list.composite_buffer,name);
 
 
-    if(w->file_list.entries[w->file_list.selected_entry].type_id==CVM_FL_DIRECTORY_TYPE_ID)
+    if(w->file_list.directory_text_bar)
     {
-        if(w->file_list.directory_text_bar)text_bar_widget_set_text_pointer(w->file_list.directory_text_bar,w->file_list.directory_buffer);
-    }
-    else
-    {
-        if(w->file_list.directory_text_bar)text_bar_widget_set_text_pointer(w->file_list.directory_text_bar,w->file_list.composite_buffer);
-        if(w->file_list.enterbox)set_enterbox_text(w->file_list.enterbox,name);
+        if(w->file_list.entries[w->file_list.selected_entry_index].type_id==CVM_FL_DIRECTORY_TYPE_ID)
+        {
+            text_bar_widget_set_text_pointer(w->file_list.directory_text_bar,w->file_list.directory_buffer);
+        }
+        else
+        {
+            text_bar_widget_set_text_pointer(w->file_list.directory_text_bar,w->file_list.composite_buffer);
+        }
     }
 }
 
-static inline void file_list_widget_set_selected_entry(widget * w,int32_t selected_entry_index)
+static inline void file_list_widget_set_selected_entry(widget * w,int32_t selected_entry_index,bool set_enterbox_contents)
 {
     int32_t o;
 
@@ -245,16 +250,20 @@ static inline void file_list_widget_set_selected_entry(widget * w,int32_t select
     o-=w->file_list.visible_height-w->file_list.entry_height;
     if(w->file_list.offset<o)w->file_list.offset=o;
 
-    w->file_list.selected_entry=selected_entry_index;
+    w->file_list.selected_entry_index=selected_entry_index;
 
     file_list_widget_set_composite_buffer(w);
     ///set enterbox
+    if(set_enterbox_contents && w->file_list.entries[selected_entry_index].type_id!=CVM_FL_DIRECTORY_TYPE_ID && w->file_list.enterbox)
+    {
+        set_enterbox_text(w->file_list.enterbox,w->file_list.entries[selected_entry_index].filename);
+    }
 }
 
 static void file_list_widget_deselect_entry(widget * w)
 {
     if(w->file_list.directory_text_bar)text_bar_widget_set_text_pointer(w->file_list.directory_text_bar,w->file_list.directory_buffer);
-    w->file_list.selected_entry=-1;
+    w->file_list.selected_entry_index=-1;
 }
 
 static void file_list_widget_set_directory(widget * w,const char * directory)
@@ -263,7 +272,7 @@ static void file_list_widget_set_directory(widget * w,const char * directory)
     if(directory==NULL)directory="";
     uint32_t length=strlen(directory);
 
-    while((length+2) >= w->file_list.directory_buffer_size)w->file_list.directory_buffer=realloc(w->file_list.directory_buffer,sizeof(char)*(w->file_list.directory_buffer_size*=2));
+    if((length+2) >= w->file_list.directory_buffer_size)w->file_list.directory_buffer=realloc(w->file_list.directory_buffer,sizeof(char)*(w->file_list.directory_buffer_size=length+2));
     strcpy(w->file_list.directory_buffer,directory);
 
     w->file_list.directory_buffer[length]='/';
@@ -313,7 +322,7 @@ static void file_list_widget_organise_entries(widget * w)
 
 #warning make static ??
 ///only call this when changing/refreshing directory, NOT when altering filtering
-void load_file_search_directory_entries(widget * w)
+static void load_file_search_directory_entries(widget * w)
 {
     DIR * directory;
     struct dirent * entry;
@@ -382,7 +391,7 @@ void load_file_search_directory_entries(widget * w)
 
                 while(*type_ext)
                 {
-                    if(!str_cmp_lower(type_ext,ext))
+                    if(!cvm_strcmp_lower(type_ext,ext))
                     {
                         type_id=i+CVM_FL_CUSTOM_TYPE_OFFSET;
                         break;
@@ -426,16 +435,55 @@ void load_file_search_directory_entries(widget * w)
     closedir(directory);
 
     file_list_widget_organise_entries(w);
+
+    fl->selected_entry_index=-1;
+    fl->offset=0;
+    if(fl->directory_text_bar)text_bar_widget_set_text_pointer(fl->directory_text_bar,fl->directory_buffer);
+}
+
+static void file_list_enter_selected_directory(widget * w)
+{
+    const char *s;
+    uint32_t dl,sl;
+
+    dl=strlen(w->file_list.directory_buffer);
+
+    s=w->file_list.entries[w->file_list.selected_entry_index].filename;
+    sl=strlen(s);
+
+    if(dl+sl+2 > w->file_list.directory_buffer_size) w->file_list.directory_buffer=realloc(w->file_list.directory_buffer,sizeof(char)*(w->file_list.directory_buffer_size=dl+sl+2));
+
+    strcat(w->file_list.directory_buffer,s);
+    w->file_list.directory_buffer[dl+sl]='/';
+    w->file_list.directory_buffer[dl+sl+1]='\0';
+
+    file_list_widget_clean_directory(w->file_list.directory_buffer);
+
+    load_file_search_directory_entries(w);
+    file_list_widget_recalculate_scroll_properties(w);
 }
 
 static void file_list_widget_perform_action(widget * w)
 {
-    puts("FILE LIST WIDGET ACTION");//placeholder
+    if(w->file_list.selected_entry_index>=0)
+    {
+        if(w->file_list.entries[w->file_list.selected_entry_index].type_id == CVM_FL_DIRECTORY_TYPE_ID)
+        {
+            file_list_enter_selected_directory(w);///don't allow folder section (when that is required) via double clicking
+        }
+        else
+        {
+            puts("FILE LIST WIDGET ACTION");//placeholder
+            ///should reset selection and offset(?) and text bar
+
+            w->file_list.selected_entry_index=-1;
+            //fl->offset=0;
+            if(w->file_list.directory_text_bar)text_bar_widget_set_text_pointer(w->file_list.directory_text_bar,w->file_list.directory_buffer);
+
+            ///possibly close widget?
+        }
+    }
 }
-
-
-
-
 
 
 
@@ -465,33 +513,16 @@ static void file_list_widget_left_click(overlay_theme * theme,widget * w,int x,i
 
     /// *could* check against bounding h_bar for each item, but i don't see the value
 
-    file_list_widget_set_selected_entry(w,index);
-
-    if(w->file_list.selected_entry==index)
+    if(w->file_list.selected_entry_index==index)
     {
         if(check_widget_double_clicked(w))
         {
-            if(w->file_list.entries[index].type_id == CVM_FL_DIRECTORY_TYPE_ID)
-            {
-                puts("double clicked directory");
-            }
-            else
-            {
-                puts("double clicked file");
-            }
+            file_list_widget_perform_action(w);
+            return;
         }
     }
-    else
-    {
-        if(w->file_list.entries[index].type_id == CVM_FL_DIRECTORY_TYPE_ID)
-        {
-            puts("single clicked directory");
-        }
-        else
-        {
-            puts("single clicked file");
-        }
-    }
+
+    file_list_widget_set_selected_entry(w,index,true);
 }
 
 static bool file_list_widget_left_release(overlay_theme * theme,widget * clicked,widget * released,int x,int y)
@@ -501,14 +532,12 @@ static bool file_list_widget_left_release(overlay_theme * theme,widget * clicked
 
 static bool file_list_widget_key_down(overlay_theme * theme,widget * w,SDL_Keycode keycode,SDL_Keymod mod)
 {
-    assert(w->file_list.selected_entry>=0 && w->file_list.selected_entry<(int32_t)w->file_list.valid_entry_count);///should have a selected entry if performing keyboard operations
-
     switch(keycode)
     {
     case SDLK_KP_8:/// keypad/numpad up
         if(mod&KMOD_NUM)break;
     case SDLK_UP:
-        if(w->file_list.selected_entry>0)file_list_widget_set_selected_entry(w,w->file_list.selected_entry-1);
+        if(w->file_list.selected_entry_index>0)file_list_widget_set_selected_entry(w,w->file_list.selected_entry_index-1,true);
         break;
 
     case SDLK_KP_9:/// keypad/numpad page up
@@ -522,14 +551,14 @@ static bool file_list_widget_key_down(overlay_theme * theme,widget * w,SDL_Keyco
     case SDLK_KP_7:/// keypad/numpad home
         if(mod&KMOD_NUM)break;
     case SDLK_HOME:
-        file_list_widget_set_selected_entry(w,0);
+        file_list_widget_set_selected_entry(w,0,true);
         break;
 
 
     case SDLK_KP_2:/// keypad/numpad down
         if(mod&KMOD_NUM)break;
     case SDLK_DOWN:
-        if(w->file_list.selected_entry < (int32_t)w->file_list.valid_entry_count-1) file_list_widget_set_selected_entry(w,w->file_list.selected_entry+1);
+        if(w->file_list.selected_entry_index < (int32_t)w->file_list.valid_entry_count-1) file_list_widget_set_selected_entry(w,w->file_list.selected_entry_index+1,true);
         break;
 
     case SDLK_KP_3:/// keypad/numpad page down
@@ -543,7 +572,7 @@ static bool file_list_widget_key_down(overlay_theme * theme,widget * w,SDL_Keyco
     case SDLK_KP_1:/// keypad/numpad end
         if(mod&KMOD_NUM)break;
     case SDLK_END:
-        file_list_widget_set_selected_entry(w,w->file_list.valid_entry_count-1);
+        file_list_widget_set_selected_entry(w,w->file_list.valid_entry_count-1,true);
         break;
 
 
@@ -553,7 +582,7 @@ static bool file_list_widget_key_down(overlay_theme * theme,widget * w,SDL_Keyco
         break;
 
     case SDLK_RETURN:
-        puts("file list perform action");///return/enter to perform op on selected widget, same as double clicking
+        file_list_widget_perform_action(w);///return/enter to perform op on selected widget, same as double clicking
         break;
 
         default:;
@@ -636,7 +665,7 @@ static void file_list_widget_render(overlay_theme * theme,widget * w,int16_t x_o
 
 	while(y<y_end && index<(int32_t)w->file_list.valid_entry_count)
     {
-        if(index==w->file_list.selected_entry)/// && is_currently_active_widget(w) not sure the currently selected widget thing is desirable, probably not, other programs don't do it
+        if(index==w->file_list.selected_entry_index)/// && is_currently_active_widget(w) not sure the currently selected widget thing is desirable, probably not, other programs don't do it
         {
             theme->h_bar_box_constrained_render(erb,theme,bounds,((rectangle){.x1=r.x1,.y1=y,.x2=r.x2,.y2=y+theme->base_contiguous_unit_h}),w->base.status,OVERLAY_HIGHLIGHTING_COLOUR,r,w->base.status);
         }
@@ -764,7 +793,7 @@ widget * create_file_list(int16_t min_visible_rows,int16_t min_visible_glyphs,co
     w->file_list.error_popup=NULL;
     w->file_list.type_select_popup=NULL;
 
-    w->file_list.selected_entry=-1;
+    w->file_list.selected_entry_index=-1;
     w->file_list.offset=0;
     w->file_list.max_offset=0;
     w->file_list.visible_height=0;
@@ -778,21 +807,38 @@ widget * create_file_list(int16_t min_visible_rows,int16_t min_visible_glyphs,co
     return w;
 }
 
+
 widget * create_file_list_widget_directory_text_bar(widget * file_list,uint32_t min_glyphs_visible)
 {
     widget * text_bar=create_dynamic_text_bar(min_glyphs_visible,WIDGET_TEXT_RIGHT_ALIGNED,true);
 
     file_list->file_list.directory_text_bar=text_bar;
 
-    if(file_list->file_list.selected_entry<0)text_bar_widget_set_text_pointer(text_bar,file_list->file_list.directory_buffer);
+    if(file_list->file_list.selected_entry_index<0)text_bar_widget_set_text_pointer(text_bar,file_list->file_list.directory_buffer);
     else file_list_widget_set_composite_buffer(file_list);
 
     return text_bar;
 }
 
+
 static void file_list_widget_enterbox_input_function(widget * enterbox)
 {
+    uint32_t i;
     widget * file_list=enterbox->enterbox.data;
+
+    ///iterate over list and jump to (exact) match
+    ///only select upon exact match (POSIX file requirements :P) or could sub comparison function on windows (cvm_strcmp_lower)
+    for(i=0;i<file_list->file_list.valid_entry_count;i++)
+    {
+        ///also try appending extension??
+        if(!strcmp(enterbox->enterbox.text,file_list->file_list.entries[i].filename))
+        {
+            file_list_widget_set_selected_entry(file_list,i,false);
+            return;
+        }
+    }
+
+    ///no match found, deselect
     file_list_widget_deselect_entry(file_list);
 }
 
@@ -802,12 +848,69 @@ static void file_list_widget_enterbox_action_function(widget * enterbox)
     file_list_widget_perform_action(file_list);
 }
 
-
-
-//void file_list_widget_set_directory_enterbox(widget * file_list,widget * enterbox)
 widget * create_file_list_widget_enterbox(widget * file_list,uint32_t min_glyphs_visible)
 {
     widget * enterbox=create_enterbox(256,256,min_glyphs_visible,NULL,file_list_widget_enterbox_action_function,NULL,file_list_widget_enterbox_input_function,file_list,false,false);
     file_list->file_list.enterbox=enterbox;
     return enterbox;
 }
+
+
+static void file_list_widget_refresh_button_function(widget * w)
+{
+    widget * fl=w->button.data;///button must be set up with file list as data
+    load_file_search_directory_entries(fl);///button must be set up with file list as data
+    file_list_widget_recalculate_scroll_properties(fl);
+}
+
+widget * create_file_list_widget_refresh_button(widget * file_list)
+{
+    return create_icon_button("R",file_list,false,file_list_widget_refresh_button_function);
+}
+
+static void file_list_widget_up_button_function(widget * w)
+{
+    char *d,*b;
+    widget * fl=w->button.data;///button must be set up with file list as data
+
+    ///as this will only reduce the length of the directory buffer nothing complex will be necessary and it can be done in place
+    b=d=fl->file_list.directory_buffer;
+
+    if(!d || !*d)return;///don't process null or empty director buffers
+
+    while(*d++);
+    d-=2;///find last char of directory buffer
+
+    assert(*d=='/');
+
+    do d--;///find next previous directory separator
+    while(d>b && *d!='/');
+
+    if(d>=b)
+    {
+        d[1]='\0';///after finding last directory separator trim the rest of the buffer that follows
+        load_file_search_directory_entries(fl);
+        file_list_widget_recalculate_scroll_properties(fl);
+    }
+}
+
+widget * create_file_list_widget_up_button(widget * file_list)
+{
+    return create_icon_button("↑",file_list,false,file_list_widget_up_button_function);
+}
+
+static void file_list_widget_home_button_function(widget * w)
+{
+    widget * fl=w->button.data;///button must be set up with file list as data
+    file_list_widget_set_directory(fl,getenv("HOME"));
+    load_file_search_directory_entries(fl);
+    file_list_widget_recalculate_scroll_properties(fl);
+}
+
+widget * create_file_list_widget_home_button(widget * file_list)
+{
+    return create_icon_button("H",file_list,false,file_list_widget_home_button_function);
+}
+
+
+

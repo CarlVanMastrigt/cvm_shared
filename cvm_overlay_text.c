@@ -107,7 +107,7 @@ static inline uint32_t cvm_overlay_get_utf8_glyph_index(FT_Face face,uint8_t * t
     else return FT_Get_Char_Index(face,*text);
 }
 
-bool cvm_overlay_utf8_validate_string(char * text)
+bool cvm_overlay_utf8_validate_string(const char * text)
 {
     int i;
     while(*text)
@@ -125,7 +125,7 @@ bool cvm_overlay_utf8_validate_string(char * text)
     return true;
 }
 
-uint32_t cvm_overlay_utf8_count_glyphs(char * text)
+uint32_t cvm_overlay_utf8_count_glyphs(const char * text)
 {
     uint32_t i,c;
     c=0;
@@ -145,7 +145,7 @@ uint32_t cvm_overlay_utf8_count_glyphs(char * text)
     return c;
 }
 
-uint32_t cvm_overlay_utf8_count_glyphs_outside_range(char * text,char * begin,char * end)
+uint32_t cvm_overlay_utf8_count_glyphs_outside_range(const char * text,const char * begin,const char * end)
 {
     uint32_t i,c;
     c=0;
@@ -164,7 +164,7 @@ uint32_t cvm_overlay_utf8_count_glyphs_outside_range(char * text,char * begin,ch
     return c;
 }
 
-bool cvm_overlay_utf8_validate_string_and_count_glyphs(char * text,uint32_t * c)
+bool cvm_overlay_utf8_validate_string_and_count_glyphs(const char * text,uint32_t * c)
 {
     uint32_t i;
     *c=0;
@@ -768,7 +768,7 @@ char * overlay_text_multiline_find_offset(cvm_overlay_font * font,cvm_overlay_te
 
 
 
-cvm_overlay_glyph * overlay_get_glyph(cvm_overlay_font * font,char * text)
+cvm_overlay_glyph * overlay_get_glyph(cvm_overlay_font * font,const char * text)
 {
     uint32_t gi,incr;
     cvm_overlay_glyph * g;

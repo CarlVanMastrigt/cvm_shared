@@ -136,15 +136,6 @@ typedef struct widget_base
 widget_base;
 
 
-typedef struct widget_custom
-{
-    widget_base base;
-    void * data;
-    int i0;
-}
-widget_custom;
-
-
 #include "widgets/container.h"
 #include "widgets/box.h"
 #include "widgets/button.h"
@@ -172,7 +163,7 @@ union widget
     widget_anchor               anchor;
     widget_textbox              textbox;
     widget_enterbox             enterbox;
-    widget_slider_bar            slider_bar;
+    widget_slider_bar           slider_bar;
     widget_text_bar             text_bar;
 
     widget_container            container;
@@ -183,9 +174,6 @@ union widget
     widget_file_list            file_list;
 
     widget_tab_folder           tab_folder;
-
-
-    widget_custom               custom;
 };
 
 

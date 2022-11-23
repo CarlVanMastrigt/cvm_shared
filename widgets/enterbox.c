@@ -113,6 +113,54 @@ static void enterbox_check_visible_offset(overlay_theme * theme,widget * w)
 }
 
 
+
+static void enterbox_widget_left_click(overlay_theme * theme,widget * w,int x,int y)
+{
+    if(!SDL_IsTextInputActive()) SDL_StartTextInput();///need to only call if not already active...
+
+    if(*w->enterbox.composition_text)return;
+
+    adjust_coordinates_to_widget_local(w,&x,&y);
+    w->enterbox.selection_begin=w->enterbox.selection_end=overlay_text_single_line_find_offset(&theme->font,w->enterbox.text,x-theme->h_bar_text_offset+w->enterbox.visible_offset);
+
+    if(w->enterbox.upon_input_func)
+    {
+        w->enterbox.upon_input_func(w);
+    }
+
+    enterbox_check_visible_offset(theme,w);
+}
+
+static bool enterbox_widget_left_release(overlay_theme * theme,widget * clicked,widget * released,int x,int y)
+{
+    /// should also find test position to set start/end of selection with... (actually move does this, which makes more sense)
+    return true;
+}
+
+static void enterbox_widget_mouse_movement(overlay_theme * theme,widget * w,int x,int y)
+{
+    if(*w->enterbox.composition_text)return;
+
+    adjust_coordinates_to_widget_local(w,&x,&y);
+    w->enterbox.selection_end=overlay_text_single_line_find_offset(&theme->font,w->enterbox.text,x-theme->h_bar_text_offset+w->enterbox.visible_offset);
+
+    enterbox_check_visible_offset(theme,w);
+}
+
+static bool enterbox_widget_scroll(overlay_theme * theme,widget * w,int delta)
+{
+    int32_t max_offset;
+    max_offset=w->enterbox.text_pixel_length - (w->base.r.x2-w->base.r.x1-2*theme->h_bar_text_offset-1);///text length - max offset
+    if(max_offset < 0) max_offset=0;
+
+    w->enterbox.visible_offset-=delta*theme->font.max_advance;
+
+    if(w->enterbox.visible_offset<0)w->enterbox.visible_offset=0;
+    else if(w->enterbox.visible_offset > max_offset) w->enterbox.visible_offset=max_offset;
+
+    return true;
+}
+
 static bool enterbox_widget_key_down(overlay_theme * theme,widget * w,SDL_Keycode keycode,SDL_Keymod mod)
 {
     char *s_begin,*s_end,*s;
@@ -266,48 +314,26 @@ static bool enterbox_widget_key_down(overlay_theme * theme,widget * w,SDL_Keycod
 
     enterbox_check_visible_offset(theme,w);
 
+    if(w->enterbox.upon_input_func)
+    {
+        w->enterbox.upon_input_func(w);
+    }
+
     return true;
 }
 
 #warning SDL_SystemCursor
 
-static void enterbox_widget_left_click(overlay_theme * theme,widget * w,int x,int y)
+static bool enterbox_widget_text_input(overlay_theme * theme,widget * w,char * text)
 {
-    if(!SDL_IsTextInputActive()) SDL_StartTextInput();///need to only call if not already active...
-
-    if(*w->enterbox.composition_text)return;
-
-    adjust_coordinates_to_widget_local(w,&x,&y);
-    w->enterbox.selection_begin=w->enterbox.selection_end=overlay_text_single_line_find_offset(&theme->font,w->enterbox.text,x-theme->h_bar_text_offset+w->enterbox.visible_offset);
+    enterbox_enter_text(theme,w,text);
+    enterbox_check_visible_offset(theme,w);
 
     if(w->enterbox.upon_input_func)
     {
         w->enterbox.upon_input_func(w);
     }
 
-    enterbox_check_visible_offset(theme,w);
-}
-
-static bool enterbox_widget_left_release(overlay_theme * theme,widget * clicked,widget * released,int x,int y)
-{
-    /// should also find test position to set start/end of selection with... (actually move does this, which makes more sense)
-    return true;
-}
-
-static void enterbox_widget_mouse_movement(overlay_theme * theme,widget * w,int x,int y)
-{
-    if(*w->enterbox.composition_text)return;
-
-    adjust_coordinates_to_widget_local(w,&x,&y);
-    w->enterbox.selection_end=overlay_text_single_line_find_offset(&theme->font,w->enterbox.text,x-theme->h_bar_text_offset+w->enterbox.visible_offset);
-
-    enterbox_check_visible_offset(theme,w);
-}
-
-static bool enterbox_widget_text_input(overlay_theme * theme,widget * w,char * text)
-{
-    enterbox_enter_text(theme,w,text);
-    enterbox_check_visible_offset(theme,w);
     return true;
 }
 
@@ -354,7 +380,7 @@ static widget_behaviour_function_set enterbox_behaviour_functions=
     .l_release      =   enterbox_widget_left_release,
     .r_click        =   blank_widget_right_click,
     .m_move         =   enterbox_widget_mouse_movement,
-    .scroll         =   blank_widget_scroll,
+    .scroll         =   enterbox_widget_scroll,
     .key_down       =   enterbox_widget_key_down,
     .text_input     =   enterbox_widget_text_input,
     .text_edit      =   enterbox_widget_text_edit,
@@ -474,7 +500,7 @@ widget * create_enterbox(uint32_t max_strlen,uint32_t max_glyphs,uint32_t min_gl
 }
 
 
-void set_enterbox_text(widget * w,char * text)
+void set_enterbox_text(widget * w,const char * text)
 {
     ///error checking, don't put in release?
     assert(!text || strlen(text)<=w->enterbox.max_strlen);///ATTEMPTING TO SET A STRING WITHOUT PROVIDING ENOUGH CAPACITY

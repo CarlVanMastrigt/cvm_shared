@@ -85,10 +85,10 @@ void cvm_overlay_destroy_font(cvm_overlay_font * font);
 
 
 ///some generic
-bool cvm_overlay_utf8_validate_string(char * text);
-uint32_t cvm_overlay_utf8_count_glyphs(char * text);
-uint32_t cvm_overlay_utf8_count_glyphs_outside_range(char * text,char * begin,char * end);///end is uninclusive offset, start is inclusive offset
-bool cvm_overlay_utf8_validate_string_and_count_glyphs(char * text,uint32_t * c);
+bool cvm_overlay_utf8_validate_string(const char * text);
+uint32_t cvm_overlay_utf8_count_glyphs(const char * text);
+uint32_t cvm_overlay_utf8_count_glyphs_outside_range(const char * text,const char * begin,const char * end);///end is uninclusive offset, start is inclusive offset
+bool cvm_overlay_utf8_validate_string_and_count_glyphs(const char * text,uint32_t * c);
 ///following also check for variation sequences, assumes string is valid utf8 already
 char * cvm_overlay_utf8_get_previous_glyph(char * base,char * t);
 char * cvm_overlay_utf8_get_next_glyph(char * t);
@@ -152,7 +152,7 @@ static inline rectangle overlay_text_single_line_get_text_area(rectangle r,int16
     return r;
 }
 
-cvm_overlay_glyph * overlay_get_glyph(cvm_overlay_font * font,char * text);///assumes a single glyph in text
+cvm_overlay_glyph * overlay_get_glyph(cvm_overlay_font * font,const char * text);///assumes a single glyph in text
 
 void overlay_text_centred_glyph_render(cvm_overlay_element_render_buffer * erb,cvm_overlay_font * font,rectangle bounds,rectangle r,const char * icon_glyph,overlay_colour colour);
 void overlay_text_centred_glyph_box_constrained_render(cvm_overlay_element_render_buffer * erb,overlay_theme * theme,rectangle bounds,rectangle r,const char * icon_glyph,overlay_colour colour,rectangle box_r,uint32_t box_status);

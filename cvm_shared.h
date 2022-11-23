@@ -64,13 +64,9 @@ typedef union widget widget;
 
 static inline char * cvm_strdup(const char * in)
 {
-    const char *in_end;
-    char *out;
-    if(!in)return NULL;
-    in_end=in;
-    while(*in_end++);
-    out=malloc(in_end-in);
-    return memcpy(out,in,in_end-in);
+    size_t len=(strlen(in)+1)*sizeof(char);
+    char * out=malloc(len);
+    return memcpy(out,in,len);
 }
 
 #endif

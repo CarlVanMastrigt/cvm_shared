@@ -28,6 +28,8 @@ along with cvm_shared.  If not, see <https://www.gnu.org/licenses/>.
 typedef int(*widget_dimension_function)(overlay_theme*);
 
 
+///is a contiguous box actually desirable... are ad-hoc solutions better?
+
 typedef struct widget_contiguous_box
 {
     widget_base base;

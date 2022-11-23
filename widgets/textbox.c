@@ -55,7 +55,7 @@ static void textbox_copy_selection_to_clipboard(widget * w)
 
 static bool textbox_widget_scroll(overlay_theme * theme,widget * w,int delta)
 {
-    w->textbox.y_offset+=delta*w->textbox.wheel_delta;/// 10 = scroll_factor
+    w->textbox.y_offset+=delta*w->textbox.wheel_delta;
 
     if(w->textbox.y_offset > w->textbox.max_offset) w->textbox.y_offset=w->textbox.max_offset;
     if(w->textbox.y_offset < 0) w->textbox.y_offset=0;
@@ -293,7 +293,7 @@ widget * create_textbox(char * text,bool owns_text,int min_horizontal_glyphs,int
 }
 
 
-const static int32_t scroll_bar_zero=0;
+static const int32_t scroll_bar_zero=0;
 
 widget * create_textbox_scrollbar(widget * textbox)
 {

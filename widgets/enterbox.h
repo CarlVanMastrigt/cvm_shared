@@ -34,9 +34,9 @@ typedef struct widget_enterbox
     uint32_t min_glyphs_visible;
     int32_t visible_offset;
     int32_t text_pixel_length;
-    widget_function activation_func;
-    widget_function update_contents_func;
-    widget_function upon_input_func;
+    widget_function activation_func;///when activated; pressing return, clicking away (if setup to do so) &c.
+    widget_function update_contents_func;/// called every frame to maintain parity
+    widget_function upon_input_func;///when text changes (only doe to user input?)
     void * data;
 
     char * selection_begin;
@@ -45,14 +45,12 @@ typedef struct widget_enterbox
     char composition_text[CVM_OVERLAY_MAX_COMPOSITION_BYTES];
     int composition_visible_offset;
 
-    uint32_t delete_all_when_first_selected:1;
+    //uint32_t delete_all_when_first_selected:1;
     uint32_t activate_upon_deselect:1;
     uint32_t free_data:1;
     uint32_t recalculate_text_size:1;
 }
 widget_enterbox;
-
-//widget * create_enterbox(int text_max_length,int text_min_visible,char * initial_text,widget_function activation_func,void * data,widget_function update_contents_func,bool activate_upon_deselect,bool free_data);
 
 widget * create_enterbox(uint32_t max_strlen,uint32_t max_glyphs,uint32_t min_glyphs_visible,char * initial_text,widget_function activation_func,widget_function update_contents_func,widget_function upon_input_func,void * data,bool free_data,bool activate_upon_deselect);
 #define create_enterbox_simple(glyph_count,initial_text,activation_func,update_contents_func,data,free_data,activate_upon_deselect)\
@@ -60,7 +58,7 @@ create_enterbox(glyph_count * CVM_OVERLAY_MAX_UNICODE_BYTES,glyph_count,glyph_co
 
 void blank_enterbox_function(widget * w);
 
-void set_enterbox_text(widget * w,char * text);
+void set_enterbox_text(widget * w,const char * text);
 
 #endif
 

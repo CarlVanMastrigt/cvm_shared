@@ -43,8 +43,6 @@ typedef struct widget_button
     char * text;
 
     widget_button_toggle_status_func toggle_status;///for toggle button, use this to do toggle upon potential_interaction ???
-
-    int index;///for indexed button
 }
 widget_button;
 
