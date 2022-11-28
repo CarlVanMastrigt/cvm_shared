@@ -50,7 +50,9 @@ typedef struct file_list_type
 }
 file_list_type;
 
-typedef uint16_t(*file_list_widget_action)(const char*,void*,bool);///active file (or directory?) data, force (overwrite &c.), returns 1 in top bit if should continue on force/ask permission
+///returns whether popup is required, should always have completed file/folder result in file_list.composite_buffer will require modifying error popup in function but that's probably okay
+/// second parameter is whether to force the operation
+typedef bool(*file_list_widget_action)(widget*,bool);
 
 //void load_file_search_directory_entries(file_search_data * fsd);
 
@@ -80,21 +82,12 @@ typedef struct widget_file_list
     ///store "valid" entry count, display only these, allows resorting w/o reloading entries
 
     ///can be the same or null, could dynamically switch these out if shared system is actually desirable... (or programmer could just set directory using value from the other themselves)
-    const file_list_type * save_types;
-    uint32_t save_type_count;
-    void * save_data;
-    file_list_widget_action save_action;
+    const file_list_type * file_types;
+    uint32_t file_type_count;
+    file_list_widget_action action;
+    void * action_data;
 
-    const file_list_type * load_types;
-    uint32_t load_type_count;
-    void * load_data;
-    file_list_widget_action load_action;
-
-    const char *const * error_messages;// exists to make translation easier
-    uint16_t error_count;
-
-    uint16_t free_load_data:1;///REMOVE
-    uint16_t free_save_data:1;///REMOVE
+    uint16_t free_action_data:1;///REMOVE
     uint16_t fixed_directory:1;///allow changing directory, show directories in file list &c.
     uint16_t hide_misc_files:1;///show files not relevant to any applicable filter
     uint16_t hide_control_entries:1;/// show  ./  ../   &c.
@@ -106,7 +99,6 @@ typedef struct widget_file_list
     ///link to widgets that operate in tandem with this widget, is basically saying cannot have file interaction without the file list widget (unsure this is desirable but w/e)
     widget * enterbox;///enterbox automplete w/ tab autofill?
     widget * directory_text_bar;///displays full directory ending in current widget, fade on left hand side
-    widget * error_popup;
     widget * type_select_popup;
 
     widget * parent_widget; ///needs way to close widget should that happen, can be null to avoid
@@ -129,8 +121,7 @@ widget_file_list;
 widget * create_file_list(int16_t min_visible_rows,int16_t min_visible_glyphs,const char * initial_directory,const char *const * error_messages,uint16_t error_count);
 
 ///hmm, allowing tabs to perform action may be a good idea if wanting unified save/load widget spread across tabs
-void file_list_widget_set_save_information(const file_list_type * save_types,uint32_t save_type_count,void * save_data,file_list_widget_action save_action);
-void file_list_widget_set_load_information(const file_list_type * load_types,uint32_t load_type_count,void * load_data,file_list_widget_action load_action);
+void file_list_widget_set_action_information(const file_list_type * supported_types,uint32_t type_count,void * data,file_list_widget_action action,bool hide_misc_files,bool allow_selecting_folder);
 
 
 widget * create_file_list_widget_directory_text_bar(widget * file_list,uint32_t min_glyphs_visible);
@@ -139,6 +130,14 @@ widget * create_file_list_widget_enterbox(widget * file_list,uint32_t min_glyphs
 widget * create_file_list_widget_refresh_button(widget * file_list);
 widget * create_file_list_widget_up_button(widget * file_list);
 widget * create_file_list_widget_home_button(widget * file_list);
+
+
+const char * file_list_widget_get_selected_filepath(widget * w);///e.g. for delete function
+
+void file_list_widget_load_directory_entries(widget * w);/// reloads directory, use when contents are expected to have changed
+
+///should be called inside action function when encountering issue before returning false, action functions should under no circumstances set force text here (instead pass null) when force was passed in as true
+void file_list_widget_set_error_information(const char * message,const char * cancel_button_text,const char * force_button_text);
 
 #endif
 

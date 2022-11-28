@@ -1,5 +1,5 @@
 /**
-Copyright 2020,2021,2022 Carl van Mastrigt
+Copyright 2022 Carl van Mastrigt
 
 This file is part of cvm_shared.
 
@@ -21,19 +21,21 @@ along with cvm_shared.  If not, see <https://www.gnu.org/licenses/>.
 #include "cvm_shared.h"
 #endif
 
-#ifndef WIDGET_PANEL_H
-#define WIDGET_PANEL_H
+#ifndef WIDGET_CENTRING_CONTAINER_H
+#define WIDGET_CENTRING_CONTAINER_H
 
 
-typedef struct widget_panel
+typedef struct widget_centring_container
 {
     widget_base base;
 
+    widget * reference_widget;
+
     widget * contents;
 }
-widget_panel;
+widget_centring_container;
 
-widget * create_panel(void);
+widget * create_centring_container(void);
 
 
 #endif

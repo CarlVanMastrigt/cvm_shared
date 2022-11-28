@@ -42,9 +42,10 @@ void container_widget_add_child(widget * w,widget * child)
 
 void container_widget_remove_child(widget * w,widget * child)
 {
+    assert(child->base.parent==w);
+
     if(child->base.parent!=w)
     {
-        puts("error: trying to remove child from something not its parent (container)");
         return;
     }
 
@@ -71,17 +72,9 @@ void container_widget_remove_child(widget * w,widget * child)
 
 void container_widget_delete(widget * w)
 {
-    widget *current,*next;
-
-    current=w->container.first;
-
-    while(current)
+    while(w->container.first)
     {
-        next=current->base.next;
-
-        delete_widget(current);
-
-        current=next;
+        delete_widget(w->container.first);
     }
 }
 

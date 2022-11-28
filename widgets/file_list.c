@@ -28,7 +28,11 @@ along with cvm_shared.  If not, see <https://www.gnu.org/licenses/>.
 
 ///implement basics of dirent for windows?
 
-static uint32_t test_count=0;
+static widget * error_dialogue_widget=NULL;///singleton, deleted when no more menu widgets exist
+static widget * error_dialogue_message_text_bar=NULL;
+static widget * error_dialogue_cancel_button=NULL;
+static widget * error_dialogue_force_button=NULL;
+static uint32_t extant_file_list_count=0;///used to track need for above, delete this upon last deletion
 
 static inline int file_list_string_compare_number_blocks(const char * s1,const char * s2)
 {
@@ -111,8 +115,6 @@ static inline int file_list_string_compare(const char * s1,const char * s2)
 
 static int file_list_entry_comparison_basic(const void * a,const void * b)
 {
-    test_count++;
-    /// return a-b in terms of names
     const file_list_entry * fse1=a;
     const file_list_entry * fse2=b;
 
@@ -123,8 +125,6 @@ static int file_list_entry_comparison_basic(const void * a,const void * b)
 
 static int file_list_entry_comparison_type(const void * a,const void * b)
 {
-    test_count++;
-    /// return a-b in terms of names
     const file_list_entry * fse1=a;
     const file_list_entry * fse2=b;
 
@@ -207,8 +207,6 @@ static inline void file_list_widget_set_composite_buffer(widget * w)
     uint32_t s;
     const char * e,*base,*name;
 
-    printf("%d %d\n",w->file_list.selected_entry_index,w->file_list.valid_entry_count);
-
     assert(w->file_list.selected_entry_index>=0 && w->file_list.selected_entry_index<(int32_t)w->file_list.valid_entry_count);///should have a selected entry if setting composite buffer
 
     base=w->file_list.directory_buffer;
@@ -232,6 +230,9 @@ static inline void file_list_widget_set_composite_buffer(widget * w)
         if(w->file_list.entries[w->file_list.selected_entry_index].type_id==CVM_FL_DIRECTORY_TYPE_ID)
         {
             text_bar_widget_set_text_pointer(w->file_list.directory_text_bar,w->file_list.directory_buffer);
+            ///terminate directory with a / (then add required null terminator)
+            w->file_list.composite_buffer[s-2]='/';
+            w->file_list.composite_buffer[s-1]='\0';
         }
         else
         {
@@ -270,13 +271,13 @@ static void file_list_widget_set_directory(widget * w,const char * directory)
 {
     if(directory==NULL)directory=getenv("HOME");
     if(directory==NULL)directory="";
-    uint32_t length=strlen(directory);
+    uint32_t length=strlen(directory)+2;///need space for / and null terminator
 
-    if((length+2) >= w->file_list.directory_buffer_size)w->file_list.directory_buffer=realloc(w->file_list.directory_buffer,sizeof(char)*(w->file_list.directory_buffer_size=length+2));
+    if(length >= w->file_list.directory_buffer_size)w->file_list.directory_buffer=realloc(w->file_list.directory_buffer,sizeof(char)*(w->file_list.directory_buffer_size=length));
     strcpy(w->file_list.directory_buffer,directory);
 
-    w->file_list.directory_buffer[length]='/';
-    w->file_list.directory_buffer[length+1]='\0';
+    w->file_list.directory_buffer[length-2]='/';
+    w->file_list.directory_buffer[length-1]='\0';
 
     file_list_widget_clean_directory(w->file_list.directory_buffer);
 }
@@ -317,12 +318,12 @@ static void file_list_widget_organise_entries(widget * w)
     fl->valid_entry_count=valid_count;
 
     qsort(entries,valid_count,sizeof(file_list_entry),file_list_entry_comparison_basic);
+
+    file_list_widget_recalculate_scroll_properties(w);
 }
 
-
-#warning make static ??
 ///only call this when changing/refreshing directory, NOT when altering filtering
-static void load_file_search_directory_entries(widget * w)
+void file_list_widget_load_directory_entries(widget * w)
 {
     DIR * directory;
     struct dirent * entry;
@@ -356,16 +357,8 @@ static void load_file_search_directory_entries(widget * w)
         }
     }
 
-    if(fl->save_mode_active)
-    {
-        file_types=fl->save_types;
-        file_type_count=fl->save_type_count;
-    }
-    else
-    {
-        file_types=fl->load_types;
-        file_type_count=fl->load_type_count;
-    }
+    file_types=fl->file_types;
+    file_type_count=fl->file_type_count;
 
     while((entry=readdir(directory)))
     {
@@ -459,8 +452,35 @@ static void file_list_enter_selected_directory(widget * w)
 
     file_list_widget_clean_directory(w->file_list.directory_buffer);
 
-    load_file_search_directory_entries(w);
-    file_list_widget_recalculate_scroll_properties(w);
+    file_list_widget_load_directory_entries(w);
+}
+
+///requires that file_list_widget_set_error_information has already been called
+//static void file_list_widget_activate_error_dialogue(widget * w)
+//{
+//    error_dialogue_cancel_button->button.data=w;
+//    error_dialogue_force_button->button.data=w;
+//
+//    add_widget_to_widgets_menu(w,error_dialogue_widget);
+//    organise_toplevel_widget(error_dialogue_widget);
+//    set_only_interactable_widget(error_dialogue_widget);
+//}
+
+static void file_list_widget_sucessful_action_cleanup(widget * w)
+{
+    w->file_list.selected_entry_index=-1;
+    if(w->file_list.directory_text_bar)text_bar_widget_set_text_pointer(w->file_list.directory_text_bar,w->file_list.directory_buffer);
+
+    error_dialogue_cancel_button->button.data=NULL;
+    error_dialogue_force_button->button.data=NULL;
+
+    remove_child_from_parent(error_dialogue_widget);
+    set_only_interactable_widget(NULL);
+
+    //fl->offset=0;
+    ///possibly close widget?
+    ///do any other required cleanup
+
 }
 
 static void file_list_widget_perform_action(widget * w)
@@ -473,15 +493,52 @@ static void file_list_widget_perform_action(widget * w)
         }
         else
         {
-            puts("FILE LIST WIDGET ACTION");//placeholder
-            ///should reset selection and offset(?) and text bar
+            assert(w->file_list.action);
+            if(w->file_list.action)
+            {
+                if(w->file_list.action(w,false))
+                {
+                    file_list_widget_sucessful_action_cleanup(w);
+                }
+                else
+                {
+                    //file_list_widget_activate_error_dialogue(w);
+                    assert(!error_dialogue_widget->base.parent);///error must have been handled already previously (which would close the dialogue box and remove it from the menu that opened it)
 
-            w->file_list.selected_entry_index=-1;
-            //fl->offset=0;
-            if(w->file_list.directory_text_bar)text_bar_widget_set_text_pointer(w->file_list.directory_text_bar,w->file_list.directory_buffer);
+                    error_dialogue_cancel_button->button.data=w;
+                    error_dialogue_force_button->button.data=w;
 
-            ///possibly close widget?
+                    add_widget_to_widgets_menu(w,error_dialogue_widget);
+                    organise_toplevel_widget(error_dialogue_widget);
+                    set_only_interactable_widget(error_dialogue_widget);
+                }
+            }
         }
+    }
+}
+
+
+
+///REMOVE THIS
+static bool test_file_action(widget * w,bool force)
+{
+    printf("TEST %d %s\n",w->file_list.selected_entry_index,w->file_list.composite_buffer);
+    if(force)
+    {
+        static uint32_t c=0;
+        c++;
+        printf("TEST FILE LOAD FORCED %s %s\n",w->file_list.composite_buffer, (c&1)?"succ":"fail");
+        if(!(c&1))
+        {
+            file_list_widget_set_error_information(w->file_list.composite_buffer,"nah","no really, do it");
+        }
+        return c&1;
+    }
+    else
+    {
+        printf("TEST FILE LOAD (failing to test system) %s\n",w->file_list.composite_buffer);
+        file_list_widget_set_error_information(w->file_list.composite_buffer,"Cancel","Force");
+        return false;
     }
 }
 
@@ -602,8 +659,23 @@ void file_list_widget_delete(widget * w)
     free(w->file_list.directory_buffer);
     free(w->file_list.composite_buffer);
     free(w->file_list.entries);
-    if(w->file_list.free_save_data)free(w->file_list.save_data);
-    if(w->file_list.free_load_data)free(w->file_list.load_data);
+    if(w->file_list.free_action_data)free(w->file_list.action_data);
+
+    assert(extant_file_list_count);
+
+    if(error_dialogue_widget && extant_file_list_count && !--extant_file_list_count)
+    {
+        assert(error_dialogue_widget->base.status&WIDGET_DO_NOT_DELETE);
+
+        remove_child_from_parent(error_dialogue_widget);
+        error_dialogue_widget->base.status&=~WIDGET_DO_NOT_DELETE;
+        delete_widget(error_dialogue_widget);
+
+        error_dialogue_widget=NULL;
+        error_dialogue_message_text_bar=NULL;
+        error_dialogue_cancel_button=NULL;
+        error_dialogue_force_button=NULL;
+    }
 }
 
 static widget_behaviour_function_set enterbox_behaviour_functions=
@@ -631,8 +703,7 @@ static void file_list_widget_render(overlay_theme * theme,widget * w,int16_t x_o
 	int32_t y,y_end,index,y_text_off;
 	const char * icon_glyph;
 
-    if(w->file_list.save_mode_active)file_types=w->file_list.save_types;
-    else file_types=w->file_list.load_types;
+    file_types=w->file_list.file_types;
 
 	r=rectangle_add_offset(w->base.r,x_off,y_off);
 
@@ -745,6 +816,8 @@ widget * create_file_list(int16_t min_visible_rows,int16_t min_visible_glyphs,co
 {
     widget * w=create_widget();
 
+    extant_file_list_count++;
+
     w->base.appearence_functions=&file_list_appearence_functions;
     w->base.behaviour_functions=&enterbox_behaviour_functions;
 
@@ -762,20 +835,11 @@ widget * create_file_list(int16_t min_visible_rows,int16_t min_visible_glyphs,co
     w->file_list.entry_space=8;
     w->file_list.entries=malloc(sizeof(file_list_entry)*w->file_list.entry_space);
 
-    w->file_list.save_types=NULL;
-    w->file_list.save_type_count=0;
-    w->file_list.save_data=NULL;
-    w->file_list.free_save_data=false;
-    w->file_list.save_action=NULL;
-
-    w->file_list.load_types=NULL;
-    w->file_list.load_type_count=0;
-    w->file_list.load_data=NULL;
-    w->file_list.free_load_data=false;
-    w->file_list.load_action=NULL;
-
-    w->file_list.error_messages=error_messages;
-    w->file_list.error_count=error_count;
+    w->file_list.file_types=NULL;
+    w->file_list.file_type_count=0;
+    w->file_list.action=test_file_action;///remove test_file_action
+    w->file_list.action_data=NULL;
+    w->file_list.free_action_data=false;
 
     w->file_list.fixed_directory=false;
     w->file_list.hide_misc_files=false;
@@ -790,7 +854,6 @@ widget * create_file_list(int16_t min_visible_rows,int16_t min_visible_glyphs,co
     w->file_list.directory_text_bar=NULL;
     w->file_list.enterbox=NULL;
     w->file_list.parent_widget=NULL;
-    w->file_list.error_popup=NULL;
     w->file_list.type_select_popup=NULL;
 
     w->file_list.selected_entry_index=-1;
@@ -802,7 +865,7 @@ widget * create_file_list(int16_t min_visible_rows,int16_t min_visible_glyphs,co
     w->file_list.selected_out_type=0;
 
     file_list_widget_set_directory(w,initial_directory);
-    load_file_search_directory_entries(w);
+    file_list_widget_load_directory_entries(w);
 
     return w;
 }
@@ -859,8 +922,7 @@ widget * create_file_list_widget_enterbox(widget * file_list,uint32_t min_glyphs
 static void file_list_widget_refresh_button_function(widget * w)
 {
     widget * fl=w->button.data;///button must be set up with file list as data
-    load_file_search_directory_entries(fl);///button must be set up with file list as data
-    file_list_widget_recalculate_scroll_properties(fl);
+    file_list_widget_load_directory_entries(fl);///button must be set up with file list as data
 }
 
 widget * create_file_list_widget_refresh_button(widget * file_list)
@@ -886,11 +948,10 @@ static void file_list_widget_up_button_function(widget * w)
     do d--;///find next previous directory separator
     while(d>b && *d!='/');
 
-    if(d>=b)
+    if(d>=b)///don't do this if we're at root directory, d would also be an invalid pointer here
     {
         d[1]='\0';///after finding last directory separator trim the rest of the buffer that follows
-        load_file_search_directory_entries(fl);
-        file_list_widget_recalculate_scroll_properties(fl);
+        file_list_widget_load_directory_entries(fl);
     }
 }
 
@@ -903,8 +964,7 @@ static void file_list_widget_home_button_function(widget * w)
 {
     widget * fl=w->button.data;///button must be set up with file list as data
     file_list_widget_set_directory(fl,getenv("HOME"));
-    load_file_search_directory_entries(fl);
-    file_list_widget_recalculate_scroll_properties(fl);
+    file_list_widget_load_directory_entries(fl);
 }
 
 widget * create_file_list_widget_home_button(widget * file_list)
@@ -912,5 +972,92 @@ widget * create_file_list_widget_home_button(widget * file_list)
     return create_icon_button("H",file_list,false,file_list_widget_home_button_function);
 }
 
+
+const char * file_list_widget_get_selected_filepath(widget * w)
+{
+    if(w->file_list.selected_entry_index>0) return w->file_list.composite_buffer;
+    else return w->file_list.directory_buffer;
+}
+
+
+
+static void file_list_widget_error_cancel_button_function(widget * w)
+{
+    ///extract this before stripping data in next step
+    widget_file_list * fl=w->button.data;
+
+    assert(fl);
+    if(!fl)return;
+
+    error_dialogue_cancel_button->button.data=NULL;
+    error_dialogue_force_button->button.data=NULL;
+
+    remove_child_from_parent(error_dialogue_widget);
+    set_only_interactable_widget(NULL);
+}
+
+static void file_list_widget_error_force_button_function(widget * w)
+{
+    widget_file_list * fl=w->button.data;
+
+    assert(fl);
+    if(!fl)return;
+
+    assert(fl->action);
+    if(fl->action)
+    {
+        if(fl->action(fl,true))
+        {
+            file_list_widget_sucessful_action_cleanup(fl);
+        }
+        else
+        {
+            ///all other shit already set, just need to account for potential changed widget statuses
+            organise_toplevel_widget(error_dialogue_widget);
+        }
+    }
+}
+
+
+void file_list_widget_set_error_information(const char * message,const char * cancel_button_text,const char * force_button_text)
+{
+    widget *box1,*box2;
+    assert(message);
+    assert(cancel_button_text);
+
+    if(!error_dialogue_widget)
+    {
+        error_dialogue_widget=create_centring_container();///replace with popup widget w/ appropriate relative positioning
+        error_dialogue_widget->base.status|=WIDGET_DO_NOT_DELETE;
+
+        box1=add_child_to_parent(add_child_to_parent(error_dialogue_widget,create_panel()),create_box(WIDGET_VERTICAL,WIDGET_EVENLY_DISTRIBUTED));
+
+        error_dialogue_message_text_bar=add_child_to_parent(box1,create_static_text_bar(NULL));
+
+        box1=add_child_to_parent(box1,create_box(WIDGET_HORIZONTAL,WIDGET_EVENLY_DISTRIBUTED));
+        add_child_to_parent(box1,create_empty_widget(0,0));
+        box1=add_child_to_parent(box1,create_box(WIDGET_HORIZONTAL,WIDGET_LAST_DISTRIBUTED));
+        box2=add_child_to_parent(box1,create_box(WIDGET_HORIZONTAL,WIDGET_ALL_SAME_DISTRIBUTED));
+
+        error_dialogue_force_button=add_child_to_parent(box2,create_text_button(NULL,NULL,false,file_list_widget_error_force_button_function));
+        error_dialogue_cancel_button=add_child_to_parent(box2,create_text_button(NULL,NULL,false,file_list_widget_error_cancel_button_function));
+
+        add_child_to_parent(box1,create_empty_widget(0,0));
+    }
+
+    if(force_button_text)
+    {
+        button_widget_set_text(error_dialogue_force_button,force_button_text);
+        error_dialogue_force_button->base.status|=WIDGET_ACTIVE;
+    }
+    else
+    {
+        error_dialogue_force_button->base.status&=~WIDGET_ACTIVE;
+    }
+
+    button_widget_set_text(error_dialogue_cancel_button,cancel_button_text);
+
+    text_bar_widget_set_text(error_dialogue_message_text_bar,message);
+}
 
 

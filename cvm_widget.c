@@ -21,6 +21,11 @@ along with cvm_shared.  If not, see <https://www.gnu.org/licenses/>.
 
 static uint32_t double_click_time=400;
 
+static overlay_theme * current_theme;
+static widget * currently_active_widget=NULL;
+static widget * only_interactable_widget=NULL;
+static widget * potential_interaction_widget=NULL;
+
 void set_overlay_double_click_time(uint32_t t)
 {
     double_click_time=t;
@@ -197,32 +202,7 @@ bool widget_active(widget * w)
     return false;
 }
 
-//bool click_within_bounds(rectangle r,int x,int y)
-//{
-//    return ((x>=r.x)&&(y>=r.y)&&(x<(r.x+r.w))&&(y<(r.y+r.h)));
-//}
-//
-//bool check_toplevel_container(widget * w)
-//{
-//    if(w->base.parent==NULL)
-//    {
-//        return true;
-//    }
-//
-//    return false;
-//}
 
-
-
-//widget * get_widgets_menu(widget * w)
-//{
-//    while(w->base.parent!=NULL)
-//    {
-//        w=w->base.parent;
-//    }
-//
-//    return w;
-//}
 
 void adjust_coordinates_to_widget_local(widget * w,int * x,int * y)
 {
@@ -263,7 +243,7 @@ static void organise_widget(widget * w,int width,int height)
     }
 }
 
-void organise_menu_widget(widget * menu_widget,int screen_width,int screen_height)///for extenal access, like create_menu_widget
+void organise_menu_widget(widget * menu_widget,int screen_width,int screen_height)
 {
     organise_widget(menu_widget,screen_width,screen_height);
 }
@@ -327,6 +307,15 @@ void move_toplevel_widget_to_front(widget * w)
     w->base.prev=w->base.parent->container.last;
     w->base.parent->container.last=w;
     w->base.next=NULL;
+}
+
+void add_widget_to_widgets_menu(widget * w,widget * to_add)
+{
+    w=get_widgets_toplevel_ancestor(w);
+
+    assert(w && to_add && to_add->base.parent==NULL);
+
+    add_child_to_parent(w->base.parent,to_add);
 }
 
 
@@ -429,15 +418,6 @@ void blank_widget_delete(widget * w)
 
 
 
-
-
-
-static overlay_theme * current_theme;
-static widget * currently_active_widget=NULL;
-static widget * only_interactable_widget=NULL;
-static widget * potential_interaction_widget=NULL;
-
-
 void set_current_overlay_theme(overlay_theme * theme)
 {
     current_theme=theme;
@@ -450,7 +430,7 @@ overlay_theme * get_current_overlay_theme(void)
 
 void set_only_interactable_widget(widget * w)
 {
-    set_currently_active_widget(NULL);///if triggerd when something is selected
+    set_currently_active_widget(NULL);///if triggered when something is selected
     only_interactable_widget=w;
 }
 
@@ -490,7 +470,7 @@ widget * select_widget(widget * w,int x_in,int y_in)
     return NULL;
 }
 
-int set_widget_minimum_width(widget * w,uint32_t pos_flags)
+int16_t set_widget_minimum_width(widget * w,uint32_t pos_flags)
 {
     if((w)&&(w->base.status&WIDGET_ACTIVE))
     {
@@ -504,7 +484,7 @@ int set_widget_minimum_width(widget * w,uint32_t pos_flags)
     return 0;
 }
 
-int set_widget_minimum_height(widget * w,uint32_t pos_flags)
+int16_t set_widget_minimum_height(widget * w,uint32_t pos_flags)
 {
     if((w)&&(w->base.status&WIDGET_ACTIVE))
     {
@@ -517,7 +497,7 @@ int set_widget_minimum_height(widget * w,uint32_t pos_flags)
     return 0;
 }
 
-int organise_widget_horizontally(widget * w,int x_pos,int width)
+int16_t organise_widget_horizontally(widget * w,int16_t x_pos,int16_t width)
 {
     if((w)&&(w->base.status&WIDGET_ACTIVE))
     {
@@ -529,7 +509,7 @@ int organise_widget_horizontally(widget * w,int x_pos,int width)
     return 0;
 }
 
-int organise_widget_vertically(widget * w,int y_pos,int height)
+int16_t organise_widget_vertically(widget * w,int16_t y_pos,int16_t height)
 {
     if((w)&&(w->base.status&WIDGET_ACTIVE))
     {
@@ -692,16 +672,20 @@ void remove_child_from_parent(widget * child)
 {
     widget * parent=child->base.parent;
     if(parent)parent->base.behaviour_functions->remove_child(parent,child);
+    child->base.parent=NULL;///there is a lot of duplication of this, remove from all add child instances?
 }
 
 void delete_widget(widget * w)
 {
+    if(!w)return;
+    remove_child_from_parent(w);
+    assert(!(w->base.status&WIDGET_DO_NOT_DELETE));///should not be trying to delete a widget that has been marked as undeleteable, but handle it anyway
+    if(w->base.status&WIDGET_DO_NOT_DELETE)return;
     if(w==currently_active_widget)currently_active_widget=NULL;///avoid calling click away when deleting by not using set_currently_active_widget
     if(w==only_interactable_widget)only_interactable_widget=NULL;
 
     /// link to other widgets in popup.trigger_widget and any button that toggles another widget prevents deletion from being clean (deletion of any widget in this king of structure may cause a segfault)
 
-    remove_child_from_parent(w);
     w->base.behaviour_functions->wid_delete(w);
     free(w);
 }

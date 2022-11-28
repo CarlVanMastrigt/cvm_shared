@@ -419,7 +419,11 @@ widget * create_icon_toggle_button(char * positive_icon,char * negative_icon,voi
     return w;
 }
 
-
+void button_widget_set_text(widget * w,const char * new_text)
+{
+    w->button.text=realloc(w->button.text,sizeof(char)*(strlen(new_text)+1));
+    strcpy(w->button.text,new_text);
+}
 
 
 

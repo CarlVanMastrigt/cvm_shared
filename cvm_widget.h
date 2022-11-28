@@ -35,6 +35,7 @@ along with cvm_shared.  If not, see <https://www.gnu.org/licenses/>.
 #define WIDGET_IS_MENU              0x00000010 /** used for testing find_toplevel_ancestor worked (is parent-child structure correct) */
 #define WIDGET_IS_AUTO_CLOSE_POPUP  0x00000020
 #define WIDGET_IS_CONTIGUOUS_BOX    0x00000040
+#define WIDGET_DO_NOT_DELETE        0x00000080 /** must only be deleted by specialised method, which will set this to false before executing*/
 
 #define WIDGET_H_FIRST  0x10000000
 #define WIDGET_H_LAST   0x20000000
@@ -145,6 +146,7 @@ widget_base;
 #include "widgets/anchor.h"
 #include "widgets/textbox.h"
 #include "widgets/panel.h"
+#include "widgets/centring_container.h"
 #include "widgets/resize_constraint.h"
 #include "widgets/popup.h"
 #include "widgets/tab.h"
@@ -169,6 +171,7 @@ union widget
     widget_container            container;
     widget_contiguous_box       contiguous_box;
     widget_panel                panel;
+    widget_centring_container   centring_container;
     widget_resize_constraint    resize_constraint;
     widget_popup                popup;
     widget_file_list            file_list;
@@ -183,18 +186,15 @@ widget * create_widget(void);
 
 
 bool widget_active(widget * w);
-//bool click_within_bounds(rectangle r,int x,int y);///remove????
-//bool check_toplevel_container(widget * w);
 widget * create_widget_menu(void);
 
 void organise_menu_widget(widget * menu_widget,int screen_width,int screen_height);
 
 
 
-//widget * get_widgets_toplevel_ancestor(widget * w);
 void organise_toplevel_widget(widget * w);
 void move_toplevel_widget_to_front(widget * target);
-//widget * get_widgets_menu(widget * w);
+void add_widget_to_widgets_menu(widget * w,widget * to_add);
 void adjust_coordinates_to_widget_local(widget * w,int * x,int * y);
 void get_widgets_global_coordinates(widget * w,int * x,int * y);
 
@@ -203,10 +203,10 @@ void get_widgets_global_coordinates(widget * w,int * x,int * y);
 
 void render_widget(widget * w,int x_off,int y_off,cvm_overlay_element_render_buffer * erb,rectangle bounds);
 widget * select_widget(widget * w,int x_in,int y_in);
-int set_widget_minimum_width(widget * w,uint32_t pos_flags);
-int set_widget_minimum_height(widget * w,uint32_t pos_flags);
-int organise_widget_horizontally(widget * w,int x_pos,int width);
-int organise_widget_vertically(widget * w,int y_pos,int height);
+int16_t set_widget_minimum_width(widget * w,uint32_t pos_flags);
+int16_t set_widget_minimum_height(widget * w,uint32_t pos_flags);
+int16_t organise_widget_horizontally(widget * w,int16_t x_pos,int16_t width);
+int16_t organise_widget_vertically(widget * w,int16_t y_pos,int16_t height);
 
 
 
