@@ -474,13 +474,18 @@ static void file_list_widget_sucessful_action_cleanup(widget * w)
     error_dialogue_cancel_button->button.data=NULL;
     error_dialogue_force_button->button.data=NULL;
 
+    ///error dialogue will not always be triggered so these are not strictly necessary, but they will work anyway and when they might cause issue that is likely an invalid state
     remove_child_from_parent(error_dialogue_widget);
     set_only_interactable_widget(NULL);
 
-    //fl->offset=0;
-    ///possibly close widget?
+    w->file_list.offset=0;
     ///do any other required cleanup
 
+    if(w->file_list.parent_widget)
+    {
+        w->file_list.parent_widget->base.status&=~WIDGET_ACTIVE;
+        organise_toplevel_widget(w->file_list.parent_widget);
+    }
 }
 
 static void file_list_widget_perform_action(widget * w)
@@ -502,7 +507,6 @@ static void file_list_widget_perform_action(widget * w)
                 }
                 else
                 {
-                    //file_list_widget_activate_error_dialogue(w);
                     assert(!error_dialogue_widget->base.parent);///error must have been handled already previously (which would close the dialogue box and remove it from the menu that opened it)
 
                     error_dialogue_cancel_button->button.data=w;
@@ -1027,8 +1031,8 @@ void file_list_widget_set_error_information(const char * message,const char * ca
 
     if(!error_dialogue_widget)
     {
-        error_dialogue_widget=create_centring_container();///replace with popup widget w/ appropriate relative positioning
-        error_dialogue_widget->base.status|=WIDGET_DO_NOT_DELETE;
+        error_dialogue_widget=create_popup(WIDGET_POSITIONING_CENTRED,false);///replace with popup widget w/ appropriate relative positioning
+        error_dialogue_widget->base.status|=WIDGET_ACTIVE|WIDGET_DO_NOT_DELETE;///popup widgets disabled by default, not the methodology we'll be employing here
 
         box1=add_child_to_parent(add_child_to_parent(error_dialogue_widget,create_panel()),create_box(WIDGET_VERTICAL,WIDGET_EVENLY_DISTRIBUTED));
 

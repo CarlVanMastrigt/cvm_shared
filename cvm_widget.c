@@ -432,6 +432,10 @@ void set_only_interactable_widget(widget * w)
 {
     set_currently_active_widget(NULL);///if triggered when something is selected
     only_interactable_widget=w;
+    if(w)
+    {
+        assert(w->base.status&WIDGET_ACTIVE);
+    }
 }
 
 bool is_currently_active_widget(widget * w)
@@ -678,9 +682,12 @@ void remove_child_from_parent(widget * child)
 void delete_widget(widget * w)
 {
     if(!w)return;
+
     remove_child_from_parent(w);
+
     assert(!(w->base.status&WIDGET_DO_NOT_DELETE));///should not be trying to delete a widget that has been marked as undeleteable, but handle it anyway
     if(w->base.status&WIDGET_DO_NOT_DELETE)return;
+
     if(w==currently_active_widget)currently_active_widget=NULL;///avoid calling click away when deleting by not using set_currently_active_widget
     if(w==only_interactable_widget)only_interactable_widget=NULL;
 

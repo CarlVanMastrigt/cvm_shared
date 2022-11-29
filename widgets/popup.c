@@ -38,8 +38,6 @@ static widget * popup_widget_select(overlay_theme * theme,widget * w,int16_t x_i
 static void popup_widget_min_w(overlay_theme * theme,widget * w)
 {
     w->base.min_w=set_widget_minimum_width(w->popup.contents,0);
-
-    ///if WIDGET_POSITIONING_DOWN   if external_aligned.min_w is bigger than internal_aligned.min_w set increase contents.min_w by difference ???? (also w.min_w)
 }
 
 static void popup_widget_min_h(overlay_theme * theme,widget * w)
@@ -49,46 +47,47 @@ static void popup_widget_min_h(overlay_theme * theme,widget * w)
 
 static void popup_widget_set_w(overlay_theme * theme,widget * w)
 {
-    organise_widget_horizontally(w->popup.contents,0,w->base.min_w);///fix x_pos in set_h because it is always called second
+    organise_widget_horizontally(w->popup.contents,0,w->base.min_w);
 }
 
 static void popup_widget_set_h(overlay_theme * theme,widget * w)
 {
-//    organise_widget_vertically(w->popup.contents,0,w->base.min_h);
-//
-//    widget * c=w->popup.contents;
-//
-//    if((c)&&(w->popup.internal_alignment_widget)&&(w->popup.external_alignment_widget))
-//    {
-//        int xi=0;
-//        int yi=0;
-//        int xe=0;
-//        int ye=0;
-//
-//        get_widgets_global_coordinates(w->popup.external_alignment_widget,&xe,&ye);
-//        get_widgets_global_coordinates(w->popup.internal_alignment_widget,&xi,&yi);
-//
-//        c->base.r.x+=xe-xi;
-//        c->base.r.y+=ye-yi;
-//
-//        if((w->popup.positioning==WIDGET_POSITIONING_CENTRED)||(w->popup.positioning==WIDGET_POSITIONING_CENTRED_DOWN))
-//            c->base.r.x+=(w->popup.external_alignment_widget->base.r.w - w->popup.internal_alignment_widget->base.r.w)/2;
-//
-//        if(w->popup.positioning==WIDGET_POSITIONING_CENTRED)
-//            c->base.r.y+=(w->popup.external_alignment_widget->base.r.h - w->popup.internal_alignment_widget->base.r.h)/2;
-//
-//        if(w->popup.positioning==WIDGET_POSITIONING_OFFSET_RIGHT)
-//            c->base.r.x+=w->popup.external_alignment_widget->base.r.w + theme->popup_separation;
-//
-//        if(w->popup.positioning==WIDGET_POSITIONING_OFFSET_DOWN)
-//            c->base.r.y+=w->popup.external_alignment_widget->base.r.h + theme->popup_separation;
-//
-//        if((c->base.r.x+c->base.r.w)>w->base.r.w)c->base.r.x=w->base.r.w-c->base.r.w;
-//        if((c->base.r.y+c->base.r.h)>w->base.r.h)c->base.r.y=w->base.r.h-c->base.r.h;
-//
-//        if(c->base.r.x<0)c->base.r.x=0;
-//        if(c->base.r.y<0)c->base.r.y=0;
-//    }
+    int16_t delta_x,delta_y,width,height,max;
+    organise_widget_vertically(w->popup.contents,0,w->base.min_h);
+
+    widget *contained,*external,*internal;
+    contained=w->popup.contents;
+    internal=w->popup.internal_alignment_widget;
+    external=w->popup.external_alignment_widget;
+
+    if(contained)
+    {
+        if(!internal)internal=contained;
+        if(!external)external=w;
+        ///allow internal not to exist (use contained) and external not to exist (use w)
+
+        get_widgets_global_coordinates(internal,&delta_x,&delta_y);
+        adjust_coordinates_to_widget_local(external,&delta_x,&delta_y);
+
+        if(w->popup.positioning==WIDGET_POSITIONING_CENTRED)
+        {
+            delta_x+=((external->base.r.x2-external->base.r.x1) - (internal->base.r.x2-internal->base.r.x1))>>1;
+            delta_y+=((external->base.r.y2-external->base.r.y1) - (internal->base.r.y2-internal->base.r.y1))>>1;
+        }
+
+        ///implement the others
+
+        delta_x*=delta_x>0;///delta cannot be less than 0, doesn't respect some initial offset being generated (though that shouldn't happen)
+        max=w->base.r.x2-w->base.r.x1 - contained->base.r.x2;///required to move contained.x2 to overlap w.x2
+        if(delta_x > max)delta_x=max;
+
+        delta_y*=delta_y>0;
+        max=w->base.r.y2-w->base.r.y1 - contained->base.r.y2;///required to move contained.x2 to overlap w.x2
+        if(delta_y > max)delta_y=max;
+
+
+        contained->base.r=rectangle_add_offset(contained->base.r,delta_x,delta_y);
+    }
 }
 
 

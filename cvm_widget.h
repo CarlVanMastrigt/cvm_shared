@@ -146,7 +146,6 @@ widget_base;
 #include "widgets/anchor.h"
 #include "widgets/textbox.h"
 #include "widgets/panel.h"
-#include "widgets/centring_container.h"
 #include "widgets/resize_constraint.h"
 #include "widgets/popup.h"
 #include "widgets/tab.h"
@@ -171,7 +170,6 @@ union widget
     widget_container            container;
     widget_contiguous_box       contiguous_box;
     widget_panel                panel;
-    widget_centring_container   centring_container;
     widget_resize_constraint    resize_constraint;
     widget_popup                popup;
     widget_file_list            file_list;
@@ -195,9 +193,9 @@ void organise_menu_widget(widget * menu_widget,int screen_width,int screen_heigh
 void organise_toplevel_widget(widget * w);
 void move_toplevel_widget_to_front(widget * target);
 void add_widget_to_widgets_menu(widget * w,widget * to_add);
+
 void adjust_coordinates_to_widget_local(widget * w,int * x,int * y);
 void get_widgets_global_coordinates(widget * w,int * x,int * y);
-
 
 
 
