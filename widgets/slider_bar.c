@@ -281,7 +281,7 @@ static widget_appearence_function_set horizontal_slider_bar_appearence_functions
 
 widget * create_slider_bar(int * value,widget_function func,void * data,bool free_data)
 {
-	widget * w=create_widget();
+	widget * w=create_widget(sizeof(widget_slider_bar));
 
 	w->slider_bar.data=data;
 	w->slider_bar.func=func;
@@ -307,7 +307,7 @@ widget * create_slider_bar(int * value,widget_function func,void * data,bool fre
 
 widget * create_slider_bar_fixed(int32_t * value,int32_t min_value,int32_t max_value,int32_t bar_fraction,int32_t scroll_fraction,widget_function func,void * data,bool free_data)
 {
-	widget * w=create_widget();
+	widget * w=create_widget(sizeof(widget_slider_bar));
 
 	assert(bar_fraction>=2);///CANNOT TAKE UP WHOLE BAR OR DIVIDE BY 0
 
@@ -335,7 +335,7 @@ widget * create_slider_bar_fixed(int32_t * value,int32_t min_value,int32_t max_v
 
 widget * create_slider_bar_dynamic(int32_t * value,const int32_t * min_value,const int32_t * max_value,const int32_t * bar_size,const int32_t * scroll_delta,widget_function func,void * data,bool free_data)
 {
-	widget * w=create_widget();
+	widget * w=create_widget(sizeof(widget_slider_bar));
 
 	w->slider_bar.data=data;
 	w->slider_bar.func=func;

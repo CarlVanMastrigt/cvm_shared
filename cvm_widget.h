@@ -178,7 +178,7 @@ union widget
 };
 
 
-widget * create_widget(void);
+widget * create_widget(size_t size);
 
 
 

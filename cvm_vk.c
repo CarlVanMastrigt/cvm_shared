@@ -65,7 +65,9 @@ static bool cvm_vk_rendering_resources_valid=false;///can this be determined for
 
 
 static cvm_vk_timeline_semaphore cvm_vk_graphics_timeline;
-static cvm_vk_timeline_semaphore cvm_vk_transfer_timeline;
+static cvm_vk_timeline_semaphore cvm_vk_transfer_timeline_high_priority;///submitted before the frame and waited on by both graphics and compute
+static cvm_vk_timeline_semaphore cvm_vk_transfer_timeline_low_priority;///submitted after the frame and relies on frame cycling to return results and make resources available
+/// both transfer semaphores only incremented/used if relevant work generated this frame (transfer ops) use stage mask &c. to determine if there is any work and how to wait upon it
 static cvm_vk_timeline_semaphore * cvm_vk_compute_timelines;///same as number of compute queues (1 for each), needs to have a way to query the count (which will be associated with compute submission scheduling paradigm
 static cvm_vk_timeline_semaphore * cvm_vk_host_timelines;///used to wait on host events from different threads, needs to have count as input
 static uint32_t cvm_vk_host_timeline_count;

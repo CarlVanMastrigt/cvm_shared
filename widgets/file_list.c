@@ -512,6 +512,8 @@ static void file_list_widget_perform_action(widget * w)
                     error_dialogue_cancel_button->button.data=w;
                     error_dialogue_force_button->button.data=w;
 
+                    set_popup_alignment_widgets(error_dialogue_widget,NULL,w->file_list.parent_widget ? w->file_list.parent_widget : w);///passing null as internal will use the contailed widget (the panel)
+
                     add_widget_to_widgets_menu(w,error_dialogue_widget);
                     organise_toplevel_widget(error_dialogue_widget);
                     set_only_interactable_widget(error_dialogue_widget);
@@ -818,7 +820,7 @@ static widget_appearence_function_set file_list_appearence_functions=
 
 widget * create_file_list(int16_t min_visible_rows,int16_t min_visible_glyphs,const char * initial_directory,const char *const * error_messages,uint16_t error_count)
 {
-    widget * w=create_widget();
+    widget * w=create_widget(sizeof(widget_file_list));
 
     extant_file_list_count++;
 
@@ -1025,7 +1027,7 @@ static void file_list_widget_error_force_button_function(widget * w)
 
 void file_list_widget_set_error_information(const char * message,const char * cancel_button_text,const char * force_button_text)
 {
-    widget *box1,*box2;
+    widget *box1,*box2,*panel;
     assert(message);
     assert(cancel_button_text);
 
@@ -1034,9 +1036,14 @@ void file_list_widget_set_error_information(const char * message,const char * ca
         error_dialogue_widget=create_popup(WIDGET_POSITIONING_CENTRED,false);///replace with popup widget w/ appropriate relative positioning
         error_dialogue_widget->base.status|=WIDGET_ACTIVE|WIDGET_DO_NOT_DELETE;///popup widgets disabled by default, not the methodology we'll be employing here
 
-        box1=add_child_to_parent(add_child_to_parent(error_dialogue_widget,create_panel()),create_box(WIDGET_VERTICAL,WIDGET_EVENLY_DISTRIBUTED));
+        panel=add_child_to_parent(error_dialogue_widget,create_panel());
+
+        box1=add_child_to_parent(panel,create_box(WIDGET_VERTICAL,WIDGET_EVENLY_DISTRIBUTED));
 
         error_dialogue_message_text_bar=add_child_to_parent(box1,create_static_text_bar(NULL));
+        ///integrate following into initialisation of text bar? allow more complicated initialisation?
+        error_dialogue_message_text_bar->text_bar.max_glyph_render_count=48;
+        error_dialogue_message_text_bar->text_bar.text_alignment=WIDGET_TEXT_RIGHT_ALIGNED;
 
         box1=add_child_to_parent(box1,create_box(WIDGET_HORIZONTAL,WIDGET_EVENLY_DISTRIBUTED));
         add_child_to_parent(box1,create_empty_widget(0,0));

@@ -277,7 +277,7 @@ static widget_appearence_function_set all_visible_contiguous_box_functions=
 
 widget * create_contiguous_box(widget_layout layout,int min_display_count)
 {
-    widget * w=create_container();
+    widget * w=create_container(sizeof(widget_contiguous_box));
 
     if(min_display_count)
     {

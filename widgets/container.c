@@ -217,9 +217,9 @@ static widget_appearence_function_set container_appearence_functions=
 
 
 
-widget * create_container(void)
+widget * create_container(size_t size)
 {
-    widget * w=create_widget();
+    widget * w=create_widget(size);
 
     w->container.first=NULL;
     w->container.last=NULL;

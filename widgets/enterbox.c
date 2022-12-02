@@ -150,12 +150,15 @@ static void enterbox_widget_mouse_movement(overlay_theme * theme,widget * w,int 
 static bool enterbox_widget_scroll(overlay_theme * theme,widget * w,int delta)
 {
     int32_t max_offset;
+
+    enterbox_check_visible_offset(theme,w);
+
     max_offset=w->enterbox.text_pixel_length - (w->base.r.x2-w->base.r.x1-2*theme->h_bar_text_offset-1);///text length - max offset
     if(max_offset < 0) max_offset=0;
 
     w->enterbox.visible_offset-=delta*theme->font.max_advance;
 
-    if(w->enterbox.visible_offset<0)w->enterbox.visible_offset=0;
+    if(w->enterbox.visible_offset < 0)w->enterbox.visible_offset=0;
     else if(w->enterbox.visible_offset > max_offset) w->enterbox.visible_offset=max_offset;
 
     return true;
@@ -471,7 +474,7 @@ static widget_appearence_function_set enterbox_appearence_functions=
 
 widget * create_enterbox(uint32_t max_strlen,uint32_t max_glyphs,uint32_t min_glyphs_visible,char * initial_text,widget_function activation_func,widget_function update_contents_func,widget_function upon_input_func,void * data,bool free_data,bool activate_upon_deselect)
 {
-	widget * w=create_widget();
+	widget * w=create_widget(sizeof(widget_enterbox));
 
 	w->enterbox.data=data;
 	w->enterbox.activation_func=activation_func;

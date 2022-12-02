@@ -143,7 +143,7 @@ static widget_appearence_function_set text_anchor_appearence_functions=
 
 widget * create_anchor(widget * constraint,char * title)
 {
-    widget * w=create_widget();
+    widget * w=create_widget(sizeof(widget_anchor));
 
     w->base.behaviour_functions=&anchor_behaviour_functions;
     w->base.appearence_functions=&text_anchor_appearence_functions;

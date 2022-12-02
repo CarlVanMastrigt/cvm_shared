@@ -236,7 +236,9 @@ typedef struct cvm_vk_module_batch
 
 
     VkCommandPool transfer_pool;/// cannot have transfers in secondary command buffer (scb's need renderpass/subpass) and they arent needed anyway, so have 1 per module batch
-    VkCommandBuffer transfer_pcb;///primary command buffer, allocated from base pool
+    ///all transfer commands actually generated from stored ops in managed buffer(s) and managed texture pool(s)
+    VkCommandBuffer high_priority_transfer_pcb;
+    VkCommandBuffer low_priority_transfer_pcb;
     /// should not need to ask module how many of these there are
     /// should use same/similar logic to distribute them that was used to create them
     /// effectively allocated is max, so can have variant number actually used in any given frame depending on workload

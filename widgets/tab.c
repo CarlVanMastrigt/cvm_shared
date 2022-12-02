@@ -306,7 +306,7 @@ static widget_appearence_function_set tab_folder_appearence_functions=
 
 widget * create_tab_folder(widget ** button_box,widget_layout button_box_layout)
 {
-    widget * w=create_widget();
+    widget * w=create_widget(sizeof(widget_tab_folder));
 
     *button_box=w->tab_folder.tab_button_container=create_contiguous_box(button_box_layout,0);
 

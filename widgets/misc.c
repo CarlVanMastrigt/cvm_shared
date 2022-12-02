@@ -138,7 +138,7 @@ static widget_appearence_function_set empty_appearence_functions=
 
 widget * create_empty_widget(int16_t min_w,int16_t min_h)
 {
-    widget * w = create_widget();
+    widget * w = create_widget(sizeof(widget_base));///needs no extra data...
 
     w->base.appearence_functions=&empty_appearence_functions;
 
@@ -174,7 +174,7 @@ static widget_appearence_function_set separator_appearence_functions=
 
 widget * create_separator_widget(void)
 {
-    widget * w = create_widget();
+    widget * w = create_widget(sizeof(widget_base));///needs no extra data, all behaviour comes from appearance functions and theme
 
     w->base.appearence_functions=&separator_appearence_functions;
 
@@ -205,7 +205,7 @@ static widget_appearence_function_set unit_separator_appearence_functions=
 
 widget * create_unit_separator_widget(void)
 {
-    widget * w = create_widget();
+    widget * w = create_widget(sizeof(widget_base));///needs no extra data, all behaviour comes from appearance functions and theme
 
     w->base.appearence_functions=&unit_separator_appearence_functions;
 

@@ -265,7 +265,7 @@ void change_textbox_text(widget * w,char * new_text,bool owns_new_text)///use re
 
 widget * create_textbox(char * text,bool owns_text,int min_horizontal_glyphs,int min_visible_lines)///enable wrapping as input param? forces sizing and allows horizontal scrolling otherwise
 {
-    widget * w = create_widget();
+    widget * w = create_widget(sizeof(widget_textbox));
 
     w->base.appearence_functions = &textbox_appearence_functions;
     w->base.behaviour_functions = &textbox_behaviour_functions;

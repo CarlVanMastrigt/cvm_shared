@@ -586,7 +586,7 @@ static widget_appearence_function_set horizontal_all_same_distributed_box_functi
 
 widget * create_box(widget_layout layout,widget_distribution distribution)
 {
-    widget * w=create_container();
+    widget * w=create_container(sizeof(widget_container));///actually is just pure container
 
     if(layout==WIDGET_VERTICAL)
     {

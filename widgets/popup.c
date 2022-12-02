@@ -66,25 +66,24 @@ static void popup_widget_set_h(overlay_theme * theme,widget * w)
         if(!external)external=w;
         ///allow internal not to exist (use contained) and external not to exist (use w)
 
-        get_widgets_global_coordinates(internal,&delta_x,&delta_y);
-        adjust_coordinates_to_widget_local(external,&delta_x,&delta_y);
+        get_widgets_global_coordinates(external,&delta_x,&delta_y);
+        adjust_coordinates_to_widget_local(internal,&delta_x,&delta_y);
 
         if(w->popup.positioning==WIDGET_POSITIONING_CENTRED)
         {
-            delta_x+=((external->base.r.x2-external->base.r.x1) - (internal->base.r.x2-internal->base.r.x1))>>1;
-            delta_y+=((external->base.r.y2-external->base.r.y1) - (internal->base.r.y2-internal->base.r.y1))>>1;
+            delta_x+=((external->base.r.x2-external->base.r.x1) - (internal->base.r.x2-internal->base.r.x1))/2;
+            delta_y+=((external->base.r.y2-external->base.r.y1) - (internal->base.r.y2-internal->base.r.y1))/2;
         }
 
-        ///implement the others
+        ///implement the others, can/should probably specify relative alignment separately for horizontal and vertical
 
-        delta_x*=delta_x>0;///delta cannot be less than 0, doesn't respect some initial offset being generated (though that shouldn't happen)
         max=w->base.r.x2-w->base.r.x1 - contained->base.r.x2;///required to move contained.x2 to overlap w.x2
         if(delta_x > max)delta_x=max;
+        if(delta_x < 0)delta_x=0;
 
-        delta_y*=delta_y>0;
         max=w->base.r.y2-w->base.r.y1 - contained->base.r.y2;///required to move contained.x2 to overlap w.x2
         if(delta_y > max)delta_y=max;
-
+        if(delta_y < 0)delta_y=0;
 
         contained->base.r=rectangle_add_offset(contained->base.r,delta_x,delta_y);
     }
@@ -150,7 +149,7 @@ static widget_behaviour_function_set popup_behaviour_functions=
 
 widget * create_popup(widget_relative_positioning positioning,bool auto_close)
 {
-    widget * w=create_widget();
+    widget * w=create_widget(sizeof(widget_popup));
 
     w->base.appearence_functions=&popup_appearence_functions;
     w->base.behaviour_functions=&popup_behaviour_functions;

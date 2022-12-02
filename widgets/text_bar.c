@@ -25,29 +25,21 @@ static inline void text_bar_recalculate_text_size_and_offset(overlay_theme * the
     if(w->text_bar.recalculate_text_size)
     {
         w->text_bar.text_pixel_length=overlay_text_single_line_get_pixel_length(&theme->font,w->text_bar.text);
+        w->text_bar.max_visible_offset=w->text_bar.text_pixel_length-(w->base.r.x2-w->base.r.x1 - theme->h_bar_text_offset*2 -1);
+        ///above: text length - visible text length (width of space where text can be displayed); -1 for space for caret
+        if(w->text_bar.max_visible_offset < 0)w->text_bar.max_visible_offset=0;
 
         if(w->text_bar.text_alignment==WIDGET_TEXT_LEFT_ALIGNED)w->text_bar.visible_offset=0;
         else
         {
             assert(w->text_bar.text_alignment==WIDGET_TEXT_RIGHT_ALIGNED);
-            w->text_bar.visible_offset=w->text_bar.text_pixel_length-(w->base.r.x2-w->base.r.x1 - theme->h_bar_text_offset*2 -1);///text length - visible text length; -1 for space for caret
-            w->text_bar.visible_offset*=w->text_bar.visible_offset>0;///cannot be negative
+            w->text_bar.visible_offset=w->text_bar.max_visible_offset;
         }
 
         w->text_bar.recalculate_text_size=false;
     }
 }
 
-static inline void text_bar_reset_offset(overlay_theme * theme,widget * w)
-{
-    if(w->text_bar.text_alignment==WIDGET_TEXT_LEFT_ALIGNED)w->text_bar.visible_offset=0;
-    else
-    {
-        assert(w->text_bar.text_alignment==WIDGET_TEXT_RIGHT_ALIGNED);
-        w->text_bar.visible_offset=w->text_bar.text_pixel_length-(w->base.r.x2-w->base.r.x1 - theme->h_bar_text_offset*2 -1);///text length - visible text length; -1 for space for caret
-        w->text_bar.visible_offset*=w->text_bar.visible_offset>0;///cannot be negative
-    }
-}
 
 ///perhaps call this upon resize of still active widget?
 static void text_bar_check_visible_offset(overlay_theme * theme,widget * w)
@@ -57,7 +49,7 @@ static void text_bar_check_visible_offset(overlay_theme * theme,widget * w)
 
     if(!w->text_bar.text) return;
 
-    text_space=w->base.r.x2-w->base.r.x1-2*theme->h_bar_text_offset-1;
+    text_space=w->text_bar.text_pixel_length-w->text_bar.max_visible_offset;
 
     tmp=*w->text_bar.selection_end;
     *w->text_bar.selection_end='\0';
@@ -71,9 +63,7 @@ static void text_bar_check_visible_offset(overlay_theme * theme,widget * w)
 
     ///special condition to put offset at middle???
     if(w->text_bar.visible_offset<0)w->text_bar.visible_offset=0;
-    max_offset=w->text_bar.text_pixel_length-text_space;///max offset
-    if(max_offset < 0) w->text_bar.visible_offset=0;
-    else if(w->text_bar.visible_offset > max_offset) w->text_bar.visible_offset=max_offset;
+    else if(w->text_bar.visible_offset > w->text_bar.max_visible_offset) w->text_bar.visible_offset=w->text_bar.max_visible_offset;
 }
 
 
@@ -134,14 +124,12 @@ static void text_bar_widget_mouse_movement(overlay_theme * theme,widget * w,int 
 
 static bool text_bar_widget_scroll(overlay_theme * theme,widget * w,int delta)
 {
-    int32_t max_offset;
-    max_offset=w->text_bar.text_pixel_length - (w->base.r.x2-w->base.r.x1-2*theme->h_bar_text_offset-1);///text length - max offset
-    if(max_offset < 0) max_offset=0;
+    text_bar_recalculate_text_size_and_offset(theme,w);
 
     w->text_bar.visible_offset-=delta*theme->font.max_advance;
 
-    if(w->text_bar.visible_offset<0)w->text_bar.visible_offset=0;
-    else if(w->text_bar.visible_offset > max_offset) w->text_bar.visible_offset=max_offset;
+    if(w->text_bar.visible_offset < 0)w->text_bar.visible_offset=0;
+    else if(w->text_bar.visible_offset > w->text_bar.max_visible_offset) w->text_bar.visible_offset=w->text_bar.max_visible_offset;
 
     return true;
 }
@@ -243,7 +231,13 @@ static bool text_bar_widget_key_down(overlay_theme * theme,widget * w,SDL_Keycod
 
 static void text_bar_widget_click_away(overlay_theme * theme,widget * w)
 {
-    text_bar_reset_offset(theme,w);
+    ///reset offset
+    if(w->text_bar.text_alignment==WIDGET_TEXT_LEFT_ALIGNED)w->text_bar.visible_offset=0;
+    else
+    {
+        assert(w->text_bar.text_alignment==WIDGET_TEXT_RIGHT_ALIGNED);
+        w->text_bar.visible_offset=w->text_bar.max_visible_offset;///text length - visible text length; -1 for space for caret
+    }
 }
 
 static void text_bar_widget_delete(widget * w)
@@ -283,23 +277,22 @@ static void text_bar_widget_render(overlay_theme * theme,widget * w,int16_t x_of
 
     overlay_text_single_line_render_data text_render_data=
 	{
+	    .text=w->text_bar.text,
+	    .bounds=bounds,
+	    .colour=OVERLAY_TEXT_COLOUR_0,
         .flags=0,
 	    .x=r.x1+theme->h_bar_text_offset,
 	    .y=(r.y1+r.y2-theme->font.glyph_size)>>1,
-	    .text=w->text_bar.text,
-	    .bounds=bounds,
-	    .colour=OVERLAY_TEXT_COLOUR_0
+	    .text_length=w->text_bar.text_pixel_length,
+	    .text_area=overlay_text_single_line_get_text_area(r,theme->font.glyph_size,theme->h_bar_text_offset),
 	};
 
-	{
-	    text_render_data.text_length=w->text_bar.text_pixel_length;
-        text_render_data.text_area=overlay_text_single_line_get_text_area(r,theme->font.glyph_size,theme->h_bar_text_offset);
-        text_render_data.x-=w->text_bar.visible_offset;
-        if(w->text_bar.selection_end > w->text_bar.selection_begin) text_render_data.selection_begin=w->text_bar.selection_begin, text_render_data.selection_end=w->text_bar.selection_end;
-        else text_render_data.selection_begin=w->text_bar.selection_end, text_render_data.selection_end=w->text_bar.selection_begin;
-	}
 
-    text_render_data.flags|=!!w->text_bar.min_glyph_render_count*OVERLAY_TEXT_RENDER_FADING;
+    text_render_data.x-=w->text_bar.visible_offset;
+    if(w->text_bar.selection_end > w->text_bar.selection_begin) text_render_data.selection_begin=w->text_bar.selection_begin, text_render_data.selection_end=w->text_bar.selection_end;
+    else text_render_data.selection_begin=w->text_bar.selection_end, text_render_data.selection_end=w->text_bar.selection_begin;
+
+    text_render_data.flags|=(w->text_bar.min_glyph_render_count||w->text_bar.max_glyph_render_count)*OVERLAY_TEXT_RENDER_FADING;
     text_render_data.flags|=is_currently_active_widget(w)*OVERLAY_TEXT_RENDER_SELECTION;
 
     overlay_text_single_line_render(erb,theme,&text_render_data);
@@ -314,14 +307,27 @@ static widget * text_bar_widget_select(overlay_theme * theme,widget * w,int16_t 
 
 static void text_bar_widget_min_w(overlay_theme * theme,widget * w)
 {
+    int16_t max_w;
+
+
     if(w->text_bar.min_glyph_render_count)
     {
-        w->base.min_w = 2*theme->h_bar_text_offset + w->text_bar.min_glyph_render_count * theme->font.max_advance;
+        w->base.min_w = 2*theme->h_bar_text_offset + w->text_bar.min_glyph_render_count * theme->font.max_advance + 1;///+1 for caret
         ///also need to set flag to recalculate text size here b/c that functionality won't be provoked upon theme change but this function will be called and the product of the change will be necessary
         w->text_bar.recalculate_text_size=true;
     }
-    else w->base.min_w = 2*theme->h_bar_text_offset + overlay_text_single_line_get_pixel_length(&theme->font,w->text_bar.text);
+    else w->base.min_w = 2*theme->h_bar_text_offset + overlay_text_single_line_get_pixel_length(&theme->font,w->text_bar.text) + 1;///+1 for caret
 
+    if(w->text_bar.max_glyph_render_count)
+    {
+        assert(w->text_bar.min_glyph_render_count < w->text_bar.max_glyph_render_count);
+        max_w=2*theme->h_bar_text_offset + w->text_bar.max_glyph_render_count * theme->font.max_advance;
+        if(w->base.min_w>max_w)
+        {
+            w->base.min_w=max_w;
+            w->text_bar.recalculate_text_size=true;
+        }
+    }
 }
 
 static void text_bar_widget_min_h(overlay_theme * theme,widget * w)
@@ -358,7 +364,7 @@ static widget_appearence_function_set text_bar_appearence_functions=
 ///static provably isnt best name, or want to add another variant for when text references string that is modified externally
 widget * create_static_text_bar(char * text)
 {
-	widget * w=create_widget();
+	widget * w=create_widget(sizeof(widget_text_bar));
 
 	w->base.appearence_functions=&text_bar_appearence_functions;
 	w->base.behaviour_functions=&text_bar_behaviour_functions;
@@ -367,6 +373,7 @@ widget * create_static_text_bar(char * text)
 	///w->text_bar.data=NULL;
 
 	w->text_bar.min_glyph_render_count=0;
+	w->text_bar.max_glyph_render_count=0;
 
 	w->text_bar.free_text=true;
 	w->text_bar.allow_selection=false;
@@ -388,16 +395,14 @@ widget * create_static_text_bar(char * text)
 
 widget * create_dynamic_text_bar(int min_glyph_render_count,widget_text_alignment text_alignment,bool allow_selection)
 {
-	widget * w=create_widget();
+	widget * w=create_widget(sizeof(widget_text_bar));
 
 	w->base.appearence_functions=&text_bar_appearence_functions;
 	w->base.behaviour_functions=&text_bar_behaviour_functions;
 
-	///w->text_bar.set_text=set_text;
-	///w->text_bar.data=data;
-
 	assert(min_glyph_render_count);///ZERO GLYPH RENDER COUNT INVALID FOR DYNAMIC TEXT BARS
 	w->text_bar.min_glyph_render_count=min_glyph_render_count;
+	w->text_bar.max_glyph_render_count=0;
 
 	w->text_bar.free_text=false;
 	w->text_bar.allow_selection=allow_selection;
@@ -408,6 +413,7 @@ widget * create_dynamic_text_bar(int min_glyph_render_count,widget_text_alignmen
 	w->text_bar.text=NULL;
 
 	w->text_bar.visible_offset=0;
+	w->text_bar.max_visible_offset=0;
     w->text_bar.text_pixel_length=0;
 
     w->text_bar.selection_begin=NULL;
@@ -425,6 +431,7 @@ void text_bar_widget_set_text_pointer(widget * w,char * text_pointer)
 
     w->text_bar.free_text=false;
     w->text_bar.visible_offset=0;
+    w->text_bar.max_visible_offset=0;
     ///perhaps null isn't best, instead use just .text
     w->text_bar.selection_begin=w->text_bar.text;
     w->text_bar.selection_end=w->text_bar.text;
@@ -433,13 +440,24 @@ void text_bar_widget_set_text_pointer(widget * w,char * text_pointer)
 
 void text_bar_widget_set_text(widget * w,char * text_to_copy)
 {
-    if(w->text_bar.free_text)free(w->text_bar.text);
-
-    if(text_to_copy) w->text_bar.text=cvm_strdup(text_to_copy);
-    else w->text_bar.text=NULL;
+    if(text_to_copy)
+    {
+        if(w->text_bar.free_text)
+        {
+            w->text_bar.text=realloc(w->text_bar.text,sizeof(char)*(strlen(text_to_copy)+1));
+            strcpy(w->text_bar.text,text_to_copy);
+        }
+        else w->text_bar.text=cvm_strdup(text_to_copy);
+    }
+    else
+    {
+        if(w->text_bar.free_text)free(w->text_bar.free_text);
+        w->text_bar.text=NULL;
+    }
 
     w->text_bar.free_text=true;
     w->text_bar.visible_offset=0;
+    w->text_bar.max_visible_offset=0;
     ///perhaps null isn't best, instead use just .text
     w->text_bar.selection_begin=w->text_bar.text;
     w->text_bar.selection_end=w->text_bar.text;

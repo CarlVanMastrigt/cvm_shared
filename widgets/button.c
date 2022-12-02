@@ -105,7 +105,7 @@ static widget_behaviour_function_set button_behaviour_functions=
 
 widget * create_button(void * data,widget_function func,bool free_data)
 {
-    widget * w=create_widget();
+    widget * w=create_widget(sizeof(widget_button));
 
     w->base.behaviour_functions=&button_behaviour_functions;
 

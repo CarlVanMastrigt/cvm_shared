@@ -171,9 +171,9 @@ static widget_behaviour_function_set base_behaviour_functions =
     .wid_delete     =   base_widget_delete
 };
 
-widget * create_widget(void)
+widget * create_widget(size_t size)
 {
-    widget * w=malloc(sizeof(widget));
+    widget * w=malloc(size);
 
     w->base.status=WIDGET_ACTIVE;
 
@@ -250,7 +250,7 @@ void organise_menu_widget(widget * menu_widget,int screen_width,int screen_heigh
 
 widget * create_widget_menu(void)
 {
-    widget * w= create_container();
+    widget * w= create_container(sizeof(widget_container));///actually is just a pure container
     w->base.status|=WIDGET_IS_MENU;
     return w;
 }

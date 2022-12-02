@@ -277,7 +277,7 @@ static widget_appearence_function_set resize_constraint_appearence_functions=
 
 widget * create_resize_constraint(uint16_t alignment_data,bool maximizable)
 {
-    widget * w=create_widget();
+    widget * w=create_widget(sizeof(widget_resize_constraint));
 
     w->base.appearence_functions=&resize_constraint_appearence_functions;
     w->base.behaviour_functions=&resize_constraint_behaviour_functions;

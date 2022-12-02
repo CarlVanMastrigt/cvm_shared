@@ -39,9 +39,11 @@ typedef struct widget_text_bar
 	uint32_t recalculate_text_size:1;
 
 	int32_t visible_offset;///usually based on text_alignment, alternatively can be based on selection
+	int32_t max_visible_offset;///usually based on text_alignment, alternatively can be based on selection
     int32_t text_pixel_length;
 
-	int32_t min_glyph_render_count;
+	int32_t min_glyph_render_count;///should definitely make use of this (and/or max render count) in static text bar as well!
+	int32_t max_glyph_render_count;
 	///uint32_t max_strlen;needed if handling text internally (compositing internally, not sure this is desirable functionality though)
 	widget_text_alignment text_alignment;///when selection not active?
 }
