@@ -50,7 +50,7 @@ size_t cvm_mesh_get_vertex_data_size(uint16_t flags);
 typedef struct cvm_managed_mesh
 {
     cvm_vk_managed_buffer * mb;
-    char * filename;
+    char * filename;///could clear/free once loaded in retail
 
     union
     {
@@ -60,9 +60,10 @@ typedef struct cvm_managed_mesh
 
     uint16_t dynamic:1;
     ///stages of creation
-    uint16_t allocated:1;
-    uint16_t loaded:1;
+    uint16_t allocated:1;///REMOVE THIS
+    uint16_t loaded:1;///data was loaded to staging buffer in preparation for copy
     uint16_t ready:1;
+    uint16_t freeing:1;///backing memory was freed, wait on availability token
     uint16_t availability_token;///only becomes relevant after moving data to the GPU
 
     ///precalculate following for speed of access/use

@@ -110,7 +110,7 @@ typedef struct cvm_vk_swapchain_image_present_data
     uint64_t present_wait_value;
     uint64_t transfer_wait_value;///should move this to the transferchain when that becomes a thing
 
-    VkFence completion_fence;
+//    VkFence completion_fence;
 }
 cvm_vk_swapchain_image_present_data;
 
@@ -217,28 +217,34 @@ void cvm_vk_submit_graphics_work(cvm_vk_module_work_payload * payload,cvm_vk_pay
 void cvm_vk_submit_transfer_work(cvm_vk_module_work_payload * payload);
 
 ///misc data the rendering system needs from each module, as well as container for module's per frame rendering data, should be static var in module file
-typedef struct cvm_vk_module_work_sub_batch
+typedef struct cvm_vk_module_sub_batch
 {
     VkCommandPool graphics_pool;
     VkCommandBuffer * graphics_scbs;///secondary command buffers
+    uint32_t graphics_scb_count;
+    uint32_t graphics_scbs_used;
 
     ///should not need to query number of scbs allocated, max that ever tries to be used should match number allocated
 }
-cvm_vk_module_work_sub_batch;
+cvm_vk_module_sub_batch;
 
 typedef struct cvm_vk_module_batch
 {
-    cvm_vk_module_work_sub_batch main_sub_batch;///for use on same thread (main thread) as primary command buffers below
-    VkCommandBuffer graphics_pcb;///primary command buffer, allocated from base pool
+    cvm_vk_module_sub_batch * sub_batches;///for distribution to other threads
 
-    cvm_vk_module_work_sub_batch * sub_batches;
+    /// might consider removing the singular command buffer paradigm above entirely, allocate new command buffers as necessary (is this vaible)
+    VkCommandBuffer * graphics_pcbs;///primary command buffes, allocated from main_sub_batch pool
+    uint32_t graphics_pcb_count;
+    uint32_t graphics_pcbs_used;
+
+    uint32_t graphics_pcb_created;///error checking only, used to ensure all scb's were returned
+
     /// should have/use array of primary command buffers for each queue type w/ async being submitted in order w/ implicit preference for queue family
 
 
     VkCommandPool transfer_pool;/// cannot have transfers in secondary command buffer (scb's need renderpass/subpass) and they arent needed anyway, so have 1 per module batch
     ///all transfer commands actually generated from stored ops in managed buffer(s) and managed texture pool(s)
-    VkCommandBuffer high_priority_transfer_pcb;
-    VkCommandBuffer low_priority_transfer_pcb;
+    VkCommandBuffer transfer_pcb;///only for low priority uploads, high priority uploads should go in command buffer/queue that will use them
     /// should not need to ask module how many of these there are
     /// should use same/similar logic to distribute them that was used to create them
     /// effectively allocated is max, so can have variant number actually used in any given frame depending on workload
@@ -261,8 +267,6 @@ typedef struct cvm_vk_module_batch
     /// could/should add async compute, but it has same dependency problems as transfer unless using VK_SHARING_MODE_CONCURRENT (as mentioned above)
 
     /// also probably worth investigating whether per-frame resources are worth transferring to device local (double)buffer before using on the gpu
-
-    uint32_t in_flight:1;///used for error checking
 }
 cvm_vk_module_batch;
 
@@ -273,21 +277,20 @@ typedef struct cvm_vk_module_data
     uint32_t batch_count;///same as swapchain image count used to initialise this
     uint32_t batch_index;
 
-    uint32_t graphics_scb_count;
-    uint32_t sub_batch_count;///effectively max number of worker threads this module will use
+    uint32_t sub_batch_count;///effectively max number of threads this module will use, must have at least 1 (index 0 is the primary thread)
 
     ///need an array of fixed, recyclable primary command buffers here and a way to sequence them with the dynamic command buffers
 }
 cvm_vk_module_data;
 ///must be called after cvm_vk_initialise
-void cvm_vk_create_module_data(cvm_vk_module_data * module_data,uint32_t sub_batch_count,uint32_t graphics_scb_count);///sub batches are basically the number of worker threads
-void cvm_vk_resize_module_graphics_data(cvm_vk_module_data * module_data);///this must be called in critical section
+void cvm_vk_create_module_data(cvm_vk_module_data * module_data,uint32_t sub_batch_count);///sub batches are basically the number of threads rendering will use
+void cvm_vk_resize_module_graphics_data(cvm_vk_module_data * module_data);///this must be called in critical section, rename to resize_module_data
 void cvm_vk_destroy_module_data(cvm_vk_module_data * module_data);
 
 cvm_vk_module_batch * cvm_vk_get_module_batch(cvm_vk_module_data * module_data,uint32_t * swapchain_image_index);///have this return bool? (VkCommandBuffer through ref.)
 
-VkCommandBuffer cvm_vk_module_batch_start_secondary_command_buffer(cvm_vk_module_batch * mb,uint32_t sub_batch_index,uint32_t scb_index,VkFramebuffer framebuffer,VkRenderPass render_pass,uint32_t sub_pass);
-#define CVM_VK_MAIN_SUB_BATCH_INDEX 0xFFFFFFFF
+VkCommandBuffer cvm_vk_get_batch_secondary_command_buffer(cvm_vk_module_sub_batch * msb,VkFramebuffer framebuffer,VkRenderPass render_pass,uint32_t sub_pass);
+VkCommandBuffer cvm_vk_get_batch_primary_command_buffer(cvm_vk_module_batch * mb);
 
 
 static inline bool cvm_vk_availability_token_check(uint16_t token_counter,uint16_t current_counter,uint16_t delay)

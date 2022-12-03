@@ -77,10 +77,10 @@ void cvm_vk_managed_buffer_create(cvm_vk_managed_buffer * mb,uint32_t buffer_siz
     mb->copy_acquire_barriers.count=0;
 
     mb->copy_update_counter=0;
-    mb->copy_delay=mb->mapping==NULL;
+    mb->copy_delay=(mb->mapping==NULL);///this shit needs serious review
 
+    //mb->copy_src_queue_family=cvm_vk_get_transfer_queue_family();
     mb->copy_dst_queue_family=cvm_vk_get_graphics_queue_family();///will have to add a way to use compute here
-    mb->copy_dst_queue_family=cvm_vk_get_transfer_queue_family();
 }
 
 void cvm_vk_managed_buffer_destroy(cvm_vk_managed_buffer * mb)
@@ -477,6 +477,7 @@ static inline void * stage_copy_action(cvm_vk_managed_buffer * mb,uint64_t offse
     #warning this probably doesnt work... needs another look (i believe the image variant does work)
     ///will probably need src and dst component swapped in pass-back variant
     if(mb->copy_release_barriers.count==mb->copy_release_barriers.space)mb->copy_release_barriers.barriers=realloc(mb->copy_release_barriers.barriers,sizeof(VkBufferMemoryBarrier2)*(mb->copy_release_barriers.space*=2));
+
     mb->copy_release_barriers.barriers[mb->copy_release_barriers.count++]=(VkBufferMemoryBarrier2)
     {
         .sType=VK_STRUCTURE_TYPE_BUFFER_MEMORY_BARRIER_2,
@@ -518,7 +519,32 @@ void * cvm_vk_managed_buffer_get_static_allocation_mapping(cvm_vk_managed_buffer
     return stage_copy_action(mb,offset,size,stage_mask,access_mask);
 }
 
-void cvm_vk_managed_buffer_submit_all_pending_copy_actions(cvm_vk_managed_buffer * mb,VkCommandBuffer transfer_cb,VkCommandBuffer graphics_cb)
+
+void cvm_vk_managed_buffer_submit_all_acquire_barriers(cvm_vk_managed_buffer * mb,VkCommandBuffer graphics_cb)
+{
+    if(mb->copy_acquire_barriers.count)
+    {
+        assert(!mb->mapping);
+        VkDependencyInfo copy_aquire_dependencies=
+        {
+            .sType=VK_STRUCTURE_TYPE_DEPENDENCY_INFO,
+            .pNext=NULL,
+            .dependencyFlags=0,
+            .memoryBarrierCount=0,
+            .pMemoryBarriers=NULL,
+            .bufferMemoryBarrierCount=mb->copy_acquire_barriers.count,
+            .pBufferMemoryBarriers=mb->copy_acquire_barriers.barriers,
+            .imageMemoryBarrierCount=0,
+            .pImageMemoryBarriers=NULL
+        };
+        vkCmdPipelineBarrier2(graphics_cb,&copy_aquire_dependencies);
+
+        ///rest now that we're done with it
+        mb->copy_acquire_barriers.count=0;
+    }
+}
+
+void cvm_vk_managed_buffer_submit_all_pending_copy_actions(cvm_vk_managed_buffer * mb,VkCommandBuffer transfer_cb)
 {
     uint_fast32_t lock;
     cvm_vk_managed_buffer_barrier_list tmp;
@@ -540,30 +566,6 @@ void cvm_vk_managed_buffer_submit_all_pending_copy_actions(cvm_vk_managed_buffer
     }
     else
     {
-        ///this design isnt enough if using delay more than 1, but this should do for now
-
-        if(mb->copy_acquire_barriers.count)
-        {
-
-            VkDependencyInfo copy_aquire_dependencies=
-            {
-                .sType=VK_STRUCTURE_TYPE_DEPENDENCY_INFO,
-                .pNext=NULL,
-                .dependencyFlags=0,
-                .memoryBarrierCount=0,
-                .pMemoryBarriers=NULL,
-                .bufferMemoryBarrierCount=mb->copy_acquire_barriers.count,
-                .pBufferMemoryBarriers=mb->copy_acquire_barriers.barriers,
-                .imageMemoryBarrierCount=0,
-                .pImageMemoryBarriers=NULL
-            };
-            //puts("BARRIER");
-            vkCmdPipelineBarrier2(graphics_cb,&copy_aquire_dependencies);
-
-            ///rest now that we're done with it
-            mb->copy_acquire_barriers.count=0;
-        }
-
         if(mb->pending_copy_count) /// mb->pending_copy_count should be the same as mb->copy_release_barriers.count
         {
             ///multithreading consideration shouldnt be necessary as this should only ever be called from the main thread relevant to this resource while no worker threads are operating on the resource
@@ -585,7 +587,7 @@ void cvm_vk_managed_buffer_submit_all_pending_copy_actions(cvm_vk_managed_buffer
                     .imageMemoryBarrierCount=0,
                     .pImageMemoryBarriers=NULL
                 };
-                vkCmdPipelineBarrier2(graphics_cb,&copy_release_dependencies);
+                vkCmdPipelineBarrier2(transfer_cb,&copy_release_dependencies);
             }
 
             tmp=mb->copy_acquire_barriers;
