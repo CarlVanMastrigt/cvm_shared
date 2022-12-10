@@ -672,7 +672,7 @@ void overlay_render_frame(int screen_w,int screen_h,widget * menu_widget)
     cvm_vk_module_batch * batch;
     uint32_t swapchain_image_index;
 
-    VkCommandBuffer cb;
+    cvm_vk_module_work_payload payload;
 
     cvm_overlay_element_render_buffer element_render_buffer;
     VkDeviceSize uniform_offset,vertex_offset;
@@ -693,11 +693,9 @@ void overlay_render_frame(int screen_w,int screen_h,widget * menu_widget)
 
     if(batch)
     {
-        cb=cvm_vk_get_batch_primary_command_buffer(batch);
-//        overlay_upload_command_buffer=batch->graphics_work;
+        cvm_vk_init_batch_primary_payload(batch,&payload);
 
         cvm_vk_staging_buffer_begin(&overlay_staging_buffer);///build barriers into begin/end paradigm maybe???
-
         cvm_vk_transient_buffer_begin(&overlay_transient_buffer,swapchain_image_index);
         #warning need to use the appropriate queue for all following transfer ops
         ///     ^ possibly detect when they're different and use gfx directly to avoid double submission?
@@ -713,8 +711,8 @@ void overlay_render_frame(int screen_w,int screen_h,widget * menu_widget)
 
         /// upload all staged resources needed by this frame
         ///if ever using a dedicated transfer queue (probably don't want tbh) change command buffers in these
-        cvm_vk_image_atlas_submit_all_pending_copy_actions(&overlay_transparent_image_atlas,cb);
-        cvm_vk_image_atlas_submit_all_pending_copy_actions(&overlay_colour_image_atlas,cb);
+        cvm_vk_image_atlas_submit_all_pending_copy_actions(&overlay_transparent_image_atlas,payload.command_buffer);
+        cvm_vk_image_atlas_submit_all_pending_copy_actions(&overlay_colour_image_atlas,payload.command_buffer);
 
         ///end of transfer
 
@@ -729,11 +727,11 @@ void overlay_render_frame(int screen_w,int screen_h,widget * menu_widget)
 
         float screen_dimensions[4]={2.0/((float)screen_w),2.0/((float)screen_h),(float)screen_w,(float)screen_h};
 
-        vkCmdPushConstants(cb,overlay_pipeline_layout,VK_SHADER_STAGE_VERTEX_BIT|VK_SHADER_STAGE_FRAGMENT_BIT,0,4*sizeof(float),screen_dimensions);
+        vkCmdPushConstants(payload.command_buffer,overlay_pipeline_layout,VK_SHADER_STAGE_VERTEX_BIT|VK_SHADER_STAGE_FRAGMENT_BIT,0,4*sizeof(float),screen_dimensions);
 
-        vkCmdBindDescriptorSets(cb,VK_PIPELINE_BIND_POINT_GRAPHICS,overlay_pipeline_layout,0,1,overlay_descriptor_sets+swapchain_image_index,0,NULL);
+        vkCmdBindDescriptorSets(payload.command_buffer,VK_PIPELINE_BIND_POINT_GRAPHICS,overlay_pipeline_layout,0,1,overlay_descriptor_sets+swapchain_image_index,0,NULL);
 
-        vkCmdBindDescriptorSets(cb,VK_PIPELINE_BIND_POINT_GRAPHICS,overlay_pipeline_layout,1,1,&overlay_consistent_descriptor_set,0,NULL);
+        vkCmdBindDescriptorSets(payload.command_buffer,VK_PIPELINE_BIND_POINT_GRAPHICS,overlay_pipeline_layout,1,1,&overlay_consistent_descriptor_set,0,NULL);
 
         VkRenderPassBeginInfo render_pass_begin_info=(VkRenderPassBeginInfo)
         {
@@ -746,27 +744,20 @@ void overlay_render_frame(int screen_w,int screen_h,widget * menu_widget)
             .pClearValues=NULL
         };
 
-        vkCmdBeginRenderPass(cb,&render_pass_begin_info,VK_SUBPASS_CONTENTS_INLINE);///================
+        vkCmdBeginRenderPass(payload.command_buffer,&render_pass_begin_info,VK_SUBPASS_CONTENTS_INLINE);///================
 
-        vkCmdBindPipeline(cb,VK_PIPELINE_BIND_POINT_GRAPHICS,overlay_pipeline);
+        vkCmdBindPipeline(payload.command_buffer,VK_PIPELINE_BIND_POINT_GRAPHICS,overlay_pipeline);
 
-        cvm_vk_transient_buffer_bind_as_vertex(cb,&overlay_transient_buffer,0,vertex_offset);
+        cvm_vk_transient_buffer_bind_as_vertex(payload.command_buffer,&overlay_transient_buffer,0,vertex_offset);
 
-        vkCmdDraw(cb,4,element_render_buffer.count,0,0);
+        vkCmdDraw(payload.command_buffer,4,element_render_buffer.count,0,0);
 
-        vkCmdEndRenderPass(cb);///================
+        vkCmdEndRenderPass(payload.command_buffer);///================
 
         cvm_vk_staging_buffer_end(&overlay_staging_buffer,swapchain_image_index);
         cvm_vk_transient_buffer_end(&overlay_transient_buffer);
 
-
-        cvm_vk_module_work_payload pl;
-
-        pl.wait_count=0;
-        pl.signal_count=0;
-
-        pl.command_buffer=cb;
-        cvm_vk_submit_graphics_work(&pl,CVM_VK_PAYLOAD_LAST_SWAPCHAIN_USE);
+        cvm_vk_submit_graphics_work(&payload,CVM_VK_PAYLOAD_LAST_SWAPCHAIN_USE);
     }
 }
 

@@ -20,10 +20,13 @@ along with cvm_shared.  If not, see <https://www.gnu.org/licenses/>.
 #include "cvm_shared.h"
 
 
-void cvm_vk_managed_buffer_create(cvm_vk_managed_buffer * mb,uint32_t buffer_size,uint32_t min_size_factor,uint32_t max_size_factor,VkBufferUsageFlags usage,bool multithreaded,bool host_visible)
+void cvm_vk_managed_buffer_create(cvm_vk_managed_buffer * mb,uint32_t buffer_size,uint32_t min_size_factor,VkBufferUsageFlags usage,bool multithreaded,bool host_visible)
 {
     uint32_t i;
-    buffer_size=(((buffer_size-1) >> min_size_factor)+1) << min_size_factor;///round to multiple (complier warns about what i want as needing braces, lol)
+
+    usage|=VK_BUFFER_USAGE_TRANSFER_DST_BIT;///for when its necessary to copy into the buffer (device only memory)
+
+    buffer_size=(((buffer_size-1) >> min_size_factor)+1) << min_size_factor;///round to multiple of 1<<min_size_factor
     mb->total_space=buffer_size;
     mb->static_offset=buffer_size;
     mb->dynamic_offset=0;
@@ -44,12 +47,10 @@ void cvm_vk_managed_buffer_create(cvm_vk_managed_buffer * mb,uint32_t buffer_siz
     mb->last_used_allocation=NULL;///rightmost doesn't exist as it hasn't been allocated
 
 
-    mb->num_dynamic_allocation_sizes=max_size_factor-min_size_factor;
-    mb->available_dynamic_allocations=malloc(mb->num_dynamic_allocation_sizes*sizeof(cvm_vk_available_dynamic_allocation_heap));
-    for(i=0;i<mb->num_dynamic_allocation_sizes;i++)
+    for(i=0;i<32;i++)
     {
-        mb->available_dynamic_allocations[i].heap=malloc(16*sizeof(cvm_vk_dynamic_buffer_allocation*));
-        mb->available_dynamic_allocations[i].space=16;
+        mb->available_dynamic_allocations[i].heap=malloc(sizeof(cvm_vk_dynamic_buffer_allocation*));
+        mb->available_dynamic_allocations[i].space=1;
         mb->available_dynamic_allocations[i].count=0;
     }
     mb->available_dynamic_allocation_bitmask=0;
@@ -92,8 +93,7 @@ void cvm_vk_managed_buffer_destroy(cvm_vk_managed_buffer * mb)
     ///all dynamic allocations should be freed at this point
     assert(!mb->last_used_allocation);///ATTEMPTED TO DESTROY A BUFFER WITH ACTIVE ELEMENTS
 
-    for(i=0;i<mb->num_dynamic_allocation_sizes;i++)free(mb->available_dynamic_allocations[i].heap);
-    free(mb->available_dynamic_allocations);
+    for(i=0;i<32;i++)free(mb->available_dynamic_allocations[i].heap);
 
     first=last=NULL;
     ///get all base allocations in their own linked list, discarding all others
@@ -132,13 +132,14 @@ cvm_vk_dynamic_buffer_allocation * cvm_vk_managed_buffer_acquire_dynamic_allocat
 
     size_factor-=mb->base_dynamic_allocation_size_factor;
 
-    if(size_factor>=mb->num_dynamic_allocation_sizes)return NULL;
+    assert(size_factor<32);
+    if(size_factor>=32)return NULL;
 
     if(mb->multithreaded)do lock=atomic_load(&mb->acquire_spinlock);
     while(lock!=0 || !atomic_compare_exchange_weak(&mb->acquire_spinlock,&lock,1));
 
     /// seeing as this function must be as fast and light as possible, we should track unused allocation count to determine if there are enough unused allocations left (with allowance for inaccuracy)
-    if(mb->unused_allocation_count < mb->num_dynamic_allocation_sizes)
+    if(mb->unused_allocation_count < 32)
     {
         p=malloc(CVM_VK_RESERVED_DYNAMIC_BUFFER_ALLOCATION_COUNT*sizeof(cvm_vk_dynamic_buffer_allocation));
 
@@ -339,7 +340,7 @@ void cvm_vk_managed_buffer_relinquish_dynamic_allocation(cvm_vk_managed_buffer *
     }
     else /// the difficult one...
     {
-        while(a->size_factor+1u < mb->num_dynamic_allocation_sizes)/// combine allocations in aligned way
+        while(a->size_factor+1u < 32)/// combine allocations in aligned way
         {
             ///neighbouring allocation for this alignment
             n = a->offset&1<<a->size_factor ? a->prev : a->next;/// will never be NULL (if a was last other branch would be taken, if first (offset is 0) n will always be set to next)
@@ -551,6 +552,7 @@ void cvm_vk_managed_buffer_submit_all_pending_copy_actions(cvm_vk_managed_buffer
 
     mb->copy_update_counter++;
 
+    #warning need to check VK_MEMORY_PROPERTY_HOST_COHERENT to see if flushes are actually necessary
     if(mb->mapping)/// is UMA system, no staging copies necessary
     {
         VkMappedMemoryRange flush_range=(VkMappedMemoryRange)
@@ -741,6 +743,8 @@ void cvm_vk_staging_buffer_end(cvm_vk_staging_buffer * sb,uint32_t frame_index)
 
     if(offset < start)///if the buffer wrapped between begin and end
     {
+        #warning need to check VK_MEMORY_PROPERTY_HOST_COHERENT to see if flushes are actually necessary
+
         VkMappedMemoryRange flush_range=(VkMappedMemoryRange)
         {
             .sType=VK_STRUCTURE_TYPE_MAPPED_MEMORY_RANGE,
@@ -754,8 +758,10 @@ void cvm_vk_staging_buffer_end(cvm_vk_staging_buffer * sb,uint32_t frame_index)
         start=0;
     }
 
-    if(start<offset)///if anything was written that wasnt handled by the previous branch
+    if(start<offset)///if anything was written that wasn't handled by the previous branch (i.e. we've looped around to the start o the staging buffer this frame)
     {
+        #warning need to check VK_MEMORY_PROPERTY_HOST_COHERENT to see if flushes are actually necessary
+
         VkMappedMemoryRange flush_range=(VkMappedMemoryRange)
         {
             .sType=VK_STRUCTURE_TYPE_MAPPED_MEMORY_RANGE,
@@ -937,6 +943,8 @@ void cvm_vk_transient_buffer_end(cvm_vk_transient_buffer * tb)
 
     if(acquired_space)
     {
+        #warning need to check VK_MEMORY_PROPERTY_HOST_COHERENT to see if flushes are actually necessary
+
         acquired_space=(((acquired_space-1)>>tb->alignment_size_factor)+1)<<tb->alignment_size_factor;
 
         VkMappedMemoryRange flush_range=(VkMappedMemoryRange)

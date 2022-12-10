@@ -193,26 +193,29 @@ typedef enum
 }
 cvm_vk_payload_flags;
 
+#define CVM_VK_PAYLOAD_MAX_WAITS 8
+#define CVM_VK_PAYLOAD_MAX_SIGNALS 4
+
 typedef struct cvm_vk_module_work_payload
 {
-    const cvm_vk_timeline_semaphore * waits;
-    const VkPipelineStageFlags2 * wait_stages;
+    cvm_vk_timeline_semaphore waits[CVM_VK_PAYLOAD_MAX_WAITS];
+    VkPipelineStageFlags2 wait_stages[CVM_VK_PAYLOAD_MAX_WAITS];
+    uint32_t wait_count;
 
     ///consider making signal singular... signalling pipeline stages out of order has the potential for bad results, and allowing different stages has very little benefit
     /// output/results, used as input to subsequent commands, will all have the same semaphore, just different values
-    cvm_vk_timeline_semaphore * signals;
-    /// stages at which signals are generated for
-    const VkPipelineStageFlags2 * signal_stages;
+    cvm_vk_timeline_semaphore signals[CVM_VK_PAYLOAD_MAX_SIGNALS];
+    VkPipelineStageFlags2 signal_stages[CVM_VK_PAYLOAD_MAX_SIGNALS];
+    uint32_t signal_count;
 
     VkCommandBuffer command_buffer;
 
-    uint32_t wait_count;
-    uint32_t signal_count;
 
     ///presently only support generating 1 signal and submitting 1 command buffer, can easily change should there be justification to do so
 }
 cvm_vk_module_work_payload;
 
+///have these return semaphores (which will be set upon their completion)
 void cvm_vk_submit_graphics_work(cvm_vk_module_work_payload * payload,cvm_vk_payload_flags flags);
 void cvm_vk_submit_transfer_work(cvm_vk_module_work_payload * payload);
 
@@ -290,7 +293,7 @@ void cvm_vk_destroy_module_data(cvm_vk_module_data * module_data);
 cvm_vk_module_batch * cvm_vk_get_module_batch(cvm_vk_module_data * module_data,uint32_t * swapchain_image_index);///have this return bool? (VkCommandBuffer through ref.)
 
 VkCommandBuffer cvm_vk_get_batch_secondary_command_buffer(cvm_vk_module_sub_batch * msb,VkFramebuffer framebuffer,VkRenderPass render_pass,uint32_t sub_pass);
-VkCommandBuffer cvm_vk_get_batch_primary_command_buffer(cvm_vk_module_batch * mb);
+void cvm_vk_init_batch_primary_payload(cvm_vk_module_batch * mb,cvm_vk_module_work_payload * payload);
 
 
 static inline bool cvm_vk_availability_token_check(uint16_t token_counter,uint16_t current_counter,uint16_t delay)

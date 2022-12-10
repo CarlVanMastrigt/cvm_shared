@@ -1752,15 +1752,14 @@ cvm_vk_module_batch * cvm_vk_get_module_batch(cvm_vk_module_data * module_data,u
     return NULL;
 }
 
-VkCommandBuffer cvm_vk_get_batch_primary_command_buffer(cvm_vk_module_batch * mb)
+void cvm_vk_init_batch_primary_payload(cvm_vk_module_batch * mb,cvm_vk_module_work_payload * payload)
 {
     static const uint32_t pcb_allocation_count=4;
-
     uint32_t index;
 
     index=mb->graphics_pcbs_used++;
 
-    if(index==mb->graphics_pcb_count)
+    if(index==mb->graphics_pcb_count)///out of command buffers (or not yet init)
     {
         mb->graphics_pcbs=realloc(mb->graphics_pcbs,sizeof(VkCommandBuffer)*(mb->graphics_pcb_count+pcb_allocation_count));
 
@@ -1778,7 +1777,9 @@ VkCommandBuffer cvm_vk_get_batch_primary_command_buffer(cvm_vk_module_batch * mb
         mb->graphics_pcb_count+=pcb_allocation_count;
     }
 
-    VkCommandBuffer cb=mb->graphics_pcbs[index];
+    payload->command_buffer=mb->graphics_pcbs[index];
+    payload->signal_count=0;
+    payload->wait_count=0;
 
     VkCommandBufferBeginInfo command_buffer_begin_info=(VkCommandBufferBeginInfo)
     {
@@ -1788,9 +1789,7 @@ VkCommandBuffer cvm_vk_get_batch_primary_command_buffer(cvm_vk_module_batch * mb
         .pInheritanceInfo=NULL
     };
 
-    CVM_VK_CHECK(vkBeginCommandBuffer(cb,&command_buffer_begin_info));
-
-    return cb;
+    CVM_VK_CHECK(vkBeginCommandBuffer(payload->command_buffer,&command_buffer_begin_info));
 }
 
 uint32_t cvm_vk_get_transfer_queue_family(void)
