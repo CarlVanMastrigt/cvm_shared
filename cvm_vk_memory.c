@@ -48,7 +48,7 @@ void cvm_vk_managed_buffer_create(cvm_vk_managed_buffer * mb,uint32_t buffer_siz
 
     for(i=0;i<32;i++)
     {
-        mb->available_temporary_allocations[i].heap=malloc(sizeof(cvm_vk_temporary_buffer_allocation_index)*16);
+        mb->available_temporary_allocations[i].heap=malloc(sizeof(uint32_t)*16);
         mb->available_temporary_allocations[i].space=16;
         mb->available_temporary_allocations[i].count=0;
     }
@@ -65,17 +65,11 @@ void cvm_vk_managed_buffer_create(cvm_vk_managed_buffer * mb,uint32_t buffer_siz
 
     #warning should have a runtime method to check if following is necessary, will be a decent help in setting up module buffer sizes
     mb->staging_buffer=NULL;
-    mb->pending_copy_actions=malloc(sizeof(VkBufferCopy)*16);
-    mb->pending_copy_space=16;
-    mb->pending_copy_count=0;
 
-    mb->copy_release_barriers.barriers=malloc(sizeof(VkBufferMemoryBarrier2)*16);
-    mb->copy_release_barriers.space=16;
-    mb->copy_release_barriers.count=0;
+    cvm_vk_buffer_copy_list_ini(&mb->pending_copies);
 
-    mb->copy_acquire_barriers.barriers=malloc(sizeof(VkBufferMemoryBarrier2)*16);
-    mb->copy_acquire_barriers.space=16;
-    mb->copy_acquire_barriers.count=0;
+    cvm_vk_buffer_barrier_list_ini(&mb->copy_release_barriers);
+    cvm_vk_buffer_barrier_list_ini(&mb->copy_acquire_barriers);
 
     mb->copy_update_counter=0;
     mb->copy_delay=(mb->mapping==NULL);///this shit needs serious review
@@ -96,17 +90,17 @@ void cvm_vk_managed_buffer_destroy(cvm_vk_managed_buffer * mb)
 
     free(mb->temporary_allocation_data);
 
-    free(mb->pending_copy_actions);
+    cvm_vk_buffer_copy_list_del(&mb->pending_copies);
 
-    free(mb->copy_release_barriers.barriers);
-    free(mb->copy_acquire_barriers.barriers);
+    cvm_vk_buffer_barrier_list_del(&mb->copy_release_barriers);
+    cvm_vk_buffer_barrier_list_del(&mb->copy_acquire_barriers);
 }
 
-bool cvm_vk_managed_buffer_acquire_temporary_allocation(cvm_vk_managed_buffer * mb,uint64_t size,cvm_vk_temporary_buffer_allocation_index * allocation_index,uint64_t * allocation_offset)
+bool cvm_vk_managed_buffer_acquire_temporary_allocation(cvm_vk_managed_buffer * mb,uint64_t size,uint32_t * allocation_index,uint64_t * allocation_offset)
 {
     uint32_t i,offset,size_bitmask,up,down,end,size_factor,available_bitmask,additional_allocations;///up down current are for binary heap management
-    cvm_vk_temporary_buffer_allocation_index *heap;
-    cvm_vk_temporary_buffer_allocation_index prev_index,next_index;
+    uint32_t *heap;
+    uint32_t prev_index,next_index;
     cvm_vk_temporary_buffer_allocation_data *allocations,*prev_data,*next_data;
     uint_fast32_t lock;
 
@@ -130,7 +124,7 @@ bool cvm_vk_managed_buffer_acquire_temporary_allocation(cvm_vk_managed_buffer * 
         additional_allocations=mb->temporary_allocation_data_space;
         additional_allocations=(additional_allocations&~(additional_allocations>>1 | additional_allocations>>2))>>2;///additional quarter of current size rounded down to power of 2
         assert(additional_allocations>=32);
-        assert((additional_allocations&additional_allocations-1)==0);
+        assert(!(additional_allocations&(additional_allocations-1)));
 
         mb->temporary_allocation_data = allocations = realloc(mb->temporary_allocation_data,sizeof(cvm_vk_temporary_buffer_allocation_data)*(mb->temporary_allocation_data_space+additional_allocations));
 
@@ -246,7 +240,7 @@ bool cvm_vk_managed_buffer_acquire_temporary_allocation(cvm_vk_managed_buffer * 
 
             if(next_data->heap_index==mb->available_temporary_allocations[i].space)
             {
-                mb->available_temporary_allocations[i].heap=realloc(mb->available_temporary_allocations[i].heap,sizeof(cvm_vk_temporary_buffer_allocation_index)*(mb->available_temporary_allocations[i].space+=16));
+                mb->available_temporary_allocations[i].heap=realloc(mb->available_temporary_allocations[i].heap,sizeof(uint32_t)*(mb->available_temporary_allocations[i].space+=16));
             }
             mb->available_temporary_allocations[i].heap[next_data->heap_index]=next_index;
 
@@ -281,11 +275,11 @@ bool cvm_vk_managed_buffer_acquire_temporary_allocation(cvm_vk_managed_buffer * 
     return true;
 }
 
-void cvm_vk_managed_buffer_release_temporary_allocation(cvm_vk_managed_buffer * mb,cvm_vk_temporary_buffer_allocation_index allocation_index)
+void cvm_vk_managed_buffer_release_temporary_allocation(cvm_vk_managed_buffer * mb,uint32_t allocation_index)
 {
     uint32_t up,down,end,size_factor,offset;
-    cvm_vk_temporary_buffer_allocation_index * heap;
-    cvm_vk_temporary_buffer_allocation_index neighbour_index;///represents neighbouring/"buddy" allocation
+    uint32_t * heap;
+    uint32_t neighbour_index;///represents neighbouring/"buddy" allocation
     cvm_vk_temporary_buffer_allocation_data * allocations;
     cvm_vk_temporary_buffer_allocation_data *allocation_data,*neighbour_data;
     uint_fast32_t lock;
@@ -408,7 +402,7 @@ void cvm_vk_managed_buffer_release_temporary_allocation(cvm_vk_managed_buffer * 
         heap=mb->available_temporary_allocations[size_factor].heap;
         if(down==mb->available_temporary_allocations[size_factor].space)
         {
-            heap=mb->available_temporary_allocations[size_factor].heap=realloc(heap,sizeof(cvm_vk_temporary_buffer_allocation_index)*(mb->available_temporary_allocations[size_factor].space+=16));
+            heap=mb->available_temporary_allocations[size_factor].heap=realloc(heap,sizeof(uint32_t)*(mb->available_temporary_allocations[size_factor].space+=16));
         }
 
         while(down && offset < allocations[heap[(up=(down-1)>>1)]].offset)
@@ -475,20 +469,14 @@ static inline void * stage_copy_action(cvm_vk_managed_buffer * mb,uint64_t offse
     if(mb->multithreaded)do lock=atomic_load(&mb->copy_spinlock);
     while(lock!=0 || !atomic_compare_exchange_weak(&mb->copy_spinlock,&lock,1));
 
-
-    if(mb->pending_copy_count==mb->pending_copy_space)mb->pending_copy_actions=realloc(mb->pending_copy_actions,sizeof(VkBufferCopy)*(mb->pending_copy_space*=2));
-    mb->pending_copy_actions[mb->pending_copy_count++]=(VkBufferCopy)
+    *cvm_vk_buffer_copy_list_new(&mb->pending_copies)=(VkBufferCopy)
     {
         .srcOffset=staging_offset,
         .dstOffset=offset,
         .size=size
     };
 
-    #warning this probably doesnt work... needs another look (i believe the image variant does work)
-    ///will probably need src and dst component swapped in pass-back variant
-    if(mb->copy_release_barriers.count==mb->copy_release_barriers.space)mb->copy_release_barriers.barriers=realloc(mb->copy_release_barriers.barriers,sizeof(VkBufferMemoryBarrier2)*(mb->copy_release_barriers.space*=2));
-
-    mb->copy_release_barriers.barriers[mb->copy_release_barriers.count++]=(VkBufferMemoryBarrier2)
+    *cvm_vk_buffer_barrier_list_new(&mb->copy_release_barriers)=(VkBufferMemoryBarrier2)
     {
         .sType=VK_STRUCTURE_TYPE_BUFFER_MEMORY_BARRIER_2,
         .pNext=NULL,
@@ -508,18 +496,6 @@ static inline void * stage_copy_action(cvm_vk_managed_buffer * mb,uint64_t offse
     return ptr;
 }
 
-//void * cvm_vk_managed_buffer_get_temporary_allocation_mapping(cvm_vk_managed_buffer * mb,cvm_vk_dynamic_buffer_allocation * allocation,uint64_t size,VkPipelineStageFlags2 stage_mask,VkAccessFlags2 access_mask,uint16_t * availability_token)
-//{
-//    *availability_token=mb->copy_update_counter;///could technically go after the early exit as mapped buffers (so far) don't need to be transferred
-//
-//    uint64_t offset=allocation->offset<<mb->base_temporary_allocation_size_factor;
-//    if(mb->mapping) return mb->mapping+offset;///on UMA can access memory directly!
-//
-//    if(!size) size=1<<(allocation->size_factor+mb->base_temporary_allocation_size_factor);///if size not specified use whole region
-//
-//    return stage_copy_action(mb,offset,size,stage_mask,access_mask);
-//}
-
 void * cvm_vk_managed_buffer_get_permanent_allocation_mapping(cvm_vk_managed_buffer * mb,uint64_t offset,uint64_t size,VkPipelineStageFlags2 stage_mask,VkAccessFlags2 access_mask,uint16_t * availability_token)
 {
     *availability_token=mb->copy_update_counter;///could technically go after the early exit as mapped buffers (so far) don't need to be transferre
@@ -529,7 +505,6 @@ void * cvm_vk_managed_buffer_get_permanent_allocation_mapping(cvm_vk_managed_buf
     return stage_copy_action(mb,offset,size,stage_mask,access_mask);
 }
 
-#warning temporary holdover, remove this shit
 void * cvm_vk_managed_buffer_get_temporary_allocation_mapping(cvm_vk_managed_buffer * mb,uint64_t offset,uint64_t size,VkPipelineStageFlags2 stage_mask,VkAccessFlags2 access_mask,uint16_t * availability_token)
 {
     *availability_token=mb->copy_update_counter;///could technically go after the early exit as mapped buffers (so far) don't need to be transferre
@@ -553,7 +528,7 @@ void cvm_vk_managed_buffer_submit_all_acquire_barriers(cvm_vk_managed_buffer * m
             .memoryBarrierCount=0,
             .pMemoryBarriers=NULL,
             .bufferMemoryBarrierCount=mb->copy_acquire_barriers.count,
-            .pBufferMemoryBarriers=mb->copy_acquire_barriers.barriers,
+            .pBufferMemoryBarriers=mb->copy_acquire_barriers.list,
             .imageMemoryBarrierCount=0,
             .pImageMemoryBarriers=NULL
         };
@@ -567,7 +542,7 @@ void cvm_vk_managed_buffer_submit_all_acquire_barriers(cvm_vk_managed_buffer * m
 void cvm_vk_managed_buffer_submit_all_pending_copy_actions(cvm_vk_managed_buffer * mb,VkCommandBuffer transfer_cb)
 {
     uint_fast32_t lock;
-    cvm_vk_managed_buffer_barrier_list tmp;
+    cvm_vk_buffer_barrier_list tmp;
 
     mb->copy_update_counter++;
 
@@ -587,12 +562,12 @@ void cvm_vk_managed_buffer_submit_all_pending_copy_actions(cvm_vk_managed_buffer
     }
     else
     {
-        if(mb->pending_copy_count) /// mb->pending_copy_count should be the same as mb->copy_release_barriers.count
+        if(mb->pending_copies.count)
         {
             ///multithreading consideration shouldnt be necessary as this should only ever be called from the main thread relevant to this resource while no worker threads are operating on the resource
 
-            vkCmdCopyBuffer(transfer_cb,mb->staging_buffer->buffer,mb->buffer,mb->pending_copy_count,mb->pending_copy_actions);
-            mb->pending_copy_count=0;
+            vkCmdCopyBuffer(transfer_cb,mb->staging_buffer->buffer,mb->buffer,mb->pending_copies.count,mb->pending_copies.list);
+            mb->pending_copies.count=0;
 
             if(mb->copy_src_queue_family!=mb->copy_dst_queue_family)///first barrier is only needed when QFOT is necessary
             {
@@ -604,7 +579,7 @@ void cvm_vk_managed_buffer_submit_all_pending_copy_actions(cvm_vk_managed_buffer
                     .memoryBarrierCount=0,
                     .pMemoryBarriers=NULL,
                     .bufferMemoryBarrierCount=mb->copy_release_barriers.count,
-                    .pBufferMemoryBarriers=mb->copy_release_barriers.barriers,
+                    .pBufferMemoryBarriers=mb->copy_release_barriers.list,
                     .imageMemoryBarrierCount=0,
                     .pImageMemoryBarriers=NULL
                 };
@@ -984,7 +959,7 @@ void cvm_vk_transient_buffer_end(cvm_vk_transient_buffer * tb)
 void * cvm_vk_transient_buffer_get_allocation(cvm_vk_transient_buffer * tb,uint32_t allocation_size,uint32_t alignment,VkDeviceSize * acquired_offset)
 {
     VkDeviceSize offset;
-    uint_fast32_t old_offset,new_offset,oas;
+    uint_fast32_t old_offset,new_offset;
 
     old_offset=atomic_load(&tb->current_offset);
     do

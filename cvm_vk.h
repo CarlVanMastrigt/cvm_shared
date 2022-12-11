@@ -37,18 +37,13 @@ along with cvm_shared.  If not, see <https://www.gnu.org/licenses/>.
 
 
 
+CVM_LIST(VkBufferMemoryBarrier2,cvm_vk_buffer_barrier,4)
+CVM_LIST(VkBufferCopy,cvm_vk_buffer_copy,4)
 
 
 
-///REMOVE
-#define CVM_VK_MAX_EXTERNAL 256
-///REMOVE
-#define CVM_VK_PRESENTATION_INSTANCE_COUNT 3
-///need 1 more than this for each extra layer of cycling (e.g. thread-sync-separation, that is written in thread then passed to main thread before being rendered with)
-
+///this is swapchain, though can probably extend to both image atlas and perhaps even to generic CVM_VK_INVALID_INDEX
 #define CVM_VK_INVALID_IMAGE_INDEX 0xFFFFFFFF
-
-
 
 /**
 features to be cognisant of:

@@ -71,19 +71,15 @@ void cvm_vk_staging_buffer_release_space(cvm_vk_staging_buffer * sb,uint32_t fra
 
 
 
-///hmmm, we dont know base_size so deref is needed anyway, and also is pointer so deref needed for that as well...
 
-
-typedef uint32_t cvm_vk_temporary_buffer_allocation_index;
 #define CVM_VK_INVALID_TEMPORARY_ALLOCATION 0xFFFFFFFF
-
 
 ///16 bytes, 4 to a cacheline
 typedef struct cvm_vk_temporary_buffer_allocation_data
 {
     ///doubt I'll need to support more than 64M allocations, but will fill structure space as efficiently as possible for now, and respect typing
-    cvm_vk_temporary_buffer_allocation_index prev;
-    cvm_vk_temporary_buffer_allocation_index next;
+    uint32_t prev;
+    uint32_t next;
 
     uint64_t offset:36;/// actual offset = base_size<<offset_factor
     uint64_t heap_index:22;///4M frees supported should be more than enough
@@ -103,10 +99,13 @@ cvm_vk_temporary_buffer_allocation_data;
 ///     ^ require all chunks to meet the largest supported types alignment requirements
 
 
-///need to ensure heap ALWAYS has enough space for this test,create heap with max number of allocations! (2^16)
+///cannot use generic heap for this as a bunch of specialised things are done with this heap (randomised deletions, and tracked indices to support that)
+
+
+
 typedef struct cvm_vk_available_temporary_allocation_heap
 {
-    cvm_vk_temporary_buffer_allocation_index * heap;///potentially worth testing the effect of storing in a struct with the pointer to the allocation (avoids double indirection in about half of cases)
+    uint32_t * heap;///indices of allocations
     uint32_t space;
     uint32_t count;
 }
@@ -138,10 +137,10 @@ typedef struct cvm_vk_managed_buffer
     cvm_vk_temporary_buffer_allocation_data * temporary_allocation_data;
     uint32_t temporary_allocation_data_space;
 
-    cvm_vk_temporary_buffer_allocation_index first_unused_temporary_allocation;///singly linked list of allocations to assign space to
+    uint32_t first_unused_temporary_allocation;///singly linked list of allocations to assign space to
     uint32_t unused_temporary_allocation_count;
 
-    cvm_vk_temporary_buffer_allocation_index last_used_allocation;///used for setting left/right of new allocations
+    uint32_t last_used_allocation;///used for setting left/right of new allocations
 
     cvm_vk_available_temporary_allocation_heap available_temporary_allocations[32];
     uint32_t available_temporary_allocation_bitmask;
@@ -154,12 +153,11 @@ typedef struct cvm_vk_managed_buffer
 
 /// relevant data for copying, if UMA none of what follows will be used
 
-    VkBufferCopy * pending_copy_actions;///DELETE
-    uint32_t pending_copy_space;///DELETE
-    uint32_t pending_copy_count;///DELETE
+    cvm_vk_buffer_copy_list pending_copies;///DELETE
 
-    cvm_vk_managed_buffer_barrier_list copy_release_barriers;
-    cvm_vk_managed_buffer_barrier_list copy_acquire_barriers;
+    ///can probably delete following
+    cvm_vk_buffer_barrier_list copy_release_barriers;
+    cvm_vk_buffer_barrier_list copy_acquire_barriers;
     ///could have an arbitrary number of cvm_vk_managed_buffer_barrier_list, allowing for more than 1 frame of delay
     ///but after the number exceeds the number of swapchain images barriers become unnecessary unless transferring between queue families
 
@@ -284,7 +282,7 @@ typedef struct cvm_vk_managed_buffer
 
     uint16_t cycle_counter;///needs to ONLY ever be incremented once a frame, used for comparing to values stored on buffer ranges
 
-    ///will always be the same regardless of where the contents end up, should be performed in same "frame" the were generated
+    ///will always be the same regardless of where the contents end up, should be performed in same "frame" the were generated, just on the DMA queue
     VkBufferCopy * pending_copy_actions_;
     uint32_t pending_copy_space_;
     uint32_t pending_copy_count_;
@@ -293,21 +291,15 @@ typedef struct cvm_vk_managed_buffer
     ///cvm_vk_managed_buffer_barrier_list graphics_to_transfer_release;
     ///cvm_vk_managed_buffer_barrier_list graphics_to_transfer_acquire;
 
+    /// per frame, built up then flushed outside threaded section
+    /// move this stuff to cvm list, including smart expansion algorithm?
+    uint32_t * deleted_temporary_allocation_indices;
+    uint32_t deleted_temporary_allocation_count;
+    uint32_t deleted_temporary_allocation_space;
 
     atomic_uint_fast32_t copy_spinlock;///put at bottom in order to get padding between spinlocks (other being acquire_spinlock)
 }
 cvm_vk_managed_buffer;
-
-///this can be cleaned up in "the usual fashion" but avoids any need for superfluous semaphores (at the expense of some delay in data availability)
-/// being put in the critical section does make me uneasy to be honest...
-/// need to ensure any async compute which doesn't make up a requirement for this frames graphics is handled properly by overarching system... (last compute in queue this frame should signal cpu read semaphore)
-typedef struct cvm_vk_managed_buffer_deletion_queue
-{
-    uint32_t * allocation_indices;
-    uint32_t count;
-    uint32_t space;
-}
-cvm_vk_managed_buffer_deletion_queue;
 
 
 /// deletions happen at the end of the frame will save hassle. assuming we're using the per queue semaphore requirement (which i now think is a good idea)
@@ -373,13 +365,10 @@ fuck. yes.   confirmation
 void cvm_vk_managed_buffer_create(cvm_vk_managed_buffer * buffer,uint32_t buffer_size,uint32_t min_size_factor,VkBufferUsageFlags usage,bool multithreaded,bool host_visible);
 void cvm_vk_managed_buffer_destroy(cvm_vk_managed_buffer * mb);
 
-bool cvm_vk_managed_buffer_acquire_temporary_allocation(cvm_vk_managed_buffer * mb,uint64_t size,cvm_vk_temporary_buffer_allocation_index * allocation_index,uint64_t * offset);
-void cvm_vk_managed_buffer_release_temporary_allocation(cvm_vk_managed_buffer * mb,cvm_vk_temporary_buffer_allocation_index allocation_index);
+bool cvm_vk_managed_buffer_acquire_temporary_allocation(cvm_vk_managed_buffer * mb,uint64_t size,uint32_t * allocation_index,uint64_t * offset);
+void cvm_vk_managed_buffer_release_temporary_allocation(cvm_vk_managed_buffer * mb,uint32_t allocation_index);
 
 uint64_t cvm_vk_managed_buffer_acquire_permanent_allocation(cvm_vk_managed_buffer * mb,uint64_t size,uint64_t alignment);///cannot be released, exists until entire buffer is cleared or deleted
-
-/// from spec regarding QFOT: A release operation is used to release exclusive ownership of a range of a buffer or image subresource range.
-/// so availibility being moved for only
 
 /// need high priority and low priority variants of these?
 void * cvm_vk_managed_buffer_get_permanent_allocation_mapping(cvm_vk_managed_buffer * mb,uint64_t offset,uint64_t size,VkPipelineStageFlags2 stage_mask,VkAccessFlags2 access_mask,uint16_t * availability_token);

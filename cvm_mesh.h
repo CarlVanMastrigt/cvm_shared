@@ -52,7 +52,7 @@ typedef struct cvm_managed_mesh
     cvm_vk_managed_buffer * mb;
     char * filename;///could clear/free once loaded in retail
 
-    cvm_vk_temporary_buffer_allocation_index temporary_allocation_index;
+    uint32_t temporary_allocation_index;
 
     uint64_t buffer_offset;///used for both permanent and temporary allocations
 

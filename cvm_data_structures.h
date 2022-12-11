@@ -29,7 +29,7 @@ along with cvm_shared.  If not, see <https://www.gnu.org/licenses/>.
 
 
 #ifndef CVM_LIST
-#define CVM_LIST(type,name)                                                     \
+#define CVM_LIST(type,name,start_size)                                          \
                                                                                 \
 typedef struct name##_list                                                      \
 {                                                                               \
@@ -42,24 +42,23 @@ name##_list;                                                                    
                                                                                 \
 static inline void name##_list_ini( name##_list * l )                           \
 {                                                                               \
-    l->list=malloc( sizeof( type ) );                                           \
-    l->space=1;                                                                 \
+    assert(start_size>3 && !(start_size & (start_size-1)));                     \
+    l->list=malloc( sizeof( type ) * start_size );                              \
+    l->space=start_size;                                                        \
     l->count=0;                                                                 \
 }                                                                               \
                                                                                 \
 static inline uint32_t name##_list_add( name##_list * l , type value )          \
 {                                                                               \
+    uint32_t n;                                                                 \
     if(l->count==l->space)                                                      \
     {                                                                           \
-        l->list=realloc(l->list,sizeof( type )*(l->space*=2));                  \
+        n=l->space;                                                             \
+        n=(n&~(n>>1|n>>2))>>2;                                                  \
+        l->list=realloc(l->list,sizeof( type )*(l->space+=n));                  \
     }                                                                           \
     l->list[l->count]=value;                                                    \
     return l->count++;                                                          \
-}                                                                               \
-                                                                                \
-static inline void name##_list_clr( name##_list * l )                           \
-{                                                                               \
-    l->count=0;                                                                 \
 }                                                                               \
                                                                                 \
 static inline int name##_list_get( name##_list * l , type * value )             \
@@ -74,45 +73,41 @@ static inline void name##_list_del( name##_list * l )                           
     free(l->list);                                                              \
 }                                                                               \
                                                                                 \
-                                                                                \
-                                                                                \
-static inline uint32_t name##_list_add_by_ptr( name##_list * l , type * value ) \
+static inline type * name##_list_new( name##_list * l )                         \
 {                                                                               \
+    uint32_t n;                                                                 \
     if(l->count==l->space)                                                      \
     {                                                                           \
-        l->list=realloc(l->list,sizeof( type )*(l->space*=2));                  \
+        n=l->space;                                                             \
+        n=(n&~(n>>1|n>>2))>>2;                                                  \
+        l->list=realloc(l->list,sizeof( type )*(l->space+=n));                  \
     }                                                                           \
-    l->list[l->count]=*value;                                                   \
-    return l->count++;                                                          \
+    return l->list+l->count++;                                                  \
 }                                                                               \
                                                                                 \
 static inline uint32_t name##_list_add_multiple                                 \
 ( name##_list * l , type * values , uint32_t count)                             \
 {                                                                               \
+    uint32_t n;                                                                 \
     while((l->count+count) > l->space)                                          \
     {                                                                           \
-        l->list=realloc(l->list,sizeof( type )*(l->space*=2));                  \
+        n=l->space;                                                             \
+        n=(n&~(n>>1|n>>2))>>2;                                                  \
+        l->list=realloc(l->list,sizeof( type )*(l->space+=n));                  \
     }                                                                           \
     memcpy(l->list+l->count,values,sizeof( type )*count);                       \
     return (l->count+=count);                                                   \
 }                                                                               \
                                                                                 \
-static inline type * name##_list_get_ptr( name##_list * l )                     \
-{                                                                               \
-    return l->list;                                                             \
-}                                                                               \
-                                                                                \
-static inline uint32_t name##_list_get_count( name##_list * l )                 \
-{                                                                               \
-    return l->count;                                                            \
-}                                                                               \
-                                                                                \
 static inline type * name##_list_ensure_space                                   \
 ( name##_list * l , uint32_t required_space )                                   \
 {                                                                               \
+    uint32_t n;                                                                 \
     while((l->count+required_space) > l->space)                                 \
     {                                                                           \
-        l->list=realloc(l->list,sizeof( type )*(l->space*=2));                  \
+        n=l->space;                                                             \
+        n=(n&~(n>>1|n>>2))>>2;                                                  \
+        l->list=realloc(l->list,sizeof( type )*(l->space+=n));                  \
     }                                                                           \
     return (l->list+l->count);                                                  \
 }                                                                               \
@@ -124,9 +119,17 @@ static inline type * name##_list_ensure_space                                   
 
 
 
+/**
+may be worth looking into adding support for random location deletion and heap
+location tracking to support that, though probably not as adaptable as might be
+desirable
+*/
 
 
-/// CVM_BIN_HEAP_CMP(a,b) must be declared with true resulting in the value a moving UP the heap
+/**
+CVM_BIN_HEAP_CMP(A,B) must be declared, with true resulting in the value A
+moving UP the heap
+*/
 
 #ifndef CVM_BIN_HEAP
 #define CVM_BIN_HEAP(type,name)                                                 \
@@ -209,10 +212,7 @@ static inline void name##_bin_heap_del( name##_bin_heap * h )                   
 
 
 
-typedef uint8_t cvm_atomic_pad[256-sizeof(atomic_uint_fast32_t)];///+sizeof(uint32_t) is 128, required memory separation on most, if not all CPU's test this for actual performance difference
-
-
-
+typedef uint8_t cvm_atomic_pad[256-sizeof(atomic_uint_fast32_t)];
 
 typedef struct cvm_thread_safe_expanding_queue
 {
