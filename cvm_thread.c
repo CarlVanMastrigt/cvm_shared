@@ -23,7 +23,7 @@ along with cvm_shared.  If not, see <https://www.gnu.org/licenses/>.
 
 
 
-void cvm_thread_group_data_create(cvm_thread_group_data * group_data,cvm_thread_function func,void ** data,uint_fast32_t thread_count)
+void cvm_thread_group_data_create(cvm_thread_group_data * group_data,cvm_thread_function * functions,void ** data,uint_fast32_t thread_count)
 {
     uint_fast32_t i;
     group_data->threads=malloc(sizeof(cvm_thread)*thread_count);
@@ -39,7 +39,7 @@ void cvm_thread_group_data_create(cvm_thread_group_data * group_data,cvm_thread_
         group_data->threads[i].group_data=group_data;
         group_data->threads[i].data=data[i];
 
-        thrd_create(&group_data->threads[i].thread,func,group_data->threads+i);
+        thrd_create(&group_data->threads[i].thread,functions[i],group_data->threads+i);
     }
 }
 

@@ -96,7 +96,7 @@ struct cvm_thread_group_data
     bool running;
 };
 
-void cvm_thread_group_data_create(cvm_thread_group_data * group_data,cvm_thread_function func,void ** data,uint_fast32_t thread_count);
+void cvm_thread_group_data_create(cvm_thread_group_data * group_data,cvm_thread_function * functions,void ** data,uint_fast32_t thread_count);
 void cvm_thread_group_data_join(cvm_thread_group_data * group_data,int ** res);///res must be a buffer of size CVM_MAX_THREADS or NULL
 
 ///called from parent thread
