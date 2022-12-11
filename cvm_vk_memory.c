@@ -22,40 +22,39 @@ along with cvm_shared.  If not, see <https://www.gnu.org/licenses/>.
 
 void cvm_vk_managed_buffer_create(cvm_vk_managed_buffer * mb,uint32_t buffer_size,uint32_t min_size_factor,VkBufferUsageFlags usage,bool multithreaded,bool host_visible)
 {
-    uint32_t i;
+    uint32_t i,next;
 
     usage|=VK_BUFFER_USAGE_TRANSFER_DST_BIT;///for when its necessary to copy into the buffer (device only memory)
 
     buffer_size=(((buffer_size-1) >> min_size_factor)+1) << min_size_factor;///round to multiple of 1<<min_size_factor
     mb->total_space=buffer_size;
-    mb->static_offset=buffer_size;
-    mb->dynamic_offset=0;
+    mb->permanent_offset=buffer_size;
+    mb->temporary_offset=0;
 
-    cvm_vk_dynamic_buffer_allocation * dynamic_allocations=malloc(CVM_VK_RESERVED_DYNAMIC_BUFFER_ALLOCATION_COUNT*sizeof(cvm_vk_dynamic_buffer_allocation));
+    mb->temporary_allocation_data_space=128;
+    mb->temporary_allocation_data=malloc(mb->temporary_allocation_data_space*sizeof(cvm_vk_temporary_buffer_allocation_data));
 
-    cvm_vk_dynamic_buffer_allocation * next=NULL;
-    i=CVM_VK_RESERVED_DYNAMIC_BUFFER_ALLOCATION_COUNT;
+    i=mb->temporary_allocation_data_space;
+    next=CVM_VK_INVALID_TEMPORARY_ALLOCATION;
     while(i--)
     {
-        dynamic_allocations[i].next=next;
-        dynamic_allocations[i].is_base=!i;
-        next=dynamic_allocations+i;
+        mb->temporary_allocation_data[i].next=next;
+        next=i;
     }
 
-    mb->first_unused_allocation=dynamic_allocations;///put all allocations in linked list of unused allocations
-    mb->unused_allocation_count=CVM_VK_RESERVED_DYNAMIC_BUFFER_ALLOCATION_COUNT;
-    mb->last_used_allocation=NULL;///rightmost doesn't exist as it hasn't been allocated
-
+    mb->first_unused_temporary_allocation=0;///put all allocations in linked list of unused allocations
+    mb->unused_temporary_allocation_count=mb->temporary_allocation_data_space;
+    mb->last_used_allocation=CVM_VK_INVALID_TEMPORARY_ALLOCATION;
 
     for(i=0;i<32;i++)
     {
-        mb->available_dynamic_allocations[i].heap=malloc(sizeof(cvm_vk_dynamic_buffer_allocation*));
-        mb->available_dynamic_allocations[i].space=1;
-        mb->available_dynamic_allocations[i].count=0;
+        mb->available_temporary_allocations[i].heap=malloc(sizeof(cvm_vk_temporary_buffer_allocation_index)*16);
+        mb->available_temporary_allocations[i].space=16;
+        mb->available_temporary_allocations[i].count=0;
     }
-    mb->available_dynamic_allocation_bitmask=0;
+    mb->available_temporary_allocation_bitmask=0;
 
-    mb->base_dynamic_allocation_size_factor=min_size_factor;
+    mb->base_temporary_allocation_size_factor=min_size_factor;
 
     mb->multithreaded=multithreaded;
     atomic_init(&mb->acquire_spinlock,0);
@@ -64,6 +63,7 @@ void cvm_vk_managed_buffer_create(cvm_vk_managed_buffer * mb,uint32_t buffer_siz
 
     atomic_init(&mb->copy_spinlock,0);
 
+    #warning should have a runtime method to check if following is necessary, will be a decent help in setting up module buffer sizes
     mb->staging_buffer=NULL;
     mb->pending_copy_actions=malloc(sizeof(VkBufferCopy)*16);
     mb->pending_copy_space=16;
@@ -80,39 +80,21 @@ void cvm_vk_managed_buffer_create(cvm_vk_managed_buffer * mb,uint32_t buffer_siz
     mb->copy_update_counter=0;
     mb->copy_delay=(mb->mapping==NULL);///this shit needs serious review
 
-    //mb->copy_src_queue_family=cvm_vk_get_transfer_queue_family();
+    mb->copy_src_queue_family=cvm_vk_get_transfer_queue_family();
     mb->copy_dst_queue_family=cvm_vk_get_graphics_queue_family();///will have to add a way to use compute here
 }
 
 void cvm_vk_managed_buffer_destroy(cvm_vk_managed_buffer * mb)
 {
-    cvm_vk_destroy_buffer(mb->buffer,mb->memory,mb->mapping);
     uint32_t i;
-    cvm_vk_dynamic_buffer_allocation *first,*last,*current,*next;
 
-    ///all dynamic allocations should be freed at this point
-    assert(!mb->last_used_allocation);///ATTEMPTED TO DESTROY A BUFFER WITH ACTIVE ELEMENTS
+    cvm_vk_destroy_buffer(mb->buffer,mb->memory,mb->mapping);
+    ///all temporary allocations should be freed at this point
+    assert(mb->last_used_allocation==CVM_VK_INVALID_TEMPORARY_ALLOCATION);///ATTEMPTED TO DESTROY A BUFFER WITH ACTIVE ELEMENTS
 
-    for(i=0;i<32;i++)free(mb->available_dynamic_allocations[i].heap);
+    for(i=0;i<32;i++)free(mb->available_temporary_allocations[i].heap);
 
-    first=last=NULL;
-    ///get all base allocations in their own linked list, discarding all others
-    for(current=mb->first_unused_allocation;current;current=next)
-    {
-        next=current->next;
-        if(current->is_base)
-        {
-            if(last) last=last->next=current;
-            else first=last=current;
-        }
-    }
-    last->next=NULL;
-
-    for(current=first;current;current=next)
-    {
-        next=current->next;
-        free(current);///free all base allocations (to match appropriate allocs)
-    }
+    free(mb->temporary_allocation_data);
 
     free(mb->pending_copy_actions);
 
@@ -120,307 +102,334 @@ void cvm_vk_managed_buffer_destroy(cvm_vk_managed_buffer * mb)
     free(mb->copy_acquire_barriers.barriers);
 }
 
-cvm_vk_dynamic_buffer_allocation * cvm_vk_managed_buffer_acquire_dynamic_allocation(cvm_vk_managed_buffer * mb,uint64_t size)
+bool cvm_vk_managed_buffer_acquire_temporary_allocation(cvm_vk_managed_buffer * mb,uint64_t size,cvm_vk_temporary_buffer_allocation_index * allocation_index,uint64_t * allocation_offset)
 {
-    uint32_t i,o,m,u,d,c,size_factor,available_bitmask;
-    cvm_vk_dynamic_buffer_allocation ** heap;
-    cvm_vk_dynamic_buffer_allocation *p,*n;
+    uint32_t i,offset,size_bitmask,up,down,end,size_factor,available_bitmask,additional_allocations;///up down current are for binary heap management
+    cvm_vk_temporary_buffer_allocation_index *heap;
+    cvm_vk_temporary_buffer_allocation_index prev_index,next_index;
+    cvm_vk_temporary_buffer_allocation_data *allocations,*prev_data,*next_data;
     uint_fast32_t lock;
 
+    assert(allocation_index);
+
+    assert(size < mb->total_space);
+
     ///linear search should be fine as its assumed the vast majority of buffers will have size factor less than 3 (ergo better than binary search)
-    for(size_factor=mb->base_dynamic_allocation_size_factor;0x0000000000000001u<<size_factor < size;size_factor++);
-
-    size_factor-=mb->base_dynamic_allocation_size_factor;
-
+    for(size_factor=0;0x0000000000000001u<<(size_factor+mb->base_temporary_allocation_size_factor) < size;size_factor++);
     assert(size_factor<32);
-    if(size_factor>=32)return NULL;
+    if(size_factor>=32)return false;
 
     if(mb->multithreaded)do lock=atomic_load(&mb->acquire_spinlock);
     while(lock!=0 || !atomic_compare_exchange_weak(&mb->acquire_spinlock,&lock,1));
 
     /// seeing as this function must be as fast and light as possible, we should track unused allocation count to determine if there are enough unused allocations left (with allowance for inaccuracy)
-    if(mb->unused_allocation_count < 32)
+    if(mb->unused_temporary_allocation_count < 32)
     {
-        p=malloc(CVM_VK_RESERVED_DYNAMIC_BUFFER_ALLOCATION_COUNT*sizeof(cvm_vk_dynamic_buffer_allocation));
+        next_index=mb->first_unused_temporary_allocation;
 
-        n=mb->first_unused_allocation;
-        i=CVM_VK_RESERVED_DYNAMIC_BUFFER_ALLOCATION_COUNT;
-        while(i--)
+        additional_allocations=mb->temporary_allocation_data_space;
+        additional_allocations=(additional_allocations&~(additional_allocations>>1 | additional_allocations>>2))>>2;///additional quarter of current size rounded down to power of 2
+        assert(additional_allocations>=32);
+        assert((additional_allocations&additional_allocations-1)==0);
+
+        mb->temporary_allocation_data = allocations = realloc(mb->temporary_allocation_data,sizeof(cvm_vk_temporary_buffer_allocation_data)*(mb->temporary_allocation_data_space+additional_allocations));
+
+        for(i=mb->temporary_allocation_data_space+additional_allocations-1;i>=mb->temporary_allocation_data_space;i--)
         {
-            p[i].next=n;
-            p[i].is_base=!i;
-            n=p+i;
+            allocations[i].next=next_index;
+            next_index=i;
         }
+        mb->first_unused_temporary_allocation=next_index;///same as next
 
-        mb->first_unused_allocation=p;
-        mb->unused_allocation_count+=CVM_VK_RESERVED_DYNAMIC_BUFFER_ALLOCATION_COUNT;
+        mb->unused_temporary_allocation_count+=additional_allocations;
+        mb->temporary_allocation_data_space+=additional_allocations;
     }
+    else allocations=mb->temporary_allocation_data;
     ///above ensures there will be enough unused allocations for any case below (is overly conservative. but is a quick, rarely failing test)
 
-    available_bitmask=mb->available_dynamic_allocation_bitmask;
+    available_bitmask=mb->available_temporary_allocation_bitmask;
 
     if(available_bitmask >> size_factor)///there exists an allocation of the desired size or larger
     {
         ///find lowest size with available allocation
         for(i=size_factor;!(available_bitmask>>i&1);i++);
 
-        heap=mb->available_dynamic_allocations[i].heap;
+        heap=mb->available_temporary_allocations[i].heap;
 
-        p=heap[0];
+        prev_index=heap[0];///what we want, the lowest offset available allocation of the required size or smaller
+        prev_data=allocations+prev_index;
 
-        if((c= --mb->available_dynamic_allocations[i].count))
+        prev_data->available=false;
+        prev_data->size_factor=size_factor;
+
+        if((end= --mb->available_temporary_allocations[i].count))///after extraction patch up the heap if its nonempty
         {
-            u=0;
+            up=0;
 
-            while((d=(u<<1)+1)<c)
+            while((down=(up<<1)+1)<end)
             {
-                d+= (d+1<c) && (heap[d+1]->offset < heap[d]->offset);
-                if(heap[c]->offset < heap[d]->offset) break;
-                heap[d]->heap_index=u;///need to know (new) index in heap
-                heap[u]=heap[d];
-                u=d;
+                down+= (down+1<end) && (allocations[heap[down+1]].offset < allocations[heap[down]].offset);///find smallest of downwards offset
+                if(allocations[heap[end]].offset < allocations[heap[down]].offset) break;///if last element (old count) has smaller offset than next down then early exit
+                allocations[heap[down]].heap_index=up;///need to know (new) index in heap
+                heap[up]=heap[down];
+                up=down;
             }
 
-            heap[c]->heap_index=u;
-            heap[u]=heap[c];
+            allocations[heap[end]].heap_index=up;
+            heap[up]=heap[end];
         }
-        else available_bitmask&= ~(1<<i);
-
-        p->available=false;
-        p->size_factor=size_factor;
+        else available_bitmask&= ~(1<<i);///otherwise, if now empty mark the heap as such
 
         while(i-- > size_factor)
         {
-            n=mb->first_unused_allocation;
-            mb->first_unused_allocation=n->next;
-            mb->unused_allocation_count--;
+            next_index=mb->first_unused_temporary_allocation;
+            next_data=allocations+next_index;
+
+            mb->first_unused_temporary_allocation=next_data->next;
+            mb->unused_temporary_allocation_count--;
 
             ///horizontal linked list stuff
-            p->next->prev=n;///next cannot be NULL. if it were, then this allocation would have been freed back to the pool (last available allocations are recursively freed)
-            n->next=p->next;
-            n->prev=p;
-            p->next=n;
+            allocations[prev_data->next].prev=next_index;///next cannot be CVM_VK_INVALID_TEMPORARY_ALLOCATION. if it were, then this allocation would have been freed back to the pool (last available allocations are recursively freed)
+            next_data->next=prev_data->next;
+            next_data->prev=prev_index;
+            prev_data->next=next_index;
 
-            n->size_factor=i;
-            n->offset=p->offset+(1<<i);
-            n->available=true;
+            next_data->size_factor=i;
+            next_data->offset=prev_data->offset+(1u<<i);
+            next_data->available=true;
+            next_data->heap_index=0;///index in heap
             ///if this allocation size wasn't empty, then this code path wouldn't be taken, ergo addition to heap is super simple
-            n->heap_index=0;///index in heap
 
-            mb->available_dynamic_allocations[i].heap[0]=n;
-            mb->available_dynamic_allocations[i].count=1;
+            mb->available_temporary_allocations[i].heap[0]=next_index;
+            mb->available_temporary_allocations[i].count=1;
 
             available_bitmask|=1<<i;
         }
 
-        mb->available_dynamic_allocation_bitmask=available_bitmask;
+        mb->available_temporary_allocation_bitmask=available_bitmask;
 
         if(mb->multithreaded) atomic_store(&mb->acquire_spinlock,0);
 
-        return p;
+        *allocation_index=prev_index;///set the allocation data
+        if(allocation_offset)*allocation_offset=prev_data->offset<<mb->base_temporary_allocation_size_factor;
     }
     else///try to allocate from the end of the buffer
     {
-        o=mb->dynamic_offset;///store offset locally
+        offset=mb->temporary_offset;///store offset locally
 
-        m=(1<<size_factor)-1;
+        size_bitmask=(1u<<size_factor)-1u;
 
-        if( ((uint64_t)((((o+m)>>size_factor)<<size_factor) + (1<<size_factor))) << mb->base_dynamic_allocation_size_factor > mb->static_offset)
+        ///rounded offset plus allocation size must be less than end of dynamic buffer space
+        if( ((uint64_t)((((offset+size_bitmask)>>size_factor)<<size_factor) + (1u<<size_factor))) << mb->base_temporary_allocation_size_factor > mb->permanent_offset)
         {
+            ///not enough memory left
             if(mb->multithreaded) atomic_store(&mb->acquire_spinlock,0);
-            return NULL;///not enough memory left
+            return false;
         }
         /// ^ extra brackets to make compiler shut up :sob:
 
-        p=mb->last_used_allocation;
+        prev_index=mb->last_used_allocation;
+        next_index=mb->first_unused_temporary_allocation;///rely on next chain already existing here, but next does need to be set on last used allocation
+        if(prev_index!=CVM_VK_INVALID_TEMPORARY_ALLOCATION)allocations[prev_index].next=next_index;
+        next_data=allocations+next_index;
 
-        for(i=0;o&m;i++) if(o&1<<i)
+        for(i=0;offset&size_bitmask;i++) if(offset & 1<<i)
         {
-            n=mb->first_unused_allocation;
-            mb->first_unused_allocation=n->next;///r is guaranteed to be a valid location by checking done before starting this loop
-            mb->unused_allocation_count--;
+            mb->unused_temporary_allocation_count--;
 
-            n->offset=o;
-            n->prev=p;///right will get set after the fact
-            n->size_factor=i;
-            n->available=true;
+            next_data->offset=offset;
+            next_data->prev=prev_index;///right/next will get set after the fact (after this loop), prev on available linked list has not been set, so will need to set that
+            next_data->size_factor=i;
+            next_data->available=true;
+            next_data->heap_index=mb->available_temporary_allocations[i].count++;///by virtue of being allocated from the end it will have the largest offset, thus will never need to move up the heap
             ///add to heap
-            n->heap_index=mb->available_dynamic_allocations[i].count++;///by virtue of being allocated from the end it will have the largest offset, thus will never need to move up the heap
 
-            if(n->heap_index==mb->available_dynamic_allocations[i].space)
+            if(next_data->heap_index==mb->available_temporary_allocations[i].space)
             {
-                mb->available_dynamic_allocations[i].heap=realloc(mb->available_dynamic_allocations[i].heap,sizeof(cvm_vk_dynamic_buffer_allocation*)*(mb->available_dynamic_allocations[i].space*=2));
+                mb->available_temporary_allocations[i].heap=realloc(mb->available_temporary_allocations[i].heap,sizeof(cvm_vk_temporary_buffer_allocation_index)*(mb->available_temporary_allocations[i].space+=16));
             }
-            mb->available_dynamic_allocations[i].heap[n->heap_index]=n;
+            mb->available_temporary_allocations[i].heap[next_data->heap_index]=next_index;
 
             available_bitmask|=1<<i;
 
-            p->next=n;///p cannot be NULL as then alignment would already be satisfied
+            offset+=1<<i;///increment offset to align
 
-            o+=1<<i;///increment offset
-
-            p=n;
+            prev_index=next_index;
+            next_index=next_data->next;
+            next_data=allocations+next_index;
         }
 
-        n=mb->first_unused_allocation;
-        mb->first_unused_allocation=n->next;
-        mb->unused_allocation_count--;
+        mb->unused_temporary_allocation_count--;
+        mb->first_unused_temporary_allocation=next_data->next;
 
-        n->offset=o;
-        n->prev=p;
-        n->next=NULL;
-        n->size_factor=size_factor;
-        n->available=false;
+        next_data->offset=offset;
+        next_data->prev=prev_index;
+        next_data->next=CVM_VK_INVALID_TEMPORARY_ALLOCATION;///last used allocation now after all
+        next_data->size_factor=size_factor;
+        next_data->available=false;
 
-        if(p)p->next=n;
-
-        mb->last_used_allocation=n;
-        mb->dynamic_offset=o+(1<<size_factor);
-        mb->available_dynamic_allocation_bitmask=available_bitmask;
+        mb->last_used_allocation=next_index;
+        mb->temporary_offset=offset+(1<<size_factor);
+        mb->available_temporary_allocation_bitmask=available_bitmask;
 
         if(mb->multithreaded) atomic_store(&mb->acquire_spinlock,0);
 
-        return n;
+        *allocation_index=next_index;///set the allocation data
+        if(allocation_offset)*allocation_offset=offset<<mb->base_temporary_allocation_size_factor;
     }
+
+    return true;
 }
 
-void cvm_vk_managed_buffer_relinquish_dynamic_allocation(cvm_vk_managed_buffer * mb,cvm_vk_dynamic_buffer_allocation * a)
+void cvm_vk_managed_buffer_release_temporary_allocation(cvm_vk_managed_buffer * mb,cvm_vk_temporary_buffer_allocation_index allocation_index)
 {
-    uint32_t u,d,c;
-    cvm_vk_dynamic_buffer_allocation ** heap;
-    cvm_vk_dynamic_buffer_allocation *n;///represents next or neighbour
+    uint32_t up,down,end,size_factor,offset;
+    cvm_vk_temporary_buffer_allocation_index * heap;
+    cvm_vk_temporary_buffer_allocation_index neighbour_index;///represents neighbouring/"buddy" allocation
+    cvm_vk_temporary_buffer_allocation_data * allocations;
+    cvm_vk_temporary_buffer_allocation_data *allocation_data,*neighbour_data;
     uint_fast32_t lock;
 
     if(mb->multithreaded)do lock=atomic_load(&mb->acquire_spinlock);
     while(lock!=0 || !atomic_compare_exchange_weak(&mb->acquire_spinlock,&lock,1));
 
-    if(a==mb->last_used_allocation)///could also check a->right==NULL
+    allocations=mb->temporary_allocation_data;
+
+    if(allocation_index==mb->last_used_allocation)///could also check data.next==CVM_VK_INVALID_TEMPORARY_ALLOCATION
     {
         ///free space from end until an unavailable allocation is found
         ///need handling for only 1 alloc, which is rightmost
 
-        a->next=mb->first_unused_allocation;
+        allocations[allocation_index].next=mb->first_unused_temporary_allocation;///beyond this we can rely on the extant next
 
-        n=a;
-        a=a->prev;
-        mb->unused_allocation_count++;
+        mb->first_unused_temporary_allocation=allocation_index;
+        allocation_index=allocations[allocation_index].prev;
+        mb->unused_temporary_allocation_count++;
 
-        while(a && a->available)
+        while(allocation_index!=CVM_VK_INVALID_TEMPORARY_ALLOCATION && allocations[allocation_index].available)
         {
-            ///remove from heap, index cannot have any children as it's the allocation with the largest offset
-            if((c= --mb->available_dynamic_allocations[a->size_factor].count))
+            size_factor=allocations[allocation_index].size_factor;
+            ///remove from heap, index itself cannot have any children as it's the allocation with the largest offset (it's at the end), but the one we replace it with may, so no need to check down when adding
+            if((end= --mb->available_temporary_allocations[size_factor].count))
             {
-                heap=mb->available_dynamic_allocations[a->size_factor].heap;
+                heap=mb->available_temporary_allocations[size_factor].heap;
 
-                d=a->heap_index;
-                while(d && heap[c]->offset < heap[(u=(d-1)>>1)]->offset)
+                down=allocations[allocation_index].heap_index;
+                while(down && allocations[heap[end]].offset < allocations[heap[(up=(down-1)>>1)]].offset)
                 {
-                    heap[u]->heap_index=d;
-                    heap[d]=heap[u];
-                    d=u;
+                    allocations[heap[up]].heap_index=down;
+                    heap[down]=heap[up];
+                    down=up;
                 }
 
-                heap[c]->heap_index=d;
-                heap[d]=heap[c];
+                allocations[heap[end]].heap_index=down;
+                heap[down]=heap[end];
             }
-            else mb->available_dynamic_allocation_bitmask&= ~(1<<a->size_factor);///just removed last available allocation of this size
+            else mb->available_temporary_allocation_bitmask&= ~(1<<size_factor);///just removed last available allocation of this size
 
-            ///put into unused linked list
-            a->next=n;
-
-            n=a;
-            a=a->prev;
-            mb->unused_allocation_count++;
+            mb->first_unused_temporary_allocation=allocation_index;
+            allocation_index=allocations[allocation_index].prev;
+            mb->unused_temporary_allocation_count++;
         }
 
-        mb->first_unused_allocation=n;
-        mb->last_used_allocation=a;
-        if(a)a->next=NULL;
-        mb->dynamic_offset=n->offset;///despite having been conceptually moved this data is still available and valid
+        if(allocation_index!=CVM_VK_INVALID_TEMPORARY_ALLOCATION)allocations[allocation_index].next=CVM_VK_INVALID_TEMPORARY_ALLOCATION;
+        mb->last_used_allocation=allocation_index;
+
+        mb->temporary_offset=allocations[mb->first_unused_temporary_allocation].offset;///set based on last added, which will be end of removed, a little hacky but w/e
     }
     else /// the difficult one...
     {
-        while(a->size_factor+1u < 32)/// combine allocations in aligned way
+        allocation_data=allocations+allocation_index;
+        size_factor=allocation_data->size_factor;
+        offset=allocation_data->offset;
+
+        while(size_factor+1u < 32)/// combine allocations in aligned way
         {
             ///neighbouring allocation for this alignment
-            n = a->offset&1<<a->size_factor ? a->prev : a->next;/// will never be NULL (if a was last other branch would be taken, if first (offset is 0) n will always be set to next)
+            neighbour_index = offset & 1<<size_factor ? allocation_data->prev : allocation_data->next;/// will never be NULL (if a was last other branch would be taken, if first (offset is 0) n will always be set to next)
+            neighbour_data=allocations+neighbour_index;
 
-            if(!n->available || n->size_factor!=a->size_factor)break;///an size factor must be the same size or smaller, can only combine if the same size and available
+            if(!neighbour_data->available || neighbour_data->size_factor!=size_factor)break;///an size factor must be the same size or smaller, can only combine if the same size and available
 
             ///remove n from its availability heap
-            if((c= --mb->available_dynamic_allocations[n->size_factor].count))
+            ///n's size factor must be same as size factor here
+            if((end= --mb->available_temporary_allocations[size_factor].count))
             {
-                heap=mb->available_dynamic_allocations[n->size_factor].heap;
+                heap=mb->available_temporary_allocations[size_factor].heap;
 
-                d=n->heap_index;
-                while(d && heap[c]->offset < heap[(u=(d-1)>>1)]->offset)///try moving up
+                down=neighbour_data->heap_index;
+                ///try moving up
+                while(down && allocations[heap[end]].offset < allocations[heap[(up=(down-1)>>1)]].offset)
                 {
-                    heap[u]->heap_index=d;
-                    heap[d]=heap[u];
-                    d=u;
+                    allocations[heap[up]].heap_index=down;
+                    heap[down]=heap[up];
+                    down=up;
                 }
-                u=d;
-                while((d=(u<<1)+1)<c)///try moving down
+                ///try moving down
+                up=down;
+                while((down=(up<<1)+1)<end)
                 {
-                    d+= (d+1<c) && (heap[d+1]->offset < heap[d]->offset);
-                    if(heap[c]->offset < heap[d]->offset) break;
-                    heap[d]->heap_index=u;
-                    heap[u]=heap[d];
-                    u=d;
+                    down+= (down+1<end) && (allocations[heap[down+1]].offset < allocations[heap[down]].offset);
+                    if(allocations[heap[end]].offset < allocations[heap[down]].offset) break;///will break on first cycle if above loop did anything
+                    allocations[heap[down]].heap_index=up;
+                    heap[up]=heap[down];
+                    up=down;
                 }
 
-                heap[c]->heap_index=u;
-                heap[u]=heap[c];
+                allocations[heap[end]].heap_index=up;
+                heap[up]=heap[end];
             }
-            else mb->available_dynamic_allocation_bitmask&= ~(1<<n->size_factor);///just removed last available allocation of this size
+            else mb->available_temporary_allocation_bitmask&= ~(1<<size_factor);///just removed last available allocation of this size
 
-            ///change bindings
-            if(a->offset&1<<a->size_factor) /// a is next/right
+            ///change linked list/ adjacency information
+            if(offset&1<<size_factor) /// a is next/right
             {
-                a->offset=n->offset;
+                offset-=1<<size_factor;
                 ///this should be rare enough to set next and prev during loop and still be the most efficient option
-                a->prev=n->prev;
-                if(a->prev) a->prev->next=a;
+                allocation_data->prev=neighbour_data->prev;
+                if(allocation_data->prev!=CVM_VK_INVALID_TEMPORARY_ALLOCATION) allocations[allocation_data->prev].next=allocation_index;///using prev set above
             }
-            else (a->next=n->next)->prev=a;///next CANNOT be NULL, as last allocation cannot be available (and thus break above would have been hit)
+            else allocations[(allocation_data->next=neighbour_data->next)].prev=allocation_index;///next CANNOT be NULL, as last allocation cannot be available (and thus break above would have been hit)
 
-            a->size_factor++;
+            size_factor++;
 
-            n->next=mb->first_unused_allocation;///put subsumed adjacent allocation in unused list
-            mb->first_unused_allocation=n;
-            mb->unused_allocation_count++;
+            neighbour_data->next=mb->first_unused_temporary_allocation;///put subsumed adjacent allocation in unused list
+            mb->first_unused_temporary_allocation=neighbour_index;
+            mb->unused_temporary_allocation_count++;
         }
+
+        allocation_data->size_factor=size_factor;
+        allocation_data->offset=offset;
+        allocation_data->available=true;
 
         /// add a to appropriate availability heap
-        a->available=true;
+        down=mb->available_temporary_allocations[size_factor].count++;///by virtue of being allocated from the end it will have the largest offset, thus will never need to move up the heap
 
-        d=mb->available_dynamic_allocations[a->size_factor].count++;///by virtue of being allocated from the end it will have the largest offset, thus will never need to move up the heap
-        heap=mb->available_dynamic_allocations[a->size_factor].heap;
-
-        if(d==mb->available_dynamic_allocations[a->size_factor].space)
+        heap=mb->available_temporary_allocations[size_factor].heap;
+        if(down==mb->available_temporary_allocations[size_factor].space)
         {
-            heap=mb->available_dynamic_allocations[a->size_factor].heap=realloc(heap,sizeof(cvm_vk_dynamic_buffer_allocation*)*(mb->available_dynamic_allocations[a->size_factor].space*=2));
+            heap=mb->available_temporary_allocations[size_factor].heap=realloc(heap,sizeof(cvm_vk_temporary_buffer_allocation_index)*(mb->available_temporary_allocations[size_factor].space+=16));
         }
 
-        while(d && a->offset < heap[(u=(d-1)>>1)]->offset)
+        while(down && offset < allocations[heap[(up=(down-1)>>1)]].offset)
         {
-            heap[u]->heap_index=d;
-            heap[d]=heap[u];
-            d=u;
+            allocations[heap[up]].heap_index=down;
+            heap[down]=heap[up];
+            down=up;
         }
 
-        a->heap_index=d;
-        heap[d]=a;
+        allocation_data->heap_index=down;
+        heap[down]=allocation_index;
 
-        mb->available_dynamic_allocation_bitmask|=1<<a->size_factor;
+        mb->available_temporary_allocation_bitmask|=1<<size_factor;
     }
 
     if(mb->multithreaded) atomic_store(&mb->acquire_spinlock,0);
 }
 
-uint64_t cvm_vk_managed_buffer_acquire_static_allocation(cvm_vk_managed_buffer * mb,uint64_t size,uint64_t alignment)
+uint64_t cvm_vk_managed_buffer_acquire_permanent_allocation(cvm_vk_managed_buffer * mb,uint64_t size,uint64_t alignment)
 {
-    uint64_t static_offset,dynamic_offset;
+    uint64_t permanent_offset,temporary_offset;
     uint_fast32_t lock;
 
     if(mb->multithreaded)do lock=atomic_load(&mb->acquire_spinlock);
@@ -429,25 +438,25 @@ uint64_t cvm_vk_managed_buffer_acquire_static_allocation(cvm_vk_managed_buffer *
     ///allocating at desired alignment from end of buffer, can simply "round down"
     ///don't require power of 2 alignment (useful for base vertex use cases, so can index different sections of buffer w/o binding to different slot)
 
-    static_offset=mb->static_offset;
+    permanent_offset=mb->permanent_offset;
     ///make sure there's enough space in the buffer to begin with (and avoid underflow errors), set error otherwise
     ///also would be interpreted as an error is 0 space remained so don't allocate ALL of the remaining space
-    if(static_offset<=size)static_offset=0;
+    if(permanent_offset<=size)permanent_offset=0;
     else
     {
-        static_offset-=size;
-        static_offset-=static_offset%alignment;///align allocation properly
+        permanent_offset-=size;
+        permanent_offset-=permanent_offset%alignment;///align allocation properly
 
-        dynamic_offset=((uint64_t)mb->dynamic_offset)<<mb->base_dynamic_allocation_size_factor;///the other end of the buffer contains a dynamic allocator, need to check this allocation wouldn't overlap with that
-        if(static_offset<dynamic_offset) static_offset=0;///ensure there's enough space available, set error otherwise
+        temporary_offset=((uint64_t)mb->temporary_offset)<<mb->base_temporary_allocation_size_factor;///the other end of the buffer contains a dynamic allocator, need to check this allocation wouldn't overlap with that
+        if(permanent_offset<temporary_offset) permanent_offset=0;///ensure there's enough space available, set error otherwise
     }
 
     ///if there's precisely 0 space left that would be interpreted as an error so don't make that wasted/untracked allocation (as well as don't allocate upon error)
-    if(static_offset) mb->static_offset=static_offset;///if allocation was valid make it official
+    if(permanent_offset) mb->permanent_offset=permanent_offset;///if allocation was valid make it official
 
     if(mb->multithreaded) atomic_store(&mb->acquire_spinlock,0);
 
-    return static_offset;
+    return permanent_offset;
 }
 
 static inline void * stage_copy_action(cvm_vk_managed_buffer * mb,uint64_t offset,uint64_t size,VkPipelineStageFlags2 stage_mask,VkAccessFlags2 access_mask)
@@ -459,7 +468,7 @@ static inline void * stage_copy_action(cvm_vk_managed_buffer * mb,uint64_t offse
     assert(mb->staging_buffer);///ATTEMPTED TO MAP DEVICE LOCAL MEMORY WITHOUT SETTING A STAGING BUFFER
     assert(size <= mb->staging_buffer->total_space);///ATTEMPTED TO UPLOAD MORE DATA THEN ASSIGNED STAGING BUFFER CAN ACCOMODATE
 
-    ptr=cvm_vk_staging_buffer_get_allocation(mb->staging_buffer,size,&staging_offset);
+    ptr=cvm_vk_staging_buffer_acquire_space(mb->staging_buffer,size,&staging_offset);
 
     if(!ptr) return NULL;
 
@@ -499,19 +508,29 @@ static inline void * stage_copy_action(cvm_vk_managed_buffer * mb,uint64_t offse
     return ptr;
 }
 
-void * cvm_vk_managed_buffer_get_dynamic_allocation_mapping(cvm_vk_managed_buffer * mb,cvm_vk_dynamic_buffer_allocation * allocation,uint64_t size,VkPipelineStageFlags2 stage_mask,VkAccessFlags2 access_mask,uint16_t * availability_token)
+//void * cvm_vk_managed_buffer_get_temporary_allocation_mapping(cvm_vk_managed_buffer * mb,cvm_vk_dynamic_buffer_allocation * allocation,uint64_t size,VkPipelineStageFlags2 stage_mask,VkAccessFlags2 access_mask,uint16_t * availability_token)
+//{
+//    *availability_token=mb->copy_update_counter;///could technically go after the early exit as mapped buffers (so far) don't need to be transferred
+//
+//    uint64_t offset=allocation->offset<<mb->base_temporary_allocation_size_factor;
+//    if(mb->mapping) return mb->mapping+offset;///on UMA can access memory directly!
+//
+//    if(!size) size=1<<(allocation->size_factor+mb->base_temporary_allocation_size_factor);///if size not specified use whole region
+//
+//    return stage_copy_action(mb,offset,size,stage_mask,access_mask);
+//}
+
+void * cvm_vk_managed_buffer_get_permanent_allocation_mapping(cvm_vk_managed_buffer * mb,uint64_t offset,uint64_t size,VkPipelineStageFlags2 stage_mask,VkAccessFlags2 access_mask,uint16_t * availability_token)
 {
-    *availability_token=mb->copy_update_counter;///could technically go after the early exit as mapped buffers (so far) don't need to be transferred
+    *availability_token=mb->copy_update_counter;///could technically go after the early exit as mapped buffers (so far) don't need to be transferre
 
-    uint64_t offset=allocation->offset<<mb->base_dynamic_allocation_size_factor;
     if(mb->mapping) return mb->mapping+offset;///on UMA can access memory directly!
-
-    if(!size) size=1<<(allocation->size_factor+mb->base_dynamic_allocation_size_factor);///if size not specified use whole region
 
     return stage_copy_action(mb,offset,size,stage_mask,access_mask);
 }
 
-void * cvm_vk_managed_buffer_get_static_allocation_mapping(cvm_vk_managed_buffer * mb,uint64_t offset,uint64_t size,VkPipelineStageFlags2 stage_mask,VkAccessFlags2 access_mask,uint16_t * availability_token)
+#warning temporary holdover, remove this shit
+void * cvm_vk_managed_buffer_get_temporary_allocation_mapping(cvm_vk_managed_buffer * mb,uint64_t offset,uint64_t size,VkPipelineStageFlags2 stage_mask,VkAccessFlags2 access_mask,uint16_t * availability_token)
 {
     *availability_token=mb->copy_update_counter;///could technically go after the early exit as mapped buffers (so far) don't need to be transferre
 
@@ -784,7 +803,7 @@ void cvm_vk_staging_buffer_end(cvm_vk_staging_buffer * sb,uint32_t frame_index)
     sb->active_region.end=0;
 }
 
-void * cvm_vk_staging_buffer_get_allocation(cvm_vk_staging_buffer * sb,uint32_t allocation_size,VkDeviceSize * acquired_offset)
+void * cvm_vk_staging_buffer_acquire_space(cvm_vk_staging_buffer * sb,uint32_t allocation_size,VkDeviceSize * acquired_offset)
 {
     allocation_size=(((allocation_size-1)>>sb->alignment_size_factor)+1)<<sb->alignment_size_factor;///round as required
 
@@ -821,7 +840,7 @@ void * cvm_vk_staging_buffer_get_allocation(cvm_vk_staging_buffer * sb,uint32_t 
 }
 
 ///should only ever be called during cleanup, not thread safe
-void cvm_vk_staging_buffer_relinquish_space(cvm_vk_staging_buffer * sb,uint32_t frame_index)
+void cvm_vk_staging_buffer_release_space(cvm_vk_staging_buffer * sb,uint32_t frame_index)
 {
     cvm_vk_staging_buffer_region region;
     uint32_t i;

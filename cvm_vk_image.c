@@ -650,7 +650,7 @@ cvm_vk_image_atlas_tile * cvm_vk_acquire_image_atlas_tile_with_staging(cvm_vk_im
     assert(ia->staging_buffer);///IMAGE ATLAS STAGING BUFFER NOT SET
     assert(ia->bytes_per_pixel*width*height <= ia->staging_buffer->total_space);///ATTEMPTED TO ACQUIRE STAGING SPACE FOR IMAGE GREATER THAN STAGING BUFFER TOTAL
 
-    *staging = cvm_vk_staging_buffer_get_allocation(ia->staging_buffer,ia->bytes_per_pixel*width*height,&upload_offset);
+    *staging = cvm_vk_staging_buffer_acquire_space(ia->staging_buffer,ia->bytes_per_pixel*width*height,&upload_offset);
 
     if(!*staging) return NULL;
 
@@ -706,7 +706,7 @@ void * cvm_vk_acquire_staging_for_image_atlas_tile(cvm_vk_image_atlas * ia,cvm_v
     assert(ia->staging_buffer);///IMAGE ATLAS STAGING BUFFER NOT SET
     assert(ia->bytes_per_pixel*width*height <= ia->staging_buffer->total_space);///ATTEMPTED TO ACQUIRE STAGING SPACE FOR IMAGE GREATER THAN STAGING BUFFER TOTAL
 
-    staging = cvm_vk_staging_buffer_get_allocation(ia->staging_buffer,ia->bytes_per_pixel*width*height,&upload_offset);
+    staging = cvm_vk_staging_buffer_acquire_space(ia->staging_buffer,ia->bytes_per_pixel*width*height,&upload_offset);
 
     if(!staging) return NULL;
 

@@ -25,9 +25,6 @@ along with cvm_shared.  If not, see <https://www.gnu.org/licenses/>.
 #ifndef CVM_VK_MEMORY_H
 #define CVM_VK_MEMORY_H
 
-#define CVM_VK_RESERVED_DYNAMIC_BUFFER_ALLOCATION_COUNT 256
-
-
 typedef struct cvm_vk_staging_buffer_region
 {
     uint32_t start;
@@ -65,9 +62,9 @@ uint32_t cvm_vk_staging_buffer_get_rounded_allocation_size(cvm_vk_staging_buffer
 void cvm_vk_staging_buffer_begin(cvm_vk_staging_buffer * sb);
 void cvm_vk_staging_buffer_end(cvm_vk_staging_buffer * sb,uint32_t frame_index);
 
-void * cvm_vk_staging_buffer_get_allocation(cvm_vk_staging_buffer * sb,uint32_t allocation_size,VkDeviceSize * acquired_offset);
+void * cvm_vk_staging_buffer_acquire_space(cvm_vk_staging_buffer * sb,uint32_t allocation_size,VkDeviceSize * acquired_offset);
 
-void cvm_vk_staging_buffer_relinquish_space(cvm_vk_staging_buffer * sb,uint32_t frame_index);
+void cvm_vk_staging_buffer_release_space(cvm_vk_staging_buffer * sb,uint32_t frame_index);
 
 
 
@@ -77,13 +74,16 @@ void cvm_vk_staging_buffer_relinquish_space(cvm_vk_staging_buffer * sb,uint32_t 
 ///hmmm, we dont know base_size so deref is needed anyway, and also is pointer so deref needed for that as well...
 
 
+typedef uint32_t cvm_vk_temporary_buffer_allocation_index;
+#define CVM_VK_INVALID_TEMPORARY_ALLOCATION 0xFFFFFFFF
+
 
 ///16 bytes, 4 to a cacheline
-typedef struct cvm_vk_dynamic_buffer_allocation_data
+typedef struct cvm_vk_temporary_buffer_allocation_data
 {
-    ///doubt I'll need to support more than 64M allocations, but will fill structure space as efficiently as possible for now
-    uint32_t prev;///index of allocatiom
-    uint32_t next;
+    ///doubt I'll need to support more than 64M allocations, but will fill structure space as efficiently as possible for now, and respect typing
+    cvm_vk_temporary_buffer_allocation_index prev;
+    cvm_vk_temporary_buffer_allocation_index next;
 
     uint64_t offset:36;/// actual offset = base_size<<offset_factor
     uint64_t heap_index:22;///4M frees supported should be more than enough
@@ -91,7 +91,9 @@ typedef struct cvm_vk_dynamic_buffer_allocation_data
     uint64_t available:1;///does not have contents, can be retrieved by new allocation or recombined into
     ///get bit for "is_right_buffer" by 1 & (offset >> size_factor) during recombination calculations (256M max buffer size and 256 byte min gives the required size of this)
 }
-cvm_vk_dynamic_buffer_allocation_data;
+cvm_vk_temporary_buffer_allocation_data;
+
+
 /// ^ can return offset alongside allocation for efficient use purposes
 
 /// could use more complicated allocator that can recombine sections of arbitrary size with no power of 2 superstructure, may work reasonably well, especially if memory is grouped by expected lifetime
@@ -101,29 +103,14 @@ cvm_vk_dynamic_buffer_allocation_data;
 ///     ^ require all chunks to meet the largest supported types alignment requirements
 
 
-typedef struct cvm_vk_dynamic_buffer_allocation cvm_vk_dynamic_buffer_allocation;
-
-struct cvm_vk_dynamic_buffer_allocation/// (dont ref this by pointer, only store index)
-{
-    cvm_vk_dynamic_buffer_allocation * prev;
-    cvm_vk_dynamic_buffer_allocation * next;/// both next in horizontal structure of all buffers and next in linked list of unused allocations
-
-    uint32_t offset;/// actual offset = base_size<<offset_factor base allocation size 10 allows 16G buffer (which i quite like)
-    ///get bit for "is_right_buffer" by 1 & (offset >> size_factor) during recombination calculations (256M max buffer size and 256 byte min gives the required size of this)
-    uint32_t heap_index:25;///32m should be enough...
-    uint32_t size_factor:5;///32 different sizes is definitely enough, probably overkill but 16 is perhaps a little too few
-    uint32_t available:1;///does not have contents, can be retrieved by new allocation or recombined into
-    uint32_t is_base:1;///need to free this pointer at end
-};
-
 ///need to ensure heap ALWAYS has enough space for this test,create heap with max number of allocations! (2^16)
-typedef struct cvm_vk_available_dynamic_allocation_heap
+typedef struct cvm_vk_available_temporary_allocation_heap
 {
-    cvm_vk_dynamic_buffer_allocation ** heap;///potentially worth testing the effect of storing in a struct with the pointer to the allocation (avoids double indirection in about half of cases)
+    cvm_vk_temporary_buffer_allocation_index * heap;///potentially worth testing the effect of storing in a struct with the pointer to the allocation (avoids double indirection in about half of cases)
     uint32_t space;
     uint32_t count;
 }
-cvm_vk_available_dynamic_allocation_heap;
+cvm_vk_available_temporary_allocation_heap;
 
 typedef struct cvm_vk_managed_buffer_barrier_list
 {
@@ -143,23 +130,22 @@ typedef struct cvm_vk_managed_buffer
 
     ///VkBufferUsageFlags usage;/// for use if buffer ends up needing recreation
 
-    uint64_t total_space;///actually DO need to track total buffer size so that buffer can be cleaned (all static and dynamic allocations removed in one go)
-    uint64_t static_offset;/// taken from end of buffer
-    uint32_t dynamic_offset;/// taken from start of buffer, is a multiple of base offset, actual offset = dynamic_offset<<base_dynamic_allocation_size_factor
-    ///recursively free dynamic allocations (if they are the last allocation) when making available
-    ///give error if dynamic_offset would become greater than static_offset
+    uint64_t total_space;///actually DO need to track total buffer size so that buffer can be cleaned (all permanent and temporary allocations removed in one go)
+    uint64_t permanent_offset;/// taken from end of buffer
+    uint32_t temporary_offset;/// taken from start of buffer, is in terms of base offset
 
 
-    cvm_vk_dynamic_buffer_allocation * first_unused_allocation;///singly linked list of allocations to assign space to
-    uint32_t unused_allocation_count;
+    cvm_vk_temporary_buffer_allocation_data * temporary_allocation_data;
+    uint32_t temporary_allocation_data_space;
 
-    cvm_vk_dynamic_buffer_allocation * last_used_allocation;///used for setting left/right of new allocations
+    cvm_vk_temporary_buffer_allocation_index first_unused_temporary_allocation;///singly linked list of allocations to assign space to
+    uint32_t unused_temporary_allocation_count;
 
-    ///consider making following fixed array with max size of ~24 (whole struct should fit on 2-3 cache lines)
-    cvm_vk_available_dynamic_allocation_heap available_dynamic_allocations[32];
-    ///intelligent application of last pointer to linked list creation isn't applicable, cannot reference/dereference bitfield!
-    uint32_t available_dynamic_allocation_bitmask;
-    uint32_t base_dynamic_allocation_size_factor;
+    cvm_vk_temporary_buffer_allocation_index last_used_allocation;///used for setting left/right of new allocations
+
+    cvm_vk_available_temporary_allocation_heap available_temporary_allocations[32];
+    uint32_t available_temporary_allocation_bitmask;
+    uint32_t base_temporary_allocation_size_factor;
 
 
     uint8_t * mapping;///can copy data in directly (no need for staging) on UMA systems
@@ -323,6 +309,10 @@ typedef struct cvm_vk_managed_buffer_deletion_queue
 }
 cvm_vk_managed_buffer_deletion_queue;
 
+
+/// deletions happen at the end of the frame will save hassle. assuming we're using the per queue semaphore requirement (which i now think is a good idea)
+///     ^ store most recent semaphore per relevant queue and add it as a wait for each and every "fisrt per frame" submission of a *different* queue
+
 /// transfer needs to wait on appropriate graphics semaphore with stages VK_PIPELINE_STAGE_2_ALL_GRAPHICS_BIT from queues where deletions happened (and the same for compute queues with VK_PIPELINE_STAGE_2_COMPUTE_SHADER_BIT)
 ///     ^ this is a simple solution to a major problem, i LOVE it, it also reduces number of semaphore waits IF sources of deletions (command buffer/queue and last use) can actually be tracked!
 ///         ^ because transfer wont be executed every frame, will need to store the latest semaphore and keep masking stages (note compute only has one stage :p) until transfer DOES actually occur
@@ -383,22 +373,17 @@ fuck. yes.   confirmation
 void cvm_vk_managed_buffer_create(cvm_vk_managed_buffer * buffer,uint32_t buffer_size,uint32_t min_size_factor,VkBufferUsageFlags usage,bool multithreaded,bool host_visible);
 void cvm_vk_managed_buffer_destroy(cvm_vk_managed_buffer * mb);
 
-cvm_vk_dynamic_buffer_allocation * cvm_vk_managed_buffer_acquire_dynamic_allocation(cvm_vk_managed_buffer * mb,uint64_t size);
-void cvm_vk_managed_buffer_relinquish_dynamic_allocation(cvm_vk_managed_buffer * mb,cvm_vk_dynamic_buffer_allocation * allocation);
-static inline uint64_t cvm_vk_managed_buffer_get_dynamic_allocation_offset(cvm_vk_managed_buffer * mb,cvm_vk_dynamic_buffer_allocation * allocation)
-{
-    return allocation->offset<<mb->base_dynamic_allocation_size_factor;
-}
+bool cvm_vk_managed_buffer_acquire_temporary_allocation(cvm_vk_managed_buffer * mb,uint64_t size,cvm_vk_temporary_buffer_allocation_index * allocation_index,uint64_t * offset);
+void cvm_vk_managed_buffer_release_temporary_allocation(cvm_vk_managed_buffer * mb,cvm_vk_temporary_buffer_allocation_index allocation_index);
 
-uint64_t cvm_vk_managed_buffer_acquire_static_allocation(cvm_vk_managed_buffer * mb,uint64_t size,uint64_t alignment);///cannot be relinquished, exists until
+uint64_t cvm_vk_managed_buffer_acquire_permanent_allocation(cvm_vk_managed_buffer * mb,uint64_t size,uint64_t alignment);///cannot be released, exists until entire buffer is cleared or deleted
 
 /// from spec regarding QFOT: A release operation is used to release exclusive ownership of a range of a buffer or image subresource range.
 /// so availibility being moved for only
 
-/// need high priority and low priority variants of these
-/// need to test QFOT management on buffer regions (not whole buffer) - look at spec...
-void * cvm_vk_managed_buffer_get_dynamic_allocation_mapping(cvm_vk_managed_buffer * mb,cvm_vk_dynamic_buffer_allocation * allocation,uint64_t size,VkPipelineStageFlags2 stage_mask,VkAccessFlags2 access_mask,uint16_t * availability_token);///if size==0 returns full allocation
-void * cvm_vk_managed_buffer_get_static_allocation_mapping(cvm_vk_managed_buffer * mb,uint64_t offset,uint64_t size,VkPipelineStageFlags2 stage_mask,VkAccessFlags2 access_mask,uint16_t * availability_token);
+/// need high priority and low priority variants of these?
+void * cvm_vk_managed_buffer_get_permanent_allocation_mapping(cvm_vk_managed_buffer * mb,uint64_t offset,uint64_t size,VkPipelineStageFlags2 stage_mask,VkAccessFlags2 access_mask,uint16_t * availability_token);
+void * cvm_vk_managed_buffer_get_temporary_allocation_mapping(cvm_vk_managed_buffer * mb,uint64_t offset,uint64_t size,VkPipelineStageFlags2 stage_mask,VkAccessFlags2 access_mask,uint16_t * availability_token);
 
 void cvm_vk_managed_buffer_submit_all_acquire_barriers(cvm_vk_managed_buffer * mb,VkCommandBuffer graphics_cb);
 void cvm_vk_managed_buffer_submit_all_pending_copy_actions(cvm_vk_managed_buffer * mb,VkCommandBuffer transfer_cb);///includes necessary barriers

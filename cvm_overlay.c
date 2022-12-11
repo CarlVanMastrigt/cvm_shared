@@ -765,7 +765,7 @@ void overlay_frame_cleanup(uint32_t swapchain_image_index)
 {
     if(swapchain_image_index!=CVM_VK_INVALID_IMAGE_INDEX)
     {
-        cvm_vk_staging_buffer_relinquish_space(&overlay_staging_buffer,swapchain_image_index);
+        cvm_vk_staging_buffer_release_space(&overlay_staging_buffer,swapchain_image_index);
     }
 }
 

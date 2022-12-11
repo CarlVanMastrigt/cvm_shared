@@ -52,13 +52,11 @@ typedef struct cvm_managed_mesh
     cvm_vk_managed_buffer * mb;
     char * filename;///could clear/free once loaded in retail
 
-    union
-    {
-        cvm_vk_dynamic_buffer_allocation * dynamic_allocation;///store so that this can be deleted quickly, will be null if static allocation
-        uint64_t static_offset;
-    };
+    cvm_vk_temporary_buffer_allocation_index temporary_allocation_index;
 
-    uint16_t dynamic:1;
+    uint64_t buffer_offset;///used for both permanent and temporary allocations
+
+    uint16_t is_temporary_allocation:1;
     ///stages of creation
     uint16_t allocated:1;///REMOVE THIS
     uint16_t loaded:1;///data was loaded to staging buffer in preparation for copy
@@ -76,7 +74,7 @@ typedef struct cvm_managed_mesh
 }
 cvm_managed_mesh;
 
-void cvm_managed_mesh_create(cvm_managed_mesh * mm,cvm_vk_managed_buffer * mb,char * filename,uint16_t flags,bool dynamic);
+void cvm_managed_mesh_create(cvm_managed_mesh * mm,cvm_vk_managed_buffer * mb,char * filename,uint16_t flags,bool temporary);
 void cvm_managed_mesh_destroy(cvm_managed_mesh * mm);
 
 bool cvm_managed_mesh_load(cvm_managed_mesh * mm);

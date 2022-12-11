@@ -352,6 +352,7 @@ bool cvm_managed_mesh_load(cvm_managed_mesh * mm)
     size_t vertex_data_size;
     uint32_t size;
     FILE * f;
+    bool success;
 
     f=fopen(mm->filename,"rb");
 
@@ -373,39 +374,39 @@ bool cvm_managed_mesh_load(cvm_managed_mesh * mm)
     size+=(mm->data.vertex_count+1)*vertex_data_size;///1 extra needed for alignment
 
 
-    if(mm->dynamic)
+    if(mm->is_temporary_allocation)
     {
         if(!mm->allocated)
         {
-            mm->dynamic_allocation=cvm_vk_managed_buffer_acquire_dynamic_allocation(mm->mb,size);
+            success=cvm_vk_managed_buffer_acquire_temporary_allocation(mm->mb,size,&mm->temporary_allocation_index,&mm->buffer_offset);
 
             #warning, probably want to handle this case "elegantly"
-            assert(mm->dynamic_allocation || !fprintf(stderr,"INSUFFICIENT SPACE REMAINING IN BUFFER FOR MESH: %s\n",mm->filename));
+            assert(success || !fprintf(stderr,"INSUFFICIENT SPACE REMAINING IN BUFFER FOR MESH: %s\n",mm->filename));
 
             mm->allocated=true;
         }
 
         #warning should probably be more specific with the stage and flags bits... (if possible)
-        ptr=cvm_vk_managed_buffer_get_dynamic_allocation_mapping(mm->mb,mm->dynamic_allocation,size,VK_PIPELINE_STAGE_2_VERTEX_INPUT_BIT,VK_ACCESS_2_INDEX_READ_BIT|VK_ACCESS_2_VERTEX_ATTRIBUTE_READ_BIT,&mm->availability_token);
+        ptr=cvm_vk_managed_buffer_get_temporary_allocation_mapping(mm->mb,mm->temporary_allocation_index,size,VK_PIPELINE_STAGE_2_VERTEX_INPUT_BIT,VK_ACCESS_2_INDEX_READ_BIT|VK_ACCESS_2_VERTEX_ATTRIBUTE_READ_BIT,&mm->availability_token);
         if(!ptr)return false;///could not allocate staging space!
-        base_offset = current_offset = cvm_vk_managed_buffer_get_dynamic_allocation_offset(mm->mb,mm->dynamic_allocation);
+        base_offset = current_offset = mm->buffer_offset;
     }
     else
     {
         if(!mm->allocated)
         {
-            mm->static_offset = cvm_vk_managed_buffer_acquire_static_allocation(mm->mb,size,2);
+            mm->buffer_offset = cvm_vk_managed_buffer_acquire_permanent_allocation(mm->mb,size,2);
 
             #warning, probably want to handle this case "elegantly"
-            assert(mm->static_offset || !fprintf(stderr,"INSUFFICIENT SPACE REMAINING IN BUFFER FOR MESH: %s\n",mm->filename));
+            assert(mm->buffer_offset || !fprintf(stderr,"INSUFFICIENT SPACE REMAINING IN BUFFER FOR MESH: %s\n",mm->filename));
 
             mm->allocated=true;
         }
 
         #warning should probably be more specific with the stage and flags bits... (if possible)
-        ptr=cvm_vk_managed_buffer_get_static_allocation_mapping(mm->mb,mm->static_offset,size,VK_PIPELINE_STAGE_2_VERTEX_INPUT_BIT,VK_ACCESS_2_INDEX_READ_BIT|VK_ACCESS_2_VERTEX_ATTRIBUTE_READ_BIT,&mm->availability_token);
+        ptr=cvm_vk_managed_buffer_get_permanent_allocation_mapping(mm->mb,mm->buffer_offset,size,VK_PIPELINE_STAGE_2_VERTEX_INPUT_BIT,VK_ACCESS_2_INDEX_READ_BIT|VK_ACCESS_2_VERTEX_ATTRIBUTE_READ_BIT,&mm->availability_token);
         if(!ptr)return false;///could not allocate staging space!
-        base_offset = current_offset = mm->static_offset;
+        base_offset = current_offset = mm->buffer_offset;
     }
 
 
@@ -444,9 +445,10 @@ bool cvm_managed_mesh_load(cvm_managed_mesh * mm)
 
 void cvm_managed_mesh_relinquish(cvm_managed_mesh * mm)
 {
-    if(mm->allocated && mm->dynamic)
+    //assert(mm->is_temporary_allocation);
+    if(mm->allocated && mm->is_temporary_allocation)
     {
-        cvm_vk_managed_buffer_relinquish_dynamic_allocation(mm->mb,mm->dynamic_allocation);
+        cvm_vk_managed_buffer_release_temporary_allocation(mm->mb,mm->temporary_allocation_index);
     }
 }
 
@@ -479,7 +481,7 @@ void cvm_managed_mesh_adjacency_render(cvm_managed_mesh * mm,VkCommandBuffer gra
     }
 }
 
-void cvm_managed_mesh_create(cvm_managed_mesh * mm,cvm_vk_managed_buffer * mb,char * filename,uint16_t flags,bool dynamic)
+void cvm_managed_mesh_create(cvm_managed_mesh * mm,cvm_vk_managed_buffer * mb,char * filename,uint16_t flags,bool temporary)
 {
     mm->filename=cvm_strdup(filename);
     mm->mb=mb;
@@ -487,7 +489,7 @@ void cvm_managed_mesh_create(cvm_managed_mesh * mm,cvm_vk_managed_buffer * mb,ch
     mm->allocated=false;
     mm->loaded=false;
     mm->ready=false;
-    mm->dynamic=dynamic;
+    mm->is_temporary_allocation=temporary;
 }
 
 void cvm_managed_mesh_destroy(cvm_managed_mesh * mm)
