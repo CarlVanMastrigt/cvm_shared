@@ -19,69 +19,89 @@ along with cvm_shared.  If not, see <https://www.gnu.org/licenses/>.
 
 #include "cvm_shared.h"
 
-int cvm_synchronised_thread_create(cvm_synchronised_thread * thread,cvm_thread_function func,void * data)
+
+
+
+
+void cvm_thread_group_data_create(cvm_thread_group_data * group_data,cvm_thread_function func,void ** data,uint_fast32_t thread_count)
 {
-    mtx_init(&thread->mutex,mtx_plain);
-    cnd_init(&thread->condition);
+    uint_fast32_t i;
+    group_data->threads=malloc(sizeof(cvm_thread)*thread_count);
+    group_data->thread_count=thread_count;
 
-    thread->waiting=false;
-    thread->running=true;
+    cnd_init(&group_data->condition);
+    atomic_init(&group_data->active_counter,0);///start with no threads active
+    group_data->running=true;
 
-    atomic_init(&thread->spinlock,1);
+    for(i=0;i<thread_count;i++)
+    {
+        mtx_init(&group_data->threads[i].mutex,mtx_plain);
+        group_data->threads[i].group_data=group_data;
+        group_data->threads[i].data=data[i];
 
-    thread->data=data;
-
-    return thrd_create(&thread->thread,func,thread);
+        thrd_create(&group_data->threads[i].thread,func,group_data->threads+i);
+    }
 }
 
-int cvm_synchronised_thread_join(cvm_synchronised_thread * thread,int * res)
+void cvm_thread_group_data_join(cvm_thread_group_data * group_data,int ** res)
 {
-    int r = thrd_join(thread->thread,res);
+    uint_fast32_t i;
 
-    cnd_destroy(&thread->condition);
-    mtx_destroy(&thread->mutex);
+    assert(!group_data->running);
 
-    return r;
+    for(i=0;i<group_data->thread_count;i++)
+    {
+        thrd_join(group_data->threads[i].thread,res?res[i]:NULL);
+
+        mtx_destroy(&group_data->threads[i].mutex);
+    }
+
+    free(group_data->threads);
+
+    cnd_destroy(&group_data->condition);
 }
 
-void cvm_synchronised_thread_critical_section_start(cvm_synchronised_thread * thread)
+void cvm_thread_group_critical_section_start(cvm_thread_group_data * group_data)
 {
-    uint_fast32_t lock;
-    do lock=0;
-    while( ! atomic_compare_exchange_weak(&thread->spinlock,&lock,1));
+    uint_fast32_t value,i;
 
-    mtx_lock(&thread->mutex);///critical section start
+    do value=group_data->thread_count;
+    while( ! atomic_compare_exchange_weak(&group_data->active_counter,&value,0));///wait for signal to be active (worker thread has definitely gained control of mutex)
+
+    for(i=0;i<group_data->thread_count;i++)
+    {
+        mtx_lock(&group_data->threads[i].mutex);
+        ///main thread must have all relevant mutexes locked
+    }
 }
 
-void cvm_synchronised_thread_critical_section_end(cvm_synchronised_thread * thread,bool keep_running)
+void cvm_thread_group_critical_section_end(cvm_thread_group_data * group_data,bool keep_running)
 {
-    thread->running=keep_running;
-    atomic_store(&thread->spinlock,1);
-    thread->waiting=false;
+    uint_fast32_t i;
 
-    cnd_signal(&thread->condition);
-    mtx_unlock(&thread->mutex);///critical section end
+    group_data->running=keep_running;
+    cnd_broadcast(&group_data->condition);
+
+    for(i=0;i<group_data->thread_count;i++)
+    {
+        mtx_unlock(&group_data->threads[i].mutex);
+        ///main thread must unlock all mutexes so that all worker threads may begin again
+    }
 }
 
-void cvm_synchronised_thread_critical_section_wait(cvm_synchronised_thread * thread)
+void cvm_thread_critical_section_wait(cvm_thread * thread)
 {
-    thread->waiting=true;
-    do cnd_wait(&thread->condition,&thread->mutex);
-    while(thread->waiting);
-
-    atomic_store(&thread->spinlock,0);
+    cnd_wait(&thread->group_data->condition,&thread->mutex);///unlocks mutex (MUST have control at this point) then waits on condition and regains control of it's mutex once condition is signalled/broadcast
+    atomic_fetch_add(&thread->group_data->active_counter,1);///signal that this thread has started again and gained control of its mutex
 }
 
-void cvm_synchronised_thread_initialise(cvm_synchronised_thread * thread)
+void cvm_thread_initialise(cvm_thread * thread)
 {
     mtx_lock(&thread->mutex);
-    atomic_store(&thread->spinlock,0);
+    atomic_fetch_add(&thread->group_data->active_counter,1);///signal that this thread has started and gained control of its mutex
 }
 
-void cvm_synchronised_thread_finalise(cvm_synchronised_thread * thread)
+void cvm_thread_finalise(cvm_thread * thread)
 {
     mtx_unlock(&thread->mutex);
 }
-
-
-

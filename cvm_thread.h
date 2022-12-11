@@ -26,34 +26,86 @@ along with cvm_shared.  If not, see <https://www.gnu.org/licenses/>.
 
 typedef int(*cvm_thread_function)(void*);
 
-typedef struct cvm_synchronised_thread
+//typedef struct cvm_synchronised_thread
+//{
+//    thrd_t thread;
+//
+//    mtx_t mutex;
+//    cnd_t condition;
+//
+//    atomic_uint_fast32_t signal;
+//
+//    bool running;
+//
+//    void * data;
+//}
+//cvm_synchronised_thread;
+//
+//int cvm_synchronised_thread_create(cvm_synchronised_thread * thread,cvm_thread_function func,void * data);
+//int cvm_synchronised_thread_join(cvm_synchronised_thread * thread,int * res);
+//
+/////called from parent thread
+//void cvm_synchronised_thread_critical_section_start(cvm_synchronised_thread * thread);
+//void cvm_synchronised_thread_critical_section_end(cvm_synchronised_thread * thread,bool keep_running);
+/////called from child thread
+//void cvm_synchronised_thread_critical_section_wait(cvm_synchronised_thread * thread);
+//void cvm_synchronised_thread_initialise(cvm_synchronised_thread * thread);
+//void cvm_synchronised_thread_finalise(cvm_synchronised_thread * thread);
+
+
+
+
+static inline void cvm_atomic_lock_create(atomic_uint_fast32_t * spinlock)
+{
+    atomic_init(spinlock,0);
+}
+
+static inline void cvm_atomic_lock_acquire(atomic_uint_fast32_t * spinlock)
+{
+    uint_fast32_t lock;
+    do lock=atomic_load(spinlock);
+    while(lock!=0 || !atomic_compare_exchange_weak(spinlock,&lock,1));
+}
+
+static inline void cvm_atomic_lock_release(atomic_uint_fast32_t * spinlock)
+{
+    atomic_store(spinlock,0);
+}
+
+
+#define CVM_MAX_THREADS 16
+
+typedef struct cvm_thread_group_data cvm_thread_group_data;
+
+typedef struct cvm_thread
 {
     thrd_t thread;
-
     mtx_t mutex;
-    cnd_t condition;
-    bool waiting;
-
-    atomic_uint_fast32_t spinlock;
-
-    bool running;
-
+    cvm_thread_group_data * group_data;
     void * data;
 }
-cvm_synchronised_thread;
+cvm_thread;
 
-int cvm_synchronised_thread_create(cvm_synchronised_thread * thread,cvm_thread_function func,void * data);
-int cvm_synchronised_thread_join(cvm_synchronised_thread * thread,int * res);
+struct cvm_thread_group_data
+{
+    cvm_thread * threads;
+    uint_fast32_t thread_count;
+
+    cnd_t condition;
+    atomic_uint_fast32_t active_counter;
+    bool running;
+};
+
+void cvm_thread_group_data_create(cvm_thread_group_data * group_data,cvm_thread_function func,void ** data,uint_fast32_t thread_count);
+void cvm_thread_group_data_join(cvm_thread_group_data * group_data,int ** res);///res must be a buffer of size CVM_MAX_THREADS or NULL
 
 ///called from parent thread
-void cvm_synchronised_thread_critical_section_start(cvm_synchronised_thread * thread);
-void cvm_synchronised_thread_critical_section_end(cvm_synchronised_thread * thread,bool keep_running);
+void cvm_thread_group_critical_section_start(cvm_thread_group_data * group_data);
+void cvm_thread_group_critical_section_end(cvm_thread_group_data * group_data,bool keep_running);
 ///called from child thread
-void cvm_synchronised_thread_critical_section_wait(cvm_synchronised_thread * thread);
-void cvm_synchronised_thread_initialise(cvm_synchronised_thread * thread);
-void cvm_synchronised_thread_finalise(cvm_synchronised_thread * thread);
-
-
+void cvm_thread_critical_section_wait(cvm_thread * thread);
+void cvm_thread_initialise(cvm_thread * thread);
+void cvm_thread_finalise(cvm_thread * thread);
 
 
 
