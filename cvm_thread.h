@@ -26,33 +26,6 @@ along with cvm_shared.  If not, see <https://www.gnu.org/licenses/>.
 
 typedef int(*cvm_thread_function)(void*);
 
-//typedef struct cvm_synchronised_thread
-//{
-//    thrd_t thread;
-//
-//    mtx_t mutex;
-//    cnd_t condition;
-//
-//    atomic_uint_fast32_t signal;
-//
-//    bool running;
-//
-//    void * data;
-//}
-//cvm_synchronised_thread;
-//
-//int cvm_synchronised_thread_create(cvm_synchronised_thread * thread,cvm_thread_function func,void * data);
-//int cvm_synchronised_thread_join(cvm_synchronised_thread * thread,int * res);
-//
-/////called from parent thread
-//void cvm_synchronised_thread_critical_section_start(cvm_synchronised_thread * thread);
-//void cvm_synchronised_thread_critical_section_end(cvm_synchronised_thread * thread,bool keep_running);
-/////called from child thread
-//void cvm_synchronised_thread_critical_section_wait(cvm_synchronised_thread * thread);
-//void cvm_synchronised_thread_initialise(cvm_synchronised_thread * thread);
-//void cvm_synchronised_thread_finalise(cvm_synchronised_thread * thread);
-
-
 
 
 static inline void cvm_atomic_lock_create(atomic_uint_fast32_t * spinlock)
@@ -73,22 +46,25 @@ static inline void cvm_atomic_lock_release(atomic_uint_fast32_t * spinlock)
 }
 
 
-#define CVM_MAX_THREADS 16
 
-typedef struct cvm_thread_group_data cvm_thread_group_data;
+/**
+"synchronous" used here to communicate that threads run in parallel with some controlling thread, that is the check in at some point when necessary (the critical section)
+*/
 
-typedef struct cvm_thread
+typedef struct cvm_synchronous_thread_group_data cvm_synchronous_thread_group_data;
+
+typedef struct cvm_synchronous_thread
 {
     thrd_t thread;
     mtx_t mutex;
-    cvm_thread_group_data * group_data;
+    cvm_synchronous_thread_group_data * group_data;
     void * data;
 }
-cvm_thread;
+cvm_synchronous_thread;
 
-struct cvm_thread_group_data
+struct cvm_synchronous_thread_group_data
 {
-    cvm_thread * threads;
+    cvm_synchronous_thread * threads;
     uint_fast32_t thread_count;
 
     cnd_t condition;
@@ -96,16 +72,16 @@ struct cvm_thread_group_data
     bool running;
 };
 
-void cvm_thread_group_data_create(cvm_thread_group_data * group_data,cvm_thread_function * functions,void ** data,uint_fast32_t thread_count);
-void cvm_thread_group_data_join(cvm_thread_group_data * group_data,int ** res);///res must be a buffer of size CVM_MAX_THREADS or NULL
+void cvm_synchronous_thread_group_create(cvm_synchronous_thread_group_data * group_data,cvm_thread_function * functions,void ** data,uint_fast32_t thread_count);
+void cvm_synchronous_thread_group_join(cvm_synchronous_thread_group_data * group_data,int ** res);///res must be a buffer of size thread_count NULL
 
 ///called from parent thread
-void cvm_thread_group_critical_section_start(cvm_thread_group_data * group_data);
-void cvm_thread_group_critical_section_end(cvm_thread_group_data * group_data,bool keep_running);
+void cvm_synchronous_thread_group_critical_section_begin(cvm_synchronous_thread_group_data * group_data);
+void cvm_synchronous_thread_group_critical_section_end(cvm_synchronous_thread_group_data * group_data,bool keep_running);
 ///called from child thread
-void cvm_thread_critical_section_wait(cvm_thread * thread);
-void cvm_thread_initialise(cvm_thread * thread);
-void cvm_thread_finalise(cvm_thread * thread);
+void cvm_synchronous_thread_critical_section_wait(cvm_synchronous_thread * thread);
+void cvm_synchronous_thread_initialise(cvm_synchronous_thread * thread);
+void cvm_synchronous_thread_finalise(cvm_synchronous_thread * thread);
 
 
 
