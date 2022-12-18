@@ -142,6 +142,7 @@ typedef struct cvm_vk_managed_buffer
 
     uint32_t last_used_allocation;///used for setting left/right of new allocations
 
+    ///for various reasons can't/shouldn't use generic heap data structure here
     cvm_vk_available_temporary_allocation_heap available_temporary_allocations[32];
     uint32_t available_temporary_allocation_bitmask;
     uint32_t base_temporary_allocation_size_factor;
@@ -151,13 +152,7 @@ typedef struct cvm_vk_managed_buffer
     /// also operates as flag as to whether staging is necessary and how to handle release/free operations
     /// can hypothetically make regions available straight away after freeing on non-uma systems (no release queue) but probably not worth it to do so and just use the free sequence
 
-/// relevant data for copying, if UMA none of what follows will be used
 
-    cvm_vk_buffer_copy_list pending_copies;///DELETE
-
-    ///can probably delete following
-    cvm_vk_buffer_barrier_list copy_release_barriers;
-    cvm_vk_buffer_barrier_list copy_acquire_barriers;
     ///could have an arbitrary number of cvm_vk_managed_buffer_barrier_list, allowing for more than 1 frame of delay
     ///but after the number exceeds the number of swapchain images barriers become unnecessary unless transferring between queue families
 
@@ -165,145 +160,43 @@ typedef struct cvm_vk_managed_buffer
     uint32_t copy_dst_queue_family;///DELETE
 
     uint16_t copy_update_counter;///DELETE
-    uint16_t copy_delay;///DELETE
+    uint16_t copy_delay;///DELETE always 2! (for regular staged copies, 0 for inline, 0 for UMA)
     /// acquire barrier only relevant when a dedicated transfer queue family is involved
     /// is used to acquire ownership of buffer regions after they were released on transfer queue family
     /// when this is the case, upon submitting copies, need to swap these 2 structs and reset the (new) transfer barrier list
 
-    ///fuuuuck copy actions need to happen in correct command buffer which isn't always just the graphics CB!
-    /// schedule preemptive local copy actions
 
-
-
-
-    /**
-    creating a buffer allocation adds it to the appropriate list of ALL operations that must happen
-
-
-    for now EVERYTHING will use low priority queue, high priority queue would/will require the staging buffer to be moved around (QFOT)
-        and worse, if high priority mode is to be used on CPT queues they will require their own staging buffer OR the QFOT associated with them will need to be performed per region
-            QFOT requirement mean for zero latency to be viable the staging buffer will need to be owned by GFX by default and most staging regions will need to be given to DMA en masse
-                ^ probably means its better to have staging buffer (or at least staging regions) per queue OR to only allow high priority staging on graphics
-
-    will only technically support 2 destination queue families (compute and graphics) as copy destinations BUT will want varying entry points (queues) for resource acquisition
-
-    add/get entrypoint (index) which it's the users responsibility to handle, 0th is always graphics, so add should specifically call out compute?
-        ^ with such a long delay anyway is there any point allowing entrypoints throughout a single queue? probably not
-
-
-
-          CPT (this represents direct handoff (no need to init buffer region)
-        /
-    GFX   GFX   GFX   GFX
-        \     X     /
-          DMA   DMA
-              \
-                CPT
-
-    try to avoid same queue semaphores (GFX specifically) because this imposes a global memory barrier and will hurt performance
-
-    acquire memory:
-        if non-mapped and graphics queue: its just available
-        if non-mapped and compute: it needs to first be transferred to compute from graphics with ALL possible access and stage masks as source
-            ^ (will need to use on compute queue but thats always going to be write, perhaps can avoid? probably not worth it)
-        if mapped: need to stage and copy, first transferring to DMA queue with all possible access and stage masks as source
-
-
-
-    go to access memory: check if its copy has completed: if so add a barrier, either
-        immediately in command buffer -- expensive
-        or at start of current command buffer -- requires universal use of secondary command buffers to ensure commands are executed at the correct time
-            ^ seeing as first use will be needed by DMA end barrier anyway (and so should be submitted as part of initial acquisition) we KNOW which barrier to insert and on which queue/cb so it should be possible to schedule this!
-        or submit barrier in this frame and ACTUALLY make it available in the next -- adds delay
-
-
-        okay
-        add_mapped_buffer_range(uint32_t destination_queue_identifier,VkPipelineStageFlags2 stage_mask,VkAccessFlags2 access_mask)
-
-
-
-    entrypoint can be per module queue based number - graphics is always queue 0, and have up to N compute queues exist
-
-    FUCK - need to keep track of stage mask required by command buffer (entrypoint) to use with wait/signal semaphores of submission
-        ^ add to signal mask upon release (last use in graphics/compute, copy write in DMA)
-        ^ add to wait mask upon acquire (first use in graphics/compute, copy write in DMA)
-                ^ copy write is only use in DMA really
-
-
-    per frame here need:
-
-    end of graphics outgoing barriers (GFX to DMA) and matching semaphore based requirements,
-            ^ these barriers should NEVER need source access masks or stage masks as all previous ops should have been flushed via a previous barrier upon deletion
-            ^ and dst access will always be VK_ACCESS_MEMORY_WRITE_BIT and stage VK_PIPELINE_STAGE_2_COPY_BIT
-    the later incoming barriers (DMA to GFX or DMA to CPT) that will be needed, along with matching semaphores to be signaled (match all together?)
-    list of copies to do (DMA only, simple)
-
-
-
-
-    DMA queue's timeline semaphore will increase based on amount of work done across all modules so CANNOT use it to track availability (though it is required as wait for on for all receiving entrypoints)
-    need to track availability PER ENTRYPOINT, thus resource must know which entrypoint its applicable to (honestly quite reasonable)
-
-
-    release memory: release must specify correct access and stage masks related to the resources last use, as well as queuing up operation
-
-    if on graphics is made available next frame as its known that actions are completed (is this strictly true? have all caches been flushed in a guaranteed fashion?)
-        ^ perhaps still add a barrier, though a single sided one
-
-    if on compute pass back to compute (QFOT)
-
-
-    as the next usage isn't known for any of these use VK_ACCESS_MEMORY_WRITE_BIT (only write as the contents are effectively invalid) and VK_PIPELINE_STAGE_2_ALL_COMMANDS_BIT
-        ^ above commands(barriers) should flush all necessary caches, is it then actually necessary to pass resources to the DMA queue (can try it i guess)
-
-    only once the graphics queue has control again can a resource truly be freed
-
-    how to handle deletion on a frame a resource is created? (or before its actually available) ?? -- question for later
-
-
-
-
-    Signalling a semaphore waits for all stages to complete, and all memory accesses are made available automatically. Similarly, waiting for a semaphore will make all memory accesses available, and prevent further work from being started until it is signalled. Note that in the case of QueueSubmit there is an explicit set of stages to prevent running in VkSubmitInfo::pWaitDstStageMask - for all other semaphore uses execution of all work is prevented.
-
-        ^ barrier still needed for QFOT
-
-
-             o------------------------- barriers/copies generated during GFX, so as long as all lists of barriers get executed at the start they should be fine to recycle immediately
-             |                                         ^ NO! INCORRECT! the return to GFX doesnt happen in the following GFX iteration but the one after that so we need to cycle this shit!
-             |              o----- THIS ONE this is the only data that actually needs to get stored long term
-             |              |
-    GFX->DMA(b) (b)copy(b) (b)DMA->GFX
-                         ^ actually DST (w/e the destination is)
-    */
-
-    /// following part only is destination queue/cb independent so should/may be stored here (perhaps separate out?)
+    ///paradigm of processing deletion list after its known to be complete (via list of allocation to be made available after timeline semaphore "signals completion) allows this whole process to be SO much simpler
+    /// ^ no need for work->transfer dependencies!
 
     cvm_vk_staging_buffer * staging_buffer;///for when mapping is not available :p
 
-    uint16_t cycle_counter;///needs to ONLY ever be incremented once a frame, used for comparing to values stored on buffer ranges
 
-    ///will always be the same regardless of where the contents end up, should be performed in same "frame" the were generated, just on the DMA queue
-    VkBufferCopy * pending_copy_actions_;
-    uint32_t pending_copy_space_;
-    uint32_t pending_copy_count_;
+    ///
+    atomic_uint_fast32_t deletion_spinlock;
+    u32_list * deleted_temporary_allocation_indices;
+    uint16_t deletion_cycle_count;///same as swapchain image count used to initialise this
+    uint16_t deletion_cycle_index;
 
-    ///following completely irrelevant as no QFOT is required, see excerpt from spec below
-    ///cvm_vk_managed_buffer_barrier_list graphics_to_transfer_release;
-    ///cvm_vk_managed_buffer_barrier_list graphics_to_transfer_acquire;
 
-    /// per frame, built up then flushed outside threaded section
-    /// move this stuff to cvm list, including smart expansion algorithm?
-    uint32_t * deleted_temporary_allocation_indices;
-    uint32_t deleted_temporary_allocation_count;
-    uint32_t deleted_temporary_allocation_space;
+
+    ///will always be the same regardless of where the contents end up, should be performed in same "frame" the were generated, just on the DMA queue, which will wait on graphics!
+    cvm_vk_buffer_copy_list pending_copies;
+    cvm_vk_buffer_barrier_list copy_release_barriers;
+
+    cvm_vk_buffer_barrier_list copy_acquire_barriers;///DELETE
+    ///above should be moved to "per queue" and be cycled, replace with cvm_vk_managed_buffer_pending_queue_acquires
+
+    /// OOOOH, transfer queue (unified) should have singular per frame update of shared availability token!
+
+
+    ///make memory available again when its KNOWN to be unused, either by swapchan image acquisition or by queue semaphore testing
+    /// module batch wouldn't be a bad place...
 
     atomic_uint_fast32_t copy_spinlock;///put at bottom in order to get padding between spinlocks (other being acquire_spinlock)
 }
 cvm_vk_managed_buffer;
 
-
-/// deletions happen at the end of the frame will save hassle. assuming we're using the per queue semaphore requirement (which i now think is a good idea)
-///     ^ store most recent semaphore per relevant queue and add it as a wait for each and every "fisrt per frame" submission of a *different* queue
 
 /// transfer needs to wait on appropriate graphics semaphore with stages VK_PIPELINE_STAGE_2_ALL_GRAPHICS_BIT from queues where deletions happened (and the same for compute queues with VK_PIPELINE_STAGE_2_COMPUTE_SHADER_BIT)
 ///     ^ this is a simple solution to a major problem, i LOVE it, it also reduces number of semaphore waits IF sources of deletions (command buffer/queue and last use) can actually be tracked!
@@ -315,26 +208,23 @@ cvm_vk_managed_buffer;
 ///             ^ only signalled if/when deletion ops are needed
 ///                 ^ gets messy really fast, last-first per queue semaphore dependency is fine IMO, with managed buffer release
 
-typedef struct ///this whole struct is flushed/executed at the start of a queue (usually per module, though not necessarily) then filled up again throughout the frame
-{
-    VkBufferMemoryBarrier2 * transfer_release_barriers;///QFOT releases, on transfer thread
-    VkBufferMemoryBarrier2 * acquire_barriers;///QFOT acquires, emptied/invalidated at start of frame then built up as transfer releases are
 
-    cvm_vk_timeline_semaphore transfer_complete_signal;///transfer complete semaphore from last frame, waited upon by next graphics, always with stages being
 
-    ///FUUUCK deletions REALLY need a CPU side wait, don't they... UNLESS we REALLY do stack up all deletion sources and properly wait on them per managed buffer... (might not actually be so bad....)
-    ///     ^ there should be benefit in improved timing if ALWAYS recording last usages of managed buffer per queue (the semaphore and appropriate stages)
-    /// REQUIRE that deleted resource is NOT used this frame
-}
-cvm_vk_managed_buffer_pending_events;
+///move following to sub module?? - makes sense as sub module would be how transfer queue is accessed, though 2xN array makes more sense than Nx2
+///this whole struct is flushed/executed at the start of a queue (usually per module, though not necessarily) then filled up again throughout the frame
+/// exists per queue and must have 2 copies on the move at all times
+//typedef struct cvm_vk_managed_buffer_pending_queue_acquires
+//{
+//    cvm_vk_buffer_barrier_list acquire_barriers[2];
+//    ///following will be the same across ALL queues per cycle position AND always be the same semaphore (just different valued)
+//    ///cvm_vk_timeline_semaphore transfer_complete_signal;///transfer complete semaphore from last frame, waited upon by graphics AFTER next (2 frame delay), always with stages being all parts of graphics/compute
+//}
+//cvm_vk_managed_buffer_pending_queue_acquires;
 
 ///called with command buffers (payloads) that do work on the resources
-void cvm_vk_managed_buffer_add_work_acquire_barriers(cvm_vk_managed_buffer * mb,cvm_vk_module_work_payload * payload);
-void cvm_vk_managed_buffer_add_work_release_barriers(cvm_vk_managed_buffer * mb,cvm_vk_module_work_payload * payload);
-
+void cvm_vk_managed_buffer_add_acquire_barriers(cvm_vk_managed_buffer * mb,cvm_vk_module_work_payload * payload);
 ///called solely on transfer (DMA) payloads/queues
-void cvm_vk_managed_buffer_add_copy_acquire_barriers(cvm_vk_managed_buffer * mb,cvm_vk_module_work_payload * payload);
-void cvm_vk_managed_buffer_add_copy_release_barriers(cvm_vk_managed_buffer * mb,cvm_vk_module_work_payload * payload);
+void cvm_vk_managed_buffer_add_release_barriers(cvm_vk_managed_buffer * mb,cvm_vk_module_work_payload * payload);
 
 
 
@@ -362,11 +252,18 @@ SHOULD be skipped.
 fuck. yes.   confirmation
 */
 
-void cvm_vk_managed_buffer_create(cvm_vk_managed_buffer * buffer,uint32_t buffer_size,uint32_t min_size_factor,VkBufferUsageFlags usage,bool multithreaded,bool host_visible);
+void cvm_vk_managed_buffer_create(cvm_vk_managed_buffer * mb,uint32_t buffer_size,uint32_t min_size_factor,VkBufferUsageFlags usage,bool multithreaded,bool host_visible);
+void cvm_vk_managed_buffer_update(cvm_vk_managed_buffer * mb,uint32_t deletion_cycle_count);
+///deletion_cycle_count should be initialised with swapchain image count in the simple paradigm, should essentially be used to ensure a frame delay sufficient to prevent re-use of "deleted" resources that are still in flight
 void cvm_vk_managed_buffer_destroy(cvm_vk_managed_buffer * mb);
 
+///as with all uses of this paradigm, if all swapchain images aren't actually cycled through, the deletion/free list may get stuck in limbo, may want to test potentially completed in-flight-frame semaphores occasionally?
+///     ^ perhaps only when frame delay is greater than swapchain image count?
+void cvm_vk_managed_buffer_process_deletion_list(cvm_vk_managed_buffer * mb,uint32_t deletion_cycle_index);
+
 bool cvm_vk_managed_buffer_acquire_temporary_allocation(cvm_vk_managed_buffer * mb,uint64_t size,uint32_t * allocation_index,uint64_t * offset);
-void cvm_vk_managed_buffer_release_temporary_allocation(cvm_vk_managed_buffer * mb,uint32_t allocation_index);
+void cvm_vk_managed_buffer_release_temporary_allocation(cvm_vk_managed_buffer * mb,uint32_t allocation_index);///schedule for deletion with simple cycling of frames (or other appropriate schedule)
+void cvm_vk_managed_buffer_delete_temporary_allocation(cvm_vk_managed_buffer * mb,uint32_t allocation_index);///delete immediately, must be correctly synchronised
 
 uint64_t cvm_vk_managed_buffer_acquire_permanent_allocation(cvm_vk_managed_buffer * mb,uint64_t size,uint64_t alignment);///cannot be released, exists until entire buffer is cleared or deleted
 
@@ -380,6 +277,7 @@ void cvm_vk_managed_buffer_submit_all_pending_copy_actions(cvm_vk_managed_buffer
 
 void cvm_vk_managed_buffer_bind_as_vertex(VkCommandBuffer cmd_buf,cvm_vk_managed_buffer * mb,uint32_t binding);
 void cvm_vk_managed_buffer_bind_as_index(VkCommandBuffer cmd_buf,cvm_vk_managed_buffer * mb,VkIndexType type);
+
 
 
 

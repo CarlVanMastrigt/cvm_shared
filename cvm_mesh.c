@@ -443,12 +443,14 @@ bool cvm_managed_mesh_load(cvm_managed_mesh * mm)
     return true;
 }
 
-void cvm_managed_mesh_relinquish(cvm_managed_mesh * mm)
+void cvm_managed_mesh_release(cvm_managed_mesh * mm)
 {
-    //assert(mm->is_temporary_allocation);
-    if(mm->allocated && mm->is_temporary_allocation)
+    assert(mm->is_temporary_allocation);///only temporary allocations should be released
+    if(mm->allocated)
     {
         cvm_vk_managed_buffer_release_temporary_allocation(mm->mb,mm->temporary_allocation_index);
+        mm->temporary_allocation_index=CVM_VK_INVALID_TEMPORARY_ALLOCATION;
+        mm->allocated=false;///set others?
     }
 }
 
@@ -490,11 +492,15 @@ void cvm_managed_mesh_create(cvm_managed_mesh * mm,cvm_vk_managed_buffer * mb,ch
     mm->loaded=false;
     mm->ready=false;
     mm->is_temporary_allocation=temporary;
+    mm->temporary_allocation_index=CVM_VK_INVALID_TEMPORARY_ALLOCATION;
 }
 
 void cvm_managed_mesh_destroy(cvm_managed_mesh * mm)
 {
-    cvm_managed_mesh_relinquish(mm);
+    if(mm->is_temporary_allocation && mm->allocated)
+    {
+        cvm_vk_managed_buffer_delete_temporary_allocation(mm->mb,mm->temporary_allocation_index);
+    }
     free(mm->filename);
 }
 

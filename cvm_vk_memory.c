@@ -76,6 +76,33 @@ void cvm_vk_managed_buffer_create(cvm_vk_managed_buffer * mb,uint32_t buffer_siz
 
     mb->copy_src_queue_family=cvm_vk_get_transfer_queue_family();
     mb->copy_dst_queue_family=cvm_vk_get_graphics_queue_family();///will have to add a way to use compute here
+
+
+    atomic_init(&mb->deletion_spinlock,0);
+    mb->deletion_cycle_count=0;
+    mb->deleted_temporary_allocation_indices=NULL;
+}
+
+void cvm_vk_managed_buffer_update(cvm_vk_managed_buffer * mb,uint32_t deletion_cycle_count)
+{
+    uint32_t i;
+
+    if(mb->deletion_cycle_count==deletion_cycle_count)return;
+
+    for(i=deletion_cycle_count;i<mb->deletion_cycle_count;i++)
+    {
+        assert(mb->deleted_temporary_allocation_indices[i].count==0);
+        u32_list_del(mb->deleted_temporary_allocation_indices+i);
+    }
+
+    mb->deleted_temporary_allocation_indices=realloc(mb->deleted_temporary_allocation_indices,sizeof(u32_list)*deletion_cycle_count);
+
+    for(i=mb->deletion_cycle_count;i<deletion_cycle_count;i++)
+    {
+        u32_list_ini(mb->deleted_temporary_allocation_indices+i);
+    }
+
+    mb->deletion_cycle_count=deletion_cycle_count;
 }
 
 void cvm_vk_managed_buffer_destroy(cvm_vk_managed_buffer * mb)
@@ -86,7 +113,10 @@ void cvm_vk_managed_buffer_destroy(cvm_vk_managed_buffer * mb)
     ///all temporary allocations should be freed at this point
     assert(mb->last_used_allocation==CVM_VK_INVALID_TEMPORARY_ALLOCATION);///ATTEMPTED TO DESTROY A BUFFER WITH ACTIVE ELEMENTS
 
-    for(i=0;i<32;i++)free(mb->available_temporary_allocations[i].heap);
+    for(i=0;i<32;i++)
+    {
+        free(mb->available_temporary_allocations[i].heap);
+    }
 
     free(mb->temporary_allocation_data);
 
@@ -94,6 +124,12 @@ void cvm_vk_managed_buffer_destroy(cvm_vk_managed_buffer * mb)
 
     cvm_vk_buffer_barrier_list_del(&mb->copy_release_barriers);
     cvm_vk_buffer_barrier_list_del(&mb->copy_acquire_barriers);
+
+    for(i=0;i<mb->deletion_cycle_count;i++)
+    {
+        assert(mb->deleted_temporary_allocation_indices[i].count==0);
+        u32_list_del(mb->deleted_temporary_allocation_indices+i);
+    }
 }
 
 bool cvm_vk_managed_buffer_acquire_temporary_allocation(cvm_vk_managed_buffer * mb,uint64_t size,uint32_t * allocation_index,uint64_t * allocation_offset)
@@ -121,8 +157,7 @@ bool cvm_vk_managed_buffer_acquire_temporary_allocation(cvm_vk_managed_buffer * 
     {
         next_index=mb->first_unused_temporary_allocation;
 
-        additional_allocations=mb->temporary_allocation_data_space;
-        additional_allocations=(additional_allocations&~(additional_allocations>>1 | additional_allocations>>2))>>2;///additional quarter of current size rounded down to power of 2
+        additional_allocations=cvm_allocation_increase_step(mb->temporary_allocation_data_space);
         assert(additional_allocations>=32);
         assert(!(additional_allocations&(additional_allocations-1)));
 
@@ -275,7 +310,7 @@ bool cvm_vk_managed_buffer_acquire_temporary_allocation(cvm_vk_managed_buffer * 
     return true;
 }
 
-void cvm_vk_managed_buffer_release_temporary_allocation(cvm_vk_managed_buffer * mb,uint32_t allocation_index)
+void cvm_vk_managed_buffer_delete_temporary_allocation(cvm_vk_managed_buffer * mb,uint32_t allocation_index)
 {
     uint32_t up,down,end,size_factor,offset;
     uint32_t * heap;
@@ -288,6 +323,8 @@ void cvm_vk_managed_buffer_release_temporary_allocation(cvm_vk_managed_buffer * 
     while(lock!=0 || !atomic_compare_exchange_weak(&mb->acquire_spinlock,&lock,1));
 
     allocations=mb->temporary_allocation_data;
+
+    assert(allocation_index!=CVM_VK_INVALID_TEMPORARY_ALLOCATION);
 
     if(allocation_index==mb->last_used_allocation)///could also check data.next==CVM_VK_INVALID_TEMPORARY_ALLOCATION
     {
@@ -419,6 +456,34 @@ void cvm_vk_managed_buffer_release_temporary_allocation(cvm_vk_managed_buffer * 
     }
 
     if(mb->multithreaded) atomic_store(&mb->acquire_spinlock,0);
+}
+
+void cvm_vk_managed_buffer_release_temporary_allocation(cvm_vk_managed_buffer * mb,uint32_t allocation_index)
+{
+    uint_fast32_t lock;
+    if(mb->multithreaded)do lock=atomic_load(&mb->deletion_spinlock);///rename to release spinlock? use a different paradigm?
+    while(lock!=0 || !atomic_compare_exchange_weak(&mb->acquire_spinlock,&lock,1));
+
+    u32_list_add(mb->deleted_temporary_allocation_indices+mb->deletion_cycle_index,allocation_index);
+
+    if(mb->multithreaded) atomic_store(&mb->deletion_spinlock,0);
+}
+
+/// should only be called in critical section
+/// maybe look at conditionally stripping use of spinlocks on delete function
+void cvm_vk_managed_buffer_process_deletion_list(cvm_vk_managed_buffer * mb,uint32_t deletion_cycle_index)
+{
+    u32_list * l;
+    uint32_t allocation_index;
+
+    assert(deletion_cycle_index<mb->deletion_cycle_count);
+
+    l=mb->deleted_temporary_allocation_indices+deletion_cycle_index;
+
+    while(u32_list_get(l,&allocation_index))
+    {
+        cvm_vk_managed_buffer_delete_temporary_allocation(mb,allocation_index);
+    }
 }
 
 uint64_t cvm_vk_managed_buffer_acquire_permanent_allocation(cvm_vk_managed_buffer * mb,uint64_t size,uint64_t alignment)

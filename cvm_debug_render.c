@@ -153,7 +153,7 @@ void create_debug_swapchain_dependent_render_data(VkRenderPass render_pass,uint3
                 .alphaToOneEnable=VK_FALSE
             }
         },
-        .pDepthStencilState=cvm_vk_get_default_greater_depth_stencil_state(),
+        .pDepthStencilState=cvm_vk_get_default_greater_depth_stencil_state(false),
         .pColorBlendState=(VkPipelineColorBlendStateCreateInfo[1])
         {
             {

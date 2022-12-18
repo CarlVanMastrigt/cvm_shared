@@ -79,7 +79,7 @@ void cvm_managed_mesh_destroy(cvm_managed_mesh * mm);
 
 bool cvm_managed_mesh_load(cvm_managed_mesh * mm);
 
-void cvm_managed_mesh_relinquish(cvm_managed_mesh * mm);
+void cvm_managed_mesh_release(cvm_managed_mesh * mm);
 
 void cvm_managed_mesh_render(cvm_managed_mesh * mm,VkCommandBuffer graphics_cb,uint32_t instance_count,uint32_t instance_offset);///assumes managed buffer used in creation was bound to appropriate points
 void cvm_managed_mesh_adjacency_render(cvm_managed_mesh * mm,VkCommandBuffer graphics_cb,uint32_t instance_count,uint32_t instance_offset);

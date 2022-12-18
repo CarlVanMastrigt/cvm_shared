@@ -24,8 +24,11 @@ along with cvm_shared.  If not, see <https://www.gnu.org/licenses/>.
 #ifndef CVM_DATA_STRUCTURES_H
 #define CVM_DATA_STRUCTURES_H
 
-
-
+///requires starting with bit only in top 2 set, best to use power of 2
+static inline uint32_t cvm_allocation_increase_step(uint32_t current_size)
+{
+    return (current_size&~(current_size>>1|current_size>>2))>>2;
+}
 
 
 #ifndef CVM_LIST
@@ -53,8 +56,7 @@ static inline uint32_t name##_list_add( name##_list * l , type value )          
     uint32_t n;                                                                 \
     if(l->count==l->space)                                                      \
     {                                                                           \
-        n=l->space;                                                             \
-        n=(n&~(n>>1|n>>2))>>2;                                                  \
+        n=cvm_allocation_increase_step(l->space);                               \
         l->list=realloc(l->list,sizeof( type )*(l->space+=n));                  \
     }                                                                           \
     l->list[l->count]=value;                                                    \
@@ -78,8 +80,7 @@ static inline type * name##_list_new( name##_list * l )                         
     uint32_t n;                                                                 \
     if(l->count==l->space)                                                      \
     {                                                                           \
-        n=l->space;                                                             \
-        n=(n&~(n>>1|n>>2))>>2;                                                  \
+        n=cvm_allocation_increase_step(l->space);                               \
         l->list=realloc(l->list,sizeof( type )*(l->space+=n));                  \
     }                                                                           \
     return l->list+l->count++;                                                  \
@@ -91,8 +92,7 @@ static inline uint32_t name##_list_add_multiple                                 
     uint32_t n;                                                                 \
     while((l->count+count) > l->space)                                          \
     {                                                                           \
-        n=l->space;                                                             \
-        n=(n&~(n>>1|n>>2))>>2;                                                  \
+        n=cvm_allocation_increase_step(l->space);                               \
         l->list=realloc(l->list,sizeof( type )*(l->space+=n));                  \
     }                                                                           \
     memcpy(l->list+l->count,values,sizeof( type )*count);                       \
@@ -105,8 +105,7 @@ static inline type * name##_list_ensure_space                                   
     uint32_t n;                                                                 \
     while((l->count+required_space) > l->space)                                 \
     {                                                                           \
-        n=l->space;                                                             \
-        n=(n&~(n>>1|n>>2))>>2;                                                  \
+        n=cvm_allocation_increase_step(l->space);                               \
         l->list=realloc(l->list,sizeof( type )*(l->space+=n));                  \
     }                                                                           \
     return (l->list+l->count);                                                  \
@@ -114,7 +113,8 @@ static inline type * name##_list_ensure_space                                   
 
 #endif
 
-
+CVM_LIST(uint32_t,u32,16)
+///used pretty universally
 
 
 

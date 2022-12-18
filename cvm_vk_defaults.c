@@ -28,7 +28,8 @@ static VkPipelineViewportStateCreateInfo cvm_vk_default_viewport_state;
 static VkPipelineRasterizationStateCreateInfo cvm_vk_default_unculled_raster_state;
 static VkPipelineRasterizationStateCreateInfo cvm_vk_default_culled_raster_state;
 static VkPipelineMultisampleStateCreateInfo cvm_vk_default_multisample_state;
-static VkPipelineDepthStencilStateCreateInfo cvm_vk_default_greater_depth_stencil_state;
+static VkPipelineDepthStencilStateCreateInfo cvm_vk_default_greater_depth_stencil_write_state;
+static VkPipelineDepthStencilStateCreateInfo cvm_vk_default_greater_depth_stencil_read_state;
 static VkPipelineDepthStencilStateCreateInfo cvm_vk_default_equal_depth_stencil_state;
 static VkPipelineDepthStencilStateCreateInfo cvm_vk_default_null_depth_stencil_state;
 static VkPipelineColorBlendAttachmentState cvm_vk_default_null_blend_state;
@@ -147,7 +148,7 @@ void cvm_vk_create_defaults(void)
         .primitiveRestartEnable=VK_FALSE
     };
 
-    cvm_vk_default_unculled_raster_state=(VkPipelineRasterizationStateCreateInfo)
+    cvm_vk_default_culled_raster_state=cvm_vk_default_unculled_raster_state=(VkPipelineRasterizationStateCreateInfo)
     {
         .sType=VK_STRUCTURE_TYPE_PIPELINE_RASTERIZATION_STATE_CREATE_INFO,
         .pNext=NULL,
@@ -155,7 +156,7 @@ void cvm_vk_create_defaults(void)
         .depthClampEnable=VK_FALSE,
         .rasterizerDiscardEnable=VK_FALSE,
         .polygonMode=VK_POLYGON_MODE_FILL,
-        .cullMode=VK_CULL_MODE_NONE,
+        //.cullMode=,
         .frontFace=VK_FRONT_FACE_COUNTER_CLOCKWISE,
         .depthBiasEnable=VK_FALSE,
         .depthBiasConstantFactor=0.0,
@@ -163,23 +164,8 @@ void cvm_vk_create_defaults(void)
         .depthBiasSlopeFactor=0.0,
         .lineWidth=1.0
     };
-
-    cvm_vk_default_culled_raster_state=(VkPipelineRasterizationStateCreateInfo)
-    {
-        .sType=VK_STRUCTURE_TYPE_PIPELINE_RASTERIZATION_STATE_CREATE_INFO,
-        .pNext=NULL,
-        .flags=0,
-        .depthClampEnable=VK_FALSE,
-        .rasterizerDiscardEnable=VK_FALSE,
-        .polygonMode=VK_POLYGON_MODE_FILL,
-        .cullMode=VK_CULL_MODE_BACK_BIT,
-        .frontFace=VK_FRONT_FACE_COUNTER_CLOCKWISE,
-        .depthBiasEnable=VK_FALSE,
-        .depthBiasConstantFactor=0.0,
-        .depthBiasClamp=0.0,
-        .depthBiasSlopeFactor=0.0,
-        .lineWidth=1.0
-    };
+    cvm_vk_default_unculled_raster_state.cullMode=VK_CULL_MODE_NONE;
+    cvm_vk_default_culled_raster_state.cullMode=VK_CULL_MODE_BACK_BIT;
 
     cvm_vk_default_multisample_state=(VkPipelineMultisampleStateCreateInfo)
     {
@@ -194,13 +180,13 @@ void cvm_vk_create_defaults(void)
         .alphaToOneEnable=VK_FALSE
     };
 
-    cvm_vk_default_greater_depth_stencil_state=(VkPipelineDepthStencilStateCreateInfo)
+    cvm_vk_default_greater_depth_stencil_write_state=cvm_vk_default_greater_depth_stencil_read_state=(VkPipelineDepthStencilStateCreateInfo)
     {
         .sType=VK_STRUCTURE_TYPE_PIPELINE_DEPTH_STENCIL_STATE_CREATE_INFO,
         .pNext=NULL,
         .flags=0,
         .depthTestEnable=VK_TRUE,
-        .depthWriteEnable=VK_TRUE,
+        //.depthWriteEnable,
         .depthCompareOp=VK_COMPARE_OP_GREATER,
         .depthBoundsTestEnable=VK_FALSE,
         .stencilTestEnable=VK_FALSE,
@@ -227,6 +213,9 @@ void cvm_vk_create_defaults(void)
         .minDepthBounds=0.0,
         .maxDepthBounds=1.0,
     };
+    cvm_vk_default_greater_depth_stencil_write_state.depthWriteEnable=VK_TRUE;
+    cvm_vk_default_greater_depth_stencil_read_state.depthWriteEnable=VK_FALSE;
+
 
     cvm_vk_default_equal_depth_stencil_state=(VkPipelineDepthStencilStateCreateInfo)
     {
@@ -473,13 +462,14 @@ VkPipelineMultisampleStateCreateInfo * cvm_vk_get_default_multisample_state(void
     return &cvm_vk_default_multisample_state;
 }
 
-VkPipelineDepthStencilStateCreateInfo * cvm_vk_get_default_greater_depth_stencil_state(void)
+VkPipelineDepthStencilStateCreateInfo * cvm_vk_get_default_greater_depth_stencil_state(bool write)
 {
-    return &cvm_vk_default_greater_depth_stencil_state;
+    return write ? &cvm_vk_default_greater_depth_stencil_write_state : &cvm_vk_default_greater_depth_stencil_read_state;
 }
 
-VkPipelineDepthStencilStateCreateInfo * cvm_vk_get_default_equal_depth_stencil_state(void)
+VkPipelineDepthStencilStateCreateInfo * cvm_vk_get_default_equal_depth_stencil_state(bool write)
 {
+    assert(!write);
     return &cvm_vk_default_equal_depth_stencil_state;
 }
 
