@@ -933,7 +933,6 @@ cvm_vk_timeline_semaphore cvm_vk_submit_graphics_work(cvm_vk_module_work_payload
     uint32_t wait_count=0;
     VkSemaphoreSubmitInfo signal_semaphores[2];
     uint32_t signal_count=0;
-    VkCommandBufferSubmitInfo command_buffer;
     VkSubmitInfo2 submit_info;
 
     uint32_t i;
@@ -1627,6 +1626,8 @@ void cvm_vk_create_module_data(cvm_vk_module_data * module_data,uint32_t sub_bat
         cvm_vk_buffer_barrier_list_ini(&module_data->transfer_data[i][j].acquire_barriers);
         module_data->transfer_data[i][j].semaphore_wait_value=0;
         module_data->transfer_data[i][j].wait_stages=VK_PIPELINE_STAGE_2_NONE;
+        module_data->transfer_data[i][j].associated_queue_family_index = (j==CVM_VK_GRAPHICS_QUEUE_INDEX)?cvm_vk_graphics_queue_family:cvm_vk_graphics_queue_family;
+        #warning NEED TO SET ABOVE COMPUTE VARIANT APPROPRIATELY! USING cvm_vk_graphics_queue_family WILL NOT DO!
     }
 }
 
@@ -1733,10 +1734,9 @@ void cvm_vk_init_batch_primary_graphics_payload(cvm_vk_module_batch * mb,cvm_vk_
     {
         assert( !(mb->queue_submissions_this_batch&1u<<queue_index));
 
-
         if(payload->transfer_data->acquire_barriers.count)
         {
-            ///add resource acquires
+            ///add resource acquires QFOT
             VkDependencyInfo copy_aquire_dependencies=
             {
                 .sType=VK_STRUCTURE_TYPE_DEPENDENCY_INFO,
@@ -1750,6 +1750,10 @@ void cvm_vk_init_batch_primary_graphics_payload(cvm_vk_module_batch * mb,cvm_vk_
                 .pImageMemoryBarriers=NULL
             };
             vkCmdPipelineBarrier2(payload->command_buffer,&copy_aquire_dependencies);
+
+            #warning assert queue families are actually different! before performing barriers (perhaps if instead of asserting, not sure yet)
+
+            assert(payload->transfer_data->associated_queue_family_index+=cvm_vk_transfer_queue_family);
 
             ///add transfer waits as appropriate
             #warning make wait addition a function

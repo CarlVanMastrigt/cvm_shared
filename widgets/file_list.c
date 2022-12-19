@@ -1012,9 +1012,9 @@ static void file_list_widget_error_force_button_function(widget * w)
     assert(fl->action);
     if(fl->action)
     {
-        if(fl->action(fl,true))
+        if(fl->action((widget*)fl,true))
         {
-            file_list_widget_sucessful_action_cleanup(fl);
+            file_list_widget_sucessful_action_cleanup((widget*)fl);
         }
         else
         {

@@ -58,7 +58,6 @@ typedef struct cvm_managed_mesh
 
     uint16_t is_temporary_allocation:1;
     ///stages of creation
-    uint16_t allocated:1;///REMOVE THIS
     uint16_t loaded:1;///data was loaded to staging buffer in preparation for copy
     uint16_t ready:1;
     uint16_t freeing:1;///backing memory was freed, wait on availability token
@@ -77,12 +76,12 @@ cvm_managed_mesh;
 void cvm_managed_mesh_create(cvm_managed_mesh * mm,cvm_vk_managed_buffer * mb,char * filename,uint16_t flags,bool temporary);
 void cvm_managed_mesh_destroy(cvm_managed_mesh * mm);
 
-bool cvm_managed_mesh_load(cvm_managed_mesh * mm);
+bool cvm_managed_mesh_load(cvm_managed_mesh * mm,cvm_vk_module_work_payload * work_payload);
 
-void cvm_managed_mesh_release(cvm_managed_mesh * mm);
+void cvm_managed_mesh_dismiss(cvm_managed_mesh * mm);
 
-void cvm_managed_mesh_render(cvm_managed_mesh * mm,VkCommandBuffer graphics_cb,uint32_t instance_count,uint32_t instance_offset);///assumes managed buffer used in creation was bound to appropriate points
-void cvm_managed_mesh_adjacency_render(cvm_managed_mesh * mm,VkCommandBuffer graphics_cb,uint32_t instance_count,uint32_t instance_offset);
+void cvm_managed_mesh_render(cvm_managed_mesh * mm,cvm_vk_module_work_payload * work_payload,uint32_t instance_count,uint32_t instance_offset);///assumes managed buffer used in creation was bound to appropriate points
+void cvm_managed_mesh_adjacency_render(cvm_managed_mesh * mm,cvm_vk_module_work_payload * work_payload,uint32_t instance_count,uint32_t instance_offset);
 
 
 typedef struct cvm_mesh_data_pos

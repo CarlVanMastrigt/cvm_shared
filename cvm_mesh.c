@@ -342,7 +342,7 @@ void cvm_mesh_load_file_body(FILE * f,cvm_mesh * mesh,uint16_t * indices,uint16_
 /// possible solution could involve fseek when data isn't desired, but this wouldn't solve the problem of vertex data which is tightly packed together
 /// would need to read data to temporary buffer and "deinterlace" or actually separate out the different vertex steams
 
-bool cvm_managed_mesh_load(cvm_managed_mesh * mm)
+bool cvm_managed_mesh_load(cvm_managed_mesh * mm,cvm_vk_module_work_payload * work_payload)
 {
     uint16_t *indices,*adjacency,*materials;
     uint16_t desired_flags;
@@ -352,7 +352,6 @@ bool cvm_managed_mesh_load(cvm_managed_mesh * mm)
     size_t vertex_data_size;
     uint32_t size;
     FILE * f;
-    bool success;
 
     f=fopen(mm->filename,"rb");
 
@@ -376,35 +375,20 @@ bool cvm_managed_mesh_load(cvm_managed_mesh * mm)
 
     if(mm->is_temporary_allocation)
     {
-        if(!mm->allocated)
-        {
-            success=cvm_vk_managed_buffer_acquire_temporary_allocation(mm->mb,size,&mm->temporary_allocation_index,&mm->buffer_offset);
+        ptr=cvm_vk_managed_buffer_acquire_temporary_allocation_with_mapping(mm->mb,size,work_payload->transfer_data,
+                VK_PIPELINE_STAGE_2_VERTEX_INPUT_BIT,VK_ACCESS_2_INDEX_READ_BIT|VK_ACCESS_2_VERTEX_ATTRIBUTE_READ_BIT,
+                &mm->temporary_allocation_index,&mm->buffer_offset,&mm->availability_token);
 
-            #warning, probably want to handle this case "elegantly"
-            assert(success || !fprintf(stderr,"INSUFFICIENT SPACE REMAINING IN BUFFER FOR MESH: %s\n",mm->filename));
-
-            mm->allocated=true;
-        }
-
-        #warning should probably be more specific with the stage and flags bits... (if possible)
-        ptr=cvm_vk_managed_buffer_get_temporary_allocation_mapping(mm->mb,mm->temporary_allocation_index,size,VK_PIPELINE_STAGE_2_VERTEX_INPUT_BIT,VK_ACCESS_2_INDEX_READ_BIT|VK_ACCESS_2_VERTEX_ATTRIBUTE_READ_BIT,&mm->availability_token);
         if(!ptr)return false;///could not allocate staging space!
         base_offset = current_offset = mm->buffer_offset;
     }
     else
     {
-        if(!mm->allocated)
-        {
-            mm->buffer_offset = cvm_vk_managed_buffer_acquire_permanent_allocation(mm->mb,size,2);
+        ///alignment 2 here b/c index data goes first, manually align actual vertex data
+        ptr=cvm_vk_managed_buffer_acquire_permanent_allocation_with_mapping(mm->mb,size,2,work_payload->transfer_data,
+                VK_PIPELINE_STAGE_2_VERTEX_INPUT_BIT,VK_ACCESS_2_INDEX_READ_BIT|VK_ACCESS_2_VERTEX_ATTRIBUTE_READ_BIT,
+                &mm->buffer_offset,&mm->availability_token);
 
-            #warning, probably want to handle this case "elegantly"
-            assert(mm->buffer_offset || !fprintf(stderr,"INSUFFICIENT SPACE REMAINING IN BUFFER FOR MESH: %s\n",mm->filename));
-
-            mm->allocated=true;
-        }
-
-        #warning should probably be more specific with the stage and flags bits... (if possible)
-        ptr=cvm_vk_managed_buffer_get_permanent_allocation_mapping(mm->mb,mm->buffer_offset,size,VK_PIPELINE_STAGE_2_VERTEX_INPUT_BIT,VK_ACCESS_2_INDEX_READ_BIT|VK_ACCESS_2_VERTEX_ATTRIBUTE_READ_BIT,&mm->availability_token);
         if(!ptr)return false;///could not allocate staging space!
         base_offset = current_offset = mm->buffer_offset;
     }
@@ -443,43 +427,43 @@ bool cvm_managed_mesh_load(cvm_managed_mesh * mm)
     return true;
 }
 
-void cvm_managed_mesh_release(cvm_managed_mesh * mm)
+void cvm_managed_mesh_dismiss(cvm_managed_mesh * mm)
 {
     assert(mm->is_temporary_allocation);///only temporary allocations should be released
-    if(mm->allocated)
+    if(mm->loaded)
     {
-        cvm_vk_managed_buffer_release_temporary_allocation(mm->mb,mm->temporary_allocation_index);
+        cvm_vk_managed_buffer_dismiss_temporary_allocation(mm->mb,mm->temporary_allocation_index);
         mm->temporary_allocation_index=CVM_VK_INVALID_TEMPORARY_ALLOCATION;
-        mm->allocated=false;///set others?
+        mm->loaded=false;///set others?
     }
 }
 
 /// assumes managed buffer used in creation was bound to appropriate points
 /// assumes staging buffer used by managed buffer used in mesh creation is currently active (between begin and end)
-void cvm_managed_mesh_render(cvm_managed_mesh * mm,VkCommandBuffer graphics_cb,uint32_t instance_count,uint32_t instance_offset)
+void cvm_managed_mesh_render(cvm_managed_mesh * mm,cvm_vk_module_work_payload * work_payload,uint32_t instance_count,uint32_t instance_offset)
 {
     if(!mm->loaded)///should go first b/c can be used immediately on UMA systems
     {
-        cvm_managed_mesh_load(mm);
+        cvm_managed_mesh_load(mm,work_payload);
     }
 
     if(mm->ready || (mm->loaded && (mm->ready=cvm_vk_availability_token_check(mm->availability_token,mm->mb->copy_update_counter,mm->mb->copy_delay))))
     {
-        vkCmdDrawIndexed(graphics_cb,mm->data.face_count*3,instance_count,mm->index_offset,mm->vertex_offset,instance_offset);
+        vkCmdDrawIndexed(work_payload->command_buffer,mm->data.face_count*3,instance_count,mm->index_offset,mm->vertex_offset,instance_offset);
     }
 }
 
-void cvm_managed_mesh_adjacency_render(cvm_managed_mesh * mm,VkCommandBuffer graphics_cb,uint32_t instance_count,uint32_t instance_offset)
+void cvm_managed_mesh_adjacency_render(cvm_managed_mesh * mm,cvm_vk_module_work_payload * work_payload,uint32_t instance_count,uint32_t instance_offset)
 {
     if(!mm->loaded)///should go first b/c can be used immediately on UMA systems
     {
-        cvm_managed_mesh_load(mm);
+        cvm_managed_mesh_load(mm,work_payload);
     }
 
     if(mm->ready || (mm->loaded && (mm->ready=cvm_vk_availability_token_check(mm->availability_token,mm->mb->copy_update_counter,mm->mb->copy_delay))))
     {
         //puts("RENDER");
-        vkCmdDrawIndexed(graphics_cb,mm->data.face_count*6,instance_count,mm->adjacency_offset,mm->vertex_offset,instance_offset);
+        vkCmdDrawIndexed(work_payload->command_buffer,mm->data.face_count*6,instance_count,mm->adjacency_offset,mm->vertex_offset,instance_offset);
     }
 }
 
@@ -488,7 +472,6 @@ void cvm_managed_mesh_create(cvm_managed_mesh * mm,cvm_vk_managed_buffer * mb,ch
     mm->filename=cvm_strdup(filename);
     mm->mb=mb;
     mm->data.flags=flags;
-    mm->allocated=false;
     mm->loaded=false;
     mm->ready=false;
     mm->is_temporary_allocation=temporary;
@@ -497,9 +480,9 @@ void cvm_managed_mesh_create(cvm_managed_mesh * mm,cvm_vk_managed_buffer * mb,ch
 
 void cvm_managed_mesh_destroy(cvm_managed_mesh * mm)
 {
-    if(mm->is_temporary_allocation && mm->allocated)
+    if(mm->is_temporary_allocation && mm->loaded)
     {
-        cvm_vk_managed_buffer_delete_temporary_allocation(mm->mb,mm->temporary_allocation_index);
+        cvm_vk_managed_buffer_release_temporary_allocation(mm->mb,mm->temporary_allocation_index);
     }
     free(mm->filename);
 }

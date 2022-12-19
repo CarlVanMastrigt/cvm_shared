@@ -184,7 +184,10 @@ typedef struct queue_transfer_synchronization_data
     VkPipelineStageFlags2 wait_stages;///is this necessary?? are the stage barriers in the acquire barriers enough?
 
     ///this is handled by submit only, so could easily be handled by an array in the module/batch itself
-    uint64_t semaphore_wait_value;///transfer semaphore
+    uint64_t semaphore_wait_value;///transfer semaphore value, value set upon transfer work submission!
+
+    ///set only at creation time
+    uint32_t associated_queue_family_index;
 }
 queue_transfer_synchronization_data;
 
@@ -204,6 +207,9 @@ cvm_vk_payload_flags;
 typedef struct cvm_vk_module_work_payload
 {
     ///can reasonably use queue id, stages and semaphore value here instead of a copy of the semaphore itself...
+
+    ///can also store secondary command buffer?
+    /// have flags/enum (to assert on) regarding nature of CB, primary? inline? secondary? compute?
 
     cvm_vk_timeline_semaphore waits[CVM_VK_PAYLOAD_MAX_WAITS];///this also allows host side semaphores so isn't that bad tbh...
     VkPipelineStageFlags2 wait_stages[CVM_VK_PAYLOAD_MAX_WAITS];
@@ -254,6 +260,7 @@ typedef struct cvm_vk_module_batch
     VkCommandPool transfer_pool;/// cannot have transfers in secondary command buffer (scb's need renderpass/subpass) and they arent needed anyway, so have 1 per module batch
     ///all transfer commands actually generated from stored ops in managed buffer(s) and managed texture pool(s)
     VkCommandBuffer transfer_pcb;///only for low priority uploads, high priority uploads should go in command buffer/queue that will use them
+    ///assert that above is only acquired and submitted once a frame!
 
 
     /// also keep in mind VK_SHARING_MODE_CONCURRENT where viable and profile it
@@ -294,6 +301,7 @@ void cvm_vk_init_batch_primary_graphics_payload(cvm_vk_module_batch * mb,cvm_vk_
 
 static inline bool cvm_vk_availability_token_check(uint16_t token_counter,uint16_t current_counter,uint16_t delay)
 {
+    //return true;
     return ((current_counter-token_counter)&0xFFFF)>=delay;
 }
 

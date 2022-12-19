@@ -451,7 +451,7 @@ void text_bar_widget_set_text(widget * w,char * text_to_copy)
     }
     else
     {
-        if(w->text_bar.free_text)free(w->text_bar.free_text);
+        if(w->text_bar.free_text)free(w->text_bar.text);
         w->text_bar.text=NULL;
     }
 
