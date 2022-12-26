@@ -447,7 +447,7 @@ void cvm_managed_mesh_render(cvm_managed_mesh * mm,cvm_vk_module_work_payload * 
         cvm_managed_mesh_load(mm,work_payload);
     }
 
-    if(mm->ready || (mm->loaded && (mm->ready=cvm_vk_availability_token_check(mm->availability_token,mm->mb->copy_update_counter,mm->mb->copy_delay))))
+    if(mm->ready || (mm->loaded && mm->availability_token != mm->mb->copy_update_counter))
     {
         vkCmdDrawIndexed(work_payload->command_buffer,mm->data.face_count*3,instance_count,mm->index_offset,mm->vertex_offset,instance_offset);
     }
@@ -460,7 +460,7 @@ void cvm_managed_mesh_adjacency_render(cvm_managed_mesh * mm,cvm_vk_module_work_
         cvm_managed_mesh_load(mm,work_payload);
     }
 
-    if(mm->ready || (mm->loaded && (mm->ready=cvm_vk_availability_token_check(mm->availability_token,mm->mb->copy_update_counter,mm->mb->copy_delay))))
+    if(mm->ready || (mm->loaded && mm->availability_token != mm->mb->copy_update_counter))
     {
         //puts("RENDER");
         vkCmdDrawIndexed(work_payload->command_buffer,mm->data.face_count*6,instance_count,mm->adjacency_offset,mm->vertex_offset,instance_offset);

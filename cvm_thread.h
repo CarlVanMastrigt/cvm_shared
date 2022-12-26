@@ -28,6 +28,8 @@ typedef int(*cvm_thread_function)(void*);
 
 
 
+
+/// 1 means locked, 0 unlocked
 static inline void cvm_atomic_lock_create(atomic_uint_fast32_t * spinlock)
 {
     atomic_init(spinlock,0);
@@ -37,7 +39,7 @@ static inline void cvm_atomic_lock_acquire(atomic_uint_fast32_t * spinlock)
 {
     uint_fast32_t lock;
     do lock=atomic_load(spinlock);
-    while(lock!=0 || !atomic_compare_exchange_weak(spinlock,&lock,1));
+    while(lock || !atomic_compare_exchange_weak(spinlock,&lock,1));
 }
 
 static inline void cvm_atomic_lock_release(atomic_uint_fast32_t * spinlock)

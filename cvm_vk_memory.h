@@ -50,6 +50,7 @@ typedef struct cvm_vk_staging_buffer
     uint32_t available_region_count;
 
     uint8_t * mapping;
+    bool mapping_coherent;
 }
 cvm_vk_staging_buffer;
 
@@ -100,9 +101,6 @@ cvm_vk_temporary_buffer_allocation_data;
 
 
 ///cannot use generic heap for this as a bunch of specialised things are done with this heap (randomised deletions, and tracked indices to support that)
-
-
-
 typedef struct cvm_vk_available_temporary_allocation_heap
 {
     uint32_t * heap;///indices of allocations
@@ -111,17 +109,9 @@ typedef struct cvm_vk_available_temporary_allocation_heap
 }
 cvm_vk_available_temporary_allocation_heap;
 
-typedef struct cvm_vk_managed_buffer_barrier_list
-{
-    VkBufferMemoryBarrier2 * barriers;
-    uint32_t space;
-    uint32_t count;
-}
-cvm_vk_managed_buffer_barrier_list;
-
 typedef struct cvm_vk_managed_buffer
 {
-    atomic_uint_fast32_t acquire_spinlock;///put at top in order to get padding between spinlocks (other being copy_spinlock)
+    atomic_uint_fast32_t acquire_spinlock;
     bool multithreaded;
 
     VkBuffer buffer;
@@ -148,55 +138,25 @@ typedef struct cvm_vk_managed_buffer
     uint32_t base_temporary_allocation_size_factor;
 
 
-    uint8_t * mapping;///can copy data in directly (no need for staging) on UMA systems
-    /// also operates as flag as to whether staging is necessary and how to handle release/free operations
-    /// can hypothetically make regions available straight away after freeing on non-uma systems (no release queue) but probably not worth it to do so and just use the free sequence
+
+    uint8_t * mapping;///can copy data in directly (no need for staging) on UMA systems, also operates as flag as to whether staging is necessary and how to handle release/free operations
+    bool mapping_coherent;///indicated whether flushing ranges is necessary when this buffer is mapped
+
+    cvm_vk_staging_buffer * staging_buffer;///for when mapping is not available
 
 
-    ///could have an arbitrary number of cvm_vk_managed_buffer_barrier_list, allowing for more than 1 frame of delay
-    ///but after the number exceeds the number of swapchain images barriers become unnecessary unless transferring between queue families
-
-    uint32_t copy_src_queue_family;///DELETE
-    uint32_t copy_dst_queue_family;///DELETE
-
-    uint16_t copy_update_counter;///DELETE
-    uint16_t copy_delay;///DELETE always 2! (for regular staged copies, 0 for inline, 0 for UMA)
-    /// acquire barrier only relevant when a dedicated transfer queue family is involved
-    /// is used to acquire ownership of buffer regions after they were released on transfer queue family
-    /// when this is the case, upon submitting copies, need to swap these 2 structs and reset the (new) transfer barrier list
+    ///elements scheduled for release, need to wait to make available until they are *definitely* deleted
+    atomic_uint_fast32_t dismissal_spinlock;
+    u32_stack * dismissed_temporary_allocation_indices;
+    uint16_t dismissal_cycle_count;///same as swapchain image count used to initialise this
+    uint16_t dismissal_cycle_index;
+    ///make memory available again when its KNOWN to be unused, use swapchain image availability (same as other buffer management strategies)
 
 
-    ///paradigm of processing deletion list after its known to be complete (via list of allocation to be made available after timeline semaphore "signals completion) allows this whole process to be SO much simpler
-    /// ^ no need for work->transfer dependencies!
-
-    cvm_vk_staging_buffer * staging_buffer;///for when mapping is not available :p
-
-
-    ///rename to dismissed, are elements scheduled for release
-    atomic_uint_fast32_t deletion_spinlock;
-    u32_stack * deleted_temporary_allocation_indices;
-    uint16_t deletion_cycle_count;///same as swapchain image count used to initialise this
-    uint16_t deletion_cycle_index;
-
-
-
-    ///will always be the same regardless of where the contents end up, should be performed in same "frame" the were generated, just on the DMA queue, which will wait on graphics!
+    atomic_uint_fast32_t copy_spinlock;
+    uint16_t copy_update_counter;
     cvm_vk_buffer_copy_stack pending_copies;
     cvm_vk_buffer_barrier_stack copy_release_barriers;
-    /// this is absolutely a build up and flush paradigm
-    //uint16_t availability_tracker;
-    /// need something to track availability of allocations, u32 may be better (more stable) option?
-    /// could incorporate into returned data? allocation_id -> allocation_metadata index,state,availability_token
-    /// needs to take into account decision made regarding 1 frame delay or 2 (synchronous DMA even allowing 1 frame delay is so awesome)
-
-
-    /// OOOOH, transfer queue (unified) should have singular per frame update of shared availability token!
-
-
-    ///make memory available again when its KNOWN to be unused, either by swapchan image acquisition or by queue semaphore testing
-    /// module batch wouldn't be a bad place...
-
-    atomic_uint_fast32_t copy_spinlock;///put at bottom in order to get padding between spinlocks (other being acquire_spinlock)
 }
 cvm_vk_managed_buffer;
 
@@ -217,8 +177,8 @@ fuck. yes.   confirmation
 */
 
 void cvm_vk_managed_buffer_create(cvm_vk_managed_buffer * mb,uint32_t buffer_size,uint32_t min_size_factor,VkBufferUsageFlags usage,bool multithreaded,bool host_visible);
-void cvm_vk_managed_buffer_update(cvm_vk_managed_buffer * mb,uint32_t deletion_cycle_count);
-///deletion_cycle_count should be initialised with swapchain image count in the simple paradigm, should essentially be used to ensure a frame delay sufficient to prevent re-use of "deleted" resources that are still in flight
+void cvm_vk_managed_buffer_update(cvm_vk_managed_buffer * mb,uint32_t dismissal_cycle_count);
+///dismissal_cycle_count should be initialised with swapchain image count in the simple paradigm, should essentially be used to ensure a frame delay sufficient to prevent re-use of "deleted" resources that are still in flight
 void cvm_vk_managed_buffer_destroy(cvm_vk_managed_buffer * mb);
 
 ///as with all uses of this paradigm, if all swapchain images aren't actually cycled through, the deletion/free list may get stuck in limbo, may want to test potentially completed in-flight-frame semaphores occasionally?
@@ -274,6 +234,7 @@ typedef struct cvm_vk_transient_buffer
     ///need to test atomic version isn't (significatly) slower than non-atomic
 
     uint8_t * mapping;
+    bool mapping_coherent;
 }
 cvm_vk_transient_buffer;
 

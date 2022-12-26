@@ -59,7 +59,10 @@ void cvm_vk_managed_buffer_create(cvm_vk_managed_buffer * mb,uint32_t buffer_siz
     mb->multithreaded=multithreaded;
     atomic_init(&mb->acquire_spinlock,0);
 
-    mb->mapping=cvm_vk_create_buffer(&mb->buffer,&mb->memory,usage,buffer_size,host_visible);///if this is non-null then probably UMA and thus can circumvent staging buffer
+    mb->mapping=NULL;
+    mb->mapping_coherent=false;
+
+    cvm_vk_create_buffer(&mb->buffer,&mb->memory,usage,buffer_size,host_visible,&mb->mapping,&mb->mapping_coherent);///if this is non-null then probably UMA and thus can circumvent staging buffer
 
     atomic_init(&mb->copy_spinlock,0);
 
@@ -67,41 +70,35 @@ void cvm_vk_managed_buffer_create(cvm_vk_managed_buffer * mb,uint32_t buffer_siz
     mb->staging_buffer=NULL;
 
     cvm_vk_buffer_copy_stack_ini(&mb->pending_copies);
-
     cvm_vk_buffer_barrier_stack_ini(&mb->copy_release_barriers);
 
     mb->copy_update_counter=0;
-    mb->copy_delay=(mb->mapping==NULL);///this shit needs serious review
 
-    mb->copy_src_queue_family=cvm_vk_get_transfer_queue_family();
-    mb->copy_dst_queue_family=cvm_vk_get_graphics_queue_family();///will have to add a way to use compute here
-
-
-    atomic_init(&mb->deletion_spinlock,0);
-    mb->deletion_cycle_count=0;
-    mb->deleted_temporary_allocation_indices=NULL;
+    atomic_init(&mb->dismissal_spinlock,0);
+    mb->dismissal_cycle_count=0;
+    mb->dismissed_temporary_allocation_indices=NULL;
 }
 
-void cvm_vk_managed_buffer_update(cvm_vk_managed_buffer * mb,uint32_t deletion_cycle_count)
+void cvm_vk_managed_buffer_update(cvm_vk_managed_buffer * mb,uint32_t dismissal_cycle_count)
 {
     uint32_t i;
 
-    if(mb->deletion_cycle_count==deletion_cycle_count)return;
+    if(mb->dismissal_cycle_count==dismissal_cycle_count)return;
 
-    for(i=deletion_cycle_count;i<mb->deletion_cycle_count;i++)
+    for(i=dismissal_cycle_count;i<mb->dismissal_cycle_count;i++)
     {
-        assert(mb->deleted_temporary_allocation_indices[i].count==0);
-        u32_stack_del(mb->deleted_temporary_allocation_indices+i);
+        assert(mb->dismissed_temporary_allocation_indices[i].count==0);
+        u32_stack_del(mb->dismissed_temporary_allocation_indices+i);
     }
 
-    mb->deleted_temporary_allocation_indices=realloc(mb->deleted_temporary_allocation_indices,sizeof(u32_stack)*deletion_cycle_count);
+    mb->dismissed_temporary_allocation_indices=realloc(mb->dismissed_temporary_allocation_indices,sizeof(u32_stack)*dismissal_cycle_count);
 
-    for(i=mb->deletion_cycle_count;i<deletion_cycle_count;i++)
+    for(i=mb->dismissal_cycle_count;i<dismissal_cycle_count;i++)
     {
-        u32_stack_ini(mb->deleted_temporary_allocation_indices+i);
+        u32_stack_ini(mb->dismissed_temporary_allocation_indices+i);
     }
 
-    mb->deletion_cycle_count=deletion_cycle_count;
+    mb->dismissal_cycle_count=dismissal_cycle_count;
 }
 
 void cvm_vk_managed_buffer_destroy(cvm_vk_managed_buffer * mb)
@@ -120,13 +117,12 @@ void cvm_vk_managed_buffer_destroy(cvm_vk_managed_buffer * mb)
     free(mb->temporary_allocation_data);
 
     cvm_vk_buffer_copy_stack_del(&mb->pending_copies);
-
     cvm_vk_buffer_barrier_stack_del(&mb->copy_release_barriers);
 
-    for(i=0;i<mb->deletion_cycle_count;i++)
+    for(i=0;i<mb->dismissal_cycle_count;i++)
     {
-        assert(mb->deleted_temporary_allocation_indices[i].count==0);
-        u32_stack_del(mb->deleted_temporary_allocation_indices+i);
+        assert(mb->dismissed_temporary_allocation_indices[i].count==0);
+        u32_stack_del(mb->dismissed_temporary_allocation_indices+i);
     }
 }
 
@@ -458,25 +454,26 @@ void cvm_vk_managed_buffer_release_temporary_allocation(cvm_vk_managed_buffer * 
 
 void cvm_vk_managed_buffer_dismiss_temporary_allocation(cvm_vk_managed_buffer * mb,uint32_t allocation_index)
 {
+    ///atomic stack? would be pretty simple to implement.
     uint_fast32_t lock;
-    if(mb->multithreaded)do lock=atomic_load(&mb->deletion_spinlock);///rename to release spinlock? use a different paradigm?
+    if(mb->multithreaded)do lock=atomic_load(&mb->dismissal_spinlock);///rename to release spinlock? use a different paradigm?
     while(lock!=0 || !atomic_compare_exchange_weak(&mb->acquire_spinlock,&lock,1));
 
-    u32_stack_add(mb->deleted_temporary_allocation_indices+mb->deletion_cycle_index,allocation_index);
+    u32_stack_add(mb->dismissed_temporary_allocation_indices+mb->dismissal_cycle_index,allocation_index);
 
-    if(mb->multithreaded) atomic_store(&mb->deletion_spinlock,0);
+    if(mb->multithreaded) atomic_store(&mb->dismissal_spinlock,0);
 }
 
 /// should only be called in critical section
 /// maybe look at conditionally stripping use of spinlocks on delete function
-void cvm_vk_managed_buffer_process_deletion_list(cvm_vk_managed_buffer * mb,uint32_t deletion_cycle_index)
+void cvm_vk_managed_buffer_process_deletion_list(cvm_vk_managed_buffer * mb,uint32_t dismissal_cycle_index)
 {
     u32_stack * stack;
     uint32_t allocation_index;
 
-    assert(deletion_cycle_index<mb->deletion_cycle_count);
+    assert(dismissal_cycle_index<mb->dismissal_cycle_count);
 
-    stack=mb->deleted_temporary_allocation_indices+deletion_cycle_index;
+    stack=mb->dismissed_temporary_allocation_indices+dismissal_cycle_index;
 
     while(u32_stack_get(stack,&allocation_index))
     {
@@ -676,8 +673,7 @@ void cvm_vk_managed_buffer_submit_all_pending_copy_actions(cvm_vk_managed_buffer
 
     mb->copy_update_counter++;
 
-    #warning need to check VK_MEMORY_PROPERTY_HOST_COHERENT to see if flushes are actually necessary
-    if(mb->mapping)/// is UMA system, no staging copies necessary
+    if(mb->mapping && mb->mapping_coherent)/// is UMA system, no staging copies necessary
     {
         VkMappedMemoryRange flush_range=(VkMappedMemoryRange)
         {
@@ -694,28 +690,25 @@ void cvm_vk_managed_buffer_submit_all_pending_copy_actions(cvm_vk_managed_buffer
     {
         if(mb->pending_copies.count)
         {
-            ///multithreading consideration shouldnt be necessary as this should only ever be called from the main thread relevant to this resource while no worker threads are operating on the resource
+            ///multithreaded consideration shouldn't be necessary as this should only ever be called from the main thread relevant to this resource while no worker threads are operating on the resource
 
             vkCmdCopyBuffer(transfer_cb,mb->staging_buffer->buffer,mb->buffer,mb->pending_copies.count,mb->pending_copies.stack);
             mb->pending_copies.count=0;
 
-            //if(mb->copy_src_queue_family!=mb->copy_dst_queue_family)///first barrier is only needed when QFOT is necessary
+            VkDependencyInfo copy_release_dependencies=
             {
-                VkDependencyInfo copy_release_dependencies=
-                {
-                    .sType=VK_STRUCTURE_TYPE_DEPENDENCY_INFO,
-                    .pNext=NULL,
-                    .dependencyFlags=0,
-                    .memoryBarrierCount=0,
-                    .pMemoryBarriers=NULL,
-                    .bufferMemoryBarrierCount=mb->copy_release_barriers.count,
-                    .pBufferMemoryBarriers=mb->copy_release_barriers.stack,
-                    .imageMemoryBarrierCount=0,
-                    .pImageMemoryBarriers=NULL
-                };
-                vkCmdPipelineBarrier2(transfer_cb,&copy_release_dependencies);
-                mb->copy_release_barriers.count=0;
-            }
+                .sType=VK_STRUCTURE_TYPE_DEPENDENCY_INFO,
+                .pNext=NULL,
+                .dependencyFlags=0,
+                .memoryBarrierCount=0,
+                .pMemoryBarriers=NULL,
+                .bufferMemoryBarrierCount=mb->copy_release_barriers.count,
+                .pBufferMemoryBarriers=mb->copy_release_barriers.stack,
+                .imageMemoryBarrierCount=0,
+                .pImageMemoryBarriers=NULL
+            };
+            vkCmdPipelineBarrier2(transfer_cb,&copy_release_dependencies);
+            mb->copy_release_barriers.count=0;
         }
     }
 }
@@ -731,10 +724,6 @@ void cvm_vk_managed_buffer_submit_all_batch_copy_actions(cvm_vk_managed_buffer *
 
 void cvm_vk_managed_buffer_bind_as_vertex(VkCommandBuffer cmd_buf,cvm_vk_managed_buffer * mb,uint32_t binding)
 {
-    /// vertex offset in draw assumes all verts have same offset, so it makes no sense in this paradigm to have multiple binding points from a single buffer!
-    #warning the above offset issue may become a MASSIVE hassle when isntance data gets involved, base-indexed vertex offsets may not be viable anymore
-    ///     ^ actually does have instanceOffset...
-
     VkDeviceSize offset=0;
     vkCmdBindVertexBuffers(cmd_buf,binding,1,&mb->buffer,&offset);
 }
@@ -759,6 +748,7 @@ void cvm_vk_staging_buffer_create(cvm_vk_staging_buffer * sb,VkBufferUsageFlags 
     atomic_init(&sb->active_offset,0);
     sb->total_space=0;
     sb->mapping=NULL;
+    sb->mapping_coherent=false;
     sb->buffer=VK_NULL_HANDLE;
     sb->memory=VK_NULL_HANDLE;
     sb->usage=usage;
@@ -803,7 +793,7 @@ void cvm_vk_staging_buffer_update(cvm_vk_staging_buffer * sb,uint32_t space_per_
             cvm_vk_destroy_buffer(sb->buffer,sb->memory,sb->mapping);
         }
 
-        sb->mapping=cvm_vk_create_buffer(&sb->buffer,&sb->memory,sb->usage,buffer_size,true);
+        cvm_vk_create_buffer(&sb->buffer,&sb->memory,sb->usage,buffer_size,true,&sb->mapping,&sb->mapping_coherent);
 
         atomic_store(&sb->active_offset,0);
         sb->active_region.start=0;///doesn't really need to be set here
@@ -869,10 +859,8 @@ void cvm_vk_staging_buffer_end(cvm_vk_staging_buffer * sb,uint32_t frame_index)
     offset=atomic_load(&sb->active_offset);
     start=sb->active_region.start;
 
-    if(offset < start)///if the buffer wrapped between begin and end
+    if(offset < start && sb->mapping_coherent)///if the buffer wrapped between begin and end
     {
-        #warning need to check VK_MEMORY_PROPERTY_HOST_COHERENT to see if flushes are actually necessary
-
         VkMappedMemoryRange flush_range=(VkMappedMemoryRange)
         {
             .sType=VK_STRUCTURE_TYPE_MAPPED_MEMORY_RANGE,
@@ -886,10 +874,8 @@ void cvm_vk_staging_buffer_end(cvm_vk_staging_buffer * sb,uint32_t frame_index)
         start=0;
     }
 
-    if(start<offset)///if anything was written that wasn't handled by the previous branch (i.e. we've looped around to the start o the staging buffer this frame)
+    if(start<offset && sb->mapping_coherent)///if anything was written that wasn't handled by the previous branch (i.e. we've looped around to the start o the staging buffer this frame)
     {
-        #warning need to check VK_MEMORY_PROPERTY_HOST_COHERENT to see if flushes are actually necessary
-
         VkMappedMemoryRange flush_range=(VkMappedMemoryRange)
         {
             .sType=VK_STRUCTURE_TYPE_MAPPED_MEMORY_RANGE,
@@ -1002,6 +988,7 @@ void cvm_vk_transient_buffer_create(cvm_vk_transient_buffer * tb,VkBufferUsageFl
     tb->space_per_frame=0;
     tb->max_offset=0;
     tb->mapping=NULL;
+    tb->mapping_coherent=false;
     tb->buffer=VK_NULL_HANDLE;
     tb->memory=VK_NULL_HANDLE;
     tb->usage=usage;
@@ -1027,11 +1014,12 @@ void cvm_vk_transient_buffer_update(cvm_vk_transient_buffer * tb,uint32_t space_
         {
             cvm_vk_destroy_buffer(tb->buffer,tb->memory,tb->mapping);
             tb->mapping=NULL;
+            tb->mapping_coherent=false;
         }
 
         if(total_space)
         {
-            tb->mapping=cvm_vk_create_buffer(&tb->buffer,&tb->memory,tb->usage,total_space,true);
+            cvm_vk_create_buffer(&tb->buffer,&tb->memory,tb->usage,total_space,true,&tb->mapping,&tb->mapping_coherent);
         }
     }
 
@@ -1069,10 +1057,8 @@ void cvm_vk_transient_buffer_end(cvm_vk_transient_buffer * tb)
 {
     uint32_t acquired_space=tb->space_per_frame - (tb->max_offset-atomic_load(&tb->current_offset)); /// max space - space remaining
 
-    if(acquired_space)
+    if(acquired_space && tb->mapping_coherent)
     {
-        #warning need to check VK_MEMORY_PROPERTY_HOST_COHERENT to see if flushes are actually necessary
-
         acquired_space=(((acquired_space-1)>>tb->alignment_size_factor)+1)<<tb->alignment_size_factor;
 
         VkMappedMemoryRange flush_range=(VkMappedMemoryRange)

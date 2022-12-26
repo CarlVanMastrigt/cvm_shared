@@ -1360,7 +1360,7 @@ void cvm_vk_free_memory(VkDeviceMemory memory)
 }
 
 ///unlike other functions, this one takes abstract/resultant data rather than just generic creation info
-void * cvm_vk_create_buffer(VkBuffer * buffer,VkDeviceMemory * memory,VkBufferUsageFlags usage,VkDeviceSize size,bool require_host_visible)
+void cvm_vk_create_buffer(VkBuffer * buffer,VkDeviceMemory * memory,VkBufferUsageFlags usage,VkDeviceSize size,bool require_host_visible,void ** mapping,bool * mapping_coherent)
 {
     /// prefer_host_local for staging buffer that is written to dynamically? maybe in the future
     /// instead have flags for usage that are used to determine which heap to use?
@@ -1387,7 +1387,8 @@ void * cvm_vk_create_buffer(VkBuffer * buffer,VkDeviceMemory * memory,VkBufferUs
 
     uint32_t i;
 
-    void * mapping=NULL;
+    *mapping=NULL;
+    *mapping_coherent=false;
 
     /// integrated graphics ONLY has shared heaps! (UMA) means there's no good way to test everything is working, but also means there's room for optimisation
     ///     ^ if staging is detected as not needed then don't do it? (but still need a way to test staging, circumvent_uma define? this won't really test things properly though...)
@@ -1413,16 +1414,16 @@ void * cvm_vk_create_buffer(VkBuffer * buffer,VkDeviceMemory * memory,VkBufferUs
             {
                 ///following if can be used to test staging on my UMA system
                 if(require_host_visible)///REMOVE
-                CVM_VK_CHECK(vkMapMemory(cvm_vk_device,*memory,0,VK_WHOLE_SIZE,0,&mapping));
+                CVM_VK_CHECK(vkMapMemory(cvm_vk_device,*memory,0,VK_WHOLE_SIZE,0,mapping));
+
+                *mapping_coherent=!!(cvm_vk_memory_properties.memoryTypes[i].propertyFlags&VK_MEMORY_PROPERTY_HOST_COHERENT_BIT);
             }
 
-            break;
+            return;
         }
     }
 
-    assert(i!=cvm_vk_memory_properties.memoryTypeCount);///COULD NOT FIND APPROPRIATE MEMORY FOR BUFFER ALLOCATION
-
-    return mapping;
+    assert(false);///COULD NOT FIND APPROPRIATE MEMORY FOR BUFFER ALLOCATION
 }
 
 void cvm_vk_destroy_buffer(VkBuffer buffer,VkDeviceMemory memory,void * mapping)
