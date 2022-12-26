@@ -174,15 +174,15 @@ typedef struct cvm_vk_managed_buffer
 
     ///rename to dismissed, are elements scheduled for release
     atomic_uint_fast32_t deletion_spinlock;
-    u32_list * deleted_temporary_allocation_indices;
+    u32_stack * deleted_temporary_allocation_indices;
     uint16_t deletion_cycle_count;///same as swapchain image count used to initialise this
     uint16_t deletion_cycle_index;
 
 
 
     ///will always be the same regardless of where the contents end up, should be performed in same "frame" the were generated, just on the DMA queue, which will wait on graphics!
-    cvm_vk_buffer_copy_list pending_copies;
-    cvm_vk_buffer_barrier_list copy_release_barriers;
+    cvm_vk_buffer_copy_stack pending_copies;
+    cvm_vk_buffer_barrier_stack copy_release_barriers;
     /// this is absolutely a build up and flush paradigm
     //uint16_t availability_tracker;
     /// need something to track availability of allocations, u32 may be better (more stable) option?
@@ -235,6 +235,7 @@ uint64_t cvm_vk_managed_buffer_acquire_permanent_allocation(cvm_vk_managed_buffe
 
 
 void cvm_vk_managed_buffer_submit_all_pending_copy_actions(cvm_vk_managed_buffer * mb,VkCommandBuffer transfer_cb);///includes necessary barriers
+void cvm_vk_managed_buffer_submit_all_batch_copy_actions(cvm_vk_managed_buffer * mb,cvm_vk_module_batch * batch);///includes necessary barriers
 /// for the love of god only call this once per buffer per frame, transfer and graphics cb necessary for case of QFOT (process acquisitions for previous frames releases)
 
 void cvm_vk_managed_buffer_bind_as_vertex(VkCommandBuffer cmd_buf,cvm_vk_managed_buffer * mb,uint32_t binding);

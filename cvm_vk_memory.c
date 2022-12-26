@@ -66,9 +66,9 @@ void cvm_vk_managed_buffer_create(cvm_vk_managed_buffer * mb,uint32_t buffer_siz
     #warning should have a runtime method to check if following is necessary, will be a decent help in setting up module buffer sizes
     mb->staging_buffer=NULL;
 
-    cvm_vk_buffer_copy_list_ini(&mb->pending_copies);
+    cvm_vk_buffer_copy_stack_ini(&mb->pending_copies);
 
-    cvm_vk_buffer_barrier_list_ini(&mb->copy_release_barriers);
+    cvm_vk_buffer_barrier_stack_ini(&mb->copy_release_barriers);
 
     mb->copy_update_counter=0;
     mb->copy_delay=(mb->mapping==NULL);///this shit needs serious review
@@ -91,14 +91,14 @@ void cvm_vk_managed_buffer_update(cvm_vk_managed_buffer * mb,uint32_t deletion_c
     for(i=deletion_cycle_count;i<mb->deletion_cycle_count;i++)
     {
         assert(mb->deleted_temporary_allocation_indices[i].count==0);
-        u32_list_del(mb->deleted_temporary_allocation_indices+i);
+        u32_stack_del(mb->deleted_temporary_allocation_indices+i);
     }
 
-    mb->deleted_temporary_allocation_indices=realloc(mb->deleted_temporary_allocation_indices,sizeof(u32_list)*deletion_cycle_count);
+    mb->deleted_temporary_allocation_indices=realloc(mb->deleted_temporary_allocation_indices,sizeof(u32_stack)*deletion_cycle_count);
 
     for(i=mb->deletion_cycle_count;i<deletion_cycle_count;i++)
     {
-        u32_list_ini(mb->deleted_temporary_allocation_indices+i);
+        u32_stack_ini(mb->deleted_temporary_allocation_indices+i);
     }
 
     mb->deletion_cycle_count=deletion_cycle_count;
@@ -119,14 +119,14 @@ void cvm_vk_managed_buffer_destroy(cvm_vk_managed_buffer * mb)
 
     free(mb->temporary_allocation_data);
 
-    cvm_vk_buffer_copy_list_del(&mb->pending_copies);
+    cvm_vk_buffer_copy_stack_del(&mb->pending_copies);
 
-    cvm_vk_buffer_barrier_list_del(&mb->copy_release_barriers);
+    cvm_vk_buffer_barrier_stack_del(&mb->copy_release_barriers);
 
     for(i=0;i<mb->deletion_cycle_count;i++)
     {
         assert(mb->deleted_temporary_allocation_indices[i].count==0);
-        u32_list_del(mb->deleted_temporary_allocation_indices+i);
+        u32_stack_del(mb->deleted_temporary_allocation_indices+i);
     }
 }
 
@@ -462,7 +462,7 @@ void cvm_vk_managed_buffer_dismiss_temporary_allocation(cvm_vk_managed_buffer * 
     if(mb->multithreaded)do lock=atomic_load(&mb->deletion_spinlock);///rename to release spinlock? use a different paradigm?
     while(lock!=0 || !atomic_compare_exchange_weak(&mb->acquire_spinlock,&lock,1));
 
-    u32_list_add(mb->deleted_temporary_allocation_indices+mb->deletion_cycle_index,allocation_index);
+    u32_stack_add(mb->deleted_temporary_allocation_indices+mb->deletion_cycle_index,allocation_index);
 
     if(mb->multithreaded) atomic_store(&mb->deletion_spinlock,0);
 }
@@ -471,14 +471,14 @@ void cvm_vk_managed_buffer_dismiss_temporary_allocation(cvm_vk_managed_buffer * 
 /// maybe look at conditionally stripping use of spinlocks on delete function
 void cvm_vk_managed_buffer_process_deletion_list(cvm_vk_managed_buffer * mb,uint32_t deletion_cycle_index)
 {
-    u32_list * l;
+    u32_stack * stack;
     uint32_t allocation_index;
 
     assert(deletion_cycle_index<mb->deletion_cycle_count);
 
-    l=mb->deleted_temporary_allocation_indices+deletion_cycle_index;
+    stack=mb->deleted_temporary_allocation_indices+deletion_cycle_index;
 
-    while(u32_list_get(l,&allocation_index))
+    while(u32_stack_get(stack,&allocation_index))
     {
         cvm_vk_managed_buffer_release_temporary_allocation(mb,allocation_index);
     }
@@ -523,7 +523,7 @@ static inline void stage_copy_action(cvm_vk_managed_buffer * mb,queue_transfer_s
     if(mb->multithreaded)do lock=atomic_load(&mb->copy_spinlock);
     while(lock!=0 || !atomic_compare_exchange_weak(&mb->copy_spinlock,&lock,1));
 
-    *cvm_vk_buffer_copy_list_new(&mb->pending_copies)=(VkBufferCopy)
+    *cvm_vk_buffer_copy_stack_new(&mb->pending_copies)=(VkBufferCopy)
     {
         .srcOffset=staging_offset,
         .dstOffset=dst_offset,
@@ -534,7 +534,7 @@ static inline void stage_copy_action(cvm_vk_managed_buffer * mb,queue_transfer_s
 
     if(cvm_vk_get_transfer_queue_family()==transfer_data->associated_queue_family_index)
     {
-        *cvm_vk_buffer_barrier_list_new(&mb->copy_release_barriers)=(VkBufferMemoryBarrier2)
+        *cvm_vk_buffer_barrier_stack_new(&mb->copy_release_barriers)=(VkBufferMemoryBarrier2)
         {
             .sType=VK_STRUCTURE_TYPE_BUFFER_MEMORY_BARRIER_2,
             .pNext=NULL,
@@ -551,7 +551,7 @@ static inline void stage_copy_action(cvm_vk_managed_buffer * mb,queue_transfer_s
     }
     else
     {
-        *cvm_vk_buffer_barrier_list_new(&mb->copy_release_barriers)=(VkBufferMemoryBarrier2)
+        *cvm_vk_buffer_barrier_stack_new(&mb->copy_release_barriers)=(VkBufferMemoryBarrier2)
         {
             .sType=VK_STRUCTURE_TYPE_BUFFER_MEMORY_BARRIER_2,
             .pNext=NULL,
@@ -568,7 +568,7 @@ static inline void stage_copy_action(cvm_vk_managed_buffer * mb,queue_transfer_s
 
         ///there must exist a semaphore between these 2
 
-        *cvm_vk_buffer_barrier_list_new(&transfer_data->acquire_barriers)=(VkBufferMemoryBarrier2)
+        *cvm_vk_buffer_barrier_stack_new(&transfer_data->acquire_barriers)=(VkBufferMemoryBarrier2)
         {
             .sType=VK_STRUCTURE_TYPE_BUFFER_MEMORY_BARRIER_2,
             .pNext=NULL,
@@ -696,7 +696,7 @@ void cvm_vk_managed_buffer_submit_all_pending_copy_actions(cvm_vk_managed_buffer
         {
             ///multithreading consideration shouldnt be necessary as this should only ever be called from the main thread relevant to this resource while no worker threads are operating on the resource
 
-            vkCmdCopyBuffer(transfer_cb,mb->staging_buffer->buffer,mb->buffer,mb->pending_copies.count,mb->pending_copies.list);
+            vkCmdCopyBuffer(transfer_cb,mb->staging_buffer->buffer,mb->buffer,mb->pending_copies.count,mb->pending_copies.stack);
             mb->pending_copies.count=0;
 
             //if(mb->copy_src_queue_family!=mb->copy_dst_queue_family)///first barrier is only needed when QFOT is necessary
@@ -709,7 +709,7 @@ void cvm_vk_managed_buffer_submit_all_pending_copy_actions(cvm_vk_managed_buffer
                     .memoryBarrierCount=0,
                     .pMemoryBarriers=NULL,
                     .bufferMemoryBarrierCount=mb->copy_release_barriers.count,
-                    .pBufferMemoryBarriers=mb->copy_release_barriers.list,
+                    .pBufferMemoryBarriers=mb->copy_release_barriers.stack,
                     .imageMemoryBarrierCount=0,
                     .pImageMemoryBarriers=NULL
                 };
@@ -718,6 +718,13 @@ void cvm_vk_managed_buffer_submit_all_pending_copy_actions(cvm_vk_managed_buffer
             }
         }
     }
+}
+
+
+void cvm_vk_managed_buffer_submit_all_batch_copy_actions(cvm_vk_managed_buffer * mb,cvm_vk_module_batch * batch)
+{
+    VkCommandBuffer transfer_cb=cvm_vk_access_batch_transfer_command_buffer(batch);
+    cvm_vk_managed_buffer_submit_all_pending_copy_actions(mb,transfer_cb);
 }
 
 

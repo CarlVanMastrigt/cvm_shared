@@ -37,8 +37,8 @@ along with cvm_shared.  If not, see <https://www.gnu.org/licenses/>.
 
 
 
-CVM_LIST(VkBufferMemoryBarrier2,cvm_vk_buffer_barrier,4)
-CVM_LIST(VkBufferCopy,cvm_vk_buffer_copy,4)
+CVM_STACK(VkBufferMemoryBarrier2,cvm_vk_buffer_barrier,4)
+CVM_STACK(VkBufferCopy,cvm_vk_buffer_copy,4)
 
 
 
@@ -180,21 +180,23 @@ bool cvm_vk_format_check_optimal_feature_support(VkFormat format,VkFormatFeature
 
 typedef struct queue_transfer_synchronization_data
 {
-    cvm_vk_buffer_barrier_list acquire_barriers;
-    VkPipelineStageFlags2 wait_stages;///is this necessary?? are the stage barriers in the acquire barriers enough?
+    ///COULD have some extra data alongside this that marks data as available, sets an uint8_t from 0 to 1 (available) and marks actual dynamic buffer (if extant) as available
+    cvm_vk_buffer_barrier_stack acquire_barriers;
+    VkPipelineStageFlags2 wait_stages;///stages that need to waited upon wrt transfer semaphore (stages that have dependence upon QFOT synchronised by semaphore)
+    ///is above necessary?? are the stage barriers in the acquire barriers enough?
 
     ///this is handled by submit only, so could easily be handled by an array in the module/batch itself
-    uint64_t semaphore_wait_value;///transfer semaphore value, value set upon transfer work submission!
+    uint64_t transfer_semaphore_wait_value;///transfer semaphore value, value set upon transfer work submission!
 
     ///set only at creation time
-    uint32_t associated_queue_family_index;
+    uint32_t associated_queue_family_index;///this should probably be on the payload instead... though IS only used in setting up barriers...
 }
 queue_transfer_synchronization_data;
 
 typedef enum
 {
-    CVM_VK_PAYLOAD_FIRST_SWAPCHAIN_USE=0x00000001,///could technically work this one out...
-    CVM_VK_PAYLOAD_LAST_SWAPCHAIN_USE=0x00000002,
+    CVM_VK_PAYLOAD_FIRST_QUEUE_USE=0x00000001,///could technically work this one out...
+    CVM_VK_PAYLOAD_LAST_QUEUE_USE=0x00000002,
 }
 cvm_vk_payload_flags;
 
@@ -220,17 +222,16 @@ typedef struct cvm_vk_module_work_payload
     VkCommandBuffer command_buffer;
 
     uint32_t destination_queue:8;///should really be known at init time anyway (for barrier purposes), might as well store for simplicities sake, must be large enough to store CVM_VK_MAX_QUEUES-1
+    uint32_t is_transfer:1;
+    uint32_t is_graphics:1;
+    uint32_t is_compute:1;
 
     ///presently only support generating 1 signal and submitting 1 command buffer, can easily change should there be justification to do so
 
     ///makes sense not to have transfer queue in this list as transfer-transfer dependencies make no sense
     queue_transfer_synchronization_data * transfer_data;///the data for THIS queue
 }
-cvm_vk_module_work_payload;
-
-///have these return semaphores (which will be set upon their completion)
-cvm_vk_timeline_semaphore cvm_vk_submit_graphics_work(cvm_vk_module_work_payload * payload,cvm_vk_payload_flags flags);
-cvm_vk_timeline_semaphore cvm_vk_submit_transfer_work(cvm_vk_module_work_payload * payload);
+cvm_vk_module_work_payload;///break this struct up based on intended queue type? (have variants)
 
 typedef struct cvm_vk_module_sub_batch
 {
@@ -259,7 +260,9 @@ typedef struct cvm_vk_module_batch
     ///     ^ have staging action that also copies to alleviate this?
     VkCommandPool transfer_pool;/// cannot have transfers in secondary command buffer (scb's need renderpass/subpass) and they arent needed anyway, so have 1 per module batch
     ///all transfer commands actually generated from stored ops in managed buffer(s) and managed texture pool(s)
-    VkCommandBuffer transfer_pcb;///only for low priority uploads, high priority uploads should go in command buffer/queue that will use them
+    VkCommandBuffer transfer_cb;///only for low priority uploads, high priority uploads should go in command buffer/queue that will use them
+    uint32_t has_begun_transfer:1;///has begun the transfer command buffer, dont begin the command buffer if it isn't necessary this frame, begin upon first use
+    uint32_t has_ended_transfer:1;///has submitted transfer operations
     ///assert that above is only acquired and submitted once a frame!
 
 
@@ -283,8 +286,7 @@ typedef struct cvm_vk_module_data
     uint32_t sub_batch_count;///effectively max number of threads this module will use, must have at least 1 (index 0 is the primary thread)
 
     ///wait a second! -- transfer queue can technically be run alongside graphics! 2 frame delay isnt actually necessary (do we still want it though? does it really add much complexity?)
-    queue_transfer_synchronization_data transfer_data[2][CVM_VK_MAX_QUEUES];/// pending acquire barriers per queue, must be cycled to ensure correct semaphore dependencies exist between transfer ops and these acquires (QFOT's)
-    uint32_t transfer_cycle_index:1;///index of above 2 to use at any given time
+    queue_transfer_synchronization_data transfer_data[CVM_VK_MAX_QUEUES];/// pending acquire barriers per queue, must be cycled to ensure correct semaphore dependencies exist between transfer ops and these acquires (QFOT's)
 }
 cvm_vk_module_data;
 ///must be called after cvm_vk_initialise
@@ -293,10 +295,16 @@ void cvm_vk_resize_module_graphics_data(cvm_vk_module_data * module_data);///thi
 void cvm_vk_destroy_module_data(cvm_vk_module_data * module_data);
 
 cvm_vk_module_batch * cvm_vk_get_module_batch(cvm_vk_module_data * module_data,uint32_t * swapchain_image_index);///have this return bool? (VkCommandBuffer through ref.)
-void cvm_vk_end_module_batch(cvm_vk_module_data * module_data,cvm_vk_module_batch * batch);///capture the semaphore values and propogate the need for semaphores!
+void cvm_vk_end_module_batch(cvm_vk_module_batch * batch);///handles all pending operations (presently only the transfer operation stuff), should be last thing called that uses the batch or its derivatives
+VkCommandBuffer cvm_vk_access_batch_transfer_command_buffer(cvm_vk_module_batch * batch);///returned value should NOT be submitted directly, instead it should be handled by cvm_vk_end_module_batch
 
-VkCommandBuffer cvm_vk_get_batch_secondary_command_buffer(cvm_vk_module_sub_batch * msb,VkFramebuffer framebuffer,VkRenderPass render_pass,uint32_t sub_pass);
-void cvm_vk_init_batch_primary_graphics_payload(cvm_vk_module_batch * mb,cvm_vk_module_work_payload * payload);
+
+void cvm_vk_obtain_graphics_payload_from_batch(cvm_vk_module_batch * mb,cvm_vk_module_work_payload * payload);
+cvm_vk_timeline_semaphore cvm_vk_submit_graphics_work(cvm_vk_module_work_payload * payload,cvm_vk_payload_flags flags);
+VkCommandBuffer cvm_vk_obtain_secondary_command_buffer_from_batch(cvm_vk_module_sub_batch * msb,VkFramebuffer framebuffer,VkRenderPass render_pass,uint32_t sub_pass);
+
+///same as above but for compute (including compute?)
+
 
 
 static inline bool cvm_vk_availability_token_check(uint16_t token_counter,uint16_t current_counter,uint16_t delay)

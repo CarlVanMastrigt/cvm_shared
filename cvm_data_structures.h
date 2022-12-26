@@ -30,90 +30,88 @@ static inline uint32_t cvm_allocation_increase_step(uint32_t current_size)
     return (current_size&~(current_size>>1|current_size>>2))>>2;
 }
 
-
-#ifndef CVM_LIST
-#define CVM_LIST(type,name,start_size)                                          \
+#ifndef CVM_STACK
+#define CVM_STACK(type,name,start_size)                                         \
                                                                                 \
-typedef struct name##_list                                                      \
+typedef struct name##_stack                                                     \
 {                                                                               \
-    type * list;                                                                \
+    type * stack;                                                               \
     uint32_t space;                                                             \
     uint32_t count;                                                             \
 }                                                                               \
-name##_list;                                                                    \
+name##_stack;                                                                   \
                                                                                 \
                                                                                 \
-static inline void name##_list_ini( name##_list * l )                           \
+static inline void name##_stack_ini( name##_stack * l )                         \
 {                                                                               \
     assert(start_size>3 && !(start_size & (start_size-1)));                     \
-    l->list=malloc( sizeof( type ) * start_size );                              \
+    l->stack=malloc( sizeof( type ) * start_size );                             \
     l->space=start_size;                                                        \
     l->count=0;                                                                 \
 }                                                                               \
                                                                                 \
-static inline uint32_t name##_list_add( name##_list * l , type value )          \
+static inline void name##_stack_add( name##_stack * l , type value )            \
 {                                                                               \
     uint32_t n;                                                                 \
     if(l->count==l->space)                                                      \
     {                                                                           \
         n=cvm_allocation_increase_step(l->space);                               \
-        l->list=realloc(l->list,sizeof( type )*(l->space+=n));                  \
+        l->stack=realloc(l->stack,sizeof( type )*(l->space+=n));                \
     }                                                                           \
-    l->list[l->count]=value;                                                    \
-    return l->count++;                                                          \
+    l->stack[l->count++]=value;                                                 \
 }                                                                               \
                                                                                 \
-static inline int name##_list_get( name##_list * l , type * value )             \
+static inline int name##_stack_get( name##_stack * l , type * value )           \
 {                                                                               \
     if(l->count==0)return 0;                                                    \
-    *value=l->list[--l->count];                                                 \
+    *value=l->stack[--l->count];                                                \
     return 1;                                                                   \
 }                                                                               \
                                                                                 \
-static inline void name##_list_del( name##_list * l )                           \
+static inline void name##_stack_del( name##_stack * l )                         \
 {                                                                               \
-    free(l->list);                                                              \
+    free(l->stack);                                                             \
 }                                                                               \
                                                                                 \
-static inline type * name##_list_new( name##_list * l )                         \
+static inline type * name##_stack_new( name##_stack * l )                       \
 {                                                                               \
     uint32_t n;                                                                 \
     if(l->count==l->space)                                                      \
     {                                                                           \
         n=cvm_allocation_increase_step(l->space);                               \
-        l->list=realloc(l->list,sizeof( type )*(l->space+=n));                  \
+        l->stack=realloc(l->stack,sizeof( type )*(l->space+=n));                \
     }                                                                           \
-    return l->list+l->count++;                                                  \
+    return l->stack+l->count++;                                                 \
 }                                                                               \
                                                                                 \
-static inline uint32_t name##_list_add_multiple                                 \
-( name##_list * l , type * values , uint32_t count)                             \
+static inline void name##_stack_add_multiple                                    \
+( name##_stack * l , type * values , uint32_t count)                            \
 {                                                                               \
     uint32_t n;                                                                 \
     while((l->count+count) > l->space)                                          \
     {                                                                           \
         n=cvm_allocation_increase_step(l->space);                               \
-        l->list=realloc(l->list,sizeof( type )*(l->space+=n));                  \
+        l->stack=realloc(l->stack,sizeof( type )*(l->space+=n));                \
     }                                                                           \
-    memcpy(l->list+l->count,values,sizeof( type )*count);                       \
-    return (l->count+=count);                                                   \
+    memcpy(l->stack+l->count,values,sizeof( type )*count);                      \
+    l->count+=count;                                                            \
 }                                                                               \
                                                                                 \
-static inline type * name##_list_ensure_space                                   \
-( name##_list * l , uint32_t required_space )                                   \
+static inline type * name##_stack_ensure_space                                  \
+( name##_stack * l , uint32_t required_space )                                  \
 {                                                                               \
     uint32_t n;                                                                 \
     while((l->count+required_space) > l->space)                                 \
     {                                                                           \
         n=cvm_allocation_increase_step(l->space);                               \
-        l->list=realloc(l->list,sizeof( type )*(l->space+=n));                  \
+        l->stack=realloc(l->stack,sizeof( type )*(l->space+=n));                \
     }                                                                           \
-    return (l->list+l->count);                                                  \
+    return (l->stack+l->count);                                                 \
 }                                                                               \
 
 #endif
 
-CVM_LIST(uint32_t,u32,16)
+CVM_STACK(uint32_t,u32,16)
 ///used pretty universally
 
 
