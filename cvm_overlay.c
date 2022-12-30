@@ -693,7 +693,7 @@ void overlay_render_frame(int screen_w,int screen_h,widget * menu_widget)
 
     if(batch)
     {
-        cvm_vk_obtain_graphics_payload_from_batch(batch,&payload);
+        cvm_vk_setup_new_graphics_payload_from_batch(&payload,batch);
 
         cvm_vk_staging_buffer_begin(&overlay_staging_buffer);///build barriers into begin/end paradigm maybe???
         cvm_vk_transient_buffer_begin(&overlay_transient_buffer,swapchain_image_index);
@@ -766,7 +766,7 @@ void overlay_render_frame(int screen_w,int screen_h,widget * menu_widget)
 
 void overlay_frame_cleanup(uint32_t swapchain_image_index)
 {
-    if(swapchain_image_index!=CVM_VK_INVALID_IMAGE_INDEX)
+    if(swapchain_image_index!=CVM_INVALID_U32_INDEX)
     {
         cvm_vk_staging_buffer_release_space(&overlay_staging_buffer,swapchain_image_index);
     }

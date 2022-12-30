@@ -206,7 +206,7 @@ char * cvm_overlay_utf8_get_previous_glyph(char * base,char * t)
             assert(*((uint8_t*)t)<<(tt-t) & 0x80);///GET PREVIOUS DETECTED INVALID UTF-8 CHAR IN STRING (INVALID LENGTH SPECIFIED)\n");
         }
     }
-#endif
+#endif // NDEBUG
     return t;
 }
 

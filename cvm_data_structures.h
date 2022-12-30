@@ -73,6 +73,11 @@ static inline void name##_stack_del( name##_stack * s )                         
     free(s->stack);                                                             \
 }                                                                               \
                                                                                 \
+static inline void name##_stack_clr( name##_stack * s )                         \
+{                                                                               \
+    s->count=0;                                                                 \
+}                                                                               \
+                                                                                \
 static inline type * name##_stack_new( name##_stack * s )                       \
 {                                                                               \
     uint_fast32_t n;                                                            \
@@ -96,24 +101,94 @@ static inline void name##_stack_add_multiple                                    
     memcpy(s->stack+s->count,values,sizeof( type )*count);                      \
     s->count+=count;                                                            \
 }                                                                               \
+///add a reset function??
+#endif
+
+CVM_STACK(uint32_t,u32,16)
+///used pretty universally, including below
+
+
+
+#ifndef CVM_LIST
+#define CVM_LIST(type,name,start_size)                                          \
                                                                                 \
-static inline type * name##_stack_ensure_space                                  \
-( name##_stack * s , uint_fast32_t required_space )                             \
+typedef struct name##_list                                                      \
+{                                                                               \
+    u32_stack available_indices;                                                \
+    type * list;                                                                \
+    uint_fast32_t space;                                                        \
+    uint_fast32_t count;                                                        \
+}                                                                               \
+name##_list;                                                                    \
+                                                                                \
+                                                                                \
+static inline void name##_list_ini( name##_list * l )                           \
+{                                                                               \
+    assert(start_size>3 && !(start_size & (start_size-1)));                     \
+    u32_stack_ini(&l->available_indices);                                       \
+    l->list=malloc( sizeof( type ) * start_size );                              \
+    l->space=start_size;                                                        \
+    l->count=0;                                                                 \
+}                                                                               \
+                                                                                \
+static inline uint32_t name##_list_add( name##_list * l , type value )          \
 {                                                                               \
     uint_fast32_t n;                                                            \
-    while((s->count+required_space) > s->space)                                 \
+    uint32_t i;                                                                 \
+    if(!u32_stack_get(&l->available_indices,&i))                                \
     {                                                                           \
-        n=cvm_allocation_increase_step(s->space);                               \
-        s->stack=realloc(s->stack,sizeof( type )*(s->space+=n));                \
+        if(l->count==l->space)                                                  \
+        {                                                                       \
+            n=cvm_allocation_increase_step(l->space);                           \
+            l->list=realloc(l->list,sizeof( type )*(l->space+=n));              \
+        }                                                                       \
+        i=l->count++;                                                           \
     }                                                                           \
-    return (s->stack+s->count);                                                 \
+    l->list[i]=value;                                                           \
+    return i;                                                                   \
+}                                                                               \
+                                                                                \
+static inline uint32_t name##_list_add_ptr( name##_list * l , type * value )    \
+{                                                                               \
+    uint_fast32_t n;                                                            \
+    uint32_t i;                                                                 \
+    if(!u32_stack_get(&l->available_indices,&i))                                \
+    {                                                                           \
+        if(l->count==l->space)                                                  \
+        {                                                                       \
+            n=cvm_allocation_increase_step(l->space);                           \
+            l->list=realloc(l->list,sizeof( type )*(l->space+=n));              \
+        }                                                                       \
+        i=l->count++;                                                           \
+    }                                                                           \
+    l->list[i]=*value;                                                          \
+    return i;                                                                   \
+}                                                                               \
+                                                                                \
+static inline void name##_list_get                                              \
+( name##_list * l , type * value , uint32_t i )                                 \
+{                                                                               \
+    assert(i < l->count);                                                       \
+    *value=l->list[i];                                                          \
+    u32_stack_add(&l->available_indices,i);                                     \
+}                                                                               \
+                                                                                \
+static inline void name##_list_del( name##_list * l )                           \
+{                                                                               \
+    u32_stack_del(&l->available_indices);                                       \
+    free(l->list);                                                              \
+}                                                                               \
+                                                                                \
+static inline void name##_list_clr( name##_list * l )                           \
+{                                                                               \
+    u32_stack_clr(&l->available_indices);                                       \
+    l->count=0;                                                                 \
 }                                                                               \
 
 #endif
 
-CVM_STACK(uint32_t,u32,16)
-///used pretty universally
 
+CVM_LIST(uint32_t,u32,16)
 
 
 /**

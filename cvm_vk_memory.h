@@ -71,14 +71,9 @@ void cvm_vk_staging_buffer_release_space(cvm_vk_staging_buffer * sb,uint32_t fra
 
 
 
-
-
-#define CVM_VK_INVALID_TEMPORARY_ALLOCATION 0xFFFFFFFF
-
 ///16 bytes, 4 to a cacheline
 typedef struct cvm_vk_temporary_buffer_allocation_data
 {
-    ///doubt I'll need to support more than 64M allocations, but will fill structure space as efficiently as possible for now, and respect typing
     uint32_t prev;
     uint32_t next;
 
@@ -86,12 +81,10 @@ typedef struct cvm_vk_temporary_buffer_allocation_data
     uint64_t heap_index:22;///4M frees supported should be more than enough
     uint64_t size_factor:5;///32 different sizes is definitely enough,
     uint64_t available:1;///does not have contents, can be retrieved by new allocation or recombined into
-    ///get bit for "is_right_buffer" by 1 & (offset >> size_factor) during recombination calculations (256M max buffer size and 256 byte min gives the required size of this)
+    ///get bit for "is_right_buffer" by 1 & (offset >> size_factor) during recombination calculations
 }
 cvm_vk_temporary_buffer_allocation_data;
 
-
-/// ^ can return offset alongside allocation for efficient use purposes
 
 /// could use more complicated allocator that can recombine sections of arbitrary size with no power of 2 superstructure, may work reasonably well, especially if memory is grouped by expected lifetime
 ///     ^ this will definitely require a defragger!
@@ -109,10 +102,9 @@ typedef struct cvm_vk_available_temporary_allocation_heap
 }
 cvm_vk_available_temporary_allocation_heap;
 
-typedef struct cvm_vk_managed_buffer
+struct cvm_vk_managed_buffer
 {
-    atomic_uint_fast32_t acquire_spinlock;
-    bool multithreaded;
+    atomic_uint_fast32_t allocation_management_spinlock;
 
     VkBuffer buffer;
     VkDeviceMemory memory;
@@ -144,21 +136,13 @@ typedef struct cvm_vk_managed_buffer
 
     cvm_vk_staging_buffer * staging_buffer;///for when mapping is not available
 
-
-    ///elements scheduled for release, need to wait to make available until they are *definitely* deleted
-    atomic_uint_fast32_t dismissal_spinlock;
-    u32_stack * dismissed_temporary_allocation_indices;
-    uint16_t dismissal_cycle_count;///same as swapchain image count used to initialise this
-    uint16_t dismissal_cycle_index;
-    ///make memory available again when its KNOWN to be unused, use swapchain image availability (same as other buffer management strategies)
-
-
+    ///copies can/should get built up withing frame at same time as dismissal list (create vs destroy essentially), dismissal list just needs to hold onto data over time
     atomic_uint_fast32_t copy_spinlock;
     uint16_t copy_update_counter;
     cvm_vk_buffer_copy_stack pending_copies;
     cvm_vk_buffer_barrier_stack copy_release_barriers;
-}
-cvm_vk_managed_buffer;
+    uint32_t copy_queue_bitmask;///queues that above copy will affect
+};
 
 /**
 from the spec:
@@ -176,25 +160,17 @@ SHOULD be skipped.
 fuck. yes.   confirmation
 */
 
-void cvm_vk_managed_buffer_create(cvm_vk_managed_buffer * mb,uint32_t buffer_size,uint32_t min_size_factor,VkBufferUsageFlags usage,bool multithreaded,bool host_visible);
-void cvm_vk_managed_buffer_update(cvm_vk_managed_buffer * mb,uint32_t dismissal_cycle_count);
-///dismissal_cycle_count should be initialised with swapchain image count in the simple paradigm, should essentially be used to ensure a frame delay sufficient to prevent re-use of "deleted" resources that are still in flight
+void cvm_vk_managed_buffer_create(cvm_vk_managed_buffer * mb,uint32_t buffer_size,uint32_t min_size_factor,VkBufferUsageFlags usage,bool host_visible);
+///dismissal_cycle_count should be initialised with swapchain image count in the simple graphics based paradigm, should essentially be used to ensure a frame delay sufficient to prevent re-use of "deleted" resources that are still in flight
 void cvm_vk_managed_buffer_destroy(cvm_vk_managed_buffer * mb);
 
-///as with all uses of this paradigm, if all swapchain images aren't actually cycled through, the deletion/free list may get stuck in limbo, may want to test potentially completed in-flight-frame semaphores occasionally?
-///     ^ perhaps only when frame delay is greater than swapchain image count?
-void cvm_vk_managed_buffer_process_deletion_list(cvm_vk_managed_buffer * mb,uint32_t deletion_cycle_index);
-
 bool cvm_vk_managed_buffer_acquire_temporary_allocation(cvm_vk_managed_buffer * mb,uint64_t size,uint32_t * allocation_index,uint64_t * allocation_offset);
-void cvm_vk_managed_buffer_dismiss_temporary_allocation(cvm_vk_managed_buffer * mb,uint32_t allocation_index);///schedule for deletion with simple cycling of frames (or other appropriate schedule)
+void cvm_vk_managed_buffer_dismiss_temporary_allocation(cvm_vk_managed_buffer * mb,uint32_t allocation_index);///schedule for deletion, internally synchronised
 void cvm_vk_managed_buffer_release_temporary_allocation(cvm_vk_managed_buffer * mb,uint32_t allocation_index);///delete immediately, must be correctly synchronised
-
-
 
 uint64_t cvm_vk_managed_buffer_acquire_permanent_allocation(cvm_vk_managed_buffer * mb,uint64_t size,uint64_t alignment);///cannot be released, exists until entire buffer is cleared or deleted
 
-
-void cvm_vk_managed_buffer_submit_all_pending_copy_actions(cvm_vk_managed_buffer * mb,VkCommandBuffer transfer_cb);///includes necessary barriers
+/// FUCK following may be a reason to separate out copy data -- this effectively ties a managed buffer to a single batch (and module with it) by submitting ALL buffer copies to a particular batch!
 void cvm_vk_managed_buffer_submit_all_batch_copy_actions(cvm_vk_managed_buffer * mb,cvm_vk_module_batch * batch);///includes necessary barriers
 /// for the love of god only call this once per buffer per frame, transfer and graphics cb necessary for case of QFOT (process acquisitions for previous frames releases)
 
@@ -204,13 +180,47 @@ void cvm_vk_managed_buffer_bind_as_index(VkCommandBuffer cmd_buf,cvm_vk_managed_
 ///low priority versions
 void * cvm_vk_managed_buffer_acquire_temporary_allocation_with_mapping(cvm_vk_managed_buffer * mb,uint64_t size,
             queue_transfer_synchronization_data * transfer_data,VkPipelineStageFlags2 use_stage_mask,VkAccessFlags2 use_access_mask,
-            uint32_t * allocation_index,uint64_t * allocation_offset,uint16_t * availability_token);///perhaps move some/all of this to a unified structure
+            uint32_t * allocation_index,uint64_t * allocation_offset,uint16_t * availability_token,uint32_t dst_queue_id);///perhaps move some/all of this to a unified structure
 
 void * cvm_vk_managed_buffer_acquire_permanent_allocation_with_mapping(cvm_vk_managed_buffer * mb,uint64_t size,uint64_t alignment,
             queue_transfer_synchronization_data * transfer_data,VkPipelineStageFlags2 use_stage_mask,VkAccessFlags2 use_access_mask,
-            uint64_t * allocation_offset,uint16_t * availability_token);
+            uint64_t * allocation_offset,uint16_t * availability_token,uint32_t dst_queue_id);
 
 /// need high priority and low priority variants of above? probably wouldn't hurt...
+/// high priority would just copy inline immediately, taking command buffer or payload as parameters instead of queue_transfer_synchronization_data (which is essentially responsible for managing that copy and associated QFOT/sync)
+
+
+
+///splitting this in particular out from managed buffer allows different types of work to SHARE space in a managed buffer! (specifically when those types of work have differing "frames in flight")
+struct cvm_vk_managed_buffer_dismissal_list
+{
+    ///elements scheduled for release, need to wait to make available until they are *definitely* deleted
+    atomic_uint_fast32_t spinlock;
+    ///should probably put all spinlocks in this file (and all uses of them) behind a "multithreaded" define guard
+
+    u32_stack * allocation_indices;
+    uint32_t frame_count;///same as swapchain image count used to initialise this
+    uint32_t frame_index;
+
+    ///make memory available again when its KNOWN to be unused, use swapchain image availability (same as other buffer management strategies)
+    ///hmmm, as long as deletion(frame barrier) waits on transfer semaphore then this will also protect against same-frame copy and re-use
+};
+
+
+void cvm_vk_managed_buffer_dismissal_list_create(cvm_vk_managed_buffer_dismissal_list * dismissal_list);
+void cvm_vk_managed_buffer_dismissal_list_update(cvm_vk_managed_buffer_dismissal_list * dismissal_list,uint32_t frame_count);///frame count should usually be swapchain image count
+void cvm_vk_managed_buffer_dismissal_list_destroy(cvm_vk_managed_buffer_dismissal_list * dismissal_list);
+
+void cvm_vk_managed_buffer_dismissal_list_begin_frame(cvm_vk_managed_buffer_dismissal_list * dismissal_list,uint32_t frame_index);
+void cvm_vk_managed_buffer_dismissal_list_end_frame(cvm_vk_managed_buffer_dismissal_list * dismissal_list);
+void cvm_vk_managed_buffer_dismissal_list_release_frame(cvm_vk_managed_buffer_dismissal_list * dismissal_list,cvm_vk_managed_buffer * managed_buffer,uint32_t frame_index);
+
+void cvm_vk_managed_buffer_dismissal_list_enqueue_allocation(cvm_vk_managed_buffer_dismissal_list * dismissal_list,uint32_t allocation_index);///schedule for deletion with simple cycling of frames
+
+
+
+
+
 
 
 

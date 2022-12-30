@@ -47,6 +47,8 @@ along with cvm_shared.  If not, see <https://www.gnu.org/licenses/>.
 ///own headers
 typedef union widget widget;
 
+#define CVM_INVALID_U32_INDEX 0xFFFFFFFF
+
 #include "cvm_math.h"
 #include "cvm_data_structures.h"
 #include "cvm_random.h"

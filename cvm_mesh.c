@@ -377,7 +377,7 @@ bool cvm_managed_mesh_load(cvm_managed_mesh * mm,cvm_vk_module_work_payload * wo
     {
         ptr=cvm_vk_managed_buffer_acquire_temporary_allocation_with_mapping(mm->mb,size,work_payload->transfer_data,
                 VK_PIPELINE_STAGE_2_VERTEX_INPUT_BIT,VK_ACCESS_2_INDEX_READ_BIT|VK_ACCESS_2_VERTEX_ATTRIBUTE_READ_BIT,
-                &mm->temporary_allocation_index,&mm->buffer_offset,&mm->availability_token);
+                &mm->temporary_allocation_index,&mm->buffer_offset,&mm->availability_token,work_payload->destination_queue);
 
         if(!ptr)return false;///could not allocate staging space!
         base_offset = current_offset = mm->buffer_offset;
@@ -387,7 +387,7 @@ bool cvm_managed_mesh_load(cvm_managed_mesh * mm,cvm_vk_module_work_payload * wo
         ///alignment 2 here b/c index data goes first, manually align actual vertex data
         ptr=cvm_vk_managed_buffer_acquire_permanent_allocation_with_mapping(mm->mb,size,2,work_payload->transfer_data,
                 VK_PIPELINE_STAGE_2_VERTEX_INPUT_BIT,VK_ACCESS_2_INDEX_READ_BIT|VK_ACCESS_2_VERTEX_ATTRIBUTE_READ_BIT,
-                &mm->buffer_offset,&mm->availability_token);
+                &mm->buffer_offset,&mm->availability_token,work_payload->destination_queue);
 
         if(!ptr)return false;///could not allocate staging space!
         base_offset = current_offset = mm->buffer_offset;
@@ -427,13 +427,13 @@ bool cvm_managed_mesh_load(cvm_managed_mesh * mm,cvm_vk_module_work_payload * wo
     return true;
 }
 
-void cvm_managed_mesh_dismiss(cvm_managed_mesh * mm)
+void cvm_managed_mesh_dismiss(cvm_managed_mesh * mm,cvm_vk_module_work_payload * work_payload)
 {
     assert(mm->is_temporary_allocation);///only temporary allocations should be released
     if(mm->loaded)
     {
-        cvm_vk_managed_buffer_dismiss_temporary_allocation(mm->mb,mm->temporary_allocation_index);
-        mm->temporary_allocation_index=CVM_VK_INVALID_TEMPORARY_ALLOCATION;
+        assert(false);///cvm_vk_managed_buffer_dismiss_temporary_allocation(mm->mb,mm->temporary_allocation_index);
+        mm->temporary_allocation_index=CVM_INVALID_U32_INDEX;
         mm->loaded=false;///set others?
     }
 }
@@ -475,7 +475,7 @@ void cvm_managed_mesh_create(cvm_managed_mesh * mm,cvm_vk_managed_buffer * mb,ch
     mm->loaded=false;
     mm->ready=false;
     mm->is_temporary_allocation=temporary;
-    mm->temporary_allocation_index=CVM_VK_INVALID_TEMPORARY_ALLOCATION;
+    mm->temporary_allocation_index=CVM_INVALID_U32_INDEX;
 }
 
 void cvm_managed_mesh_destroy(cvm_managed_mesh * mm)

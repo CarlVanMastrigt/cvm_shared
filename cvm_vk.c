@@ -40,15 +40,18 @@ static VkPresentModeKHR cvm_vk_surface_present_mode;
 static uint32_t cvm_vk_transfer_queue_family;
 static uint32_t cvm_vk_graphics_queue_family;
 static uint32_t cvm_vk_present_queue_family;
+static uint32_t cvm_vk_asynchronous_compute_queue_family;///perhaps its actually desirable to support multiple async compute queue families? doesnt seem to be a feature on any gpus
 ///only support one of each of above (allow these to be the same if above are as well?)
 static VkQueue cvm_vk_transfer_queue;
-static VkQueue cvm_vk_graphics_queue;
+static VkQueue cvm_vk_graphics_queue;///doesn't seem to be any (mainstream) hardware that supports more than one graphics queue
 static VkQueue cvm_vk_present_queue;
+static VkQueue * cvm_vk_asynchronous_compute_queues;
+static uint32_t cvm_vk_asynchronous_compute_queue_count;
 
-///these command pools should only ever be used to create command buffers that are submitted multiple times, and only accessed internally (only ever used within this file)
-static VkCommandPool cvm_vk_transfer_command_pool;
-static VkCommandPool cvm_vk_graphics_command_pool;
-static VkCommandPool cvm_vk_present_command_pool;
+///these command pools should only ever be used to create command buffers that are created once, then submitted multiple times, and only accessed internally (only ever used within this file)
+static VkCommandPool cvm_vk_internal_present_command_pool;
+//static VkCommandPool cvm_vk_internal_transfer_command_pool;
+//static VkCommandPool cvm_vk_internal_graphics_command_pool;
 
 
 ///may want to rename cvm_vk_frames, cvm_vk_presentation_instance probably isnt that bad tbh...
@@ -56,9 +59,9 @@ static VkCommandPool cvm_vk_present_command_pool;
 static VkSemaphore * cvm_vk_image_acquisition_semaphores=NULL;///number of these should match swapchain image count
 static cvm_vk_swapchain_image_present_data * cvm_vk_presenting_images=NULL;
 static uint32_t cvm_vk_swapchain_image_count=0;/// this is also the number of swapchain images
-static uint32_t cvm_vk_current_acquired_image_index=CVM_VK_INVALID_IMAGE_INDEX;
+static uint32_t cvm_vk_current_acquired_image_index=CVM_INVALID_U32_INDEX;
 static uint32_t cvm_vk_acquired_image_count=0;///both frames in flight and frames acquired by rendereer
-//static bool cvm_vk_work_finished=true;
+
 ///following used to determine number of swapchain images to allocate
 static uint32_t cvm_vk_min_swapchain_images;
 static bool cvm_vk_rendering_resources_valid=false;///can this be determined for next frame during critical section?
@@ -69,7 +72,7 @@ static cvm_vk_timeline_semaphore cvm_vk_graphics_timeline;
 static cvm_vk_timeline_semaphore cvm_vk_transfer_timeline;///cycled at the same rate as graphics(?), only incremented when there is work to be done, only to be used for low priority data transfers
 static cvm_vk_timeline_semaphore cvm_vk_present_timeline;
 ///high priority should be handled by command buffer that will use it
-static cvm_vk_timeline_semaphore * cvm_vk_compute_timelines;///same as number of compute queues (1 for each), needs to have a way to query the count (which will be associated with compute submission scheduling paradigm
+static cvm_vk_timeline_semaphore * cvm_vk_asynchronous_compute_timelines;///same as number of compute queues (1 for each), needs to have a way to query the count (which will be associated with compute submission scheduling paradigm
 static cvm_vk_timeline_semaphore * cvm_vk_host_timelines;///used to wait on host events from different threads, needs to have count as input
 static uint32_t cvm_vk_host_timeline_count;
 
@@ -435,36 +438,26 @@ static void cvm_vk_create_logical_device(const char ** requested_extensions,uint
 
 static void cvm_vk_create_internal_command_pools(void)
 {
-    VkCommandPoolCreateInfo command_pool_create_info=(VkCommandPoolCreateInfo)
+    if(cvm_vk_present_queue_family!=cvm_vk_graphics_queue_family)
     {
-        .sType=VK_STRUCTURE_TYPE_COMMAND_POOL_CREATE_INFO,
-        .pNext=NULL,
-        .flags=0,
-        .queueFamilyIndex=cvm_vk_transfer_queue_family
-    };
+        VkCommandPoolCreateInfo command_pool_create_info=(VkCommandPoolCreateInfo)
+        {
+            .sType=VK_STRUCTURE_TYPE_COMMAND_POOL_CREATE_INFO,
+            .pNext=NULL,
+            .flags=0,
+            .queueFamilyIndex=cvm_vk_present_queue_family
+        };
 
-    CVM_VK_CHECK(vkCreateCommandPool(cvm_vk_device,&command_pool_create_info,NULL,&cvm_vk_transfer_command_pool));
-
-    if(cvm_vk_graphics_queue_family==cvm_vk_transfer_queue_family) cvm_vk_graphics_command_pool=cvm_vk_transfer_command_pool;
-    else
-    {
-        command_pool_create_info.queueFamilyIndex=cvm_vk_graphics_queue_family;
-        CVM_VK_CHECK(vkCreateCommandPool(cvm_vk_device,&command_pool_create_info,NULL,&cvm_vk_graphics_command_pool));
-    }
-
-    if(cvm_vk_present_queue_family==cvm_vk_transfer_queue_family) cvm_vk_present_command_pool=cvm_vk_transfer_command_pool;
-    else
-    {
-        command_pool_create_info.queueFamilyIndex=cvm_vk_present_queue_family;
-        CVM_VK_CHECK(vkCreateCommandPool(cvm_vk_device,&command_pool_create_info,NULL,&cvm_vk_present_command_pool));
+        CVM_VK_CHECK(vkCreateCommandPool(cvm_vk_device,&command_pool_create_info,NULL,&cvm_vk_internal_present_command_pool));
     }
 }
 
 static void cvm_vk_destroy_internal_command_pools(void)
 {
-    vkDestroyCommandPool(cvm_vk_device,cvm_vk_transfer_command_pool,NULL);
-    if(cvm_vk_graphics_queue_family!=cvm_vk_transfer_queue_family) vkDestroyCommandPool(cvm_vk_device,cvm_vk_graphics_command_pool,NULL);
-    if(cvm_vk_present_queue_family!=cvm_vk_transfer_queue_family) vkDestroyCommandPool(cvm_vk_device,cvm_vk_present_command_pool,NULL);
+    if(cvm_vk_present_queue_family!=cvm_vk_graphics_queue_family)
+    {
+        vkDestroyCommandPool(cvm_vk_device,cvm_vk_internal_present_command_pool,NULL);
+    }
 }
 
 
@@ -530,7 +523,7 @@ void cvm_vk_create_swapchain(void)
 
     CVM_VK_CHECK(vkGetSwapchainImagesKHR(cvm_vk_device,cvm_vk_swapchain,&cvm_vk_swapchain_image_count,swapchain_images));
 
-    cvm_vk_current_acquired_image_index=CVM_VK_INVALID_IMAGE_INDEX;///no longer have a valid swapchain image
+    cvm_vk_current_acquired_image_index=CVM_INVALID_U32_INDEX;///no longer have a valid swapchain image
 
     if(old_swapchain_image_count!=cvm_vk_swapchain_image_count)
     {
@@ -603,7 +596,7 @@ void cvm_vk_create_swapchain(void)
             {
                 .sType=VK_STRUCTURE_TYPE_COMMAND_BUFFER_ALLOCATE_INFO,
                 .pNext=NULL,
-                .commandPool=cvm_vk_present_command_pool,
+                .commandPool=cvm_vk_internal_present_command_pool,
                 .level=VK_COMMAND_BUFFER_LEVEL_PRIMARY,
                 .commandBufferCount=1
             };
@@ -700,7 +693,7 @@ void cvm_vk_destroy_swapchain(void)
         ///queue ownership transfer stuff
         if(cvm_vk_present_queue_family!=cvm_vk_graphics_queue_family)
         {
-            vkFreeCommandBuffers(cvm_vk_device,cvm_vk_present_command_pool,1,&cvm_vk_presenting_images[i].present_acquire_command_buffer);
+            vkFreeCommandBuffers(cvm_vk_device,cvm_vk_internal_present_command_pool,1,&cvm_vk_presenting_images[i].present_acquire_command_buffer);
         }
     }
 }
@@ -870,7 +863,7 @@ uint32_t cvm_vk_prepare_for_next_frame(bool rendering_resources_invalid)
 {
     if(rendering_resources_invalid)cvm_vk_rendering_resources_valid=false;
 
-    uint32_t old_acquired_image_index=CVM_VK_INVALID_IMAGE_INDEX;
+    uint32_t old_acquired_image_index=CVM_INVALID_U32_INDEX;
     cvm_vk_swapchain_image_present_data * presenting_image;
 
     if(cvm_vk_rendering_resources_valid)
@@ -914,14 +907,14 @@ uint32_t cvm_vk_prepare_for_next_frame(bool rendering_resources_invalid)
         {
             if(r==VK_ERROR_OUT_OF_DATE_KHR) fprintf(stderr,"acquired swapchain image out of date\n");
             else fprintf(stderr,"ACQUIRE NEXT IMAGE FAILED WITH ERROR : %d\n",r);
-            cvm_vk_current_acquired_image_index=CVM_VK_INVALID_IMAGE_INDEX;
+            cvm_vk_current_acquired_image_index=CVM_INVALID_U32_INDEX;
             cvm_vk_rendering_resources_valid=false;
             cvm_vk_image_acquisition_semaphores[--cvm_vk_acquired_image_count]=acquire_semaphore;
         }
     }
     else
     {
-        cvm_vk_current_acquired_image_index=CVM_VK_INVALID_IMAGE_INDEX;
+        cvm_vk_current_acquired_image_index=CVM_INVALID_U32_INDEX;
     }
 
     return old_acquired_image_index;
@@ -941,7 +934,7 @@ cvm_vk_timeline_semaphore cvm_vk_submit_graphics_work(cvm_vk_module_work_payload
 
     ///check if there is actually a frame in flight...
 
-    assert(cvm_vk_current_acquired_image_index!=CVM_VK_INVALID_IMAGE_INDEX);///SHOULDN'T BE SUBMITTING WORK WHEN NO VALID SWAPCHAIN IMAGE WAS ACQUIRED THIS FRAME
+    assert(cvm_vk_current_acquired_image_index!=CVM_INVALID_U32_INDEX);///SHOULDN'T BE SUBMITTING WORK WHEN NO VALID SWAPCHAIN IMAGE WAS ACQUIRED THIS FRAME
 
     presenting_image=cvm_vk_presenting_images+cvm_vk_current_acquired_image_index;
 
@@ -1046,6 +1039,7 @@ cvm_vk_timeline_semaphore cvm_vk_submit_graphics_work(cvm_vk_module_work_payload
         ///acquire on presenting queue if necessary, reuse submit info
         if(cvm_vk_present_queue_family!=cvm_vk_graphics_queue_family)
         {
+            ///fixed count and layout of wait and signal semaphores here
             wait_semaphores[0]=cvm_vk_create_timeline_semaphore_wait_submit_info(&cvm_vk_graphics_timeline,VK_PIPELINE_STAGE_2_COLOR_ATTACHMENT_OUTPUT_BIT);///stages is likely wrong/unnecessary...
 
             /// presenting_image->present_semaphore triggered either here or above when CVM_VK_PAYLOAD_LAST_SWAPCHAIN_USE, this path being taken when present queue != graphics queue
@@ -1146,7 +1140,7 @@ bool cvm_vk_check_for_remaining_frames(uint32_t * completed_frame_index)
         else assert(!cvm_vk_presenting_images[i].successfully_submitted);///SOMEHOW CLEANING UP FRAME THAT WAS SUBMITTED BUT NOT ACQUIRED
     }
 
-    *completed_frame_index=CVM_VK_INVALID_IMAGE_INDEX;
+    *completed_frame_index=CVM_INVALID_U32_INDEX;
     return false;
 }
 
@@ -1612,10 +1606,9 @@ void cvm_vk_create_module_data(cvm_vk_module_data * module_data,uint32_t sub_bat
     module_data->sub_batch_count=sub_batch_count;
     module_data->batch_index=0;
 
-
-
     for(i=0;i<CVM_VK_MAX_QUEUES;i++)
     {
+        cvm_atomic_lock_create(&module_data->transfer_data[i].spinlock);
         cvm_vk_buffer_barrier_stack_ini(&module_data->transfer_data[i].acquire_barriers);
         module_data->transfer_data[i].transfer_semaphore_wait_value=0;
         module_data->transfer_data[i].wait_stages=VK_PIPELINE_STAGE_2_NONE;
@@ -1643,14 +1636,14 @@ void cvm_vk_destroy_module_data(cvm_vk_module_data * module_data)
 
 cvm_vk_module_batch * cvm_vk_get_module_batch(cvm_vk_module_data * module_data,uint32_t * swapchain_image_index)
 {
-    uint32_t i,j;
+    uint32_t i;
 
     *swapchain_image_index = cvm_vk_current_acquired_image_index;///value passed back by rendering engine
 
     cvm_vk_module_batch * batch=module_data->batches+module_data->batch_index++;
     module_data->batch_index *= module_data->batch_index < module_data->batch_count;
 
-    if(*swapchain_image_index != CVM_VK_INVALID_IMAGE_INDEX)///data passed in is valid and everything is up to date
+    if(*swapchain_image_index != CVM_INVALID_U32_INDEX)///data passed in is valid and everything is up to date
     {
         for(i=0;i<module_data->sub_batch_count;i++)
         {
@@ -1675,6 +1668,7 @@ cvm_vk_module_batch * cvm_vk_get_module_batch(cvm_vk_module_data * module_data,u
         ///for managing transfers performed this frame
         batch->has_begun_transfer=false;
         batch->has_ended_transfer=false;
+        batch->transfer_affceted_queues_bitmask=0;
 
         return batch;
     }
@@ -1685,9 +1679,11 @@ cvm_vk_module_batch * cvm_vk_get_module_batch(cvm_vk_module_data * module_data,u
 void cvm_vk_end_module_batch(cvm_vk_module_batch * batch)
 {
     VkSubmitInfo2 submit_info;
+    uint32_t i;
 
     if(batch && batch->has_begun_transfer)
     {
+        assert(batch->transfer_affceted_queues_bitmask);
         assert(!batch->has_ended_transfer);
         batch->has_ended_transfer=true;
 
@@ -1717,11 +1713,20 @@ void cvm_vk_end_module_batch(cvm_vk_module_batch * batch)
             }
         };
 
+        ///need to make sure this wait is actually only performed once per QF... (not on EVERY subsequent "frame")
+        for(i=0;i<CVM_VK_MAX_QUEUES;i++)///set copy wait value on appropriate queues
+        {
+            if(batch->transfer_affceted_queues_bitmask & 1<<i)
+            {
+                batch->transfer_data[i].transfer_semaphore_wait_value=cvm_vk_transfer_timeline.value;
+            }
+        }
+
         CVM_VK_CHECK(vkQueueSubmit2(cvm_vk_transfer_queue,1,&submit_info,VK_NULL_HANDLE));
     }
 }
 
-VkCommandBuffer cvm_vk_access_batch_transfer_command_buffer(cvm_vk_module_batch * batch)
+VkCommandBuffer cvm_vk_access_batch_transfer_command_buffer(cvm_vk_module_batch * batch,uint32_t affected_queue_bitbask)
 {
     if(!batch->has_begun_transfer)
     {
@@ -1737,40 +1742,48 @@ VkCommandBuffer cvm_vk_access_batch_transfer_command_buffer(cvm_vk_module_batch 
 
         CVM_VK_CHECK(vkBeginCommandBuffer(batch->transfer_cb,&command_buffer_begin_info));
     }
+
+    assert(!batch->has_ended_transfer);
+
+    batch->transfer_affceted_queues_bitmask|=affected_queue_bitbask;
+
     return batch->transfer_cb;
 }
 
-void cvm_vk_obtain_graphics_payload_from_batch(cvm_vk_module_batch * mb,cvm_vk_module_work_payload * payload)
+void cvm_vk_setup_new_graphics_payload_from_batch(cvm_vk_module_work_payload * payload,cvm_vk_module_batch * batch)
 {
     static const uint32_t pcb_allocation_count=4;
     uint32_t cb_index,queue_index;
+    queue_transfer_synchronization_data * transfer_data;
 
     queue_index=CVM_VK_GRAPHICS_QUEUE_INDEX;
 
-    cb_index=mb->graphics_pcb_count++;
+    cb_index=batch->graphics_pcb_count++;
 
-    if(cb_index==mb->graphics_pcb_space)///out of command buffers (or not yet init)
+    if(cb_index==batch->graphics_pcb_space)///out of command buffers (or not yet init)
     {
-        mb->graphics_pcbs=realloc(mb->graphics_pcbs,sizeof(VkCommandBuffer)*(mb->graphics_pcb_space+pcb_allocation_count));
+        batch->graphics_pcbs=realloc(batch->graphics_pcbs,sizeof(VkCommandBuffer)*(batch->graphics_pcb_space+pcb_allocation_count));
 
         VkCommandBufferAllocateInfo command_buffer_allocate_info=(VkCommandBufferAllocateInfo)
         {
             .sType=VK_STRUCTURE_TYPE_COMMAND_BUFFER_ALLOCATE_INFO,
             .pNext=NULL,
-            .commandPool=mb->sub_batches[0].graphics_pool,
+            .commandPool=batch->sub_batches[0].graphics_pool,
             .level=VK_COMMAND_BUFFER_LEVEL_PRIMARY,
             .commandBufferCount=pcb_allocation_count
         };
 
-        CVM_VK_CHECK(vkAllocateCommandBuffers(cvm_vk_device,&command_buffer_allocate_info,mb->graphics_pcbs+mb->graphics_pcb_space));
+        CVM_VK_CHECK(vkAllocateCommandBuffers(cvm_vk_device,&command_buffer_allocate_info,batch->graphics_pcbs+batch->graphics_pcb_space));
 
-        mb->graphics_pcb_space+=pcb_allocation_count;
+        batch->graphics_pcb_space+=pcb_allocation_count;
     }
 
-    payload->command_buffer=mb->graphics_pcbs[cb_index];
+    transfer_data=batch->transfer_data+queue_index;
+
+    payload->command_buffer=batch->graphics_pcbs[cb_index];
     payload->wait_count=0;
     payload->destination_queue=queue_index;
-    payload->transfer_data=mb->transfer_data+queue_index;
+    payload->transfer_data=transfer_data;
 
     payload->signal_stages=VK_PIPELINE_STAGE_2_NONE;
 
@@ -1787,11 +1800,14 @@ void cvm_vk_obtain_graphics_payload_from_batch(cvm_vk_module_batch * mb,cvm_vk_m
     #warning probably want to enforce that acquisition order is the same as submission order, is easient way to ensure following condition is met
     if(cb_index==0) ///if first (for this queue/queue-family) then inject barriers (must be first SUBMITTED not just first acquired)
     {
-        assert( !(mb->queue_submissions_this_batch&1u<<queue_index));
+        assert( !(batch->queue_submissions_this_batch&1u<<queue_index));
 
-        if(payload->transfer_data->acquire_barriers.count)
+        ///shouldnt need spinlock as this should be appropriately threaded
+        if(transfer_data->acquire_barriers.count)///should always be zero if no QFOT is required, (see assert below)
         {
-            ///add resource acquires QFOT
+            assert(cvm_vk_graphics_queue_family!=cvm_vk_transfer_queue_family);
+
+            ///add resource acquisition side of QFOT
             VkDependencyInfo copy_aquire_dependencies=
             {
                 .sType=VK_STRUCTURE_TYPE_DEPENDENCY_INFO,
@@ -1799,8 +1815,8 @@ void cvm_vk_obtain_graphics_payload_from_batch(cvm_vk_module_batch * mb,cvm_vk_m
                 .dependencyFlags=0,
                 .memoryBarrierCount=0,
                 .pMemoryBarriers=NULL,
-                .bufferMemoryBarrierCount=payload->transfer_data->acquire_barriers.count,
-                .pBufferMemoryBarriers=payload->transfer_data->acquire_barriers.stack,
+                .bufferMemoryBarrierCount=transfer_data->acquire_barriers.count,
+                .pBufferMemoryBarriers=transfer_data->acquire_barriers.stack,
                 .imageMemoryBarrierCount=0,
                 .pImageMemoryBarriers=NULL
             };
@@ -1808,23 +1824,24 @@ void cvm_vk_obtain_graphics_payload_from_batch(cvm_vk_module_batch * mb,cvm_vk_m
 
             #warning assert queue families are actually different! before performing barriers (perhaps if instead of asserting, not sure yet)
 
-            assert(payload->transfer_data->associated_queue_family_index==cvm_vk_transfer_queue_family);
+            assert(transfer_data->associated_queue_family_index==cvm_vk_transfer_queue_family);
 
             ///add transfer waits as appropriate
             #warning make wait addition a function
-            payload->waits[0].value=payload->transfer_data->transfer_semaphore_wait_value;
+            payload->waits[0].value=transfer_data->transfer_semaphore_wait_value;
             payload->waits[0].semaphore=cvm_vk_transfer_timeline.semaphore;
-            payload->wait_stages[0]=payload->transfer_data->wait_stages;
+            payload->wait_stages[0]=transfer_data->wait_stages;
             payload->wait_count++;
 
             ///rest data now that we're done with it
-            payload->transfer_data->wait_stages=VK_PIPELINE_STAGE_2_NONE;
-            payload->transfer_data->acquire_barriers.count=0;
+            transfer_data->wait_stages=VK_PIPELINE_STAGE_2_NONE;
+
+            cvm_vk_buffer_barrier_stack_clr(&transfer_data->acquire_barriers);
         }
     }
     else
     {
-        assert(mb->queue_submissions_this_batch&1u<<queue_index);
+        assert(batch->queue_submissions_this_batch&1u<<queue_index);
     }
 }
 

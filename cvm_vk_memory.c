@@ -20,7 +20,7 @@ along with cvm_shared.  If not, see <https://www.gnu.org/licenses/>.
 #include "cvm_shared.h"
 
 
-void cvm_vk_managed_buffer_create(cvm_vk_managed_buffer * mb,uint32_t buffer_size,uint32_t min_size_factor,VkBufferUsageFlags usage,bool multithreaded,bool host_visible)
+void cvm_vk_managed_buffer_create(cvm_vk_managed_buffer * mb,uint32_t buffer_size,uint32_t min_size_factor,VkBufferUsageFlags usage,bool host_visible)
 {
     uint32_t i,next;
 
@@ -35,16 +35,19 @@ void cvm_vk_managed_buffer_create(cvm_vk_managed_buffer * mb,uint32_t buffer_siz
     mb->temporary_allocation_data=malloc(mb->temporary_allocation_data_space*sizeof(cvm_vk_temporary_buffer_allocation_data));
 
     i=mb->temporary_allocation_data_space;
-    next=CVM_VK_INVALID_TEMPORARY_ALLOCATION;
+    next=CVM_INVALID_U32_INDEX;
     while(i--)
     {
         mb->temporary_allocation_data[i].next=next;
+#ifndef	NDEBUG
+        mb->temporary_allocation_data[i].available=true;///for checking allocation validity
+#endif // NDEBUG
         next=i;
     }
 
     mb->first_unused_temporary_allocation=0;///put all allocations in linked list of unused allocations
     mb->unused_temporary_allocation_count=mb->temporary_allocation_data_space;
-    mb->last_used_allocation=CVM_VK_INVALID_TEMPORARY_ALLOCATION;
+    mb->last_used_allocation=CVM_INVALID_U32_INDEX;
 
     for(i=0;i<32;i++)
     {
@@ -56,15 +59,14 @@ void cvm_vk_managed_buffer_create(cvm_vk_managed_buffer * mb,uint32_t buffer_siz
 
     mb->base_temporary_allocation_size_factor=min_size_factor;
 
-    mb->multithreaded=multithreaded;
-    atomic_init(&mb->acquire_spinlock,0);
+    cvm_atomic_lock_create(&mb->allocation_management_spinlock);
 
     mb->mapping=NULL;
     mb->mapping_coherent=false;
 
-    cvm_vk_create_buffer(&mb->buffer,&mb->memory,usage,buffer_size,host_visible,&mb->mapping,&mb->mapping_coherent);///if this is non-null then probably UMA and thus can circumvent staging buffer
+    cvm_vk_create_buffer(&mb->buffer,&mb->memory,usage,buffer_size,host_visible,(void**)&mb->mapping,&mb->mapping_coherent);///if this is non-null then probably UMA and thus can circumvent staging buffer
 
-    atomic_init(&mb->copy_spinlock,0);
+    cvm_atomic_lock_create(&mb->copy_spinlock);
 
     #warning should have a runtime method to check if following is necessary, will be a decent help in setting up module buffer sizes
     mb->staging_buffer=NULL;
@@ -73,32 +75,7 @@ void cvm_vk_managed_buffer_create(cvm_vk_managed_buffer * mb,uint32_t buffer_siz
     cvm_vk_buffer_barrier_stack_ini(&mb->copy_release_barriers);
 
     mb->copy_update_counter=0;
-
-    atomic_init(&mb->dismissal_spinlock,0);
-    mb->dismissal_cycle_count=0;
-    mb->dismissed_temporary_allocation_indices=NULL;
-}
-
-void cvm_vk_managed_buffer_update(cvm_vk_managed_buffer * mb,uint32_t dismissal_cycle_count)
-{
-    uint32_t i;
-
-    if(mb->dismissal_cycle_count==dismissal_cycle_count)return;
-
-    for(i=dismissal_cycle_count;i<mb->dismissal_cycle_count;i++)
-    {
-        assert(mb->dismissed_temporary_allocation_indices[i].count==0);
-        u32_stack_del(mb->dismissed_temporary_allocation_indices+i);
-    }
-
-    mb->dismissed_temporary_allocation_indices=realloc(mb->dismissed_temporary_allocation_indices,sizeof(u32_stack)*dismissal_cycle_count);
-
-    for(i=mb->dismissal_cycle_count;i<dismissal_cycle_count;i++)
-    {
-        u32_stack_ini(mb->dismissed_temporary_allocation_indices+i);
-    }
-
-    mb->dismissal_cycle_count=dismissal_cycle_count;
+    mb->copy_queue_bitmask=0;
 }
 
 void cvm_vk_managed_buffer_destroy(cvm_vk_managed_buffer * mb)
@@ -107,7 +84,7 @@ void cvm_vk_managed_buffer_destroy(cvm_vk_managed_buffer * mb)
 
     cvm_vk_destroy_buffer(mb->buffer,mb->memory,mb->mapping);
     ///all temporary allocations should be freed at this point
-    assert(mb->last_used_allocation==CVM_VK_INVALID_TEMPORARY_ALLOCATION);///ATTEMPTED TO DESTROY A BUFFER WITH ACTIVE ELEMENTS
+    assert(mb->last_used_allocation==CVM_INVALID_U32_INDEX);///ATTEMPTED TO DESTROY A BUFFER WITH ACTIVE ELEMENTS
 
     for(i=0;i<32;i++)
     {
@@ -118,12 +95,6 @@ void cvm_vk_managed_buffer_destroy(cvm_vk_managed_buffer * mb)
 
     cvm_vk_buffer_copy_stack_del(&mb->pending_copies);
     cvm_vk_buffer_barrier_stack_del(&mb->copy_release_barriers);
-
-    for(i=0;i<mb->dismissal_cycle_count;i++)
-    {
-        assert(mb->dismissed_temporary_allocation_indices[i].count==0);
-        u32_stack_del(mb->dismissed_temporary_allocation_indices+i);
-    }
 }
 
 bool cvm_vk_managed_buffer_acquire_temporary_allocation(cvm_vk_managed_buffer * mb,uint64_t size,uint32_t * allocation_index,uint64_t * allocation_offset)
@@ -132,7 +103,6 @@ bool cvm_vk_managed_buffer_acquire_temporary_allocation(cvm_vk_managed_buffer * 
     uint32_t *heap;
     uint32_t prev_index,next_index;
     cvm_vk_temporary_buffer_allocation_data *allocations,*prev_data,*next_data;
-    uint_fast32_t lock;
 
     assert(allocation_index);
 
@@ -143,8 +113,7 @@ bool cvm_vk_managed_buffer_acquire_temporary_allocation(cvm_vk_managed_buffer * 
     assert(size_factor<32);
     if(size_factor>=32)return false;
 
-    if(mb->multithreaded)do lock=atomic_load(&mb->acquire_spinlock);
-    while(lock!=0 || !atomic_compare_exchange_weak(&mb->acquire_spinlock,&lock,1));
+    cvm_atomic_lock_acquire(&mb->allocation_management_spinlock);
 
     /// seeing as this function must be as fast and light as possible, we should track unused allocation count to determine if there are enough unused allocations left (with allowance for inaccuracy)
     if(mb->unused_temporary_allocation_count < 32)
@@ -160,6 +129,9 @@ bool cvm_vk_managed_buffer_acquire_temporary_allocation(cvm_vk_managed_buffer * 
         for(i=mb->temporary_allocation_data_space+additional_allocations-1;i>=mb->temporary_allocation_data_space;i--)
         {
             allocations[i].next=next_index;
+#ifndef	NDEBUG
+            allocations[i].available=true;///for checking allocation validity
+#endif // NDEBUG
             next_index=i;
         }
         mb->first_unused_temporary_allocation=next_index;///same as next
@@ -212,7 +184,7 @@ bool cvm_vk_managed_buffer_acquire_temporary_allocation(cvm_vk_managed_buffer * 
             mb->unused_temporary_allocation_count--;
 
             ///horizontal linked list stuff
-            allocations[prev_data->next].prev=next_index;///next cannot be CVM_VK_INVALID_TEMPORARY_ALLOCATION. if it were, then this allocation would have been freed back to the pool (last available allocations are recursively freed)
+            allocations[prev_data->next].prev=next_index;///next cannot be CVM_INVALID_U32_INDEX. if it were, then this allocation would have been freed back to the pool (last available allocations are recursively freed)
             next_data->next=prev_data->next;
             next_data->prev=prev_index;
             prev_data->next=next_index;
@@ -231,7 +203,7 @@ bool cvm_vk_managed_buffer_acquire_temporary_allocation(cvm_vk_managed_buffer * 
 
         mb->available_temporary_allocation_bitmask=available_bitmask;
 
-        if(mb->multithreaded) atomic_store(&mb->acquire_spinlock,0);
+        cvm_atomic_lock_release(&mb->allocation_management_spinlock);
 
         *allocation_index=prev_index;///set the allocation data
         if(allocation_offset)*allocation_offset=prev_data->offset<<mb->base_temporary_allocation_size_factor;
@@ -246,14 +218,14 @@ bool cvm_vk_managed_buffer_acquire_temporary_allocation(cvm_vk_managed_buffer * 
         if( ((uint64_t)((((offset+size_bitmask)>>size_factor)<<size_factor) + (1u<<size_factor))) << mb->base_temporary_allocation_size_factor > mb->permanent_offset)
         {
             ///not enough memory left
-            if(mb->multithreaded) atomic_store(&mb->acquire_spinlock,0);
+            cvm_atomic_lock_release(&mb->allocation_management_spinlock);
             return false;
         }
         /// ^ extra brackets to make compiler shut up :sob:
 
         prev_index=mb->last_used_allocation;
         next_index=mb->first_unused_temporary_allocation;///rely on next chain already existing here, but next does need to be set on last used allocation
-        if(prev_index!=CVM_VK_INVALID_TEMPORARY_ALLOCATION)allocations[prev_index].next=next_index;
+        if(prev_index!=CVM_INVALID_U32_INDEX)allocations[prev_index].next=next_index;
         next_data=allocations+next_index;
 
         for(i=0;offset&size_bitmask;i++) if(offset & 1<<i)
@@ -287,7 +259,7 @@ bool cvm_vk_managed_buffer_acquire_temporary_allocation(cvm_vk_managed_buffer * 
 
         next_data->offset=offset;
         next_data->prev=prev_index;
-        next_data->next=CVM_VK_INVALID_TEMPORARY_ALLOCATION;///last used allocation now after all
+        next_data->next=CVM_INVALID_U32_INDEX;///last used allocation now after all
         next_data->size_factor=size_factor;
         next_data->available=false;
 
@@ -295,7 +267,7 @@ bool cvm_vk_managed_buffer_acquire_temporary_allocation(cvm_vk_managed_buffer * 
         mb->temporary_offset=offset+(1<<size_factor);
         mb->available_temporary_allocation_bitmask=available_bitmask;
 
-        if(mb->multithreaded) atomic_store(&mb->acquire_spinlock,0);
+        cvm_atomic_lock_release(&mb->allocation_management_spinlock);
 
         *allocation_index=next_index;///set the allocation data
         if(allocation_offset)*allocation_offset=offset<<mb->base_temporary_allocation_size_factor;
@@ -311,27 +283,29 @@ void cvm_vk_managed_buffer_release_temporary_allocation(cvm_vk_managed_buffer * 
     uint32_t neighbour_index;///represents neighbouring/"buddy" allocation
     cvm_vk_temporary_buffer_allocation_data * allocations;
     cvm_vk_temporary_buffer_allocation_data *allocation_data,*neighbour_data;
-    uint_fast32_t lock;
 
-    if(mb->multithreaded)do lock=atomic_load(&mb->acquire_spinlock);
-    while(lock!=0 || !atomic_compare_exchange_weak(&mb->acquire_spinlock,&lock,1));
+    cvm_atomic_lock_acquire(&mb->allocation_management_spinlock);
 
     allocations=mb->temporary_allocation_data;
 
-    assert(allocation_index!=CVM_VK_INVALID_TEMPORARY_ALLOCATION);
+    assert(allocation_index<mb->temporary_allocation_data_space);/// INVALID ALLOCATION includes check that allocation_index!=CVM_INVALID_U32_INDEX
+    assert(!allocations[allocation_index].available);/// ALLOCATION WAS ALREADY FREED
 
-    if(allocation_index==mb->last_used_allocation)///could also check data.next==CVM_VK_INVALID_TEMPORARY_ALLOCATION
+    if(allocation_index==mb->last_used_allocation)///could also check data.next==CVM_INVALID_U32_INDEX
     {
         ///free space from end until an unavailable allocation is found
         ///need handling for only 1 alloc, which is rightmost
 
         allocations[allocation_index].next=mb->first_unused_temporary_allocation;///beyond this we can rely on the extant next
+#ifndef NDEBUG
+        allocations[allocation_index].available=true;///for checking allocation validity
+#endif // NDEBUG
 
         mb->first_unused_temporary_allocation=allocation_index;
         allocation_index=allocations[allocation_index].prev;
         mb->unused_temporary_allocation_count++;
 
-        while(allocation_index!=CVM_VK_INVALID_TEMPORARY_ALLOCATION && allocations[allocation_index].available)
+        while(allocation_index!=CVM_INVALID_U32_INDEX && allocations[allocation_index].available)
         {
             size_factor=allocations[allocation_index].size_factor;
             ///remove from heap, index itself cannot have any children as it's the allocation with the largest offset (it's at the end), but the one we replace it with may, so no need to check down when adding
@@ -357,7 +331,7 @@ void cvm_vk_managed_buffer_release_temporary_allocation(cvm_vk_managed_buffer * 
             mb->unused_temporary_allocation_count++;
         }
 
-        if(allocation_index!=CVM_VK_INVALID_TEMPORARY_ALLOCATION)allocations[allocation_index].next=CVM_VK_INVALID_TEMPORARY_ALLOCATION;
+        if(allocation_index!=CVM_INVALID_U32_INDEX)allocations[allocation_index].next=CVM_INVALID_U32_INDEX;
         mb->last_used_allocation=allocation_index;
 
         mb->temporary_offset=allocations[mb->first_unused_temporary_allocation].offset;///set based on last added, which will be end of removed, a little hacky but w/e
@@ -412,7 +386,7 @@ void cvm_vk_managed_buffer_release_temporary_allocation(cvm_vk_managed_buffer * 
                 offset-=1<<size_factor;
                 ///this should be rare enough to set next and prev during loop and still be the most efficient option
                 allocation_data->prev=neighbour_data->prev;
-                if(allocation_data->prev!=CVM_VK_INVALID_TEMPORARY_ALLOCATION) allocations[allocation_data->prev].next=allocation_index;///using prev set above
+                if(allocation_data->prev!=CVM_INVALID_U32_INDEX) allocations[allocation_data->prev].next=allocation_index;///using prev set above
             }
             else allocations[(allocation_data->next=neighbour_data->next)].prev=allocation_index;///next CANNOT be NULL, as last allocation cannot be available (and thus break above would have been hit)
 
@@ -449,45 +423,15 @@ void cvm_vk_managed_buffer_release_temporary_allocation(cvm_vk_managed_buffer * 
         mb->available_temporary_allocation_bitmask|=1<<size_factor;
     }
 
-    if(mb->multithreaded) atomic_store(&mb->acquire_spinlock,0);
+    cvm_atomic_lock_release(&mb->allocation_management_spinlock);
 }
 
-void cvm_vk_managed_buffer_dismiss_temporary_allocation(cvm_vk_managed_buffer * mb,uint32_t allocation_index)
-{
-    ///atomic stack? would be pretty simple to implement.
-    uint_fast32_t lock;
-    if(mb->multithreaded)do lock=atomic_load(&mb->dismissal_spinlock);///rename to release spinlock? use a different paradigm?
-    while(lock!=0 || !atomic_compare_exchange_weak(&mb->acquire_spinlock,&lock,1));
-
-    u32_stack_add(mb->dismissed_temporary_allocation_indices+mb->dismissal_cycle_index,allocation_index);
-
-    if(mb->multithreaded) atomic_store(&mb->dismissal_spinlock,0);
-}
-
-/// should only be called in critical section
-/// maybe look at conditionally stripping use of spinlocks on delete function
-void cvm_vk_managed_buffer_process_deletion_list(cvm_vk_managed_buffer * mb,uint32_t dismissal_cycle_index)
-{
-    u32_stack * stack;
-    uint32_t allocation_index;
-
-    assert(dismissal_cycle_index<mb->dismissal_cycle_count);
-
-    stack=mb->dismissed_temporary_allocation_indices+dismissal_cycle_index;
-
-    while(u32_stack_get(stack,&allocation_index))
-    {
-        cvm_vk_managed_buffer_release_temporary_allocation(mb,allocation_index);
-    }
-}
 
 uint64_t cvm_vk_managed_buffer_acquire_permanent_allocation(cvm_vk_managed_buffer * mb,uint64_t size,uint64_t alignment)
 {
     uint64_t permanent_offset,temporary_offset;
-    uint_fast32_t lock;
 
-    if(mb->multithreaded)do lock=atomic_load(&mb->acquire_spinlock);
-    while(lock!=0 || !atomic_compare_exchange_weak(&mb->acquire_spinlock,&lock,1));
+    cvm_atomic_lock_acquire(&mb->allocation_management_spinlock);
 
     ///allocating at desired alignment from end of buffer, can simply "round down"
     ///don't require power of 2 alignment (useful for base vertex use cases, so can index different sections of buffer w/o binding to different slot)
@@ -495,7 +439,10 @@ uint64_t cvm_vk_managed_buffer_acquire_permanent_allocation(cvm_vk_managed_buffe
     permanent_offset=mb->permanent_offset;
     ///make sure there's enough space in the buffer to begin with (and avoid underflow errors), set error otherwise
     ///also would be interpreted as an error is 0 space remained so don't allocate ALL of the remaining space
-    if(permanent_offset<=size)permanent_offset=0;
+    if(permanent_offset<=size)
+    {
+        permanent_offset=0;
+    }
     else
     {
         permanent_offset-=size;
@@ -506,19 +453,19 @@ uint64_t cvm_vk_managed_buffer_acquire_permanent_allocation(cvm_vk_managed_buffe
     }
 
     ///if there's precisely 0 space left that would be interpreted as an error so don't make that wasted/untracked allocation (as well as don't allocate upon error)
-    if(permanent_offset) mb->permanent_offset=permanent_offset;///if allocation was valid make it official
+    if(permanent_offset)
+    {
+        mb->permanent_offset=permanent_offset;///if allocation was valid make it official
+    }
 
-    if(mb->multithreaded) atomic_store(&mb->acquire_spinlock,0);
+    cvm_atomic_lock_release(&mb->allocation_management_spinlock);
 
     return permanent_offset;
 }
 
-static inline void stage_copy_action(cvm_vk_managed_buffer * mb,queue_transfer_synchronization_data * transfer_data,VkPipelineStageFlags2 use_stage_mask,VkAccessFlags2 use_access_mask,VkDeviceSize staging_offset,uint64_t dst_offset,uint64_t size,uint16_t * availability_token)
+static inline void stage_copy_action(cvm_vk_managed_buffer * mb,queue_transfer_synchronization_data * transfer_data,VkPipelineStageFlags2 use_stage_mask,VkAccessFlags2 use_access_mask,VkDeviceSize staging_offset,uint64_t dst_offset,uint64_t size,uint16_t * availability_token,uint32_t dst_queue_id)
 {
-    uint_fast32_t lock;
-
-    if(mb->multithreaded)do lock=atomic_load(&mb->copy_spinlock);
-    while(lock!=0 || !atomic_compare_exchange_weak(&mb->copy_spinlock,&lock,1));
+    cvm_atomic_lock_acquire(&mb->copy_spinlock);
 
     *cvm_vk_buffer_copy_stack_new(&mb->pending_copies)=(VkBufferCopy)
     {
@@ -526,6 +473,8 @@ static inline void stage_copy_action(cvm_vk_managed_buffer * mb,queue_transfer_s
         .dstOffset=dst_offset,
         .size=size
     };
+
+    mb->copy_queue_bitmask|=1<<dst_queue_id;
 
     *availability_token=mb->copy_update_counter;///this may need to change if altering allowable drame delay for DMA actions
 
@@ -545,6 +494,8 @@ static inline void stage_copy_action(cvm_vk_managed_buffer * mb,queue_transfer_s
             .offset=dst_offset,
             .size=size
         };
+
+        cvm_atomic_lock_release(&mb->copy_spinlock);
     }
     else
     {
@@ -563,7 +514,13 @@ static inline void stage_copy_action(cvm_vk_managed_buffer * mb,queue_transfer_s
             .size=size
         };
 
-        ///there must exist a semaphore between these 2
+        cvm_atomic_lock_release(&mb->copy_spinlock);
+
+
+        ///there must exist a semaphore between these 2 (GPU synchronisation on QFOT)
+
+
+        cvm_atomic_lock_acquire(&transfer_data->spinlock);
 
         *cvm_vk_buffer_barrier_stack_new(&transfer_data->acquire_barriers)=(VkBufferMemoryBarrier2)
         {
@@ -581,15 +538,15 @@ static inline void stage_copy_action(cvm_vk_managed_buffer * mb,queue_transfer_s
         };
 
         transfer_data->wait_stages|=use_stage_mask;
-    }
 
-    if(mb->multithreaded) atomic_store(&mb->copy_spinlock,0);
+        cvm_atomic_lock_release(&transfer_data->spinlock);
+    }
 }
 
 
 void * cvm_vk_managed_buffer_acquire_temporary_allocation_with_mapping(cvm_vk_managed_buffer * mb,uint64_t size,
     queue_transfer_synchronization_data * transfer_data,VkPipelineStageFlags2 use_stage_mask,VkAccessFlags2 use_access_mask,
-    uint32_t * allocation_index,uint64_t * allocation_offset,uint16_t * availability_token)
+    uint32_t * allocation_index,uint64_t * allocation_offset,uint16_t * availability_token,uint32_t dst_queue_id)
 {
     /**
     would save allocating space from staging buffer unnecessarily to do that first (temporary allocations can give their space back immediately with no issue)
@@ -624,7 +581,7 @@ void * cvm_vk_managed_buffer_acquire_temporary_allocation_with_mapping(cvm_vk_ma
             return NULL;
         }
 
-        stage_copy_action(mb,transfer_data,use_stage_mask,use_access_mask,staging_offset,*allocation_offset,size,availability_token);
+        stage_copy_action(mb,transfer_data,use_stage_mask,use_access_mask,staging_offset,*allocation_offset,size,availability_token,dst_queue_id);
 
         return mapping;
     }
@@ -632,7 +589,7 @@ void * cvm_vk_managed_buffer_acquire_temporary_allocation_with_mapping(cvm_vk_ma
 
 void * cvm_vk_managed_buffer_acquire_permanent_allocation_with_mapping(cvm_vk_managed_buffer * mb,uint64_t size,uint64_t alignment,
             queue_transfer_synchronization_data * transfer_data,VkPipelineStageFlags2 use_stage_mask,VkAccessFlags2 use_access_mask,
-            uint64_t * allocation_offset,uint16_t * availability_token)
+            uint64_t * allocation_offset,uint16_t * availability_token,uint32_t dst_queue_id)
 {
     uint8_t * mapping=NULL;
     VkDeviceSize staging_offset;
@@ -661,39 +618,48 @@ void * cvm_vk_managed_buffer_acquire_permanent_allocation_with_mapping(cvm_vk_ma
             return NULL;
         }
 
-        stage_copy_action(mb,transfer_data,use_stage_mask,use_access_mask,staging_offset,*allocation_offset,size,availability_token);
+        stage_copy_action(mb,transfer_data,use_stage_mask,use_access_mask,staging_offset,*allocation_offset,size,availability_token,dst_queue_id);
 
         return mapping;
     }
 }
 
-void cvm_vk_managed_buffer_submit_all_pending_copy_actions(cvm_vk_managed_buffer * mb,VkCommandBuffer transfer_cb)
+void cvm_vk_managed_buffer_submit_all_batch_copy_actions(cvm_vk_managed_buffer * mb,cvm_vk_module_batch * batch)
 {
-    //uint_fast32_t lock;
-
     mb->copy_update_counter++;
 
-    if(mb->mapping && mb->mapping_coherent)/// is UMA system, no staging copies necessary
+    if(mb->copy_queue_bitmask)///should indicate whether any copies happened
     {
-        VkMappedMemoryRange flush_range=(VkMappedMemoryRange)
+        if(mb->mapping)/// is UMA system, no staging copies necessary
         {
-            .sType=VK_STRUCTURE_TYPE_MAPPED_MEMORY_RANGE,
-            .pNext=NULL,
-            .memory=mb->memory,
-            .offset=0,
-            .size=VK_WHOLE_SIZE
-        };
+            if(!mb->mapping_coherent)///if its coherent on a UMA system nothing needs to be done!
+            {
+                VkMappedMemoryRange flush_range=(VkMappedMemoryRange)
+                {
+                    .sType=VK_STRUCTURE_TYPE_MAPPED_MEMORY_RANGE,
+                    .pNext=NULL,
+                    .memory=mb->memory,
+                    .offset=0,
+                    .size=VK_WHOLE_SIZE
+                };
 
-        cvm_vk_flush_buffer_memory_range(&flush_range);
-    }
-    else
-    {
-        if(mb->pending_copies.count)
+                cvm_vk_flush_buffer_memory_range(&flush_range);
+            }
+        }
+        else
         {
+            VkCommandBuffer transfer_cb=cvm_vk_access_batch_transfer_command_buffer(batch,mb->copy_queue_bitmask);
+
+            mb->copy_queue_bitmask=0;
+
+            assert(mb->pending_copies.count);
+            assert(mb->copy_release_barriers.count);
+
             ///multithreaded consideration shouldn't be necessary as this should only ever be called from the main thread relevant to this resource while no worker threads are operating on the resource
 
             vkCmdCopyBuffer(transfer_cb,mb->staging_buffer->buffer,mb->buffer,mb->pending_copies.count,mb->pending_copies.stack);
-            mb->pending_copies.count=0;
+
+            cvm_vk_buffer_copy_stack_clr(&mb->pending_copies);
 
             VkDependencyInfo copy_release_dependencies=
             {
@@ -708,16 +674,17 @@ void cvm_vk_managed_buffer_submit_all_pending_copy_actions(cvm_vk_managed_buffer
                 .pImageMemoryBarriers=NULL
             };
             vkCmdPipelineBarrier2(transfer_cb,&copy_release_dependencies);
-            mb->copy_release_barriers.count=0;
+
+            cvm_vk_buffer_barrier_stack_clr(&mb->copy_release_barriers);
         }
+
+
     }
-}
-
-
-void cvm_vk_managed_buffer_submit_all_batch_copy_actions(cvm_vk_managed_buffer * mb,cvm_vk_module_batch * batch)
-{
-    VkCommandBuffer transfer_cb=cvm_vk_access_batch_transfer_command_buffer(batch);
-    cvm_vk_managed_buffer_submit_all_pending_copy_actions(mb,transfer_cb);
+    else
+    {
+        assert(mb->pending_copies.count==0);
+        assert(mb->copy_release_barriers.count==0);
+    }
 }
 
 
@@ -735,6 +702,94 @@ void cvm_vk_managed_buffer_bind_as_index(VkCommandBuffer cmd_buf,cvm_vk_managed_
 
 
 
+void cvm_vk_managed_buffer_dismissal_list_create(cvm_vk_managed_buffer_dismissal_list * dismissal_list)
+{
+    cvm_atomic_lock_create(&dismissal_list->spinlock);
+    dismissal_list->frame_count=0;
+    dismissal_list->frame_index=CVM_INVALID_U32_INDEX;
+    dismissal_list->allocation_indices=NULL;
+}
+
+void cvm_vk_managed_buffer_dismissal_list_update(cvm_vk_managed_buffer_dismissal_list * dismissal_list,uint32_t frame_count)
+{
+    uint32_t i;
+
+    assert(dismissal_list->frame_index==CVM_INVALID_U32_INDEX);
+
+    if(dismissal_list->frame_count==frame_count)return;
+
+    for(i=frame_count;i<dismissal_list->frame_count;i++)
+    {
+        assert(dismissal_list->allocation_indices[i].count==0);
+        u32_stack_del(dismissal_list->allocation_indices+i);
+    }
+
+    dismissal_list->allocation_indices=realloc(dismissal_list->allocation_indices,sizeof(u32_stack)*frame_count);
+
+    for(i=dismissal_list->frame_count;i<frame_count;i++)
+    {
+        u32_stack_ini(dismissal_list->allocation_indices+i);
+    }
+
+    dismissal_list->frame_count=frame_count;
+}
+
+void cvm_vk_managed_buffer_dismissal_list_destroy(cvm_vk_managed_buffer_dismissal_list * dismissal_list)
+{
+    uint32_t i;
+
+    assert(dismissal_list->frame_index==CVM_INVALID_U32_INDEX);
+
+    for(i=0;i<dismissal_list->frame_count;i++)
+    {
+        assert(dismissal_list->allocation_indices[i].count==0);
+        u32_stack_del(dismissal_list->allocation_indices+i);
+    }
+
+    free(dismissal_list->allocation_indices);
+}
+
+void cvm_vk_managed_buffer_dismissal_list_begin_frame(cvm_vk_managed_buffer_dismissal_list * dismissal_list,uint32_t frame_index)
+{
+    assert(frame_index<dismissal_list->frame_count);
+    assert(dismissal_list->allocation_indices[frame_index].count==0);
+
+    dismissal_list->frame_index=frame_index;
+}
+
+void cvm_vk_managed_buffer_dismissal_list_end_frame(cvm_vk_managed_buffer_dismissal_list * dismissal_list)
+{
+    dismissal_list->frame_index=CVM_INVALID_U32_INDEX;
+}
+
+void cvm_vk_managed_buffer_dismissal_list_enqueue_allocation(cvm_vk_managed_buffer_dismissal_list * dismissal_list,uint32_t allocation_index)
+{
+    cvm_atomic_lock_acquire(&dismissal_list->spinlock);///rename to release spinlock? use a different paradigm?
+
+    assert(dismissal_list->frame_index < dismissal_list->frame_count);
+
+    u32_stack_add(dismissal_list->allocation_indices + dismissal_list->frame_index,allocation_index);
+
+    cvm_atomic_lock_release(&dismissal_list->spinlock);
+}
+
+/// should only be called in critical section
+/// maybe look at conditionally stripping use of spinlocks on delete function
+void cvm_vk_managed_buffer_dismissal_list_release_frame(cvm_vk_managed_buffer_dismissal_list * dismissal_list,cvm_vk_managed_buffer * managed_buffer,uint32_t frame_index)
+{
+    u32_stack * stack;
+    uint32_t allocation_index;
+
+    assert(frame_index<dismissal_list->frame_count);
+    assert(dismissal_list->frame_index==CVM_INVALID_U32_INDEX);
+
+    stack=dismissal_list->allocation_indices+frame_index;
+
+    while(u32_stack_get(stack,&allocation_index))
+    {
+        cvm_vk_managed_buffer_release_temporary_allocation(managed_buffer,allocation_index);
+    }
+}
 
 
 
@@ -793,7 +848,7 @@ void cvm_vk_staging_buffer_update(cvm_vk_staging_buffer * sb,uint32_t space_per_
             cvm_vk_destroy_buffer(sb->buffer,sb->memory,sb->mapping);
         }
 
-        cvm_vk_create_buffer(&sb->buffer,&sb->memory,sb->usage,buffer_size,true,&sb->mapping,&sb->mapping_coherent);
+        cvm_vk_create_buffer(&sb->buffer,&sb->memory,sb->usage,buffer_size,true,(void**)&sb->mapping,&sb->mapping_coherent);
 
         atomic_store(&sb->active_offset,0);
         sb->active_region.start=0;///doesn't really need to be set here
@@ -1019,7 +1074,7 @@ void cvm_vk_transient_buffer_update(cvm_vk_transient_buffer * tb,uint32_t space_
 
         if(total_space)
         {
-            cvm_vk_create_buffer(&tb->buffer,&tb->memory,tb->usage,total_space,true,&tb->mapping,&tb->mapping_coherent);
+            cvm_vk_create_buffer(&tb->buffer,&tb->memory,tb->usage,total_space,true,(void**)&tb->mapping,&tb->mapping_coherent);
         }
     }
 

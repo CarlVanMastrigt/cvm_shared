@@ -37,7 +37,7 @@ int cvm_mesh_generate_file_from_objs(const char * name,uint16_t flags);
 typedef struct cvm_mesh
 {
     uint16_t flags;
-    uint16_t vertex_count;
+    uint16_t vertex_count;///use u16 indexing so this MUST be enough
     uint32_t face_count;///implicitly triangles
 }
 cvm_mesh;
@@ -45,16 +45,45 @@ cvm_mesh;
 void cvm_mesh_load_file_header(FILE * f,cvm_mesh * mesh);///separate out metadata contents relevant to this operation such that complete mesh, tied to every other part of system, isn't necessary
 void cvm_mesh_load_file_body(FILE * f,cvm_mesh * mesh,uint16_t * indices,uint16_t * adjacency,uint16_t * materials,void * vertex_data);
 
-size_t cvm_mesh_get_vertex_data_size(uint16_t flags);
+///need efficient way to handle this data when multithreaded
 
-typedef struct cvm_managed_mesh
+#define CVM_MESH_STATE_INITIAL 0
+#define CVM_MESH_STATE_LOADED  1
+#define CVM_MESH_STATE_READY   2
+
+
+///wont bother supporting other/custom mesh structures, can just custom mesh type should that become desirable
+typedef struct cvm_mesh_data
 {
-    cvm_vk_managed_buffer * mb;
-    char * filename;///could clear/free once loaded in retail
+    uint64_t buffer_offset;///used for both permanent and temporary allocations
+
+    uint32_t face_count;///implicitly triangles, worth having to multiply by 3 every time? (does allow per face data)
+    ///following necessary for processing and rendering
+    uint16_t vertex_count;///use u16 indexing so this MUST be enough
+
+    uint16_t state:2;/// ini -> load -> ready -> init(upon deletion/release)
+    uint16_t is_temporary_allocation:1;/// can be released and re-acquired
+    uint16_t is_custom_loader:1;///if faulse use cvm loading defaults and treat load_data as simply the filename pointer (no need to free data)
+
+    uint16_t type:9;///effectively layout of data contained ??
 
     uint32_t temporary_allocation_index;
 
+    const char * filename;
+    cvm_vk_managed_buffer * mb;///could this be put in the payload? is not unreasonable to assume a module has only 1 managed buffer (it REALLY should)
+    atomic_uint_fast16_t lock;///to support multithreading, should only become relevant
+}
+cvm_mesh_data;
+
+/// merge mesh and managed mesh?
+
+typedef struct cvm_managed_mesh
+{
+    cvm_vk_managed_buffer * mb;///will also need for creation AND deletion, would have to batch or associate with a module (or somehow implicitly know parent buffer) to avoid this
+    char * filename;///could clear/free once loaded in retail
+
     uint64_t buffer_offset;///used for both permanent and temporary allocations
+    uint32_t temporary_allocation_index;///not necessarily used
 
     uint16_t is_temporary_allocation:1;
     ///stages of creation
@@ -78,11 +107,11 @@ void cvm_managed_mesh_destroy(cvm_managed_mesh * mm);
 
 bool cvm_managed_mesh_load(cvm_managed_mesh * mm,cvm_vk_module_work_payload * work_payload);
 
-void cvm_managed_mesh_dismiss(cvm_managed_mesh * mm);
+void cvm_managed_mesh_dismiss(cvm_managed_mesh * mm,cvm_vk_module_work_payload * work_payload);
 
-void cvm_managed_mesh_render(cvm_managed_mesh * mm,cvm_vk_module_work_payload * work_payload,uint32_t instance_count,uint32_t instance_offset);///assumes managed buffer used in creation was bound to appropriate points
+///following require buffer to already be bound
+void cvm_managed_mesh_render(cvm_managed_mesh * mm,cvm_vk_module_work_payload * work_payload,uint32_t instance_count,uint32_t instance_offset);
 void cvm_managed_mesh_adjacency_render(cvm_managed_mesh * mm,cvm_vk_module_work_payload * work_payload,uint32_t instance_count,uint32_t instance_offset);
-
 
 typedef struct cvm_mesh_data_pos
 {
