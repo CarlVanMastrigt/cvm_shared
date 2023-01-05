@@ -438,7 +438,7 @@ void text_bar_widget_set_text_pointer(widget * w,char * text_pointer)
     w->text_bar.recalculate_text_size=true;
 }
 
-void text_bar_widget_set_text(widget * w,char * text_to_copy)
+void text_bar_widget_set_text(widget * w,const char * text_to_copy)
 {
     if(text_to_copy)
     {

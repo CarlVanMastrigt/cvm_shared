@@ -366,8 +366,11 @@ void file_list_widget_load_directory_entries(widget * w)
         {
             type_id=CVM_FL_DIRECTORY_TYPE_ID;
         }
-        else if(entry->d_type==DT_REG)
+        else /// entry->d_type==DT_REG
         {
+            ///assert(entry->d_type==DT_REG);
+            /// ^ this actually fails, will need special handling for these? or ignore?
+
             type_id=CVM_FL_MISCELLANEOUS_TYPE_ID;
 
             ext=NULL;

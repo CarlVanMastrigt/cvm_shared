@@ -24,11 +24,6 @@ along with cvm_shared.  If not, see <https://www.gnu.org/licenses/>.
 #ifndef CVM_DATA_STRUCTURES_H
 #define CVM_DATA_STRUCTURES_H
 
-///requires starting with bit only in top 2 set, best to use power of 2
-static inline uint32_t cvm_allocation_increase_step(uint32_t current_size)
-{
-    return (current_size&~(current_size>>1|current_size>>2))>>2;
-}
 
 #ifndef CVM_STACK
 #define CVM_STACK(type,name,start_size)                                         \

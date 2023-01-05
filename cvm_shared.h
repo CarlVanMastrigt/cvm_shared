@@ -32,6 +32,7 @@ along with cvm_shared.  If not, see <https://www.gnu.org/licenses/>.
 #include <time.h>
 #include <assert.h>
 
+#include <immintrin.h>
 
 #include <SDL2/SDL.h>
 #include <SDL2/SDL_image.h>
@@ -41,13 +42,23 @@ along with cvm_shared.  If not, see <https://www.gnu.org/licenses/>.
 #include FT_FREETYPE_H
 #include FT_ADVANCES_H
 
-#include <GL/gl.h>///remove eventually
 #include <vulkan/vulkan.h>
 
 ///own headers
-typedef union widget widget;
 
 #define CVM_INVALID_U32_INDEX 0xFFFFFFFF
+typedef union widget widget;
+
+///following functions to expose intrinsice might want to be put in a separate header, will possibly/probably end up being platform specific
+static inline uint32_t cvm_po2_gte(uint32_t v){ return __bsrd(v-1)+1; }
+static inline uint32_t cvm_po2_lt(uint32_t v){ return __bsrd(v-1); }
+static inline uint32_t cvm_allocation_increase_step(uint32_t current_size)
+{
+    assert(__bsrd(current_size)>=2u);
+    return 1u<<(__bsrd(current_size)-2u);
+}
+
+
 
 #include "cvm_math.h"
 #include "cvm_data_structures.h"

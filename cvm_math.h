@@ -57,20 +57,525 @@ along with cvm_shared.  If not, see <https://www.gnu.org/licenses/>.
 #endif
 
 
-typedef struct vec3i
-{
-    int32_t x;
-    int32_t y;
-    int32_t z;
-}
-vec3i;
 
+
+/// no intrinsics for vec2f available (on sse at least)
+typedef struct vec2f
+{
+    float x;
+    float y;
+}
+vec2f;
+
+static inline vec2f v2f_add(vec2f v1,vec2f v2)
+{
+    return (vec2f){.x=v1.x+v2.x,.y=v1.y+v2.y};
+}
+static inline vec2f v2f_sub(vec2f v1,vec2f v2)
+{
+    return (vec2f){.x=v1.x-v2.x,.y=v1.y-v2.y};
+}
+static inline vec2f v2f_mult(vec2f v,float c)
+{
+    return (vec2f){.x=v.x*c,.y=v.y*c};
+}
+static inline vec2f v2f_div(vec2f v,float c)
+{
+    return (vec2f){.x=v.x/c,.y=v.y/c};
+}
+static inline vec2f v2f_norm(vec2f v)
+{
+    float inv_mag=1.0f/sqrtf(v.x*v.x+v.y*v.y);
+    return (vec2f){.x=v.x*inv_mag,.y=v.y*inv_mag};
+}
+static inline float v2f_mag(vec2f v)
+{
+    return sqrtf(v.x*v.x+v.y*v.y);
+}
+static inline float v2f_dist(vec2f v1,vec2f v2)
+{
+    return v2f_mag(v2f_sub(v1,v2));
+}
+static inline float v2f_mag_sq(vec2f v)
+{
+    return v.x*v.x+v.y*v.y;
+}
+static inline float v2f_dist_sq(vec2f v1,vec2f v2)
+{
+    return v2f_mag_sq(v2f_sub(v1,v2));
+}
+static inline float v2f_dot(vec2f v1,vec2f v2)
+{
+    return v1.x*v2.x+v1.y*v2.y;
+}
+static inline vec2f v2f_min(vec2f v1,vec2f v2)
+{
+    return (vec2f){.x=(v1.x<v2.x)?v1.x:v2.x,.y=(v1.y<v2.y)?v1.y:v2.y};
+}
+static inline vec2f v2f_max(vec2f v1,vec2f v2)
+{
+    return (vec2f){.x=(v1.x>v2.x)?v1.x:v2.x,.y=(v1.y>v2.y)?v1.y:v2.y};
+}
+static inline vec2f v2f_clamp(vec2f v,vec2f min,vec2f max)
+{
+    return (vec2f){.x=(v.x<min.x)?min.x:(v.x>max.x)?max.x:v.x,.y=(v.y<min.y)?min.y:(v.y>max.y)?max.y:v.y};
+}
+static inline vec2f v2f_from_angle(float angle)
+{
+    return (vec2f){.x=cosf(angle),.y=sinf(angle)};
+}
+static inline float v2f_angle(vec2f v)
+{
+    return atan2f(v.y,v.x);
+}
+static inline vec2f v2f_rotate(vec2f v,float angle)
+{
+    float c=cosf(angle),s=sinf(angle);
+    return (vec2f){.x=c*v.x-s*v.y,.y=s*v.x+c*v.y};
+}
+static inline vec2f v2f_orth(vec2f v)/// PI/2 rotation
+{
+    return (vec2f){.x=-v.y,.y=v.x};
+}
+static inline vec2f v2f_mid(vec2f v1,vec2f v2)
+{
+    return (vec2f){.x=(v1.x+v2.x)*0.5f,.y=(v1.y+v2.y)*0.5f};
+}
+
+
+
+/// insufficient intrinsics for vec2i to be meaningful on sse
 typedef struct vec2i
 {
     int32_t x;
     int32_t y;
 }
 vec2i;
+
+///vec2i
+static inline vec2i v2i_add(vec2i v1,vec2i v2)
+{
+    return (vec2i){.x=v1.x+v2.x,.y=v1.y+v2.y};
+}
+static inline vec2i v2i_sub(vec2i v1,vec2i v2)
+{
+    return (vec2i){.x=v1.x-v2.x,.y=v1.y-v2.y};
+}
+static inline vec2i v2i_mult(vec2i v,int32_t c)
+{
+    return (vec2i){.x=v.x*c,.y=v.y*c};
+}
+static inline vec2i v2i_div(vec2i v,int32_t c)
+{
+    return (vec2i){.x=v.x/c,.y=v.y/c};
+}
+static inline vec2i v2i_mod(vec2i v,int32_t m)
+{
+    return (vec2i){.x=v.x%m,.y=v.y%m};
+}
+static inline int32_t v2i_dot(vec2i v1,vec2i v2)
+{
+    return (v1.x*v2.x)+(v1.y*v2.y);
+}
+static inline int32_t v2i_mag_sq(vec2i v)
+{
+    return v.x*v.x+v.y*v.y;
+}
+static inline int32_t v2i_dist_sq(vec2i v1,vec2i v2)
+{
+    return (v1.x-v2.x)*(v1.x-v2.x)+(v1.y-v2.y)*(v1.y-v2.y);
+}
+static inline vec2i v2i_orth(vec2i v)/// PI/2 rotation
+{
+    return (vec2i){.x= -v.y,.y= v.x};
+}
+static inline vec2i v2i_ls(vec2i v,int32_t left_shift)
+{
+    return (vec2i){.x= v.x<<left_shift,.y= v.y<<left_shift};
+}
+static inline vec2i v2i_rs(vec2i v,int32_t right_shift)
+{
+    return (vec2i){.x= v.x>>right_shift,.y= v.y>>right_shift};
+}
+static inline vec2i v2i_min(vec2i v1,vec2i v2)
+{
+    return (vec2i){ .x= v1.x+(((v2.x-v1.x)>>31)&(v2.x-v1.x)),
+                    .y= v1.y+(((v2.y-v1.y)>>31)&(v2.y-v1.y))};
+}
+static inline vec2i v2i_max(vec2i v1,vec2i v2)
+{
+    return (vec2i){ .x= v1.x-(((v1.x-v2.x)>>31)&(v1.x-v2.x)),
+                    .y= v1.y-(((v1.y-v2.y)>>31)&(v1.y-v2.y))};
+}
+static inline vec2i v2i_clamp(vec2i v,vec2i min,vec2i max)
+{
+    return (vec2i){ .x= v.x-(((v.x-min.x)>>31)&(v.x-min.x))+(((max.x-v.x)>>31)&(max.x-v.x)),
+                    .y= v.y-(((v.y-min.y)>>31)&(v.y-min.y))+(((max.y-v.y)>>31)&(max.y-v.y))};
+}
+
+
+
+
+
+
+
+
+
+
+
+///none of these should be defined in retail except CVM_INTRINSIC_MODE_NONE which is useful if issues arise
+///can consider using CVM_INTRINSIC_MODE_NONE in debug (or "fast debug") mode as moving between register types is a nontrivial expense and does slow doen execution
+//#define CVM_INTRINSIC_MODE_NONE
+#define CVM_INTRINSIC_MODE_SSE /*this can trick IDE, when it doesn't pick up __SSE__ :p*/
+
+
+
+#if (defined __SSE__ || defined CVM_INTRINSIC_MODE_SSE) && !defined CVM_INTRINSIC_MODE_NONE
+
+typedef union vec3i
+{
+    __m128i v;
+    struct
+    {
+        int32_t dummy;
+        int32_t x;
+        int32_t y;
+        int32_t z;
+    };
+}
+vec3i;
+
+///vec3i
+static inline vec3i v3i_add(vec3i v1,vec3i v2)
+{
+    return (vec3i){.v=_mm_add_epi32(v1.v,v2.v)};
+}
+static inline vec3i v3i_sub(vec3i v1,vec3i v2)
+{
+    return (vec3i){.v=_mm_sub_epi32(v1.v,v2.v)};
+}
+static inline vec3i v3i_mul(vec3i v,int32_t c)
+{
+    return (vec3i){.v=_mm_mullo_epi32(v.v,_mm_set1_epi32(c))};
+}
+static inline vec3i v3i_div(vec3i v,int32_t c)
+{
+    ///only 10-15% faster than per component division...
+    ///will produce undefined behaviour when (d==1 or d==-1) and n==INT_MIN , these cases COULD be handled by returning n or n*d in those cases, but i don't see such support as worth the performance hit
+    /// ESPECIALLY when INT_MIN/-1 is an invalid op anyway! (so really only real op is unsupported)
+    /// ESPECIALLY ESPECIALLY when that "undefined behaviour" actually works on all platforms...
+    int32_t sh;
+    int64_t ad;
+    __m128i mm,h,l,r,sm,de;
+    sm=_mm_set1_epi32(c>>31);///propagate sign mask of divisor
+    ad=labs((int64_t)c);///absolute value of divisor
+    sh=cvm_po2_lt(ad);
+    int64_t m=((((int64_t)1)<<(sh|0x20))/ad)-(((int64_t)1)<<32)+1;///subtract 2^32 (then add v later before right shifting 32) to ensure multiplier stays withing s32 range
+
+    mm=_mm_set1_epi32(m);///propagate multiplier to vector
+    de=_mm_add_epi32(_mm_srli_epi32(v.v,31),sm);///sm is (fortuitously) just negative 1 times sign bit :D,
+    ///this is values sign bits (to round division correctly) minus 1 if the divisor is negative to account for 2's compliment in xor based "negation" at end
+
+    h=_mm_mul_epi32(_mm_srli_epi64(v.v,32),mm);///do high bits and leave in high bits
+    l=_mm_srli_epi64(_mm_mul_epi32(v.v,mm),32);///do low bits and put in low bits
+
+    r=_mm_blend_epi16(h,l,0x33);///combine low and high results
+    r=_mm_add_epi32(r,v.v);///add v again as mentioned above to account
+    r=_mm_srai_epi32(r,sh);///perform shift necessary to effectively "perform" division
+    r=_mm_add_epi32(r, de);///account for sign BS
+    return (vec3i){.v=_mm_xor_si128(r,sm)};///flip based on sign, other part of negation along with de
+}
+static inline vec3i v3i_mod(vec3i v,int32_t c)///because of reliance on v3i_div, mod suffers same limitation
+{
+    return v3i_sub(v,v3i_mul(v3i_div(v,c),c));
+}
+static inline vec3i v3i_rsh(vec3i v,int32_t c)
+{
+    return (vec3i){.v=_mm_srai_epi32(v.v,c)};
+}
+static inline vec3i v3i_lsh(vec3i v,int32_t c)
+{
+    return (vec3i){.v=_mm_slli_epi32(v.v,c)};
+}
+static inline vec3i v3i_min(vec3i v1,vec3i v2)
+{
+    return (vec3i){.v=_mm_min_epi32(v1.v,v2.v)};
+}
+static inline vec3i v3i_max(vec3i v1,vec3i v2)
+{
+    return (vec3i){.v=_mm_max_epi32(v1.v,v2.v)};
+}
+static inline vec3i v3i_clamp(vec3i v,vec3i min,vec3i max)
+{
+    return (vec3i){.v=_mm_min_epi32(_mm_max_epi32(v.v,min.v),max.v)};
+}
+static inline vec3i v3i_clamp_range(vec3i v,int32_t min,int32_t max)
+{
+    return (vec3i){.v=_mm_min_epi32(_mm_max_epi32(v.v,_mm_set1_epi32(min)),_mm_set1_epi32(max))};
+}
+
+
+
+typedef union vec3f
+{
+    __m128 v;
+    struct
+    {
+        float dummy;
+        float x;
+        float y;
+        float z;
+    };
+}
+vec3f;
+
+///vec3f
+static inline vec3f v3f_add(vec3f v1,vec3f v2)
+{
+    return (vec3f){.v=_mm_add_ps(v1.v,v2.v)};
+}
+static inline vec3f v3f_sub(vec3f v1,vec3f v2)
+{
+    return (vec3f){.v=_mm_sub_ps(v1.v,v2.v)};
+}
+static inline vec3f v3f_mul(vec3f v,float c)
+{
+    return (vec3f){.v=_mm_mul_ps(v.v,_mm_set1_ps(c))};
+}
+static inline vec3f v3f_div(vec3f v,float c)
+{
+    return (vec3f){.v=_mm_div_ps(v.v,_mm_set1_ps(c))};
+}
+static inline float v3f_dot(vec3f v1,vec3f v2)
+{
+    return _mm_cvtss_f32(_mm_dp_ps(v1.v,v2.v,0xE1));
+}
+static inline float v3f_mag_sqr(vec3f v)
+{
+    return v3f_dot(v,v);
+}
+static inline float v3f_mag(vec3f v)
+{
+    return sqrtf(v3f_dot(v,v));
+}
+static inline vec3f v3f_nrm(vec3f v)
+{
+    return (vec3f){.v=_mm_div_ps(v.v,_mm_sqrt_ps(_mm_dp_ps(v.v,v.v,0xEE)))};
+}
+static inline vec3f v3f_nrm_fst(vec3f v)///fast (but more inaccurate) variant (only true if using sse or similar intrinsic set)
+{
+    return (vec3f){.v=_mm_mul_ps(v.v,_mm_rsqrt_ps(_mm_dp_ps(v.v,v.v,0xEE)))};
+}
+static inline float v3f_dst_sqr(vec3f v1,vec3f v2)
+{
+    return v3f_mag_sqr(v3f_sub(v1,v2));
+}
+static inline float v3f_dst(vec3f v1,vec3f v2)
+{
+    return v3f_mag(v3f_sub(v1,v2));
+}
+static inline vec3f v3f_cross(vec3f v1,vec3f v2)
+{
+    __m128 v1p= _mm_castsi128_ps(_mm_shuffle_epi32(_mm_castps_si128(v1.v),0x78));
+    __m128 v2p= _mm_castsi128_ps(_mm_shuffle_epi32(_mm_castps_si128(v2.v),0x9C));
+    __m128 v1n= _mm_castsi128_ps(_mm_shuffle_epi32(_mm_castps_si128(v1.v),0x9C));
+    __m128 v2n= _mm_castsi128_ps(_mm_shuffle_epi32(_mm_castps_si128(v2.v),0x78));
+    return (vec3f){.v=_mm_sub_ps(_mm_mul_ps(v1p,v2p),_mm_mul_ps(v1n,v2n))};
+}
+static inline vec3f v3f_rotate(vec3f v,vec3f k,float cos_theta,float sin_theta)///Rodrigues rotation
+{
+    float d=(k.x*v.x+k.y*v.y+k.z*v.z)*(1.0f-cos_theta);
+
+    return (vec3f){ .x= v.x*cos_theta  +  (k.y*v.z - k.z*v.y)*sin_theta  +  k.x*d,
+                    .y= v.y*cos_theta  +  (k.z*v.x - k.x*v.z)*sin_theta  +  k.y*d,
+                    .z= v.z*cos_theta  +  (k.x*v.y - k.y*v.x)*sin_theta  +  k.z*d};
+}
+static inline vec3f v3f_from_spherical_direction(float zenith,float azimuth)
+{
+    return (vec3f){ .x=cosf(azimuth)*sinf(zenith),
+                    .y=sinf(azimuth)*sinf(zenith),
+                    .z=cosf(zenith)};
+}
+static inline vec3f v3f_from_spherical(float r,float zenith,float azimuth)
+{
+    return v3f_mul(v3f_from_spherical_direction(zenith,azimuth),r);
+}
+static inline vec3f v3f_max(vec3f v1,vec3f v2)
+{
+    return (vec3f){.x=(v1.x>v2.x)?v1.x:v2.x,.y=(v1.y>v2.y)?v1.y:v2.y,.z=(v1.z>v2.z)?v1.z:v2.z};
+}
+static inline vec3f v3f_min(vec3f v1,vec3f v2)
+{
+    return (vec3f){.x=(v1.x<v2.x)?v1.x:v2.x,.y=(v1.y<v2.y)?v1.y:v2.y,.z=(v1.z<v2.z)?v1.z:v2.z};
+}
+static inline vec3f v3f_clamp_range(vec3f v,float min,float max)
+{
+    return (vec3f){ .x=(v.x<min)?min:(v.x>max)?max:v.x,
+                    .y=(v.y<min)?min:(v.y>max)?max:v.y,
+                    .z=(v.z<min)?min:(v.z>max)?max:v.z};
+}
+
+#else
+
+typedef struct vec3i
+{
+    int32_t dummy;
+    int32_t x;
+    int32_t y;
+    int32_t z;
+}
+vec3i;
+
+///vec3i
+static inline vec3i v3i_add(vec3i v1,vec3i v2)
+{
+    return (vec3i){.x=v1.x+v2.x,.y=v1.y+v2.y,.z=v1.z+v2.z};
+}
+static inline vec3i v3i_sub(vec3i v1,vec3i v2)
+{
+    return (vec3i){.x=v1.x-v2.x,.y=v1.y-v2.y,.z=v1.z-v2.z};
+}
+static inline vec3i v3i_mult(vec3i v,int32_t c)
+{
+    return (vec3i){.x=v.x*c,.y=v.y*c,.z=v.z*c};
+}
+static inline vec3i v3i_div(vec3i v,int32_t c)
+{
+    return (vec3i){.x=v.x/c,.y=v.y/c,.z=v.z/c};
+}
+static inline vec3i v3i_mod(vec3i v,int32_t c)
+{
+    return (vec3i){.x=v.x%c,.y=v.y%c,.z=v.z%c};
+}
+static inline vec3i v3i_rsh(vec3i v,int32_t c)
+{
+    return (vec3i){.x=v.x>>c,.y=v.y>>c,.z=v.z>>c};
+}
+static inline vec3i v3i_lsh(vec3i v,int32_t c)
+{
+    return (vec3i){.x=v.x<<c,.y=v.y<<c,.z=v.z<<c};
+}
+static inline vec3i v3i_min(vec3i v1,vec3i v2)
+{
+    return (vec3i){ .x= v1.x+(((v2.x-v1.x)>>31)&(v2.x-v1.x)),
+                    .y= v1.y+(((v2.y-v1.y)>>31)&(v2.y-v1.y)),
+                    .z= v1.z+(((v2.z-v1.z)>>31)&(v2.z-v1.z))};
+}
+static inline vec3i v3i_max(vec3i v1,vec3i v2)
+{
+    return (vec3i){ .x= v1.x-(((v1.x-v2.x)>>31)&(v1.x-v2.x)),
+                    .y= v1.y-(((v1.y-v2.y)>>31)&(v1.y-v2.y)),
+                    .z= v1.z-(((v1.z-v2.z)>>31)&(v1.z-v2.z))};
+}
+static inline vec3i v3i_clamp(vec3i v,vec3i min,vec3i max)
+{
+    return (vec3i){ .x= v.x-(((v.x-min.x)>>31)&(v.x-min.x))+(((max.x-v.x)>>31)&(max.x-v.x)),
+                    .y= v.y-(((v.y-min.y)>>31)&(v.y-min.y))+(((max.y-v.y)>>31)&(max.y-v.y)),
+                    .z= v.z-(((v.z-min.z)>>31)&(v.z-min.z))+(((max.z-v.z)>>31)&(max.z-v.z))};
+}
+static inline vec3i v3i_clamp_range(vec3i v,int32_t min,int32_t max)
+{
+    return (vec3i){ .x= v.x-(((v.x-min)>>31)&(v.x-min))+(((max-v.x)>>31)&(max-v.x)),
+                    .y= v.y-(((v.y-min)>>31)&(v.y-min))+(((max-v.y)>>31)&(max-v.y)),
+                    .z= v.z-(((v.z-min)>>31)&(v.z-min))+(((max-v.z)>>31)&(max-v.z))};
+}
+
+
+
+typedef struct vec3f
+{
+    float dummy;
+    float x;
+    float y;
+    float z;
+}
+vec3f;
+
+///vec3f
+static inline vec3f v3f_add(vec3f v1,vec3f v2)
+{
+    return (vec3f){.x=v1.x+v2.x,.y=v1.y+v2.y,.z=v1.z+v2.z};
+}
+static inline vec3f v3f_sub(vec3f v1,vec3f v2)
+{
+    return (vec3f){.x=v1.x-v2.x,.y=v1.y-v2.y,.z=v1.z-v2.z};
+}
+static inline vec3f v3f_mul(vec3f v,float c)
+{
+    return (vec3f){.x=v.x*c,.y=v.y*c,.z=v.z*c};
+}
+static inline vec3f v3f_div(vec3f v,float c)
+{
+    return (vec3f){.x=v.x/c,.y=v.y/c,.z=v.z/c};
+}
+static inline float v3f_dot(vec3f v1,vec3f v2)
+{
+    return v1.x*v2.x+v1.y*v2.y+v1.z*v2.z;
+}
+static inline float v3f_mag_sqr(vec3f v)
+{
+    return v3f_dot(v,v);
+}
+static inline float v3f_mag(vec3f v)
+{
+    return sqrtf(v3f_mag_sqr(v));
+}
+static inline vec3f v3f_nrm(vec3f v)
+{
+    return v3f_mul(v,1.0f/v3f_mag(v));
+}
+static inline vec3f v3f_nrm_fst(vec3f v)///not relevant w/o sse
+{
+    return v3f_nrm(v);
+}
+static inline float v3f_dst_sqr(vec3f v1,vec3f v2)
+{
+    return v3f_mag_sqr(v3f_sub(v1,v2));
+}
+static inline float v3f_dst(vec3f v1,vec3f v2)
+{
+    return v3f_mag(v3f_sub(v1,v2));
+}
+static inline vec3f v3f_cross(vec3f v1,vec3f v2)
+{
+    return (vec3f){.x=v1.y*v2.z - v1.z*v2.y,.y=v1.z*v2.x - v1.x*v2.z,.z=v1.x*v2.y - v1.y*v2.x};
+}
+static inline vec3f v3f_rotate(vec3f v,vec3f k,float cos_theta,float sin_theta)///Rodrigues rotation
+{
+    float d=(k.x*v.x+k.y*v.y+k.z*v.z)*(1.0f-cos_theta);
+
+    return (vec3f){ .x= v.x*cos_theta  +  (k.y*v.z - k.z*v.y)*sin_theta  +  k.x*d,
+                    .y= v.y*cos_theta  +  (k.z*v.x - k.x*v.z)*sin_theta  +  k.y*d,
+                    .z= v.z*cos_theta  +  (k.x*v.y - k.y*v.x)*sin_theta  +  k.z*d};
+}
+static inline vec3f v3f_from_spherical_direction(float zenith,float azimuth)
+{
+    return (vec3f){ .x=cosf(azimuth)*sinf(zenith),
+                    .y=sinf(azimuth)*sinf(zenith),
+                    .z=cosf(zenith)};
+}
+static inline vec3f v3f_from_spherical(float r,float zenith,float azimuth)
+{
+    return v3f_mul(v3f_from_spherical_direction(zenith,azimuth),r);
+}
+static inline vec3f v3f_max(vec3f v1,vec3f v2)
+{
+    return (vec3f){.x=(v1.x>v2.x)?v1.x:v2.x,.y=(v1.y>v2.y)?v1.y:v2.y,.z=(v1.z>v2.z)?v1.z:v2.z};
+}
+static inline vec3f v3f_min(vec3f v1,vec3f v2)
+{
+    return (vec3f){.x=(v1.x<v2.x)?v1.x:v2.x,.y=(v1.y<v2.y)?v1.y:v2.y,.z=(v1.z<v2.z)?v1.z:v2.z};
+}
+static inline vec3f v3f_clamp_range(vec3f v,float min,float max)
+{
+    return (vec3f){ .x=(v.x<min)?min:(v.x>max)?max:v.x,
+                    .y=(v.y<min)?min:(v.y>max)?max:v.y,
+                    .z=(v.z<min)?min:(v.z>max)?max:v.z};
+}
+
+#endif
+
+
 
 typedef struct vec4f
 {
@@ -80,21 +585,6 @@ typedef struct vec4f
     float w;
 }
 vec4f;
-
-typedef struct vec3f
-{
-    float x;
-    float y;
-    float z;
-}
-vec3f;
-
-typedef struct vec2f
-{
-    float x;
-    float y;
-}
-vec2f;
 
 typedef struct rectangle
 {
@@ -111,6 +601,7 @@ typedef struct bivec3f
     float xy;
     float yz;
     float zx;
+    float dummy;
 }
 bivec3f;
 
@@ -189,104 +680,6 @@ static inline vec2i v2f_to_v2i(vec2f v)
 
 
 
-///vec3i
-static inline vec3i v3i_add(vec3i v1,vec3i v2)
-{
-    return (vec3i){.x=v1.x+v2.x,.y=v1.y+v2.y,.z=v1.z+v2.z};
-}
-static inline vec3i v3i_sub(vec3i v1,vec3i v2)
-{
-    return (vec3i){.x=v1.x-v2.x,.y=v1.y-v2.y,.z=v1.z-v2.z};
-}
-static inline vec3i v3i_mult(vec3i v,int32_t c)
-{
-    return (vec3i){.x=v.x*c,.y=v.y*c,.z=v.z*c};
-}
-static inline vec3i v3i_div(vec3i v,int32_t c)
-{
-    return (vec3i){.x=v.x/c,.y=v.y/c,.z=v.z/c};
-}
-static inline vec3i v3i_mod(vec3i v,int32_t m)
-{
-    return (vec3i){.x=v.x%m,.y=v.y%m,.z=v.z%m};
-}
-
-///vec2i
-static inline vec2i v2i_add(vec2i v1,vec2i v2)
-{
-    return (vec2i){.x=v1.x+v2.x,.y=v1.y+v2.y};
-}
-static inline vec2i v2i_sub(vec2i v1,vec2i v2)
-{
-    return (vec2i){.x=v1.x-v2.x,.y=v1.y-v2.y};
-}
-static inline vec2i v2i_mult(vec2i v,int32_t c)
-{
-    return (vec2i){.x=v.x*c,.y=v.y*c};
-}
-static inline vec2i v2i_div(vec2i v,int32_t c)
-{
-    return (vec2i){.x=v.x/c,.y=v.y/c};
-}
-static inline vec2i v2i_mod(vec2i v,int32_t m)
-{
-    return (vec2i){.x=v.x%m,.y=v.y%m};
-}
-static inline int32_t v2i_dot(vec2i v1,vec2i v2)
-{
-    return (v1.x*v2.x)+(v1.y*v2.y);
-}
-static inline int32_t v2i_mag_sq(vec2i v)
-{
-    return v.x*v.x+v.y*v.y;
-}
-static inline int32_t v2i_dist_sq(vec2i v1,vec2i v2)
-{
-    return (v1.x-v2.x)*(v1.x-v2.x)+(v1.y-v2.y)*(v1.y-v2.y);
-}
-static inline vec2i v2i_orth(vec2i v)/// PI/2 rotation
-{
-    return (vec2i){.x= -v.y,.y= v.x};
-}
-static inline vec2i v2i_ls(vec2i v,int32_t left_shift)
-{
-    return (vec2i){.x= v.x<<left_shift,.y= v.y<<left_shift};
-}
-static inline vec2i v2i_rs(vec2i v,int32_t right_shift)
-{
-    return (vec2i){.x= v.x>>right_shift,.y= v.y>>right_shift};
-}
-static inline vec2i v2i_min(vec2i v1,vec2i v2)
-{
-    return (vec2i){ .x= (v1.x<v2.x) ? v1.x : v2.x,
-                    .y= (v1.y<v2.y) ? v1.y : v2.y };
-}
-static inline vec2i v2i_max(vec2i v1,vec2i v2)
-{
-    return (vec2i){ .x= (v1.x>v2.x) ? v1.x : v2.x,
-                    .y= (v1.y>v2.y) ? v1.y : v2.y };
-}
-static inline vec2i v2i_clamp(vec2i v,vec2i min,vec2i max)
-{
-    return (vec2i){ .x= (v.x<min.x)?min.x:(v.x>max.x)?max.x:v.x,
-                    .y= (v.y<min.y)?min.y:(v.y>max.y)?max.y:v.y };
-}
-
-//static inline vec2i v2i_min(vec2i v1,vec2i v2)
-//{
-//    return (vec2i){ .x= v1.x+(((v2.x-v1.x)>>31)&(v2.x-v1.x)),
-//                    .y= v1.y+(((v2.y-v1.y)>>31)&(v2.y-v1.y))};
-//}
-//static inline vec2i v2i_max(vec2i v1,vec2i v2)
-//{
-//    return (vec2i){ .x= v1.x-(((v1.x-v2.x)>>31)&(v1.x-v2.x)),
-//                    .y= v1.y-(((v1.y-v2.y)>>31)&(v1.y-v2.y))};
-//}
-//static inline vec2i v2i_clamp(vec2i v,vec2i min,vec2i max)
-//{
-//    return (vec2i){ .x= v.x-(((v.x-min.x)>>31)&(v.x-min.x))+(((max.x-v.x)>>31)&(max.x-v.x)),
-//                    .y= v.y-(((v.y-min.y)>>31)&(v.y-min.y))+(((max.y-v.y)>>31)&(max.y-v.y))};
-//}
 
 
 
@@ -294,177 +687,8 @@ static inline vec2i v2i_clamp(vec2i v,vec2i min,vec2i max)
 
 
 
-///vec3f
-static inline vec3f v3f_add(vec3f v1,vec3f v2)
-{
-    return (vec3f){.x=v1.x+v2.x,.y=v1.y+v2.y,.z=v1.z+v2.z};
-}
-static inline vec3f v3f_sub(vec3f v1,vec3f v2)
-{
-    return (vec3f){.x=v1.x-v2.x,.y=v1.y-v2.y,.z=v1.z-v2.z};
-}
-static inline vec3f v3f_mult(vec3f v,float c)
-{
-    return (vec3f){.x=v.x*c,.y=v.y*c,.z=v.z*c};
-}
-static inline vec3f v3f_div(vec3f v,float c)
-{
-    return (vec3f){.x=v.x/c,.y=v.y/c,.z=v.z/c};
-}
-static inline vec3f v3f_norm(vec3f v)
-{
-    float inv_mag=1.0f/sqrtf(v.x*v.x+v.y*v.y+v.z*v.z);
-    return (vec3f){.x=v.x*inv_mag,.y=v.y*inv_mag,.z=v.z*inv_mag};
-}
-static inline float v3f_mag(vec3f v)
-{
-    return sqrtf(v.x*v.x+v.y*v.y+v.z*v.z);
-}
-static inline float v3f_dist(vec3f v1,vec3f v2)
-{
-    return v3f_mag(v3f_sub(v1,v2));
-}
-static inline float v3f_mag_sq(vec3f v)
-{
-    return v.x*v.x+v.y*v.y+v.z*v.z;
-}
-static inline float v3f_dist_sq(vec3f v1,vec3f v2)
-{
-    return v3f_mag_sq(v3f_sub(v1,v2));
-}
-static inline float v3f_dot(vec3f v1,vec3f v2)
-{
-    return v1.x*v2.x+v1.y*v2.y+v1.z*v2.z;
-}
-static inline vec3f v3f_cross(vec3f v1,vec3f v2)
-{
-    return (vec3f){.x=v1.y*v2.z - v1.z*v2.y,.y=v1.z*v2.x - v1.x*v2.z,.z=v1.x*v2.y - v1.y*v2.x};
-}
-static inline vec3f v3f_norm_cross(vec3f v1,vec3f v2)
-{
-    return v3f_norm(v3f_cross(v1,v2));
-}
-static inline vec3f v3f_mid(vec3f v1,vec3f v2)
-{
-    return (vec3f){.x=(v1.x+v2.x)*0.5f,.y=(v1.y+v2.y)*0.5f,.z=(v1.z+v2.z)*0.5f};
-}
-static inline vec3f v3f_norm_mid(vec3f v1,vec3f v2)
-{
-    return v3f_norm(v3f_add(v1,v2));
-}
-static inline vec3f v3f_rotate(vec3f v,vec3f k,float cos_theta,float sin_theta)///Rodrigues rotation
-{
-    float d=(k.x*v.x+k.y*v.y+k.z*v.z)*(1.0f-cos_theta);
-
-    return (vec3f){ .x= v.x*cos_theta  +  (k.y*v.z - k.z*v.y)*sin_theta  +  k.x*d,
-                    .y= v.y*cos_theta  +  (k.z*v.x - k.x*v.z)*sin_theta  +  k.y*d,
-                    .z= v.z*cos_theta  +  (k.x*v.y - k.y*v.x)*sin_theta  +  k.z*d};
-}
-static inline vec3f v3f_from_spherical(float r,float zenith,float azimuth)
-{
-    return (vec3f){ .x=r*cosf(azimuth)*sinf(zenith),
-                    .y=r*sinf(azimuth)*sinf(zenith),
-                    .z=r*cosf(zenith)};
-}
-static inline vec3f v3f_from_spherical_direction(float zenith,float azimuth)
-{
-    return (vec3f){ .x=cosf(azimuth)*sinf(zenith),
-                    .y=sinf(azimuth)*sinf(zenith),
-                    .z=cosf(zenith)};
-}
-static inline vec3f v3f_max(vec3f v1,vec3f v2)
-{
-    return (vec3f){.x=(v1.x>v2.x)?v1.x:v2.x,.y=(v1.y>v2.y)?v1.y:v2.y,.z=(v1.z>v2.z)?v1.z:v2.z};
-}
-static inline vec3f v3f_min(vec3f v1,vec3f v2)
-{
-    return (vec3f){.x=(v1.x<v2.x)?v1.x:v2.x,.y=(v1.y<v2.y)?v1.y:v2.y,.z=(v1.z<v2.z)?v1.z:v2.z};
-}
-static inline vec3f v3f_clamp_range(vec3f v,float min,float max)
-{
-    return (vec3f){ .x=(v.x<min)?min:(v.x>max)?max:v.x,
-                    .y=(v.y<min)?min:(v.y>max)?max:v.y,
-                    .z=(v.z<min)?min:(v.z>max)?max:v.z};
-}
 
 
-
-
-///vec2f
-static inline vec2f v2f_add(vec2f v1,vec2f v2)
-{
-    return (vec2f){.x=v1.x+v2.x,.y=v1.y+v2.y};
-}
-static inline vec2f v2f_sub(vec2f v1,vec2f v2)
-{
-    return (vec2f){.x=v1.x-v2.x,.y=v1.y-v2.y};
-}
-static inline vec2f v2f_mult(vec2f v,float c)
-{
-    return (vec2f){.x=v.x*c,.y=v.y*c};
-}
-static inline vec2f v2f_div(vec2f v,float c)
-{
-    return (vec2f){.x=v.x/c,.y=v.y/c};
-}
-static inline vec2f v2f_norm(vec2f v)
-{
-    float inv_mag=1.0f/sqrtf(v.x*v.x+v.y*v.y);
-    return (vec2f){.x=v.x*inv_mag,.y=v.y*inv_mag};
-}
-static inline float v2f_mag(vec2f v)
-{
-    return sqrtf(v.x*v.x+v.y*v.y);
-}
-static inline float v2f_dist(vec2f v1,vec2f v2)
-{
-    return v2f_mag(v2f_sub(v1,v2));
-}
-static inline float v2f_mag_sq(vec2f v)
-{
-    return v.x*v.x+v.y*v.y;
-}
-static inline float v2f_dist_sq(vec2f v1,vec2f v2)
-{
-    return v2f_mag_sq(v2f_sub(v1,v2));
-}
-static inline float v2f_dot(vec2f v1,vec2f v2)
-{
-    return v1.x*v2.x+v1.y*v2.y;
-}
-static inline vec2f v2f_min(vec2f v1,vec2f v2)
-{
-    return (vec2f){.x=(v1.x<v2.x)?v1.x:v2.x,.y=(v1.y<v2.y)?v1.y:v2.y};
-}
-static inline vec2f v2f_max(vec2f v1,vec2f v2)
-{
-    return (vec2f){.x=(v1.x>v2.x)?v1.x:v2.x,.y=(v1.y>v2.y)?v1.y:v2.y};
-}
-static inline vec2f v2f_clamp(vec2f v,vec2f min,vec2f max)
-{
-    return (vec2f){.x=(v.x<min.x)?min.x:(v.x>max.x)?max.x:v.x,.y=(v.y<min.y)?min.y:(v.y>max.y)?max.y:v.y};
-}
-static inline vec2f v2f_from_angle(float angle)
-{
-    return (vec2f){.x=cosf(angle),.y=sinf(angle)};
-}
-static inline float v2f_angle(vec2f v)
-{
-    return atan2f(v.y,v.x);
-}
-static inline vec2f v2f_rotate(vec2f v,float angle)
-{
-    float c=cosf(angle),s=sinf(angle);
-    return (vec2f){.x=c*v.x-s*v.y,.y=s*v.x+c*v.y};
-}
-static inline vec2f v2f_orth(vec2f v)/// PI/2 rotation
-{
-    return (vec2f){.x=-v.y,.y=v.x};
-}
-static inline vec2f v2f_mid(vec2f v1,vec2f v2)
-{
-    return (vec2f){.x=(v1.x+v2.x)*0.5f,.y=(v1.y+v2.y)*0.5f};
-}
 
 
 

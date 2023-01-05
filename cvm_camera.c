@@ -117,10 +117,10 @@ void update_camera(int screen_w,int screen_h,cvm_camera * c)
     fbl=v3f_sub(m4f_v4f_mult_p(vmi,(vec4f){.x= -1.0f,.y= -1.0f,.z=1.0f,.w=1.0f}),c->position);
     fbr=v3f_sub(m4f_v4f_mult_p(vmi,(vec4f){.x=  1.0f,.y= -1.0f,.z=1.0f,.w=1.0f}),c->position);
 
-    c->bounds[frus_face_t]=plane_from_normal_and_point(v3f_norm_cross(ftr,ftl),c->position);
-    c->bounds[frus_face_b]=plane_from_normal_and_point(v3f_norm_cross(fbl,fbr),c->position);
-    c->bounds[frus_face_l]=plane_from_normal_and_point(v3f_norm_cross(ftl,fbl),c->position);
-    c->bounds[frus_face_r]=plane_from_normal_and_point(v3f_norm_cross(fbr,ftr),c->position);
+    c->bounds[frus_face_t]=plane_from_normal_and_point(v3f_nrm(v3f_cross(ftr,ftl)),c->position);
+    c->bounds[frus_face_b]=plane_from_normal_and_point(v3f_nrm(v3f_cross(fbl,fbr)),c->position);
+    c->bounds[frus_face_l]=plane_from_normal_and_point(v3f_nrm(v3f_cross(ftl,fbl)),c->position);
+    c->bounds[frus_face_r]=plane_from_normal_and_point(v3f_nrm(v3f_cross(fbr,ftr)),c->position);
 }
 
 bool test_in_camera_bounds(vec3f position,float radius,cvm_camera * c)
