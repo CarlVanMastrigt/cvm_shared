@@ -23,6 +23,7 @@ along with cvm_shared.  If not, see <https://www.gnu.org/licenses/>.
 void cvm_vk_managed_buffer_create(cvm_vk_managed_buffer * mb,uint32_t buffer_size,uint32_t min_size_factor,VkBufferUsageFlags usage,bool host_visible)
 {
     uint32_t i,next;
+    VkMemoryPropertyFlags required_memory_properties,desired_memory_properties;
 
     usage|=VK_BUFFER_USAGE_TRANSFER_DST_BIT;///for when its necessary to copy into the buffer (device only memory)
 
@@ -64,7 +65,19 @@ void cvm_vk_managed_buffer_create(cvm_vk_managed_buffer * mb,uint32_t buffer_siz
     mb->mapping=NULL;
     mb->mapping_coherent=false;
 
-    cvm_vk_create_buffer(&mb->buffer,&mb->memory,usage,buffer_size,host_visible,(void**)&mb->mapping,&mb->mapping_coherent);///if this is non-null then probably UMA and thus can circumvent staging buffer
+    if(host_visible)
+    {
+        required_memory_properties=VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT;
+        desired_memory_properties=0;
+    }
+    else
+    {
+        required_memory_properties=0;
+        desired_memory_properties=VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT;
+    }
+
+    cvm_vk_create_buffer(&mb->buffer,&mb->memory,usage,buffer_size,(void**)&mb->mapping,&mb->mapping_coherent,required_memory_properties,desired_memory_properties);
+    ///if this is non-null then probably UMA and thus can circumvent staging buffer
 
     cvm_atomic_lock_create(&mb->copy_spinlock);
 
@@ -848,7 +861,7 @@ void cvm_vk_staging_buffer_update(cvm_vk_staging_buffer * sb,uint32_t space_per_
             cvm_vk_destroy_buffer(sb->buffer,sb->memory,sb->mapping);
         }
 
-        cvm_vk_create_buffer(&sb->buffer,&sb->memory,sb->usage,buffer_size,true,(void**)&sb->mapping,&sb->mapping_coherent);
+        cvm_vk_create_buffer(&sb->buffer,&sb->memory,sb->usage,buffer_size,(void**)&sb->mapping,&sb->mapping_coherent,VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT,VK_MEMORY_PROPERTY_HOST_COHERENT_BIT);
 
         atomic_store(&sb->active_offset,0);
         sb->active_region.start=0;///doesn't really need to be set here
@@ -1074,7 +1087,7 @@ void cvm_vk_transient_buffer_update(cvm_vk_transient_buffer * tb,uint32_t space_
 
         if(total_space)
         {
-            cvm_vk_create_buffer(&tb->buffer,&tb->memory,tb->usage,total_space,true,(void**)&tb->mapping,&tb->mapping_coherent);
+            cvm_vk_create_buffer(&tb->buffer,&tb->memory,tb->usage,total_space,(void**)&tb->mapping,&tb->mapping_coherent,VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT,VK_MEMORY_PROPERTY_HOST_COHERENT_BIT);
         }
     }
 

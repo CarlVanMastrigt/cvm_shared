@@ -150,7 +150,7 @@ void cvm_vk_write_descriptor_sets(VkWriteDescriptorSet * writes,uint32_t count);
 void cvm_vk_create_image(VkImage * image,VkImageCreateInfo * info);
 void cvm_vk_destroy_image(VkImage image);
 
-void cvm_vk_create_and_bind_memory_for_images(VkDeviceMemory * memory,VkImage * images,uint32_t image_count,VkMemoryPropertyFlags extra_flags);
+void cvm_vk_create_and_bind_memory_for_images(VkDeviceMemory * memory,VkImage * images,uint32_t image_count,VkMemoryPropertyFlags required_properties,VkMemoryPropertyFlags desired_properties);
 
 void cvm_vk_create_image_view(VkImageView * image_view,VkImageViewCreateInfo * info);
 void cvm_vk_destroy_image_view(VkImageView image_view);
@@ -160,7 +160,7 @@ void cvm_vk_destroy_sampler(VkSampler sampler);
 
 void cvm_vk_free_memory(VkDeviceMemory memory);
 
-void cvm_vk_create_buffer(VkBuffer * buffer,VkDeviceMemory * memory,VkBufferUsageFlags usage,VkDeviceSize size,bool require_host_visible,void ** mapping,bool * mapping_coherent);
+void cvm_vk_create_buffer(VkBuffer * buffer,VkDeviceMemory * memory,VkBufferUsageFlags usage,VkDeviceSize size,void ** mapping,bool * mapping_coherent,VkMemoryPropertyFlags required_properties,VkMemoryPropertyFlags desired_properties);
 void cvm_vk_destroy_buffer(VkBuffer buffer,VkDeviceMemory memory,void * mapping);
 void cvm_vk_flush_buffer_memory_range(VkMappedMemoryRange * flush_range);
 uint32_t cvm_vk_get_buffer_alignment_requirements(VkBufferUsageFlags usage);

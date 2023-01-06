@@ -509,7 +509,7 @@ static void create_overlay_images(uint32_t t_w,uint32_t t_h,uint32_t c_w,uint32_
     cvm_vk_create_image(&overlay_colour_image,&image_creation_info);
 
     VkImage images[2]={overlay_transparent_image,overlay_colour_image};
-    cvm_vk_create_and_bind_memory_for_images(&overlay_image_memory,images,2,0);
+    cvm_vk_create_and_bind_memory_for_images(&overlay_image_memory,images,2,0,VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT);
 
 
 

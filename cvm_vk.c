@@ -902,6 +902,9 @@ uint32_t cvm_vk_prepare_for_next_frame(bool rendering_resources_invalid)
             presenting_image->successfully_acquired=true;
             presenting_image->successfully_submitted=false;
             presenting_image->acquire_semaphore=acquire_semaphore;
+
+            presenting_image->graphics_wait_value=cvm_vk_graphics_timeline.value;
+            presenting_image->transfer_wait_value=cvm_vk_transfer_timeline.value;
         }
         else
         {
@@ -1287,12 +1290,27 @@ void cvm_vk_destroy_image(VkImage image)
     vkDestroyImage(cvm_vk_device,image,NULL);
 }
 
-void cvm_vk_create_and_bind_memory_for_images(VkDeviceMemory * memory,VkImage * images,uint32_t image_count,VkMemoryPropertyFlags extra_flags)
+static bool cvm_vk_find_appropriate_memory_type(uint32_t supported_type_bits,VkMemoryPropertyFlags required_properties,uint32_t * index)
+{
+    uint32_t i;
+    for(i=0;i<cvm_vk_memory_properties.memoryTypeCount;i++)
+    {
+        if(( supported_type_bits & 1<<i ) && ((cvm_vk_memory_properties.memoryTypes[i].propertyFlags & required_properties) == required_properties))
+        {
+            *index=i;
+            return true;
+        }
+    }
+    return false;
+}
+
+void cvm_vk_create_and_bind_memory_for_images(VkDeviceMemory * memory,VkImage * images,uint32_t image_count,VkMemoryPropertyFlags required_properties,VkMemoryPropertyFlags desired_properties)
 {
     VkDeviceSize offsets[image_count];
     VkDeviceSize current_offset=0;
     VkMemoryRequirements requirements;
-    uint32_t i,supported_type_bits=0xFFFFFFFF;
+    uint32_t i,memory_type_index,supported_type_bits=0xFFFFFFFF;
+    bool type_found;
 
     for(i=0;i<image_count;i++)
     {
@@ -1302,22 +1320,23 @@ void cvm_vk_create_and_bind_memory_for_images(VkDeviceMemory * memory,VkImage * 
         supported_type_bits&=requirements.memoryTypeBits;
     }
 
-    for(i=0;i<cvm_vk_memory_properties.memoryTypeCount;i++)
+    assert(supported_type_bits);
+
+    type_found=cvm_vk_find_appropriate_memory_type(supported_type_bits,desired_properties|required_properties,&memory_type_index);
+
+    if(!type_found)
     {
-        if(( supported_type_bits & 1<<i ) && ((cvm_vk_memory_properties.memoryTypes[i].propertyFlags & extra_flags) == extra_flags))
-        {
-            break;
-        }
+        type_found=cvm_vk_find_appropriate_memory_type(supported_type_bits,required_properties,&memory_type_index);
     }
 
-    assert(i!=cvm_vk_memory_properties.memoryTypeCount);///COULD NOT FIND APPROPRIATE MEMORY FOR IMAGE ALLOCATION
+    assert(type_found);
 
     VkMemoryAllocateInfo memory_allocate_info=(VkMemoryAllocateInfo)
     {
         .sType=VK_STRUCTURE_TYPE_MEMORY_ALLOCATE_INFO,
         .pNext=NULL,
         .allocationSize=current_offset,
-        .memoryTypeIndex=i
+        .memoryTypeIndex=memory_type_index
     };
 
     CVM_VK_CHECK(vkAllocateMemory(cvm_vk_device,&memory_allocate_info,NULL,memory));
@@ -1354,13 +1373,10 @@ void cvm_vk_free_memory(VkDeviceMemory memory)
 }
 
 ///unlike other functions, this one takes abstract/resultant data rather than just generic creation info
-void cvm_vk_create_buffer(VkBuffer * buffer,VkDeviceMemory * memory,VkBufferUsageFlags usage,VkDeviceSize size,bool require_host_visible,void ** mapping,bool * mapping_coherent)
+void cvm_vk_create_buffer(VkBuffer * buffer,VkDeviceMemory * memory,VkBufferUsageFlags usage,VkDeviceSize size,void ** mapping,bool * mapping_coherent,VkMemoryPropertyFlags required_properties,VkMemoryPropertyFlags desired_properties)
 {
-    /// prefer_host_local for staging buffer that is written to dynamically? maybe in the future
-    /// instead have flags for usage that are used to determine which heap to use?
-
-    /// exclusive ownership means explicit ownership transfers are required, but this may have better performance
-    /// need for these can be indicated by flags on buffer ranges (for staging)
+    uint32_t memory_type_index,supported_type_bits;
+    bool type_found;
 
     VkBufferCreateInfo buffer_create_info=(VkBufferCreateInfo)
     {
@@ -1379,45 +1395,38 @@ void cvm_vk_create_buffer(VkBuffer * buffer,VkDeviceMemory * memory,VkBufferUsag
     VkMemoryRequirements buffer_memory_requirements;
     vkGetBufferMemoryRequirements(cvm_vk_device,*buffer,&buffer_memory_requirements);
 
-    uint32_t i;
+    type_found=cvm_vk_find_appropriate_memory_type(buffer_memory_requirements.memoryTypeBits,desired_properties|required_properties,&memory_type_index);
 
-    *mapping=NULL;
-    *mapping_coherent=false;
-
-    /// integrated graphics ONLY has shared heaps! (UMA) means there's no good way to test everything is working, but also means there's room for optimisation
-    ///     ^ if staging is detected as not needed then don't do it? (but still need a way to test staging, circumvent_uma define? this won't really test things properly though...)
-    ///     ^ also I'm pretty sure staging is needed for uploading textures
-
-    for(i=0;i<cvm_vk_memory_properties.memoryTypeCount;i++)
+    if(!type_found)
     {
-        if(( buffer_memory_requirements.memoryTypeBits & 1<<i ) && ( !require_host_visible || cvm_vk_memory_properties.memoryTypes[i].propertyFlags&VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT ))
-        {
-            VkMemoryAllocateInfo memory_allocate_info=(VkMemoryAllocateInfo)
-            {
-                .sType=VK_STRUCTURE_TYPE_MEMORY_ALLOCATE_INFO,
-                .pNext=NULL,
-                .allocationSize=buffer_memory_requirements.size,
-                .memoryTypeIndex=i
-            };
-
-            CVM_VK_CHECK(vkAllocateMemory(cvm_vk_device,&memory_allocate_info,NULL,memory));
-
-            CVM_VK_CHECK(vkBindBufferMemory(cvm_vk_device,*buffer,*memory,0));///offset/alignment kind of irrelevant because of 1 buffer per allocation paradigm
-
-            if(cvm_vk_memory_properties.memoryTypes[i].propertyFlags&VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT)
-            {
-                ///following if can be used to test staging on my UMA system
-                if(require_host_visible)///REMOVE
-                CVM_VK_CHECK(vkMapMemory(cvm_vk_device,*memory,0,VK_WHOLE_SIZE,0,mapping));
-
-                *mapping_coherent=!!(cvm_vk_memory_properties.memoryTypes[i].propertyFlags&VK_MEMORY_PROPERTY_HOST_COHERENT_BIT);
-            }
-
-            return;
-        }
+        type_found=cvm_vk_find_appropriate_memory_type(buffer_memory_requirements.memoryTypeBits,required_properties,&memory_type_index);
     }
 
-    assert(false);///COULD NOT FIND APPROPRIATE MEMORY FOR BUFFER ALLOCATION
+    assert(type_found);
+
+    VkMemoryAllocateInfo memory_allocate_info=(VkMemoryAllocateInfo)
+    {
+        .sType=VK_STRUCTURE_TYPE_MEMORY_ALLOCATE_INFO,
+        .pNext=NULL,
+        .allocationSize=buffer_memory_requirements.size,
+        .memoryTypeIndex=memory_type_index
+    };
+
+    CVM_VK_CHECK(vkAllocateMemory(cvm_vk_device,&memory_allocate_info,NULL,memory));
+
+    CVM_VK_CHECK(vkBindBufferMemory(cvm_vk_device,*buffer,*memory,0));///offset/alignment kind of irrelevant because of 1 buffer per allocation paradigm
+
+    if(cvm_vk_memory_properties.memoryTypes[memory_type_index].propertyFlags&VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT)
+    {
+        CVM_VK_CHECK(vkMapMemory(cvm_vk_device,*memory,0,VK_WHOLE_SIZE,0,mapping));
+
+        *mapping_coherent=!!(cvm_vk_memory_properties.memoryTypes[memory_type_index].propertyFlags&VK_MEMORY_PROPERTY_HOST_COHERENT_BIT);
+    }
+    else
+    {
+        *mapping=NULL;
+        *mapping_coherent=false;
+    }
 }
 
 void cvm_vk_destroy_buffer(VkBuffer buffer,VkDeviceMemory memory,void * mapping)
@@ -1563,6 +1572,11 @@ static void cvm_vk_destroy_module_batch(cvm_vk_module_batch * mb,uint32_t sub_ba
     free(mb->graphics_pcbs);
 
     vkFreeCommandBuffers(cvm_vk_device,mb->transfer_pool,1,&mb->transfer_cb);
+
+    if(cvm_vk_transfer_queue_family!=cvm_vk_graphics_queue_family)
+    {
+        vkDestroyCommandPool(cvm_vk_device,mb->transfer_pool,NULL);
+    }
 
     for(i=0;i<sub_batch_count;i++)
     {
@@ -1723,6 +1737,10 @@ void cvm_vk_end_module_batch(cvm_vk_module_batch * batch)
         }
 
         CVM_VK_CHECK(vkQueueSubmit2(cvm_vk_transfer_queue,1,&submit_info,VK_NULL_HANDLE));
+
+        assert(cvm_vk_current_acquired_image_index!=CVM_INVALID_U32_INDEX);///SHOULDN'T BE SUBMITTING WORK WHEN NO VALID SWAPCHAIN IMAGE WAS ACQUIRED THIS FRAME
+
+        cvm_vk_presenting_images[cvm_vk_current_acquired_image_index].transfer_wait_value=cvm_vk_transfer_timeline.value;
     }
 }
 
@@ -1822,9 +1840,9 @@ void cvm_vk_setup_new_graphics_payload_from_batch(cvm_vk_module_work_payload * p
             };
             vkCmdPipelineBarrier2(payload->command_buffer,&copy_aquire_dependencies);
 
-            #warning assert queue families are actually different! before performing barriers (perhaps if instead of asserting, not sure yet)
+            //#warning assert queue families are actually different! before performing barriers (perhaps if instead of asserting, not sure yet)
 
-            assert(transfer_data->associated_queue_family_index==cvm_vk_transfer_queue_family);
+            //assert(transfer_data->associated_queue_family_index==cvm_vk_transfer_queue_family);
 
             ///add transfer waits as appropriate
             #warning make wait addition a function
