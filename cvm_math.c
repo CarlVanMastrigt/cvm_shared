@@ -1,5 +1,5 @@
 /**
-Copyright 2020,2021,2022 Carl van Mastrigt
+Copyright 2020,2021,2022,2023 Carl van Mastrigt
 
 This file is part of cvm_shared.
 
@@ -19,7 +19,196 @@ along with cvm_shared.  If not, see <https://www.gnu.org/licenses/>.
 
 #include "cvm_shared.h"
 
-matrix4f m4f_mult(matrix4f l,matrix4f r)
+
+
+
+//#define CVM_INTRINSIC_MODE_NONE
+#define CVM_INTRINSIC_MODE_SSE /*this can trick IDE, when it doesn't pick up __SSE__ :p*/
+
+
+///start with mmult, also probably want to rename, first thing is mat3x3 ??
+
+#if (defined __SSE__ || defined CVM_INTRINSIC_MODE_SSE) && !defined CVM_INTRINSIC_MODE_NONE
+mat44f m44f_transpose(mat44f m)
+{
+    ///names reflect columns-rows of respective vector entry
+    __m128 xx_yx_xy_yy=_mm_unpacklo_ps(m.x.v,m.y.v);
+    __m128 xz_yz_xw_yw=_mm_unpackhi_ps(m.x.v,m.y.v);
+
+    __m128 zx_wx_zy_wy=_mm_unpacklo_ps(m.z.v,m.w.v);
+    __m128 zz_wz_zw_ww=_mm_unpackhi_ps(m.z.v,m.w.v);
+
+    m.x.v=_mm_movelh_ps(xx_yx_xy_yy,zx_wx_zy_wy);
+    m.y.v=_mm_movehl_ps(zx_wx_zy_wy,xx_yx_xy_yy);
+    m.z.v=_mm_movelh_ps(xz_yz_xw_yw,zz_wz_zw_ww);
+    m.z.v=_mm_movehl_ps(zz_wz_zw_ww,xz_yz_xw_yw);
+
+    return m;
+}
+mat44f m44f_mul(mat44f l,mat44f r)
+{
+    __m128 lo,hi,ltcx,ltcy,ltcz,ltcw;///ltc=left transposed column
+
+    ///transpose l
+    lo=_mm_unpacklo_ps(l.x.v,l.y.v);//xx_yx_xy_yy
+    hi=_mm_unpacklo_ps(l.z.v,l.w.v);//zx_wx_zy_wy
+    ltcx=_mm_movelh_ps(lo,hi);
+    ltcy=_mm_movehl_ps(hi,lo);
+
+    lo=_mm_unpackhi_ps(l.x.v,l.y.v);//xz_yz_xw_yw
+    hi=_mm_unpackhi_ps(l.z.v,l.w.v);//zz_wz_zw_ww
+    ltcz=_mm_movelh_ps(lo,hi);
+    ltcw=_mm_movehl_ps(hi,lo);
+
+    r.x.v=_mm_blend_ps(
+        _mm_blend_ps(_mm_dp_ps(ltcx,r.x.v,0xF1),_mm_dp_ps(ltcy,r.x.v,0xF2),0x02),
+        _mm_blend_ps(_mm_dp_ps(ltcz,r.x.v,0xF4),_mm_dp_ps(ltcw,r.x.v,0xF8),0x08)
+        ,0x0C);
+
+    r.y.v=_mm_blend_ps(
+        _mm_blend_ps(_mm_dp_ps(ltcx,r.y.v,0xF1),_mm_dp_ps(ltcy,r.y.v,0xF2),0x02),
+        _mm_blend_ps(_mm_dp_ps(ltcz,r.y.v,0xF4),_mm_dp_ps(ltcw,r.y.v,0xF8),0x08)
+        ,0x0C);
+
+    r.z.v=_mm_blend_ps(
+        _mm_blend_ps(_mm_dp_ps(ltcx,r.z.v,0xF1),_mm_dp_ps(ltcy,r.z.v,0xF2),0x02),
+        _mm_blend_ps(_mm_dp_ps(ltcz,r.z.v,0xF4),_mm_dp_ps(ltcw,r.z.v,0xF8),0x08)
+        ,0x0C);
+
+    r.w.v=_mm_blend_ps(
+        _mm_blend_ps(_mm_dp_ps(ltcx,r.w.v,0xF1),_mm_dp_ps(ltcy,r.w.v,0xF2),0x02),
+        _mm_blend_ps(_mm_dp_ps(ltcz,r.w.v,0xF4),_mm_dp_ps(ltcw,r.w.v,0xF8),0x08)
+        ,0x0C);
+
+    return r;
+}
+mat44f m44f_inv(mat44f m)
+{
+    __m128 inv_det,ysp,ysn,zsp,zsn,wsp,wsn;///respective axies shifted posotively (+,p) or negatively (-,n) for the seubset of relevant entries
+    mat44f inv;
+
+    ///there is likely some way to optimise the swizzling performed such that values vectors can be recycled when calculating different columns
+
+    ///x not yet relevant for it's axis, and x components not relevant to following vectors
+    ///note component swizzles done forward order, index numbers done reversed
+
+    /// __y_z_w ; x-0's irrelevant
+    ysp=_mm_castsi128_ps(_mm_shuffle_epi32(_mm_castps_si128(m.y.v),0x9C));// __w_y_z 2130
+    ysn=_mm_castsi128_ps(_mm_shuffle_epi32(_mm_castps_si128(m.y.v),0x78));// __z_w_y 1320
+    zsp=_mm_castsi128_ps(_mm_shuffle_epi32(_mm_castps_si128(m.z.v),0x9C));// __w_y_z 2130
+    zsn=_mm_castsi128_ps(_mm_shuffle_epi32(_mm_castps_si128(m.z.v),0x78));// __z_w_y 1320
+    wsp=_mm_castsi128_ps(_mm_shuffle_epi32(_mm_castps_si128(m.w.v),0x9C));// __w_y_z 2130
+    wsn=_mm_castsi128_ps(_mm_shuffle_epi32(_mm_castps_si128(m.w.v),0x78));// __z_w_y 1320
+
+    inv.x.v=_mm_blend_ps(
+        _mm_blend_ps(
+            _mm_dp_ps(m.y.v,_mm_sub_ps(_mm_mul_ps(zsn,wsp),_mm_mul_ps(zsp,wsn)),0xE1),
+            _mm_dp_ps(m.x.v,_mm_sub_ps(_mm_mul_ps(zsp,wsn),_mm_mul_ps(zsn,wsp)),0xE2),
+            0x02),
+        _mm_blend_ps(
+            _mm_dp_ps(m.x.v,_mm_sub_ps(_mm_mul_ps(ysn,wsp),_mm_mul_ps(ysp,wsn)),0xE4),
+            _mm_dp_ps(m.x.v,_mm_sub_ps(_mm_mul_ps(ysp,zsn),_mm_mul_ps(ysn,zsp)),0xE8),
+            0x08),
+        0x0C);
+
+
+    /// x___z_w ; y-1's irrelevant
+    ysp=_mm_castsi128_ps(_mm_shuffle_epi32(_mm_castps_si128(m.y.v),0x87));// w___x_z 2013
+    ysn=_mm_castsi128_ps(_mm_shuffle_epi32(_mm_castps_si128(m.y.v),0x36));// z___w_x 0312
+    zsp=_mm_castsi128_ps(_mm_shuffle_epi32(_mm_castps_si128(m.z.v),0x87));// w___x_z 2013
+    zsn=_mm_castsi128_ps(_mm_shuffle_epi32(_mm_castps_si128(m.z.v),0x36));// z___w_x 0312
+    wsp=_mm_castsi128_ps(_mm_shuffle_epi32(_mm_castps_si128(m.w.v),0x87));// w___x_z 2013
+    wsn=_mm_castsi128_ps(_mm_shuffle_epi32(_mm_castps_si128(m.w.v),0x36));// z___w_x 0312
+
+    inv.y.v=_mm_blend_ps(
+        _mm_blend_ps(
+            _mm_dp_ps(m.y.v,_mm_sub_ps(_mm_mul_ps(zsp,wsn),_mm_mul_ps(zsn,wsp)),0xD1),
+            _mm_dp_ps(m.x.v,_mm_sub_ps(_mm_mul_ps(zsn,wsp),_mm_mul_ps(zsp,wsn)),0xD2),
+            0x02),
+        _mm_blend_ps(
+            _mm_dp_ps(m.x.v,_mm_sub_ps(_mm_mul_ps(ysp,wsn),_mm_mul_ps(ysn,wsp)),0xD4),
+            _mm_dp_ps(m.x.v,_mm_sub_ps(_mm_mul_ps(ysn,zsp),_mm_mul_ps(ysp,zsn)),0xD8),
+            0x08),
+        0x0C);
+
+
+    /// x_y___w ; z-2's irrelevant
+    ysp=_mm_castsi128_ps(_mm_shuffle_epi32(_mm_castps_si128(m.y.v),0x63));// w_x___y 1203
+    ysn=_mm_castsi128_ps(_mm_shuffle_epi32(_mm_castps_si128(m.y.v),0x2D));// y_w___x 0231
+    zsp=_mm_castsi128_ps(_mm_shuffle_epi32(_mm_castps_si128(m.z.v),0x63));// w_x___y 1203
+    zsn=_mm_castsi128_ps(_mm_shuffle_epi32(_mm_castps_si128(m.z.v),0x2D));// y_w___x 0231
+    wsp=_mm_castsi128_ps(_mm_shuffle_epi32(_mm_castps_si128(m.w.v),0x63));// w_x___y 1203
+    wsn=_mm_castsi128_ps(_mm_shuffle_epi32(_mm_castps_si128(m.w.v),0x2D));// y_w___x 0231
+
+    inv.z.v=_mm_blend_ps(
+        _mm_blend_ps(
+            _mm_dp_ps(m.y.v,_mm_sub_ps(_mm_mul_ps(zsn,wsp),_mm_mul_ps(zsp,wsn)),0xB1),
+            _mm_dp_ps(m.x.v,_mm_sub_ps(_mm_mul_ps(zsp,wsn),_mm_mul_ps(zsn,wsp)),0xB2),
+            0x02),
+        _mm_blend_ps(
+            _mm_dp_ps(m.x.v,_mm_sub_ps(_mm_mul_ps(ysn,wsp),_mm_mul_ps(ysp,wsn)),0xB4),
+            _mm_dp_ps(m.x.v,_mm_sub_ps(_mm_mul_ps(ysp,zsn),_mm_mul_ps(ysn,zsp)),0xB8),
+            0x08),
+        0x0C);
+
+
+    /// x_y_z__ ; w-3's irrelevant
+    ysp=_mm_castsi128_ps(_mm_shuffle_epi32(_mm_castps_si128(m.y.v),0xD2));// z_x_y__ 3102
+    ysn=_mm_castsi128_ps(_mm_shuffle_epi32(_mm_castps_si128(m.y.v),0xC9));// y_z_x__ 3021
+    zsp=_mm_castsi128_ps(_mm_shuffle_epi32(_mm_castps_si128(m.z.v),0xD2));// z_x_y__ 3102
+    zsn=_mm_castsi128_ps(_mm_shuffle_epi32(_mm_castps_si128(m.z.v),0xC9));// y_z_x__ 3021
+    wsp=_mm_castsi128_ps(_mm_shuffle_epi32(_mm_castps_si128(m.w.v),0xD2));// z_x_y__ 3102
+    wsn=_mm_castsi128_ps(_mm_shuffle_epi32(_mm_castps_si128(m.w.v),0xC9));// y_z_x__ 3021
+
+    inv.w.v=_mm_blend_ps(
+        _mm_blend_ps(
+            _mm_dp_ps(m.y.v,_mm_sub_ps(_mm_mul_ps(zsp,wsn),_mm_mul_ps(zsn,wsp)),0x71),
+            _mm_dp_ps(m.x.v,_mm_sub_ps(_mm_mul_ps(zsn,wsp),_mm_mul_ps(zsp,wsn)),0x72),
+            0x02),
+        _mm_blend_ps(
+            _mm_dp_ps(m.x.v,_mm_sub_ps(_mm_mul_ps(ysp,wsn),_mm_mul_ps(ysn,wsp)),0x74),
+            _mm_dp_ps(m.x.v,_mm_sub_ps(_mm_mul_ps(ysn,zsp),_mm_mul_ps(ysp,zsn)),0x78),
+            0x08),
+        0x0C);
+
+
+    inv_det=_mm_div_ps(_mm_set1_ps(1.0f),_mm_dp_ps(m.x.v,_mm_movelh_ps(_mm_unpacklo_ps(inv.x.v,inv.y.v),_mm_unpacklo_ps(inv.z.v,inv.w.v)),0xFF));
+
+    inv.x.v=_mm_mul_ps(inv.x.v,inv_det);
+    inv.y.v=_mm_mul_ps(inv.y.v,inv_det);
+    inv.z.v=_mm_mul_ps(inv.z.v,inv_det);
+    inv.w.v=_mm_mul_ps(inv.w.v,inv_det);
+
+    return inv;
+}
+#else
+mat44f m44f_transpose(mat44f m)
+{
+    mat44f r;
+
+    r.x.x=m.x.x;
+    r.x.y=m.y.x;
+    r.x.z=m.z.x;
+    r.x.w=m.w.x;
+
+    r.y.x=m.x.y;
+    r.y.y=m.y.y;
+    r.y.z=m.z.y;
+    r.y.w=m.w.y;
+
+    r.z.x=m.x.z;
+    r.z.y=m.y.z;
+    r.z.z=m.z.z;
+    r.z.w=m.w.z;
+
+    r.w.x=m.x.w;
+    r.w.y=m.y.w;
+    r.w.z=m.z.w;
+    r.w.w=m.w.w;
+
+    return r;
+}
+mat44f m44f_mul(mat44f l,mat44f r)
 {
     matrix4f result;
 
@@ -45,8 +234,7 @@ matrix4f m4f_mult(matrix4f l,matrix4f r)
 
     return result;
 }
-
-matrix4f m4f_inv(matrix4f m)
+mat44f m44f_inv(mat44f m)
 {
     matrix4f inv;
     float inv_det;
@@ -82,6 +270,26 @@ matrix4f m4f_inv(matrix4f m)
 
     return inv;
 }
+#endif
+
+
+
+
+
+
+
+
+
+matrix4f m4f_mult(matrix4f l,matrix4f r)
+{
+    return m44f_mul(l,r);
+}
+
+
+matrix4f m4f_inv(matrix4f m)
+{
+    return m44f_inv(m);
+}
 
 vec3f m4f_v4f_mult_p(matrix4f m,vec4f v)
 {
@@ -102,6 +310,7 @@ vec3f m4f_v4f_mult_p(matrix4f m,vec4f v)
 
 matrix3f m3f_inv(matrix3f m)
 {
+    assert(false);///needs to be converted to vector/intrinsic ops, though really would to prefer not using m3x3
     matrix3f inv;
     float inv_det;
 
@@ -126,6 +335,7 @@ matrix3f m3f_inv(matrix3f m)
 
 matrix3f m3f_inv_det(matrix3f m,float * determinant)
 {
+    assert(false);///needs to be converted to vector/intrinsic ops, though really would to prefer not using m3x3
     matrix3f inv;
     float inv_det;
 
@@ -151,6 +361,7 @@ matrix3f m3f_inv_det(matrix3f m,float * determinant)
 
 vec3f m3f_v3f_mult(matrix3f m,vec3f v)
 {
+    assert(false);///needs to be converted to vector/intrinsic ops, though really would to prefer not using m3x3
     vec3f result;
 
     result.x=m.x.x*v.x + m.y.x*v.y + m.z.x*v.z;
@@ -162,6 +373,7 @@ vec3f m3f_v3f_mult(matrix3f m,vec3f v)
 
 matrix3f m3f_mult(matrix3f l,matrix3f r)
 {
+    assert(false);///needs to be converted to vector/intrinsic ops, though really would to prefer not using m3x3
     matrix3f result;
 
     result.x.x=l.x.x*r.x.x + l.y.x*r.x.y + l.z.x*r.x.z;
