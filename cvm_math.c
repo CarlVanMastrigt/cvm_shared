@@ -47,38 +47,37 @@ mat44f m44f_transpose(mat44f m)
 }
 mat44f m44f_mul(mat44f l,mat44f r)
 {
-    __m128 lo,hi,ltcx,ltcy,ltcz,ltcw;///ltc=left transposed column
+    r.x.v=_mm_add_ps(
+        _mm_add_ps(
+            _mm_mul_ps(l.x.v,_mm_castsi128_ps(_mm_shuffle_epi32(_mm_castps_si128(r.x.v),0x00))),
+            _mm_mul_ps(l.y.v,_mm_castsi128_ps(_mm_shuffle_epi32(_mm_castps_si128(r.x.v),0x55)))),
+        _mm_add_ps(
+            _mm_mul_ps(l.z.v,_mm_castsi128_ps(_mm_shuffle_epi32(_mm_castps_si128(r.x.v),0xAA))),
+            _mm_mul_ps(l.w.v,_mm_castsi128_ps(_mm_shuffle_epi32(_mm_castps_si128(r.x.v),0xFF)))));
 
-    ///transpose l
-    lo=_mm_unpacklo_ps(l.x.v,l.y.v);//xx_yx_xy_yy
-    hi=_mm_unpacklo_ps(l.z.v,l.w.v);//zx_wx_zy_wy
-    ltcx=_mm_movelh_ps(lo,hi);
-    ltcy=_mm_movehl_ps(hi,lo);
+    r.y.v=_mm_add_ps(
+        _mm_add_ps(
+            _mm_mul_ps(l.x.v,_mm_castsi128_ps(_mm_shuffle_epi32(_mm_castps_si128(r.y.v),0x00))),
+            _mm_mul_ps(l.y.v,_mm_castsi128_ps(_mm_shuffle_epi32(_mm_castps_si128(r.y.v),0x55)))),
+        _mm_add_ps(
+            _mm_mul_ps(l.z.v,_mm_castsi128_ps(_mm_shuffle_epi32(_mm_castps_si128(r.y.v),0xAA))),
+            _mm_mul_ps(l.w.v,_mm_castsi128_ps(_mm_shuffle_epi32(_mm_castps_si128(r.y.v),0xFF)))));
 
-    lo=_mm_unpackhi_ps(l.x.v,l.y.v);//xz_yz_xw_yw
-    hi=_mm_unpackhi_ps(l.z.v,l.w.v);//zz_wz_zw_ww
-    ltcz=_mm_movelh_ps(lo,hi);
-    ltcw=_mm_movehl_ps(hi,lo);
+    r.z.v=_mm_add_ps(
+        _mm_add_ps(
+            _mm_mul_ps(l.x.v,_mm_castsi128_ps(_mm_shuffle_epi32(_mm_castps_si128(r.z.v),0x00))),
+            _mm_mul_ps(l.y.v,_mm_castsi128_ps(_mm_shuffle_epi32(_mm_castps_si128(r.z.v),0x55)))),
+        _mm_add_ps(
+            _mm_mul_ps(l.z.v,_mm_castsi128_ps(_mm_shuffle_epi32(_mm_castps_si128(r.z.v),0xAA))),
+            _mm_mul_ps(l.w.v,_mm_castsi128_ps(_mm_shuffle_epi32(_mm_castps_si128(r.z.v),0xFF)))));
 
-    r.x.v=_mm_blend_ps(
-        _mm_blend_ps(_mm_dp_ps(ltcx,r.x.v,0xF1),_mm_dp_ps(ltcy,r.x.v,0xF2),0x02),
-        _mm_blend_ps(_mm_dp_ps(ltcz,r.x.v,0xF4),_mm_dp_ps(ltcw,r.x.v,0xF8),0x08)
-        ,0x0C);
-
-    r.y.v=_mm_blend_ps(
-        _mm_blend_ps(_mm_dp_ps(ltcx,r.y.v,0xF1),_mm_dp_ps(ltcy,r.y.v,0xF2),0x02),
-        _mm_blend_ps(_mm_dp_ps(ltcz,r.y.v,0xF4),_mm_dp_ps(ltcw,r.y.v,0xF8),0x08)
-        ,0x0C);
-
-    r.z.v=_mm_blend_ps(
-        _mm_blend_ps(_mm_dp_ps(ltcx,r.z.v,0xF1),_mm_dp_ps(ltcy,r.z.v,0xF2),0x02),
-        _mm_blend_ps(_mm_dp_ps(ltcz,r.z.v,0xF4),_mm_dp_ps(ltcw,r.z.v,0xF8),0x08)
-        ,0x0C);
-
-    r.w.v=_mm_blend_ps(
-        _mm_blend_ps(_mm_dp_ps(ltcx,r.w.v,0xF1),_mm_dp_ps(ltcy,r.w.v,0xF2),0x02),
-        _mm_blend_ps(_mm_dp_ps(ltcz,r.w.v,0xF4),_mm_dp_ps(ltcw,r.w.v,0xF8),0x08)
-        ,0x0C);
+    r.w.v=_mm_add_ps(
+        _mm_add_ps(
+            _mm_mul_ps(l.x.v,_mm_castsi128_ps(_mm_shuffle_epi32(_mm_castps_si128(r.w.v),0x00))),
+            _mm_mul_ps(l.y.v,_mm_castsi128_ps(_mm_shuffle_epi32(_mm_castps_si128(r.w.v),0x55)))),
+        _mm_add_ps(
+            _mm_mul_ps(l.z.v,_mm_castsi128_ps(_mm_shuffle_epi32(_mm_castps_si128(r.w.v),0xAA))),
+            _mm_mul_ps(l.w.v,_mm_castsi128_ps(_mm_shuffle_epi32(_mm_castps_si128(r.w.v),0xFF)))));
 
     return r;
 }
@@ -88,6 +87,9 @@ mat44f m44f_inv(mat44f m)
     mat44f inv;
 
     ///there is likely some way to optimise the swizzling performed such that values vectors can be recycled when calculating different columns
+
+    ///probably also possible to optimise by replacing dp instructions with summedadditions of some description <---- almost certainly this
+    ///     ^ accumulators of stacked shuffled multiplications...
 
     ///x not yet relevant for it's axis, and x components not relevant to following vectors
     ///note component swizzles done forward order, index numbers done reversed
@@ -172,7 +174,9 @@ mat44f m44f_inv(mat44f m)
         0x0C);
 
 
-    inv_det=_mm_div_ps(_mm_set1_ps(1.0f),_mm_dp_ps(m.x.v,_mm_movelh_ps(_mm_unpacklo_ps(inv.x.v,inv.y.v),_mm_unpacklo_ps(inv.z.v,inv.w.v)),0xFF));
+    inv_det=_mm_dp_ps(m.x.v,_mm_movelh_ps(_mm_unpacklo_ps(inv.x.v,inv.y.v),_mm_unpacklo_ps(inv.z.v,inv.w.v)),0xFF);
+    assert(_mm_cvtss_f32(inv_det)!=0.0f);///matrix is not invertible
+    inv_det=_mm_div_ps(_mm_set1_ps(1.0f),inv_det);
 
     inv.x.v=_mm_mul_ps(inv.x.v,inv_det);
     inv.y.v=_mm_mul_ps(inv.y.v,inv_det);
@@ -180,6 +184,28 @@ mat44f m44f_inv(mat44f m)
     inv.w.v=_mm_mul_ps(inv.w.v,inv_det);
 
     return inv;
+}
+vec4f m44f_v4f_mul(mat44f m,vec4f v)
+{
+    return (vec4f){.v=_mm_add_ps(
+        _mm_add_ps(
+            _mm_mul_ps(m.x.v,_mm_castsi128_ps(_mm_shuffle_epi32(_mm_castps_si128(v.v),0x00))),
+            _mm_mul_ps(m.y.v,_mm_castsi128_ps(_mm_shuffle_epi32(_mm_castps_si128(v.v),0x55)))),
+        _mm_add_ps(
+            _mm_mul_ps(m.z.v,_mm_castsi128_ps(_mm_shuffle_epi32(_mm_castps_si128(v.v),0xAA))),
+            _mm_mul_ps(m.w.v,_mm_castsi128_ps(_mm_shuffle_epi32(_mm_castps_si128(v.v),0xFF)))))};
+}
+vec3f m44f_v4f_mul_p(mat44f m,vec4f v)
+{
+    __m128 s=_mm_add_ps(
+        _mm_add_ps(
+            _mm_mul_ps(m.x.v,_mm_castsi128_ps(_mm_shuffle_epi32(_mm_castps_si128(v.v),0x00))),
+            _mm_mul_ps(m.y.v,_mm_castsi128_ps(_mm_shuffle_epi32(_mm_castps_si128(v.v),0x55)))),
+        _mm_add_ps(
+            _mm_mul_ps(m.z.v,_mm_castsi128_ps(_mm_shuffle_epi32(_mm_castps_si128(v.v),0xAA))),
+            _mm_mul_ps(m.w.v,_mm_castsi128_ps(_mm_shuffle_epi32(_mm_castps_si128(v.v),0xFF)))));
+
+    return (vec3f){.v=_mm_div_ps(s,_mm_castsi128_ps(_mm_shuffle_epi32(_mm_castps_si128(s),0xFF)))};
 }
 #else
 mat44f m44f_transpose(mat44f m)
@@ -259,7 +285,9 @@ mat44f m44f_inv(mat44f m)
     inv.z.w= -m.x.x*m.y.y*m.z.w+m.x.x*m.y.w*m.z.y+m.y.x*m.x.y*m.z.w-m.y.x*m.x.w*m.z.y-m.z.x*m.x.y*m.y.w+m.z.x*m.x.w*m.y.y;
     inv.w.w=  m.x.x*m.y.y*m.z.z-m.x.x*m.y.z*m.z.y-m.y.x*m.x.y*m.z.z+m.y.x*m.x.z*m.z.y+m.z.x*m.x.y*m.y.z-m.z.x*m.x.z*m.y.y;
 
-    inv_det=1.0f/(m.x.x*inv.x.x + m.x.y*inv.y.x + m.x.z * inv.z.x + m.x.w*inv.w.x);
+    inv_det=m.x.x*inv.x.x + m.x.y*inv.y.x + m.x.z * inv.z.x + m.x.w*inv.w.x;
+    assert(inv_det!=0.0f);///matrix supplied is not invertible
+    inv_det=1.0f/inv_det;
 
     ///can fail if det == 0
 
@@ -269,6 +297,21 @@ mat44f m44f_inv(mat44f m)
     inv.w.x*=inv_det;inv.w.y*=inv_det;inv.w.z*=inv_det;inv.w.w*=inv_det;
 
     return inv;
+}
+vec4f m44f_v4f_mul(mat44f m,vec4f v)
+{
+    return (vec4f){ .x=m.x.x*v.x + m.y.x*v.y + m.z.x*v.z + m.w.x*v.w,
+                    .y=m.x.y*v.x + m.y.y*v.y + m.z.y*v.z + m.w.y*v.w,
+                    .z=m.x.z*v.x + m.y.z*v.y + m.z.z*v.z + m.w.z*v.w,
+                    .w=m.x.w*v.x + m.y.w*v.y + m.z.w*v.z + m.w.w*v.w};
+}
+vec3f m44f_v4f_mul_p(mat44f m,vec4f v)
+{
+    return v3f_div(
+    (vec3f){.x=m.x.x*v.x + m.y.x*v.y + m.z.x*v.z + m.w.x*v.w,
+            .y=m.x.y*v.x + m.y.y*v.y + m.z.y*v.z + m.w.y*v.w,
+            .z=m.x.z*v.x + m.y.z*v.y + m.z.z*v.z + m.w.z*v.w},
+               m.x.w*v.x + m.y.w*v.y + m.z.w*v.z + m.w.w*v.w);
 }
 #endif
 
@@ -293,11 +336,7 @@ matrix4f m4f_inv(matrix4f m)
 
 vec3f m4f_v4f_mult_p(matrix4f m,vec4f v)
 {
-    return v3f_div(
-        (vec3f){.x=m.x.x*v.x + m.y.x*v.y + m.z.x*v.z + m.w.x*v.w,
-                .y=m.x.y*v.x + m.y.y*v.y + m.z.y*v.z + m.w.y*v.w,
-                .z=m.x.z*v.x + m.y.z*v.y + m.z.z*v.z + m.w.z*v.w},
-                   m.x.w*v.x + m.y.w*v.y + m.z.w*v.z + m.w.w*v.w);
+    return m44f_v4f_mul_p(m,v);
 }
 
 

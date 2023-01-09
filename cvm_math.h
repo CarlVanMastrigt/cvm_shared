@@ -952,6 +952,9 @@ mat44f m44f_transpose(mat44f m);
 mat44f m44f_mul(mat44f l,mat44f r);
 mat44f m44f_inv(mat44f m);
 
+vec4f m44f_v4f_mul(mat44f m,vec4f v);
+vec3f m44f_v4f_mul_p(mat44f m,vec4f v);
+
 
 
 
