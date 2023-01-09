@@ -49,14 +49,21 @@ along with cvm_shared.  If not, see <https://www.gnu.org/licenses/>.
 #define CVM_INVALID_U32_INDEX 0xFFFFFFFF
 typedef union widget widget;
 
-///following functions to expose intrinsice might want to be put in a separate header, will possibly/probably end up being platform specific
-static inline uint32_t cvm_po2_gte(uint32_t v){ return __bsrd(v-1)+1; }
-static inline uint32_t cvm_po2_lt(uint32_t v){ return __bsrd(v-1); }
+
+///make a file "cvm_intrinsics/builtins for these?
+static inline uint64_t cvm_po2_64_gte(uint64_t v){ return __bsrq(v-1)+1; }
+static inline uint64_t cvm_po2_64_lt(uint64_t v){ return __bsrq(v-1); }
+
+static inline uint32_t cvm_po2_32_gte(uint32_t v){ return __bsrd(v-1)+1; }
+static inline uint32_t cvm_po2_32_lt(uint32_t v){ return __bsrd(v-1); }
+
 static inline uint32_t cvm_allocation_increase_step(uint32_t current_size)
 {
-    assert(__bsrd(current_size)>=2u);
-    return 1u<<(__bsrd(current_size)-2u);
+    assert(__bsrd(current_size)>=2);
+    return 1u<<((__bsrd(current_size)-2u));
 }
+
+static inline uint32_t cvm_lbs_32(uint32_t v){ return __bsfd(v); }
 
 
 

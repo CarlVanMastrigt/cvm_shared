@@ -121,8 +121,9 @@ bool cvm_vk_managed_buffer_acquire_temporary_allocation(cvm_vk_managed_buffer * 
 
     assert(size < mb->total_space);
 
-    ///linear search should be fine as its assumed the vast majority of buffers will have size factor less than 3 (ergo better than binary search)
-    for(size_factor=0;0x0000000000000001u<<(size_factor+mb->base_temporary_allocation_size_factor) < size;size_factor++);
+    size_factor=cvm_po2_64_gte(size);
+    size_factor=(size_factor>mb->base_temporary_allocation_size_factor)*(size_factor-mb->base_temporary_allocation_size_factor);
+
     assert(size_factor<32);
     if(size_factor>=32)return false;
 
@@ -157,10 +158,10 @@ bool cvm_vk_managed_buffer_acquire_temporary_allocation(cvm_vk_managed_buffer * 
 
     available_bitmask=mb->available_temporary_allocation_bitmask;
 
-    if(available_bitmask >> size_factor)///there exists an allocation of the desired size or larger
+    if(available_bitmask>>size_factor)///there exists an allocation of the desired size or larger
     {
         ///find lowest size with available allocation
-        for(i=size_factor;!(available_bitmask>>i&1);i++);
+        i=cvm_lbs_32(available_bitmask>>size_factor)+size_factor;
 
         heap=mb->available_temporary_allocations[i].heap;
 
@@ -831,8 +832,7 @@ void cvm_vk_staging_buffer_create(cvm_vk_staging_buffer * sb,VkBufferUsageFlags 
 
     uint32_t required_alignment=cvm_vk_get_buffer_alignment_requirements(usage);
 
-    for(sb->alignment_size_factor=0;1u<<sb->alignment_size_factor < required_alignment;sb->alignment_size_factor++);///alignment_size_factor expected to be small, ~6
-    ///can catastrophically fail if required_alignment is greater than 2^31, but w/e
+    sb->alignment_size_factor=cvm_po2_32_gte(required_alignment);
 
     assert(1u<<sb->alignment_size_factor == required_alignment);///NON POWER OF 2 ALIGNMENTS NOT SUPPORTED
 }
@@ -847,7 +847,10 @@ void cvm_vk_staging_buffer_update(cvm_vk_staging_buffer * sb,uint32_t space_per_
     if(frame_count)
     {
         sb->acquired_regions=realloc(sb->acquired_regions,sizeof(cvm_vk_staging_buffer_region)*frame_count);
-        for(i=0;i<frame_count;i++)sb->acquired_regions[i]=(cvm_vk_staging_buffer_region){.start=0,.end=0};
+        for(i=0;i<frame_count;i++)
+        {
+            sb->acquired_regions[i]=(cvm_vk_staging_buffer_region){.start=0,.end=0};
+        }
         sb->available_regions=realloc(sb->available_regions,sizeof(cvm_vk_staging_buffer_region)*frame_count);
         sb->available_region_count=1;
         sb->available_regions[0].start=0;
@@ -1063,8 +1066,7 @@ void cvm_vk_transient_buffer_create(cvm_vk_transient_buffer * tb,VkBufferUsageFl
 
     uint32_t required_alignment=cvm_vk_get_buffer_alignment_requirements(usage);
 
-    for(tb->alignment_size_factor=0;1u<<tb->alignment_size_factor < required_alignment;tb->alignment_size_factor++);///alignment_size_factor expected to be small, ~6
-    ///can catastrophically fail if required_alignment is greater than 2^31, but w/e
+    tb->alignment_size_factor=cvm_po2_32_gte(required_alignment);
 
     assert(1u<<tb->alignment_size_factor == required_alignment);///NON POWER OF 2 ALIGNMENTS NOT SUPPORTED (AND SHOULDN"T BE RETURNED BY VULKAN)
 }
