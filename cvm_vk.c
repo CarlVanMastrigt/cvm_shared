@@ -40,7 +40,7 @@ static VkPresentModeKHR cvm_vk_surface_present_mode;
 static uint32_t cvm_vk_transfer_queue_family;
 static uint32_t cvm_vk_graphics_queue_family;
 static uint32_t cvm_vk_present_queue_family;
-static uint32_t cvm_vk_asynchronous_compute_queue_family;///perhaps its actually desirable to support multiple async compute queue families? doesnt seem to be a feature on any gpus
+static uint32_t cvm_vk_compute_queue_family;///perhaps its actually desirable to support multiple async compute queue families? doesnt seem to be a feature on any gpus
 ///only support one of each of above (allow these to be the same if above are as well?)
 static VkQueue cvm_vk_transfer_queue;
 static VkQueue cvm_vk_graphics_queue;///doesn't seem to be any (mainstream) hardware that supports more than one graphics queue
@@ -132,9 +132,10 @@ static void cvm_vk_create_surface(SDL_Window * window)
 
 static bool check_physical_device_appropriate(bool dedicated_gpu_required,bool sync_compute_required)
 {
-    uint32_t i,queue_family_count;
+    uint32_t i,queue_family_count,redundant_compute_queue_family;
     VkQueueFamilyProperties * queue_family_properties=NULL;
     VkBool32 surface_supported;
+    VkQueueFlags flags;
 
     vkGetPhysicalDeviceProperties(cvm_vk_physical_device,&cvm_vk_device_properties);
 
@@ -213,25 +214,40 @@ static bool check_physical_device_appropriate(bool dedicated_gpu_required,bool s
     cvm_vk_graphics_queue_family=queue_family_count;
     cvm_vk_transfer_queue_family=queue_family_count;
     cvm_vk_present_queue_family=queue_family_count;
+    cvm_vk_compute_queue_family=queue_family_count;
+    redundant_compute_queue_family=queue_family_count;
 
     for(i=0;i<queue_family_count;i++)
     {
-        printf("queue family %u available queue count: %u\n",i,queue_family_properties[i].queueCount);
-        #warning add support for a-sync compute
+        printf("queue family %u\n available queue count: %u\nqueue family properties %x\n\n",i,queue_family_properties[i].queueCount,queue_family_properties[i].queueFlags);
 
-        ///If an implementation exposes any queue family that supports graphics operations,
+        flags=queue_family_properties[i].queueFlags;
+
+
+        /// If an implementation exposes any queue family that supports graphics operations,
         /// at least one queue family of at least one physical device exposed by the implementation must support both graphics and compute operations.
 
-        if((cvm_vk_graphics_queue_family==queue_family_count)&&(queue_family_properties[i].queueFlags&VK_QUEUE_GRAPHICS_BIT)&&(queue_family_properties[i].queueFlags&VK_QUEUE_COMPUTE_BIT || !sync_compute_required))
+        if((cvm_vk_graphics_queue_family==queue_family_count)&&(flags&VK_QUEUE_GRAPHICS_BIT)&&(flags&VK_QUEUE_COMPUTE_BIT || !sync_compute_required))
         {
             cvm_vk_graphics_queue_family=i;
-            if(cvm_vk_transfer_queue_family==queue_family_count)cvm_vk_transfer_queue_family=i;///graphics must support transfer, even if not specified
         }
 
-        ///if an explicit transfer queue family separate from selected graphics queue family exists use it independently
-        if((i != cvm_vk_graphics_queue_family)&&(queue_family_properties[i].queueFlags&VK_QUEUE_TRANSFER_BIT))
+        ///if an explicit transfer queue family separate from selected graphics and compute queue families exists use it independently
+        if((cvm_vk_transfer_queue_family==queue_family_count) && (flags&VK_QUEUE_TRANSFER_BIT) && !(flags&(VK_QUEUE_GRAPHICS_BIT|VK_QUEUE_COMPUTE_BIT)))
         {
             cvm_vk_transfer_queue_family=i;
+        }
+
+        ///prefer async if possible (non-graphics)
+        if((cvm_vk_compute_queue_family==queue_family_count) && (flags&VK_QUEUE_COMPUTE_BIT) && !(flags&VK_QUEUE_GRAPHICS_BIT))
+        {
+            cvm_vk_compute_queue_family=i;
+        }
+
+        ///set up redundant though otherwise
+        if((redundant_compute_queue_family==queue_family_count) && (flags&VK_QUEUE_COMPUTE_BIT))
+        {
+            redundant_compute_queue_family=i;
         }
 
         if(cvm_vk_present_queue_family==queue_family_count)
@@ -241,11 +257,26 @@ static bool check_physical_device_appropriate(bool dedicated_gpu_required,bool s
         }
     }
 
+    if(cvm_vk_transfer_queue_family==queue_family_count)
+    {
+        ///graphics must support transfer, even if not specified
+        cvm_vk_transfer_queue_family=cvm_vk_graphics_queue_family;
+    }
+
+    if(cvm_vk_compute_queue_family==queue_family_count)
+    {
+        assert(redundant_compute_queue_family!=queue_family_count);
+        cvm_vk_compute_queue_family=redundant_compute_queue_family;///graphics must support transfer, even if not specified
+    }
+
     free(queue_family_properties);
 
-    printf("Queue Families count:%u g:%u t:%u p:%u\n",queue_family_count,cvm_vk_graphics_queue_family,cvm_vk_transfer_queue_family,cvm_vk_present_queue_family);
+    printf("Queue Families count:%u g:%u t:%u p:%u c:%u\n",queue_family_count,cvm_vk_graphics_queue_family,cvm_vk_transfer_queue_family,cvm_vk_present_queue_family,cvm_vk_compute_queue_family);
 
-    return ((cvm_vk_graphics_queue_family != queue_family_count)&&(cvm_vk_transfer_queue_family != queue_family_count)&&(cvm_vk_present_queue_family != queue_family_count));
+    return ((cvm_vk_graphics_queue_family != queue_family_count)&&
+            (cvm_vk_transfer_queue_family != queue_family_count)&&
+            (cvm_vk_present_queue_family  != queue_family_count)&&
+            (cvm_vk_compute_queue_family  != queue_family_count));
     ///return true only if all queue families needed can be satisfied
 }
 
