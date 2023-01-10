@@ -226,7 +226,7 @@ static inline vec2i v2i_clamp(vec2i v,vec2i min,vec2i max)
 ///none of these should be defined in retail except CVM_INTRINSIC_MODE_NONE which is useful if issues arise
 ///can consider using CVM_INTRINSIC_MODE_NONE in debug (or "fast debug") mode as moving between register types is a nontrivial expense and does slow doen execution
 //#define CVM_INTRINSIC_MODE_NONE
-#define CVM_INTRINSIC_MODE_SSE /*this can trick IDE, when it doesn't pick up __SSE__ :p*/
+//#define CVM_INTRINSIC_MODE_SSE /*this can trick IDE, when it doesn't pick up __SSE__ :p*/
 
 
 
@@ -566,6 +566,97 @@ static inline float plane_point_dist(plane p,vec3f point)
     return _mm_cvtss_f32(_mm_dp_ps(p.p,cmp,0xF1));
 }
 
+
+
+
+///for matrices vector x,y,z,w represents the vector that those respective euclidean basis vector map to
+typedef struct matrix4f
+{
+    vec4f x;
+    vec4f y;
+    vec4f z;
+    vec4f w;
+}
+matrix4f;
+
+typedef matrix4f mat44f;
+
+static inline mat44f m44f_transpose(mat44f m)
+{
+    ///names reflect columns-rows of respective vector entry
+//    __m128 xx_yx_xy_yy=_mm_unpacklo_ps(m.x.v,m.y.v);
+//    __m128 xz_yz_xw_yw=_mm_unpackhi_ps(m.x.v,m.y.v);
+//
+//    __m128 zx_wx_zy_wy=_mm_unpacklo_ps(m.z.v,m.w.v);
+//    __m128 zz_wz_zw_ww=_mm_unpackhi_ps(m.z.v,m.w.v);
+//
+//    m.x.v=_mm_movelh_ps(xx_yx_xy_yy,zx_wx_zy_wy);
+//    m.y.v=_mm_movehl_ps(zx_wx_zy_wy,xx_yx_xy_yy);
+//    m.z.v=_mm_movelh_ps(xz_yz_xw_yw,zz_wz_zw_ww);
+//    m.w.v=_mm_movehl_ps(zz_wz_zw_ww,xz_yz_xw_yw);
+
+    _MM_TRANSPOSE4_PS(m.x.v,m.y.v,m.z.v,m.w.v);
+
+    return m;
+}
+static inline mat44f m44f_mul(mat44f l,mat44f r)
+{
+    r.x.v=_mm_add_ps(
+        _mm_add_ps(
+            _mm_mul_ps(l.x.v,_mm_castsi128_ps(_mm_shuffle_epi32(_mm_castps_si128(r.x.v),0x00))),
+            _mm_mul_ps(l.y.v,_mm_castsi128_ps(_mm_shuffle_epi32(_mm_castps_si128(r.x.v),0x55)))),
+        _mm_add_ps(
+            _mm_mul_ps(l.z.v,_mm_castsi128_ps(_mm_shuffle_epi32(_mm_castps_si128(r.x.v),0xAA))),
+            _mm_mul_ps(l.w.v,_mm_castsi128_ps(_mm_shuffle_epi32(_mm_castps_si128(r.x.v),0xFF)))));
+
+    r.y.v=_mm_add_ps(
+        _mm_add_ps(
+            _mm_mul_ps(l.x.v,_mm_castsi128_ps(_mm_shuffle_epi32(_mm_castps_si128(r.y.v),0x00))),
+            _mm_mul_ps(l.y.v,_mm_castsi128_ps(_mm_shuffle_epi32(_mm_castps_si128(r.y.v),0x55)))),
+        _mm_add_ps(
+            _mm_mul_ps(l.z.v,_mm_castsi128_ps(_mm_shuffle_epi32(_mm_castps_si128(r.y.v),0xAA))),
+            _mm_mul_ps(l.w.v,_mm_castsi128_ps(_mm_shuffle_epi32(_mm_castps_si128(r.y.v),0xFF)))));
+
+    r.z.v=_mm_add_ps(
+        _mm_add_ps(
+            _mm_mul_ps(l.x.v,_mm_castsi128_ps(_mm_shuffle_epi32(_mm_castps_si128(r.z.v),0x00))),
+            _mm_mul_ps(l.y.v,_mm_castsi128_ps(_mm_shuffle_epi32(_mm_castps_si128(r.z.v),0x55)))),
+        _mm_add_ps(
+            _mm_mul_ps(l.z.v,_mm_castsi128_ps(_mm_shuffle_epi32(_mm_castps_si128(r.z.v),0xAA))),
+            _mm_mul_ps(l.w.v,_mm_castsi128_ps(_mm_shuffle_epi32(_mm_castps_si128(r.z.v),0xFF)))));
+
+    r.w.v=_mm_add_ps(
+        _mm_add_ps(
+            _mm_mul_ps(l.x.v,_mm_castsi128_ps(_mm_shuffle_epi32(_mm_castps_si128(r.w.v),0x00))),
+            _mm_mul_ps(l.y.v,_mm_castsi128_ps(_mm_shuffle_epi32(_mm_castps_si128(r.w.v),0x55)))),
+        _mm_add_ps(
+            _mm_mul_ps(l.z.v,_mm_castsi128_ps(_mm_shuffle_epi32(_mm_castps_si128(r.w.v),0xAA))),
+            _mm_mul_ps(l.w.v,_mm_castsi128_ps(_mm_shuffle_epi32(_mm_castps_si128(r.w.v),0xFF)))));
+
+    return r;
+}
+static inline vec4f m44f_v4f_mul(mat44f m,vec4f v)
+{
+    return (vec4f){.v=_mm_add_ps(
+        _mm_add_ps(
+            _mm_mul_ps(m.x.v,_mm_castsi128_ps(_mm_shuffle_epi32(_mm_castps_si128(v.v),0x00))),
+            _mm_mul_ps(m.y.v,_mm_castsi128_ps(_mm_shuffle_epi32(_mm_castps_si128(v.v),0x55)))),
+        _mm_add_ps(
+            _mm_mul_ps(m.z.v,_mm_castsi128_ps(_mm_shuffle_epi32(_mm_castps_si128(v.v),0xAA))),
+            _mm_mul_ps(m.w.v,_mm_castsi128_ps(_mm_shuffle_epi32(_mm_castps_si128(v.v),0xFF)))))};
+}
+static inline vec3f m44f_v4f_mul_p(mat44f m,vec4f v)
+{
+    __m128 s=_mm_add_ps(
+        _mm_add_ps(
+            _mm_mul_ps(m.x.v,_mm_castsi128_ps(_mm_shuffle_epi32(_mm_castps_si128(v.v),0x00))),
+            _mm_mul_ps(m.y.v,_mm_castsi128_ps(_mm_shuffle_epi32(_mm_castps_si128(v.v),0x55)))),
+        _mm_add_ps(
+            _mm_mul_ps(m.z.v,_mm_castsi128_ps(_mm_shuffle_epi32(_mm_castps_si128(v.v),0xAA))),
+            _mm_mul_ps(m.w.v,_mm_castsi128_ps(_mm_shuffle_epi32(_mm_castps_si128(v.v),0xFF)))));
+
+    return (vec3f){.v=_mm_div_ps(s,_mm_castsi128_ps(_mm_shuffle_epi32(_mm_castps_si128(s),0xFF)))};
+}
 #else
 
 typedef struct vec3i
@@ -869,6 +960,86 @@ static inline float plane_point_dist(plane p,vec3f point)
     return p.x*point.x + p.y*point.y + p.z*point.z - p.dist;
 }
 
+
+
+typedef struct matrix4f
+{
+    vec4f x;
+    vec4f y;
+    vec4f z;
+    vec4f w;
+}
+matrix4f;
+
+typedef matrix4f mat44f;
+
+static inline mat44f m44f_transpose(mat44f m)
+{
+    mat44f r;
+
+    r.x.x=m.x.x;
+    r.x.y=m.y.x;
+    r.x.z=m.z.x;
+    r.x.w=m.w.x;
+
+    r.y.x=m.x.y;
+    r.y.y=m.y.y;
+    r.y.z=m.z.y;
+    r.y.w=m.w.y;
+
+    r.z.x=m.x.z;
+    r.z.y=m.y.z;
+    r.z.z=m.z.z;
+    r.z.w=m.w.z;
+
+    r.w.x=m.x.w;
+    r.w.y=m.y.w;
+    r.w.z=m.z.w;
+    r.w.w=m.w.w;
+
+    return r;
+}
+static inline mat44f m44f_mul(mat44f l,mat44f r)
+{
+    matrix4f result;
+
+    result.x.x = r.x.x*l.x.x + r.x.y*l.y.x + r.x.z*l.z.x + r.x.w*l.w.x;
+    result.x.y = r.x.x*l.x.y + r.x.y*l.y.y + r.x.z*l.z.y + r.x.w*l.w.y;
+    result.x.z = r.x.x*l.x.z + r.x.y*l.y.z + r.x.z*l.z.z + r.x.w*l.w.z;
+    result.x.w = r.x.x*l.x.w + r.x.y*l.y.w + r.x.z*l.z.w + r.x.w*l.w.w;
+
+    result.y.x = r.y.x*l.x.x + r.y.y*l.y.x + r.y.z*l.z.x + r.y.w*l.w.x;
+    result.y.y = r.y.x*l.x.y + r.y.y*l.y.y + r.y.z*l.z.y + r.y.w*l.w.y;
+    result.y.z = r.y.x*l.x.z + r.y.y*l.y.z + r.y.z*l.z.z + r.y.w*l.w.z;
+    result.y.w = r.y.x*l.x.w + r.y.y*l.y.w + r.y.z*l.z.w + r.y.w*l.w.w;
+
+    result.z.x = r.z.x*l.x.x + r.z.y*l.y.x + r.z.z*l.z.x + r.z.w*l.w.x;
+    result.z.y = r.z.x*l.x.y + r.z.y*l.y.y + r.z.z*l.z.y + r.z.w*l.w.y;
+    result.z.z = r.z.x*l.x.z + r.z.y*l.y.z + r.z.z*l.z.z + r.z.w*l.w.z;
+    result.z.w = r.z.x*l.x.w + r.z.y*l.y.w + r.z.z*l.z.w + r.z.w*l.w.w;
+
+    result.w.x = r.w.x*l.x.x + r.w.y*l.y.x + r.w.z*l.z.x + r.w.w*l.w.x;
+    result.w.y = r.w.x*l.x.y + r.w.y*l.y.y + r.w.z*l.z.y + r.w.w*l.w.y;
+    result.w.z = r.w.x*l.x.z + r.w.y*l.y.z + r.w.z*l.z.z + r.w.w*l.w.z;
+    result.w.w = r.w.x*l.x.w + r.w.y*l.y.w + r.w.z*l.z.w + r.w.w*l.w.w;
+
+    return result;
+}
+static inline vec4f m44f_v4f_mul(mat44f m,vec4f v)
+{
+    return (vec4f){ .x=m.x.x*v.x + m.y.x*v.y + m.z.x*v.z + m.w.x*v.w,
+                    .y=m.x.y*v.x + m.y.y*v.y + m.z.y*v.z + m.w.y*v.w,
+                    .z=m.x.z*v.x + m.y.z*v.y + m.z.z*v.z + m.w.z*v.w,
+                    .w=m.x.w*v.x + m.y.w*v.y + m.z.w*v.z + m.w.w*v.w};
+}
+static inline vec3f m44f_v4f_mul_p(mat44f m,vec4f v)
+{
+    return v3f_div(
+    (vec3f){.x=m.x.x*v.x + m.y.x*v.y + m.z.x*v.z + m.w.x*v.w,
+            .y=m.x.y*v.x + m.y.y*v.y + m.z.y*v.z + m.w.y*v.w,
+            .z=m.x.z*v.x + m.y.z*v.y + m.z.z*v.z + m.w.z*v.w},
+               m.x.w*v.x + m.y.w*v.y + m.z.w*v.z + m.w.w*v.w);
+}
 #endif
 
 
@@ -886,17 +1057,7 @@ rotor3f;
 
 
 
-///for matrices vector x,y,z,w represents the vector that those respective euclidean basis vector map to
-typedef struct matrix4f
-{
-    vec4f x;
-    vec4f y;
-    vec4f z;
-    vec4f w;
-}
-matrix4f;
 
-typedef matrix4f mat44f;
 
 typedef struct matrix3f
 {
@@ -948,9 +1109,9 @@ static inline float m3f_det(matrix3f m)
     return m.x.x*m.y.y*m.z.z + m.y.x*m.z.y*m.x.z + m.z.x*m.x.y*m.y.z - m.z.x*m.y.y*m.x.z - m.y.x*m.x.y*m.z.z - m.x.x*m.z.y*m.y.z;
 }
 
-mat44f m44f_transpose(mat44f m);
-mat44f m44f_mul(mat44f l,mat44f r);
+
 mat44f m44f_inv(mat44f m);
+
 
 vec4f m44f_v4f_mul(mat44f m,vec4f v);
 vec3f m44f_v4f_mul_p(mat44f m,vec4f v);
