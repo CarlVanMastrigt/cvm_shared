@@ -29,6 +29,42 @@ along with cvm_shared.  If not, see <https://www.gnu.org/licenses/>.
 ///start with mmult, also probably want to rename, first thing is mat3x3 ??
 
 #if (defined __SSE__ || defined CVM_INTRINSIC_MODE_SSE) && !defined CVM_INTRINSIC_MODE_NONE
+mat44f m44f_mul(mat44f l,mat44f r)
+{
+    r.x.v=_mm_add_ps(
+        _mm_add_ps(
+            _mm_mul_ps(l.x.v,_mm_castsi128_ps(_mm_shuffle_epi32(_mm_castps_si128(r.x.v),0x00))),
+            _mm_mul_ps(l.y.v,_mm_castsi128_ps(_mm_shuffle_epi32(_mm_castps_si128(r.x.v),0x55)))),
+        _mm_add_ps(
+            _mm_mul_ps(l.z.v,_mm_castsi128_ps(_mm_shuffle_epi32(_mm_castps_si128(r.x.v),0xAA))),
+            _mm_mul_ps(l.w.v,_mm_castsi128_ps(_mm_shuffle_epi32(_mm_castps_si128(r.x.v),0xFF)))));
+
+    r.y.v=_mm_add_ps(
+        _mm_add_ps(
+            _mm_mul_ps(l.x.v,_mm_castsi128_ps(_mm_shuffle_epi32(_mm_castps_si128(r.y.v),0x00))),
+            _mm_mul_ps(l.y.v,_mm_castsi128_ps(_mm_shuffle_epi32(_mm_castps_si128(r.y.v),0x55)))),
+        _mm_add_ps(
+            _mm_mul_ps(l.z.v,_mm_castsi128_ps(_mm_shuffle_epi32(_mm_castps_si128(r.y.v),0xAA))),
+            _mm_mul_ps(l.w.v,_mm_castsi128_ps(_mm_shuffle_epi32(_mm_castps_si128(r.y.v),0xFF)))));
+
+    r.z.v=_mm_add_ps(
+        _mm_add_ps(
+            _mm_mul_ps(l.x.v,_mm_castsi128_ps(_mm_shuffle_epi32(_mm_castps_si128(r.z.v),0x00))),
+            _mm_mul_ps(l.y.v,_mm_castsi128_ps(_mm_shuffle_epi32(_mm_castps_si128(r.z.v),0x55)))),
+        _mm_add_ps(
+            _mm_mul_ps(l.z.v,_mm_castsi128_ps(_mm_shuffle_epi32(_mm_castps_si128(r.z.v),0xAA))),
+            _mm_mul_ps(l.w.v,_mm_castsi128_ps(_mm_shuffle_epi32(_mm_castps_si128(r.z.v),0xFF)))));
+
+    r.w.v=_mm_add_ps(
+        _mm_add_ps(
+            _mm_mul_ps(l.x.v,_mm_castsi128_ps(_mm_shuffle_epi32(_mm_castps_si128(r.w.v),0x00))),
+            _mm_mul_ps(l.y.v,_mm_castsi128_ps(_mm_shuffle_epi32(_mm_castps_si128(r.w.v),0x55)))),
+        _mm_add_ps(
+            _mm_mul_ps(l.z.v,_mm_castsi128_ps(_mm_shuffle_epi32(_mm_castps_si128(r.w.v),0xAA))),
+            _mm_mul_ps(l.w.v,_mm_castsi128_ps(_mm_shuffle_epi32(_mm_castps_si128(r.w.v),0xFF)))));
+
+    return r;
+}
 mat44f m44f_inv(mat44f m)
 {
     mat44f inv;
@@ -92,10 +128,108 @@ mat44f m44f_inv(mat44f m)
     return m44f_transpose(inv);
 }
 
+mat33f m33f_mul(mat33f l,mat33f r)
+{
+    r.x.v=_mm_add_ps(_mm_add_ps(
+            _mm_mul_ps(l.x.v,_mm_castsi128_ps(_mm_shuffle_epi32(_mm_castps_si128(r.x.v),0x00))),
+            _mm_mul_ps(l.y.v,_mm_castsi128_ps(_mm_shuffle_epi32(_mm_castps_si128(r.x.v),0x55)))),
+            _mm_mul_ps(l.z.v,_mm_castsi128_ps(_mm_shuffle_epi32(_mm_castps_si128(r.x.v),0xAA))));
+
+    r.y.v=_mm_add_ps(_mm_add_ps(
+            _mm_mul_ps(l.x.v,_mm_castsi128_ps(_mm_shuffle_epi32(_mm_castps_si128(r.y.v),0x00))),
+            _mm_mul_ps(l.y.v,_mm_castsi128_ps(_mm_shuffle_epi32(_mm_castps_si128(r.y.v),0x55)))),
+            _mm_mul_ps(l.z.v,_mm_castsi128_ps(_mm_shuffle_epi32(_mm_castps_si128(r.y.v),0xAA))));
+
+    r.z.v=_mm_add_ps(_mm_add_ps(
+            _mm_mul_ps(l.x.v,_mm_castsi128_ps(_mm_shuffle_epi32(_mm_castps_si128(r.z.v),0x00))),
+            _mm_mul_ps(l.y.v,_mm_castsi128_ps(_mm_shuffle_epi32(_mm_castps_si128(r.z.v),0x55)))),
+            _mm_mul_ps(l.z.v,_mm_castsi128_ps(_mm_shuffle_epi32(_mm_castps_si128(r.z.v),0xAA))));
+
+    return r;
+}
+mat33f m33f_inv(mat33f m)
+{
+    mat33f inv;
+
+    inv.x.v=_mm_sub_ps(
+        _mm_mul_ps(_mm_castsi128_ps(_mm_shuffle_epi32(_mm_castps_si128(m.y.v),0xC9)),_mm_castsi128_ps(_mm_shuffle_epi32(_mm_castps_si128(m.z.v),0xD2))),
+        _mm_mul_ps(_mm_castsi128_ps(_mm_shuffle_epi32(_mm_castps_si128(m.y.v),0xD2)),_mm_castsi128_ps(_mm_shuffle_epi32(_mm_castps_si128(m.z.v),0xC9))));
+
+    __m128 inv_det=_mm_dp_ps(m.x.v,inv.x.v,0x77);
+    assert(_mm_cvtss_f32(inv_det)!=0.0f);///matrix is not invertible
+    inv_det=_mm_div_ps(_mm_set1_ps(1.0f),inv_det);
+
+    inv.y.v=_mm_sub_ps(
+        _mm_mul_ps(_mm_castsi128_ps(_mm_shuffle_epi32(_mm_castps_si128(m.x.v),0xD2)),_mm_castsi128_ps(_mm_shuffle_epi32(_mm_castps_si128(m.z.v),0xC9))),
+        _mm_mul_ps(_mm_castsi128_ps(_mm_shuffle_epi32(_mm_castps_si128(m.x.v),0xC9)),_mm_castsi128_ps(_mm_shuffle_epi32(_mm_castps_si128(m.z.v),0xD2))));
+
+    inv.z.v=_mm_sub_ps(
+        _mm_mul_ps(_mm_castsi128_ps(_mm_shuffle_epi32(_mm_castps_si128(m.x.v),0xC9)),_mm_castsi128_ps(_mm_shuffle_epi32(_mm_castps_si128(m.y.v),0xD2))),
+        _mm_mul_ps(_mm_castsi128_ps(_mm_shuffle_epi32(_mm_castps_si128(m.x.v),0xD2)),_mm_castsi128_ps(_mm_shuffle_epi32(_mm_castps_si128(m.y.v),0xC9))));
+
+    inv.x.v=_mm_mul_ps(inv.x.v,inv_det);
+    inv.y.v=_mm_mul_ps(inv.y.v,inv_det);
+    inv.z.v=_mm_mul_ps(inv.z.v,inv_det);
+
+    return m33f_transpose(inv);
+}
+mat33f m33f_inv_det(mat33f m,float * determinant)
+{
+    mat33f inv;
+
+    inv.x.v=_mm_sub_ps(
+        _mm_mul_ps(_mm_castsi128_ps(_mm_shuffle_epi32(_mm_castps_si128(m.y.v),0xC9)),_mm_castsi128_ps(_mm_shuffle_epi32(_mm_castps_si128(m.z.v),0xD2))),
+        _mm_mul_ps(_mm_castsi128_ps(_mm_shuffle_epi32(_mm_castps_si128(m.y.v),0xD2)),_mm_castsi128_ps(_mm_shuffle_epi32(_mm_castps_si128(m.z.v),0xC9))));
+
+    __m128 inv_det=_mm_dp_ps(m.x.v,inv.x.v,0x77);
+    *determinant=_mm_cvtss_f32(inv_det);
+    inv_det=_mm_div_ps(_mm_set1_ps(1.0f),inv_det);
+
+    inv.y.v=_mm_sub_ps(
+        _mm_mul_ps(_mm_castsi128_ps(_mm_shuffle_epi32(_mm_castps_si128(m.x.v),0xD2)),_mm_castsi128_ps(_mm_shuffle_epi32(_mm_castps_si128(m.z.v),0xC9))),
+        _mm_mul_ps(_mm_castsi128_ps(_mm_shuffle_epi32(_mm_castps_si128(m.x.v),0xC9)),_mm_castsi128_ps(_mm_shuffle_epi32(_mm_castps_si128(m.z.v),0xD2))));
+
+    inv.z.v=_mm_sub_ps(
+        _mm_mul_ps(_mm_castsi128_ps(_mm_shuffle_epi32(_mm_castps_si128(m.x.v),0xC9)),_mm_castsi128_ps(_mm_shuffle_epi32(_mm_castps_si128(m.y.v),0xD2))),
+        _mm_mul_ps(_mm_castsi128_ps(_mm_shuffle_epi32(_mm_castps_si128(m.x.v),0xD2)),_mm_castsi128_ps(_mm_shuffle_epi32(_mm_castps_si128(m.y.v),0xC9))));
+
+    inv.x.v=_mm_mul_ps(inv.x.v,inv_det);
+    inv.y.v=_mm_mul_ps(inv.y.v,inv_det);
+    inv.z.v=_mm_mul_ps(inv.z.v,inv_det);
+
+    return m33f_transpose(inv);
+}
+
 #else
+mat44f m44f_mul(mat44f l,mat44f r)
+{
+    mat44f result;
+
+    result.x.x = r.x.x*l.x.x + r.x.y*l.y.x + r.x.z*l.z.x + r.x.w*l.w.x;
+    result.x.y = r.x.x*l.x.y + r.x.y*l.y.y + r.x.z*l.z.y + r.x.w*l.w.y;
+    result.x.z = r.x.x*l.x.z + r.x.y*l.y.z + r.x.z*l.z.z + r.x.w*l.w.z;
+    result.x.w = r.x.x*l.x.w + r.x.y*l.y.w + r.x.z*l.z.w + r.x.w*l.w.w;
+
+    result.y.x = r.y.x*l.x.x + r.y.y*l.y.x + r.y.z*l.z.x + r.y.w*l.w.x;
+    result.y.y = r.y.x*l.x.y + r.y.y*l.y.y + r.y.z*l.z.y + r.y.w*l.w.y;
+    result.y.z = r.y.x*l.x.z + r.y.y*l.y.z + r.y.z*l.z.z + r.y.w*l.w.z;
+    result.y.w = r.y.x*l.x.w + r.y.y*l.y.w + r.y.z*l.z.w + r.y.w*l.w.w;
+
+    result.z.x = r.z.x*l.x.x + r.z.y*l.y.x + r.z.z*l.z.x + r.z.w*l.w.x;
+    result.z.y = r.z.x*l.x.y + r.z.y*l.y.y + r.z.z*l.z.y + r.z.w*l.w.y;
+    result.z.z = r.z.x*l.x.z + r.z.y*l.y.z + r.z.z*l.z.z + r.z.w*l.w.z;
+    result.z.w = r.z.x*l.x.w + r.z.y*l.y.w + r.z.z*l.z.w + r.z.w*l.w.w;
+
+    result.w.x = r.w.x*l.x.x + r.w.y*l.y.x + r.w.z*l.z.x + r.w.w*l.w.x;
+    result.w.y = r.w.x*l.x.y + r.w.y*l.y.y + r.w.z*l.z.y + r.w.w*l.w.y;
+    result.w.z = r.w.x*l.x.z + r.w.y*l.y.z + r.w.z*l.z.z + r.w.w*l.w.z;
+    result.w.w = r.w.x*l.x.w + r.w.y*l.y.w + r.w.z*l.z.w + r.w.w*l.w.w;
+
+    return result;
+}
 mat44f m44f_inv(mat44f m)
 {
-    matrix4f inv;
+    mat44f inv;
     float inv_det;
 
     inv.x.x=  m.y.y*m.z.z*m.w.w-m.y.y*m.z.w*m.w.z-m.z.y*m.y.z*m.w.w+m.z.y*m.y.w*m.w.z+m.w.y*m.y.z*m.z.w-m.w.y*m.y.w*m.z.z;
@@ -131,44 +265,28 @@ mat44f m44f_inv(mat44f m)
 
     return inv;
 }
-#endif
 
-
-
-
-
-
-
-
-
-matrix4f m4f_mult(matrix4f l,matrix4f r)
+mat33f m33f_mul(mat33f l,mat33f r)
 {
-    return m44f_mul(l,r);
+    mat33f result;
+
+    result.x.x=l.x.x*r.x.x + l.y.x*r.x.y + l.z.x*r.x.z;
+    result.x.y=l.x.y*r.x.x + l.y.y*r.x.y + l.z.y*r.x.z;
+    result.x.z=l.x.z*r.x.x + l.y.z*r.x.y + l.z.z*r.x.z;
+
+    result.y.x=l.x.x*r.y.x + l.y.x*r.y.y + l.z.x*r.y.z;
+    result.y.y=l.x.y*r.y.x + l.y.y*r.y.y + l.z.y*r.y.z;
+    result.y.z=l.x.z*r.y.x + l.y.z*r.y.y + l.z.z*r.y.z;
+
+    result.z.x=l.x.x*r.z.x + l.y.x*r.z.y + l.z.x*r.z.z;
+    result.z.y=l.x.y*r.z.x + l.y.y*r.z.y + l.z.y*r.z.z;
+    result.z.z=l.x.z*r.z.x + l.y.z*r.z.y + l.z.z*r.z.z;
+
+    return result;
 }
-
-
-matrix4f m4f_inv(matrix4f m)
+mat33f m33f_inv(mat33f m)
 {
-    return m44f_inv(m);
-}
-
-vec3f m4f_v4f_mult_p(matrix4f m,vec4f v)
-{
-    return m44f_v4f_mul_p(m,v);
-}
-
-
-
-
-
-
-
-
-
-matrix3f m3f_inv(matrix3f m)
-{
-    assert(false);///needs to be converted to vector/intrinsic ops, though really would to prefer not using m3x3
-    matrix3f inv;
+    mat33f inv;
     float inv_det;
 
     inv.x.x=m.y.y*m.z.z-m.z.y*m.y.z;
@@ -189,11 +307,9 @@ matrix3f m3f_inv(matrix3f m)
 
     return inv;
 }
-
-matrix3f m3f_inv_det(matrix3f m,float * determinant)
+mat33f m33f_inv_det(mat33f m,float * determinant)
 {
-    assert(false);///needs to be converted to vector/intrinsic ops, though really would to prefer not using m3x3
-    matrix3f inv;
+    mat33f inv;
     float inv_det;
 
     inv.x.x=m.y.y*m.z.z-m.z.y*m.y.z;
@@ -215,36 +331,30 @@ matrix3f m3f_inv_det(matrix3f m,float * determinant)
 
     return inv;
 }
+#endif
 
-vec3f m3f_v3f_mult(matrix3f m,vec3f v)
+
+
+
+
+
+
+
+
+
+
+
+void m44f_print(mat44f m)
 {
-    assert(false);///needs to be converted to vector/intrinsic ops, though really would to prefer not using m3x3
-    vec3f result;
-
-    result.x=m.x.x*v.x + m.y.x*v.y + m.z.x*v.z;
-    result.y=m.x.y*v.x + m.y.y*v.y + m.z.y*v.z;
-    result.z=m.x.z*v.x + m.y.z*v.y + m.z.z*v.z;
-
-    return result;
+    printf("%f %f %f %f\n"  ,m.x.x,m.y.x,m.z.x,m.w.x);
+    printf("%f %f %f %f\n"  ,m.x.y,m.y.y,m.z.y,m.w.y);
+    printf("%f %f %f %f\n"  ,m.x.z,m.y.z,m.z.z,m.w.z);
+    printf("%f %f %f %f\n\n",m.x.w,m.y.w,m.z.w,m.w.w);
 }
 
-matrix3f m3f_mult(matrix3f l,matrix3f r)
+void m33f_print(mat33f m)
 {
-    assert(false);///needs to be converted to vector/intrinsic ops, though really would to prefer not using m3x3
-    matrix3f result;
-
-    result.x.x=l.x.x*r.x.x + l.y.x*r.x.y + l.z.x*r.x.z;
-    result.x.y=l.x.y*r.x.x + l.y.y*r.x.y + l.z.y*r.x.z;
-    result.x.z=l.x.z*r.x.x + l.y.z*r.x.y + l.z.z*r.x.z;
-
-    result.y.x=l.x.x*r.y.x + l.y.x*r.y.y + l.z.x*r.y.z;
-    result.y.y=l.x.y*r.y.x + l.y.y*r.y.y + l.z.y*r.y.z;
-    result.y.z=l.x.z*r.y.x + l.y.z*r.y.y + l.z.z*r.y.z;
-
-    result.z.x=l.x.x*r.z.x + l.y.x*r.z.y + l.z.x*r.z.z;
-    result.z.y=l.x.y*r.z.x + l.y.y*r.z.y + l.z.y*r.z.z;
-    result.z.z=l.x.z*r.z.x + l.y.z*r.z.y + l.z.z*r.z.z;
-
-    return result;
+    printf("%f %f %f\n"  ,m.x.x,m.y.x,m.z.x);
+    printf("%f %f %f\n"  ,m.x.y,m.y.y,m.z.y);
+    printf("%f %f %f\n\n",m.x.z,m.y.z,m.z.z);
 }
-

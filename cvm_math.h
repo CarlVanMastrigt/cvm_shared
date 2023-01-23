@@ -144,6 +144,34 @@ static inline vec2f v2f_mid(vec2f v1,vec2f v2)
 
 
 
+typedef struct mat22f
+{
+    vec2f x;
+    vec2f y;
+}
+mat22f;
+
+static inline vec2f m22f_v2f_mul(mat22f m,vec2f v)
+{
+    assert(false);///needs to be converted to vector/intrinsic ops, though really would to prefer not using m2x2
+    return (vec2f){.x=v.x*m.x.x+v.y*m.y.x,.y=v.x*m.x.y+v.y*m.y.y};
+}
+static inline vec2f v2f_m32f_mul(mat22f m,vec2f v)
+{
+    assert(false);///needs to be converted to vector/intrinsic ops, though really would to prefer not using m2x2
+    return (vec2f){.x=v.x*m.x.x+v.y*m.x.y,.y=v.x*m.y.x+v.y*m.y.y};
+}
+static inline mat22f m2f_rotation_matrix(float angle)
+{
+    assert(false);///needs to be converted to vector/intrinsic ops, though really would to prefer not using m2x2
+    mat22f m;
+    m.x.x=m.y.y=cosf(angle);
+    m.x.y= -(m.y.x=sinf(angle));
+    return m;
+}
+
+
+
 /// insufficient intrinsics for vec2i to be meaningful on sse
 typedef struct vec2i
 {
@@ -231,7 +259,7 @@ static inline vec2i v2i_clamp(vec2i v,vec2i min,vec2i max)
 
 
 #if (defined __SSE__ || defined CVM_INTRINSIC_MODE_SSE) && !defined CVM_INTRINSIC_MODE_NONE
-
+/**====================== SSE INTRINSIC IMPLEMENTATION ======================*/
 typedef union vec3i
 {
     __m128i v;
@@ -435,12 +463,9 @@ static inline vec3f v3f_clamp_range(vec3f v,float min,float max)
 }
 static inline vec3f v3f_cross(vec3f v1,vec3f v2)
 {
-    /// 0x78, 0x9C here if switching back to w being first
-    __m128 v1p= _mm_castsi128_ps(_mm_shuffle_epi32(_mm_castps_si128(v1.v),0xC9));/// x=y y=z z=x
-    __m128 v2p= _mm_castsi128_ps(_mm_shuffle_epi32(_mm_castps_si128(v2.v),0xD2));/// x=z y=x z=y
-    __m128 v1n= _mm_castsi128_ps(_mm_shuffle_epi32(_mm_castps_si128(v1.v),0xD2));/// x=z y=x z=y
-    __m128 v2n= _mm_castsi128_ps(_mm_shuffle_epi32(_mm_castps_si128(v2.v),0xC9));/// x=y y=z z=x
-    return (vec3f){.v=_mm_sub_ps(_mm_mul_ps(v1p,v2p),_mm_mul_ps(v1n,v2n))};
+    return (vec3f){.v=_mm_sub_ps(
+        _mm_mul_ps(_mm_castsi128_ps(_mm_shuffle_epi32(_mm_castps_si128(v1.v),0xC9))/** yzxw*/,_mm_castsi128_ps(_mm_shuffle_epi32(_mm_castps_si128(v2.v),0xD2))/** zxyw*/),
+        _mm_mul_ps(_mm_castsi128_ps(_mm_shuffle_epi32(_mm_castps_si128(v1.v),0xD2))/** zxyw*/,_mm_castsi128_ps(_mm_shuffle_epi32(_mm_castps_si128(v2.v),0xC9))/** yzxw*/))};
 }
 static inline vec3f v3f_rotate(vec3f v,vec3f k,float cos_theta,float sin_theta)///Rodrigues rotation
 {
@@ -570,70 +595,30 @@ static inline float plane_point_dist(plane p,vec3f point)
 
 
 ///for matrices vector x,y,z,w represents the vector that those respective euclidean basis vector map to
-typedef struct matrix4f
+typedef struct mat44f
 {
     vec4f x;
     vec4f y;
     vec4f z;
     vec4f w;
 }
-matrix4f;
+mat44f;
 
-typedef matrix4f mat44f;
-
+///mat44f
 static inline mat44f m44f_transpose(mat44f m)
 {
-    ///names reflect columns-rows of respective vector entry
-//    __m128 xx_yx_xy_yy=_mm_unpacklo_ps(m.x.v,m.y.v);
-//    __m128 xz_yz_xw_yw=_mm_unpackhi_ps(m.x.v,m.y.v);
-//
-//    __m128 zx_wx_zy_wy=_mm_unpacklo_ps(m.z.v,m.w.v);
-//    __m128 zz_wz_zw_ww=_mm_unpackhi_ps(m.z.v,m.w.v);
-//
-//    m.x.v=_mm_movelh_ps(xx_yx_xy_yy,zx_wx_zy_wy);
-//    m.y.v=_mm_movehl_ps(zx_wx_zy_wy,xx_yx_xy_yy);
-//    m.z.v=_mm_movelh_ps(xz_yz_xw_yw,zz_wz_zw_ww);
-//    m.w.v=_mm_movehl_ps(zz_wz_zw_ww,xz_yz_xw_yw);
+    __m128 xx_yx_xy_yy=_mm_castsi128_ps(_mm_unpacklo_epi32(_mm_castps_si128(m.x.v),_mm_castps_si128(m.y.v)));
+    __m128 zx_wx_zy_wy=_mm_castsi128_ps(_mm_unpacklo_epi32(_mm_castps_si128(m.z.v),_mm_castps_si128(m.w.v)));
 
-    _MM_TRANSPOSE4_PS(m.x.v,m.y.v,m.z.v,m.w.v);
+    __m128 xz_yz_xw_yw=_mm_castsi128_ps(_mm_unpackhi_epi32(_mm_castps_si128(m.x.v),_mm_castps_si128(m.y.v)));
+    __m128 zz_wz_zw_ww=_mm_castsi128_ps(_mm_unpackhi_epi32(_mm_castps_si128(m.z.v),_mm_castps_si128(m.w.v)));
+
+    m.x.v=_mm_movelh_ps(xx_yx_xy_yy,zx_wx_zy_wy);
+    m.y.v=_mm_movehl_ps(zx_wx_zy_wy,xx_yx_xy_yy);
+    m.z.v=_mm_movelh_ps(xz_yz_xw_yw,zz_wz_zw_ww);
+    m.w.v=_mm_movehl_ps(zz_wz_zw_ww,xz_yz_xw_yw);
 
     return m;
-}
-static inline mat44f m44f_mul(mat44f l,mat44f r)
-{
-    r.x.v=_mm_add_ps(
-        _mm_add_ps(
-            _mm_mul_ps(l.x.v,_mm_castsi128_ps(_mm_shuffle_epi32(_mm_castps_si128(r.x.v),0x00))),
-            _mm_mul_ps(l.y.v,_mm_castsi128_ps(_mm_shuffle_epi32(_mm_castps_si128(r.x.v),0x55)))),
-        _mm_add_ps(
-            _mm_mul_ps(l.z.v,_mm_castsi128_ps(_mm_shuffle_epi32(_mm_castps_si128(r.x.v),0xAA))),
-            _mm_mul_ps(l.w.v,_mm_castsi128_ps(_mm_shuffle_epi32(_mm_castps_si128(r.x.v),0xFF)))));
-
-    r.y.v=_mm_add_ps(
-        _mm_add_ps(
-            _mm_mul_ps(l.x.v,_mm_castsi128_ps(_mm_shuffle_epi32(_mm_castps_si128(r.y.v),0x00))),
-            _mm_mul_ps(l.y.v,_mm_castsi128_ps(_mm_shuffle_epi32(_mm_castps_si128(r.y.v),0x55)))),
-        _mm_add_ps(
-            _mm_mul_ps(l.z.v,_mm_castsi128_ps(_mm_shuffle_epi32(_mm_castps_si128(r.y.v),0xAA))),
-            _mm_mul_ps(l.w.v,_mm_castsi128_ps(_mm_shuffle_epi32(_mm_castps_si128(r.y.v),0xFF)))));
-
-    r.z.v=_mm_add_ps(
-        _mm_add_ps(
-            _mm_mul_ps(l.x.v,_mm_castsi128_ps(_mm_shuffle_epi32(_mm_castps_si128(r.z.v),0x00))),
-            _mm_mul_ps(l.y.v,_mm_castsi128_ps(_mm_shuffle_epi32(_mm_castps_si128(r.z.v),0x55)))),
-        _mm_add_ps(
-            _mm_mul_ps(l.z.v,_mm_castsi128_ps(_mm_shuffle_epi32(_mm_castps_si128(r.z.v),0xAA))),
-            _mm_mul_ps(l.w.v,_mm_castsi128_ps(_mm_shuffle_epi32(_mm_castps_si128(r.z.v),0xFF)))));
-
-    r.w.v=_mm_add_ps(
-        _mm_add_ps(
-            _mm_mul_ps(l.x.v,_mm_castsi128_ps(_mm_shuffle_epi32(_mm_castps_si128(r.w.v),0x00))),
-            _mm_mul_ps(l.y.v,_mm_castsi128_ps(_mm_shuffle_epi32(_mm_castps_si128(r.w.v),0x55)))),
-        _mm_add_ps(
-            _mm_mul_ps(l.z.v,_mm_castsi128_ps(_mm_shuffle_epi32(_mm_castps_si128(r.w.v),0xAA))),
-            _mm_mul_ps(l.w.v,_mm_castsi128_ps(_mm_shuffle_epi32(_mm_castps_si128(r.w.v),0xFF)))));
-
-    return r;
 }
 static inline vec4f m44f_v4f_mul(mat44f m,vec4f v)
 {
@@ -657,7 +642,297 @@ static inline vec3f m44f_v4f_mul_p(mat44f m,vec4f v)
 
     return (vec3f){.v=_mm_div_ps(s,_mm_castsi128_ps(_mm_shuffle_epi32(_mm_castps_si128(s),0xFF)))};
 }
-#else
+
+
+
+typedef struct mat33f
+{
+    vec3f x;
+    vec3f y;
+    vec3f z;
+}
+mat33f;
+
+static inline mat33f m33f_transpose(mat33f m)
+{
+    __m128 dummy;
+
+    __m128 xx_yx_xy_yy=_mm_castsi128_ps(_mm_unpacklo_epi32(_mm_castps_si128(m.x.v),_mm_castps_si128(m.y.v)));
+    __m128 zx_wx_zy_wy=_mm_castsi128_ps(_mm_unpacklo_epi32(_mm_castps_si128(m.z.v),_mm_castps_si128(dummy)));
+
+    __m128 xz_yz_xw_yw=_mm_castsi128_ps(_mm_unpackhi_epi32(_mm_castps_si128(m.x.v),_mm_castps_si128(m.y.v)));
+    __m128 zz_wz_zw_ww=_mm_castsi128_ps(_mm_unpackhi_epi32(_mm_castps_si128(m.z.v),_mm_castps_si128(dummy)));
+
+    m.x.v=_mm_movelh_ps(xx_yx_xy_yy,zx_wx_zy_wy);
+    m.y.v=_mm_movehl_ps(zx_wx_zy_wy,xx_yx_xy_yy);
+    m.z.v=_mm_movelh_ps(xz_yz_xw_yw,zz_wz_zw_ww);
+
+    return m;
+}
+static inline vec3f m33f_v3f_mul(mat33f m,vec3f v)
+{
+    return (vec3f){.v=_mm_add_ps(_mm_add_ps(
+            _mm_mul_ps(m.x.v,_mm_castsi128_ps(_mm_shuffle_epi32(_mm_castps_si128(v.v),0x00))),
+            _mm_mul_ps(m.y.v,_mm_castsi128_ps(_mm_shuffle_epi32(_mm_castps_si128(v.v),0x55)))),
+            _mm_mul_ps(m.z.v,_mm_castsi128_ps(_mm_shuffle_epi32(_mm_castps_si128(v.v),0xAA))))};
+}
+
+
+
+typedef union rotor3f
+{
+    __m128 r;
+    struct
+    {
+        float s;
+        float xy;
+        float yz;
+        float zx;
+    };
+}
+rotor3f;
+
+///rotor3f - see reference implementation for explaination of relevant maths
+static inline float r3f_dot(rotor3f r1,rotor3f r2)
+{
+    return _mm_cvtss_f32(_mm_dp_ps(r1.r,r2.r,0xF1));
+}
+static inline rotor3f r3f_nrm(rotor3f r)///intentionally very accurate as this is used for renormalization
+{
+    return (rotor3f){.r=_mm_div_ps(r.r,_mm_sqrt_ps(_mm_dp_ps(r.r,r.r,0xFF)))};
+}
+static inline rotor3f r3f_from_mid_v3f(vec3f v1,vec3f v2)
+{
+    ///assumes both input vectors are normalised
+
+    return (rotor3f){.r=_mm_blend_ps(
+        _mm_castsi128_ps(_mm_shuffle_epi32(_mm_castps_si128(_mm_sub_ps(///calculate bivector product in xyz and move up 1 element
+            _mm_mul_ps(v1.v,_mm_castsi128_ps(_mm_shuffle_epi32(_mm_castps_si128(v2.v),0xC9))/** yzxw*/),
+            _mm_mul_ps(v2.v,_mm_castsi128_ps(_mm_shuffle_epi32(_mm_castps_si128(v1.v),0xC9))/** yzxw*/))),0x93/**wxyz*/)),
+        _mm_dp_ps(v1.v,v2.v,0x71),0x01)};
+}
+static inline rotor3f r3f_from_v3f(vec3f v1,vec3f v2)
+{
+    ///assumes both input vectors are normalised
+
+    __m128 d1=_mm_add_ps(_mm_dp_ps(v1.v,v2.v,0x7F),_mm_set1_ps(1.0f));
+    __m128 im=_mm_div_ps(_mm_set1_ps(SQRT_HALF),_mm_sqrt_ps(d1));///1.0f/sqrt(2.0f+2.0f*d) == sqrt_half/sqrt(1+d)
+
+    return (rotor3f){.r=_mm_mul_ps(_mm_blend_ps(
+        _mm_castsi128_ps(_mm_shuffle_epi32(_mm_castps_si128(_mm_sub_ps(///calculate bivector product in xyz and move up 1 element
+            _mm_mul_ps(v1.v,_mm_castsi128_ps(_mm_shuffle_epi32(_mm_castps_si128(v2.v),0xC9))/** yzxw*/),
+            _mm_mul_ps(v2.v,_mm_castsi128_ps(_mm_shuffle_epi32(_mm_castps_si128(v1.v),0xC9))/** yzxw*/))),0x93/**wxyz*/)),
+        d1,0x01),im)};
+}
+static inline rotor3f r3f_from_angle(vec3f v,float a)
+{
+    return (rotor3f){.r=_mm_blend_ps(
+        _mm_mul_ps(_mm_castsi128_ps(_mm_shuffle_epi32(_mm_castps_si128(v.v),0x4B/**wzxy*/)),_mm_set1_ps(sinf(a*0.5f))),
+        _mm_set1_ps(cosf(a*0.5f)),0x01)};
+}
+///in terms of applying rotations, LHS gets applied first
+static inline rotor3f r3f_mul(rotor3f r1,rotor3f r2)
+{
+    return (rotor3f){.r=_mm_xor_ps(_mm_set_ss(-0.0f),_mm_add_ps(
+    _mm_add_ps(
+        _mm_mul_ps(_mm_castsi128_ps(_mm_shuffle_epi32(_mm_castps_si128(r1.r),0x2D)),_mm_castsi128_ps(_mm_shuffle_epi32(_mm_castps_si128(r2.r),0xC9))),
+        _mm_mul_ps(_mm_castsi128_ps(_mm_shuffle_epi32(_mm_castps_si128(r1.r),0xD2)),_mm_castsi128_ps(_mm_shuffle_epi32(_mm_castps_si128(r2.r),0x36)))),
+    _mm_sub_ps(
+        _mm_mul_ps(_mm_castsi128_ps(_mm_shuffle_epi32(_mm_castps_si128(r1.r),0x87)),_mm_castsi128_ps(_mm_shuffle_epi32(_mm_castps_si128(r2.r),0x63))),
+        _mm_mul_ps(_mm_castsi128_ps(_mm_shuffle_epi32(_mm_castps_si128(r1.r),0x78)),_mm_castsi128_ps(_mm_shuffle_epi32(_mm_castps_si128(r2.r),0x9C))))))};
+/**
+     +
+     1 = xy,zx,yz,s 1320 2D    2 = xy,yz,s,zx 1203 C9
+     1 = yz,s,xy,zx 2013 D2    2 = yz,xy,zx,s 2130 36
+     1 = zx,xy,s,yz 3102 87    2 = zx,s,yz,xy 3021 63
+
+     -
+     1 = s,yz,zx,xy 0231 78    2 = s,zx,xy,yz 0312 9C
+
+     note: s components were inverted to make +/- ratio match, ergo the s sign flip at the end
+*/
+}
+static inline mat33f r3f_to_m3f(rotor3f r)
+{
+    __m128 r2=_mm_mul_ps(r.r,_mm_set1_ps(SQRT_2));///replacing this with "fast exponent" multiplication of each column by 2 provides only very marginal benefit, so deemed not worth it
+    ///only putting s in last component because something has to go there
+    __m128 xy_yz_zx=_mm_castsi128_ps(_mm_shuffle_epi32(_mm_castps_si128(r2),0x39));/// xy,yz,zx,s
+    __m128 zx_xy_yz=_mm_castsi128_ps(_mm_shuffle_epi32(_mm_castps_si128(r2),0x27));/// zx,xy,yz,s
+    __m128 yz_zx_xy=_mm_castsi128_ps(_mm_shuffle_epi32(_mm_castps_si128(r2),0x1E));/// yz,zx,xy,s
+    __m128 s3=_mm_castsi128_ps(_mm_shuffle_epi32(_mm_castps_si128(r2),0x00));/// s,s,s,s
+
+    __m128 s=_mm_sub_ps(_mm_sub_ps(_mm_set1_ps(1.0f),_mm_mul_ps(xy_yz_zx,xy_yz_zx)),_mm_mul_ps(zx_xy_yz,zx_xy_yz));
+
+    __m128 p=_mm_add_ps(_mm_mul_ps(yz_zx_xy,xy_yz_zx),_mm_mul_ps(zx_xy_yz,s3));
+
+    __m128 n=_mm_sub_ps(_mm_mul_ps(yz_zx_xy,zx_xy_yz),_mm_mul_ps(xy_yz_zx,s3));
+
+    return (mat33f)
+    {
+        .x={.v=_mm_blend_ps(_mm_blend_ps(s,p,0x02),n,0x04)},
+        .y={.v=_mm_blend_ps(_mm_blend_ps(s,p,0x04),n,0x01)},
+        .z={.v=_mm_blend_ps(_mm_blend_ps(s,p,0x01),n,0x02)}
+    };
+}
+static inline vec3f r3f_rotate_v3f(rotor3f r,vec3f v)
+{
+    //__m128 v2=_mm_castsi128_ps(_mm_add_epi32(_mm_castps_si128(v.v),_mm_set1_epi32(0x00800000)));
+    /// above would alter zero entries of v to become non-zero, so considered unuseable
+    __m128 v2=_mm_mul_ps(v.v,_mm_set1_ps(2.0));
+
+    __m128 xy_yz_zx=_mm_castsi128_ps(_mm_shuffle_epi32(_mm_castps_si128(r.r),0x39));/// xy,yz,zx,s
+    __m128 zx_xy_yz=_mm_castsi128_ps(_mm_shuffle_epi32(_mm_castps_si128(r.r),0x27));/// zx,xy,yz,s
+    __m128 yz_zx_xy=_mm_castsi128_ps(_mm_shuffle_epi32(_mm_castps_si128(r.r),0x1E));/// yz,zx,xy,s
+    __m128 s3=_mm_castsi128_ps(_mm_shuffle_epi32(_mm_castps_si128(r.r),0x00));/// s,s,s,s
+
+    __m128 s=_mm_sub_ps(_mm_sub_ps(_mm_set1_ps(0.5f),_mm_mul_ps(xy_yz_zx,xy_yz_zx)),_mm_mul_ps(zx_xy_yz,zx_xy_yz));
+
+    __m128 p=_mm_add_ps(_mm_mul_ps(yz_zx_xy,xy_yz_zx),_mm_mul_ps(zx_xy_yz,s3));
+
+    __m128 n=_mm_sub_ps(_mm_mul_ps(yz_zx_xy,zx_xy_yz),_mm_mul_ps(xy_yz_zx,s3));
+
+    return(vec3f){.v=_mm_add_ps(_mm_add_ps(_mm_mul_ps(s,v2),
+        _mm_mul_ps(p,_mm_castsi128_ps(_mm_shuffle_epi32(_mm_castps_si128(v2),0xD2)))),  ///zxy w
+        _mm_mul_ps(n,_mm_castsi128_ps(_mm_shuffle_epi32(_mm_castps_si128(v2),0xC9))))}; ///yzx w
+}
+static inline vec3f r3f_derotate_v3f(rotor3f r,vec3f v)
+{
+    //__m128 v2=_mm_castsi128_ps(_mm_add_epi32(_mm_castps_si128(v.v),_mm_set1_epi32(0x00800000)));
+    /// above would alter zero entries of v to become non-zero, so considered unuseable
+    __m128 v2=_mm_mul_ps(v.v,_mm_set1_ps(2.0));
+
+    __m128 xy_yz_zx=_mm_castsi128_ps(_mm_shuffle_epi32(_mm_castps_si128(r.r),0x39));/// xy,yz,zx,s
+    __m128 zx_xy_yz=_mm_castsi128_ps(_mm_shuffle_epi32(_mm_castps_si128(r.r),0x27));/// zx,xy,yz,s
+    __m128 yz_zx_xy=_mm_castsi128_ps(_mm_shuffle_epi32(_mm_castps_si128(r.r),0x1E));/// yz,zx,xy,s
+    __m128 s3=_mm_castsi128_ps(_mm_shuffle_epi32(_mm_castps_si128(r.r),0x00));/// s,s,s,s
+
+    __m128 s=_mm_sub_ps(_mm_sub_ps(_mm_set1_ps(0.5f),_mm_mul_ps(xy_yz_zx,xy_yz_zx)),_mm_mul_ps(zx_xy_yz,zx_xy_yz));
+
+    __m128 p=_mm_add_ps(_mm_mul_ps(yz_zx_xy,zx_xy_yz),_mm_mul_ps(xy_yz_zx,s3));
+
+    __m128 n=_mm_sub_ps(_mm_mul_ps(yz_zx_xy,xy_yz_zx),_mm_mul_ps(zx_xy_yz,s3));
+
+    return(vec3f){.v=_mm_add_ps(_mm_add_ps(_mm_mul_ps(s,v2),
+        _mm_mul_ps(p,_mm_castsi128_ps(_mm_shuffle_epi32(_mm_castps_si128(v2),0xC9)))),  ///yzx w
+        _mm_mul_ps(n,_mm_castsi128_ps(_mm_shuffle_epi32(_mm_castps_si128(v2),0xD2))))}; ///zxy w
+}
+static inline rotor3f r3f_rotate_around_x_axis(rotor3f r,float a)
+{
+    float s=sinf(a*0.5f);///_mm_set_ps(s,s,-s,-s) is perhaps better handled bt set1 and fixed value _ps xor ?
+    return (rotor3f){.r=_mm_add_ps(_mm_mul_ps(_mm_set1_ps(cosf(a*0.5f)),r.r),
+        _mm_mul_ps(_mm_set_ps(s,s,-s,-s),_mm_castsi128_ps(_mm_shuffle_epi32(_mm_castps_si128(r.r),0x4E))))};
+}
+static inline rotor3f r3f_rotate_around_y_axis(rotor3f r,float a)
+{
+    float s=sinf(a*0.5f);
+    return (rotor3f){.r=_mm_add_ps(_mm_mul_ps(_mm_set1_ps(cosf(a*0.5f)),r.r),
+        _mm_mul_ps(_mm_set_ps(s,-s,s,-s),_mm_castsi128_ps(_mm_shuffle_epi32(_mm_castps_si128(r.r),0x1B))))};
+}
+static inline rotor3f r3f_rotate_around_z_axis(rotor3f r,float a)
+{
+    float s=sinf(a*0.5f);
+    return (rotor3f){.r=_mm_add_ps(_mm_mul_ps(_mm_set1_ps(cosf(a*0.5f)),r.r),
+        _mm_mul_ps(_mm_set_ps(-s,s,s,-s),_mm_castsi128_ps(_mm_shuffle_epi32(_mm_castps_si128(r.r),0xB1))))};
+}
+static inline vec3f r3f_get_x_axis(rotor3f r)
+{
+    return(vec3f){.v=_mm_mul_ps(_mm_set1_ps(2.0f),_mm_add_ps(_mm_set_ps(0.0f,0.0f,0.0f,0.5f),_mm_add_ps(
+        _mm_xor_ps(_mm_set_ps(0.0f,0.0f,0.0f,-0.0f),
+            _mm_mul_ps(_mm_castsi128_ps(_mm_shuffle_epi32(_mm_castps_si128(r.r),0x1D)),_mm_castsi128_ps(_mm_shuffle_epi32(_mm_castps_si128(r.r),0x29)))),
+        _mm_xor_ps(_mm_set_ps(0.0f,-0.0f,0.0f,-0.0f),
+            _mm_mul_ps(_mm_castsi128_ps(_mm_shuffle_epi32(_mm_castps_si128(r.r),0x37)),_mm_castsi128_ps(_mm_shuffle_epi32(_mm_castps_si128(r.r),0x03)))))))};
+}
+static inline vec3f r3f_get_y_axis(rotor3f r)
+{
+    return(vec3f){.v=_mm_mul_ps(_mm_set1_ps(2.0f),_mm_add_ps(_mm_set_ps(0.0f,0.0f,0.5f,0.0f),_mm_add_ps(
+        _mm_xor_ps(_mm_set_ps(0.0f,0.0f,-0.0f,0.0f),
+            _mm_mul_ps(_mm_castsi128_ps(_mm_shuffle_epi32(_mm_castps_si128(r.r),0x16)),_mm_castsi128_ps(_mm_shuffle_epi32(_mm_castps_si128(r.r),0x37)))),
+        _mm_xor_ps(_mm_set_ps(0.0f,0.0f,-0.0f,-0.0f),
+            _mm_mul_ps(_mm_castsi128_ps(_mm_shuffle_epi32(_mm_castps_si128(r.r),0x28)),_mm_castsi128_ps(_mm_shuffle_epi32(_mm_castps_si128(r.r),0x09)))))))};
+}
+static inline vec3f r3f_get_z_axis(rotor3f r)
+{
+    return(vec3f){.v=_mm_mul_ps(_mm_set1_ps(2.0f),_mm_add_ps(_mm_set_ps(0.0f,0.5f,0.0f,0.0f),_mm_add_ps(
+        _mm_xor_ps(_mm_set_ps(0.0f,-0.0f,0.0f,0.0f),
+            _mm_mul_ps(_mm_castsi128_ps(_mm_shuffle_epi32(_mm_castps_si128(r.r),0x3E)),_mm_castsi128_ps(_mm_shuffle_epi32(_mm_castps_si128(r.r),0x35)))),
+        _mm_xor_ps(_mm_set_ps(0.0f,-0.0f,-0.0f,0.0f),
+            _mm_mul_ps(_mm_castsi128_ps(_mm_shuffle_epi32(_mm_castps_si128(r.r),0x28)),_mm_castsi128_ps(_mm_shuffle_epi32(_mm_castps_si128(r.r),0x23)))))))};
+}
+static inline rotor3f r3f_isolate_xy_rotation(rotor3f r)
+{
+    return (rotor3f){.r=_mm_blend_ps(_mm_set1_ps(0.0f),_mm_div_ps(r.r,_mm_sqrt_ps(_mm_dp_ps(r.r,r.r,0x33))),0x03)};
+}
+static inline rotor3f r3f_isolate_yz_rotation(rotor3f r)
+{
+    return (rotor3f){.r=_mm_blend_ps(_mm_set1_ps(0.0f),_mm_div_ps(r.r,_mm_sqrt_ps(_mm_dp_ps(r.r,r.r,0x55))),0x05)};
+}
+static inline rotor3f r3f_isolate_zx_rotation(rotor3f r)
+{
+    return (rotor3f){.r=_mm_blend_ps(_mm_set1_ps(0.0f),_mm_div_ps(r.r,_mm_sqrt_ps(_mm_dp_ps(r.r,r.r,0x99))),0x09)};
+}
+static inline rotor3f r3f_isolate_x_axis_rotation(rotor3f r)
+{
+    __m128 m,c;
+
+    m=_mm_sqrt_ps(_mm_dp_ps(r.r,r.r,0x5B));/// 0101 1011 -- this handles setting 0 in appropriate place!
+    c=_mm_mul_ps(r.r,_mm_castsi128_ps(_mm_shuffle_epi32(_mm_castps_si128(r.r),0x93)));/// s*zx , s*xy , xy*yz , yz*zx 2103
+    c=_mm_addsub_ps(c,_mm_castsi128_ps(_mm_shuffle_epi32(_mm_castps_si128(c),0x0E))); ///  s*zx-xy*yz , s*xy+yz*zx ,?,?  :: need to reshuffle to 0?1? =0x04
+
+    return(rotor3f){.r=_mm_blend_ps(_mm_div_ps(_mm_castsi128_ps(_mm_shuffle_epi32(_mm_castps_si128(c),0x04)),m),m,0x05)};
+}
+static inline rotor3f r3f_isolate_y_axis_rotation(rotor3f r)
+{
+    __m128 m,c;
+
+    m=_mm_sqrt_ps(_mm_dp_ps(r.r,r.r,0x97));/// 1001 0111 -- this handles setting 0 in appropriate place!
+    c=_mm_mul_ps(r.r,_mm_castsi128_ps(_mm_shuffle_epi32(_mm_castps_si128(r.r),0x8D)));/// s*xy , xy*zx , yz*s , zx*yz 2031
+    c=_mm_addsub_ps(c,_mm_castsi128_ps(_mm_shuffle_epi32(_mm_castps_si128(c),0x0B))); /// -yz*zx, +s*yz ,?,?  :: need to reshuffle as +/- would be in wrong place... -> ?10? = 10
+
+    return(rotor3f){.r=_mm_blend_ps(_mm_div_ps(_mm_castsi128_ps(_mm_shuffle_epi32(_mm_castps_si128(c),0x10)),m),m,0x09)};
+}
+static inline rotor3f r3f_isolate_z_axis_rotation(rotor3f r)
+{
+    __m128 m,c;
+
+    m=_mm_sqrt_ps(_mm_dp_ps(r.r,r.r,0x3D));/// 0011 1101 -- this handles setting 0 in appropriate place!
+    ///on this occasion we can paralellise the shuffles whilst ensuring values end up in the correct place, eliminating a latter shuffle
+    c=_mm_mul_ps(_mm_castsi128_ps(_mm_shuffle_epi32(_mm_castps_si128(r.r),0x0E)),_mm_castsi128_ps(_mm_shuffle_epi32(_mm_castps_si128(r.r),0xE5)));/// xy*yz , xy*zx , yz*s , zx*s  0032 3211
+    c=_mm_addsub_ps(c,_mm_castsi128_ps(_mm_shuffle_epi32(_mm_castps_si128(c),0x10))); /// ?,?,-zx*xy, +xy*yz  01 :: no need to reshuffle!
+
+    return(rotor3f){.r=_mm_blend_ps(_mm_div_ps(c,m),m,0x03)};
+}
+static inline rotor3f r3f_nlerp(rotor3f r1,rotor3f r2,float t)
+{
+    __m128 r=_mm_add_ps(_mm_mul_ps(_mm_set1_ps(t),r2.r),_mm_mul_ps(_mm_set1_ps(1.0f-t),r1.r));
+    return (rotor3f){.r=_mm_div_ps(r,_mm_sqrt_ps(_mm_dp_ps(r,r,0xFF)))};
+}
+static inline rotor3f r3f_bnlerp(rotor3f r0,rotor3f r1,rotor3f r2,rotor3f r3,float t)///bezier interp
+{
+    ///polynomial expansion of the piecewise factors per imput
+    __m128 tf=_mm_add_ps(_mm_mul_ps(_mm_set1_ps(t),_mm_add_ps(_mm_mul_ps(_mm_set1_ps(t),_mm_add_ps(_mm_mul_ps(_mm_set1_ps(t),
+        _mm_set_ps(0.5f,-1.5f,1.5f,-0.5f)),_mm_set_ps(-0.5f,2.0f,-2.5f,1.0f))),_mm_set_ps(0.0f,0.5f,0.0f,-0.5f))),_mm_set_ps(0.0f,0.0f,1.0f,0.0f));
+
+    __m128 r=_mm_add_ps(
+        _mm_add_ps(
+            _mm_mul_ps(_mm_castsi128_ps(_mm_shuffle_epi32(_mm_castps_si128(tf),0x00)),r0.r),
+            _mm_mul_ps(_mm_castsi128_ps(_mm_shuffle_epi32(_mm_castps_si128(tf),0x55)),r1.r)),
+        _mm_add_ps(
+            _mm_mul_ps(_mm_castsi128_ps(_mm_shuffle_epi32(_mm_castps_si128(tf),0xAA)),r2.r),
+            _mm_mul_ps(_mm_castsi128_ps(_mm_shuffle_epi32(_mm_castps_si128(tf),0xFF)),r3.r)));
+
+    return (rotor3f){.r=_mm_div_ps(r,_mm_sqrt_ps(_mm_dp_ps(r,r,0xFF)))};
+}
+static inline rotor3f r3f_slerp(rotor3f r1,rotor3f r2,float t)
+{
+    ///dont yet have derivation for this, is basically a length preserving linear interpolation of the 2 elements with the factor scaling by the sin of the angular component
+    ///may want to extend to r3f_bezier_spherical_interp <-- this
+
+    float u,m,d;
+    m=acosf(r3f_dot(r1,r2));
+    d=1.0f/sinf(m);
+    return (rotor3f){.r=_mm_add_ps(_mm_mul_ps(_mm_set1_ps( sinf(t*m)*d ),r2.r),_mm_mul_ps(_mm_set1_ps( sinf((1.0f-t)*m)*d ),r1.r))};
+}
+#else/**================ REFERENCE AND FALLBACK IMPLEMENTATION ================*/
 
 typedef struct vec3i
 {
@@ -962,17 +1237,16 @@ static inline float plane_point_dist(plane p,vec3f point)
 
 
 
-typedef struct matrix4f
+typedef struct mat44f
 {
     vec4f x;
     vec4f y;
     vec4f z;
     vec4f w;
 }
-matrix4f;
+mat44f;
 
-typedef matrix4f mat44f;
-
+///mat44f
 static inline mat44f m44f_transpose(mat44f m)
 {
     mat44f r;
@@ -999,32 +1273,6 @@ static inline mat44f m44f_transpose(mat44f m)
 
     return r;
 }
-static inline mat44f m44f_mul(mat44f l,mat44f r)
-{
-    matrix4f result;
-
-    result.x.x = r.x.x*l.x.x + r.x.y*l.y.x + r.x.z*l.z.x + r.x.w*l.w.x;
-    result.x.y = r.x.x*l.x.y + r.x.y*l.y.y + r.x.z*l.z.y + r.x.w*l.w.y;
-    result.x.z = r.x.x*l.x.z + r.x.y*l.y.z + r.x.z*l.z.z + r.x.w*l.w.z;
-    result.x.w = r.x.x*l.x.w + r.x.y*l.y.w + r.x.z*l.z.w + r.x.w*l.w.w;
-
-    result.y.x = r.y.x*l.x.x + r.y.y*l.y.x + r.y.z*l.z.x + r.y.w*l.w.x;
-    result.y.y = r.y.x*l.x.y + r.y.y*l.y.y + r.y.z*l.z.y + r.y.w*l.w.y;
-    result.y.z = r.y.x*l.x.z + r.y.y*l.y.z + r.y.z*l.z.z + r.y.w*l.w.z;
-    result.y.w = r.y.x*l.x.w + r.y.y*l.y.w + r.y.z*l.z.w + r.y.w*l.w.w;
-
-    result.z.x = r.z.x*l.x.x + r.z.y*l.y.x + r.z.z*l.z.x + r.z.w*l.w.x;
-    result.z.y = r.z.x*l.x.y + r.z.y*l.y.y + r.z.z*l.z.y + r.z.w*l.w.y;
-    result.z.z = r.z.x*l.x.z + r.z.y*l.y.z + r.z.z*l.z.z + r.z.w*l.w.z;
-    result.z.w = r.z.x*l.x.w + r.z.y*l.y.w + r.z.z*l.z.w + r.z.w*l.w.w;
-
-    result.w.x = r.w.x*l.x.x + r.w.y*l.y.x + r.w.z*l.z.x + r.w.w*l.w.x;
-    result.w.y = r.w.x*l.x.y + r.w.y*l.y.y + r.w.z*l.z.y + r.w.w*l.w.y;
-    result.w.z = r.w.x*l.x.z + r.w.y*l.y.z + r.w.z*l.z.z + r.w.w*l.w.z;
-    result.w.w = r.w.x*l.x.w + r.w.y*l.y.w + r.w.z*l.z.w + r.w.w*l.w.w;
-
-    return result;
-}
 static inline vec4f m44f_v4f_mul(mat44f m,vec4f v)
 {
     return (vec4f){ .x=m.x.x*v.x + m.y.x*v.y + m.z.x*v.z + m.w.x*v.w,
@@ -1040,8 +1288,44 @@ static inline vec3f m44f_v4f_mul_p(mat44f m,vec4f v)
             .z=m.x.z*v.x + m.y.z*v.y + m.z.z*v.z + m.w.z*v.w},
                m.x.w*v.x + m.y.w*v.y + m.z.w*v.z + m.w.w*v.w);
 }
-#endif
 
+
+
+typedef struct mat33f
+{
+    vec3f x;
+    vec3f y;
+    vec3f z;
+}
+mat33f;
+
+static inline mat33f m33f_transpose(mat33f m)
+{
+    float t;
+
+    t=m.x.y;
+    m.x.y=m.y.x;
+    m.y.x=t;
+
+    t=m.x.z;
+    m.x.z=m.z.x;
+    m.z.x=t;
+
+    t=m.y.z;
+    m.y.z=m.z.y;
+    m.z.y=t;
+
+    return m;
+}
+static inline vec3f m33f_v3f_mul(mat33f m,vec3f v)
+{
+    return (vec3f)
+    {
+        .x=m.x.x*v.x + m.y.x*v.y + m.z.x*v.z,
+        .y=m.x.y*v.x + m.y.y*v.y + m.z.y*v.z,
+        .z=m.x.z*v.x + m.y.z*v.y + m.z.z*v.z
+    };
+}
 
 
 
@@ -1054,109 +1338,16 @@ typedef struct rotor3f
 }
 rotor3f;
 
-
-
-
-
-
-typedef struct matrix3f
+///rotor3f
+static inline float r3f_dot(rotor3f r1,rotor3f r2)
 {
-    vec3f x;
-    vec3f y;
-    vec3f z;
+    return r1.s*r2.s+r1.xy*r2.xy+r1.yz*r2.yz+r1.zx*r2.zx;
 }
-matrix3f;
-
-typedef struct matrix2f
+static inline rotor3f r3f_nrm(rotor3f r)///useful for ensuring object rotation doesn't start introducing skew as error accumulates over time
 {
-    vec2f x;
-    vec2f y;
+    float im=1.0f/sqrtf(r.s*r.s+r.xy*r.xy+r.yz*r.yz+r.zx*r.zx);
+    return(rotor3f){.s=r.s*im,.xy=r.xy*im,.yz=r.yz*im,.zx=r.zx*im};
 }
-matrix2f;
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-matrix4f m4f_mult(matrix4f l,matrix4f r);
-matrix4f m4f_inv(matrix4f m);
-vec3f m4f_v4f_mult_p(matrix4f m,vec4f v);
-
-
-
-
-
-matrix3f m3f_inv(matrix3f m);
-matrix3f m3f_inv_det(matrix3f m,float * determinant);
-vec3f m3f_v3f_mult(matrix3f m,vec3f v);
-matrix3f m3f_mult(matrix3f l,matrix3f r);
-
-static inline float m3f_det(matrix3f m)
-{
-    assert(false);///needs to be vonverted to vector/intrinsic ops, though really would to prefer not using m3x3S
-    return m.x.x*m.y.y*m.z.z + m.y.x*m.z.y*m.x.z + m.z.x*m.x.y*m.y.z - m.z.x*m.y.y*m.x.z - m.y.x*m.x.y*m.z.z - m.x.x*m.z.y*m.y.z;
-}
-
-
-mat44f m44f_inv(mat44f m);
-
-
-vec4f m44f_v4f_mul(mat44f m,vec4f v);
-vec3f m44f_v4f_mul_p(mat44f m,vec4f v);
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-static inline vec2f m2f_vec2f_multiply(matrix2f m,vec2f v)
-{
-    assert(false);///needs to be vonverted to vector/intrinsic ops, though really would to prefer not using m2x2
-    return (vec2f){.x=v.x*m.x.x+v.y*m.y.x,.y=v.x*m.x.y+v.y*m.y.y};
-}
-
-static inline vec2f vec2f_m2f_multiply(matrix2f m,vec2f v)
-{
-    assert(false);///needs to be vonverted to vector/intrinsic ops, though really would to prefer not using m2x2
-    return (vec2f){.x=v.x*m.x.x+v.y*m.x.y,.y=v.x*m.y.x+v.y*m.y.y};
-}
-
-static inline matrix2f m2f_rotation_matrix(float angle)
-{
-    assert(false);///needs to be vonverted to vector/intrinsic ops, though really would to prefer not using m2x2
-    matrix2f m;
-    m.x.x=m.y.y=cosf(angle);
-    m.x.y= -(m.y.x=sinf(angle));
-    return m;
-}
-
-
-
-
-
-
-
-
 static inline rotor3f r3f_from_mid_v3f(vec3f v1,vec3f v2)
 {
     ///assumes both input vectors are normalised
@@ -1170,7 +1361,6 @@ static inline rotor3f r3f_from_mid_v3f(vec3f v1,vec3f v2)
         .zx=v1.z*v2.x-v1.x*v2.z
     };
 }
-
 static inline rotor3f r3f_from_v3f(vec3f v1,vec3f v2)
 {
     ///assumes both input vectors are normalised
@@ -1216,27 +1406,26 @@ static inline rotor3f r3f_from_v3f(vec3f v1,vec3f v2)
     \\\yz same logic applies as did for xy
     \\\xz same logic applies as did for xy
     */
-    float d=v1.x*v2.x + v1.y*v2.y + v1.z*v2.z;
-    float im=1.0f/sqrtf(2.0f+2.0f*d);///inverse_magnitude
+    float d1=1.0 + v1.x*v2.x + v1.y*v2.y + v1.z*v2.z;//1.0f+d
+    float im=SQRT_HALF/sqrtf(d1);///inverse_magnitude
+    ///1.0f/sqrt(2.0f+2.0f*d) == sqrt_half/sqrt(1+d)
 
     return(rotor3f)
     {
-        .s=im+im*d,///(1+d)*im
+        .s=im*d1,///(1+d)*im = d1 *im
         .xy=im*(v1.x*v2.y-v1.y*v2.x),
         .yz=im*(v1.y*v2.z-v1.z*v2.y),
         .zx=im*(v1.z*v2.x-v1.x*v2.z)
     };
 }
-
-static inline rotor3f r3f_from_v3f_and_angle(vec3f v,float a)
+static inline rotor3f r3f_from_angle(vec3f v,float a)
 {
     ///assumes input vector is normalised
     float s=sinf(a*0.5f);
     return(rotor3f){.s=cosf(a*0.5f),.xy=s*v.z,.yz=s*v.x,.zx=s*v.y};
 }
-
 ///in terms of applying rotations, LHS gets applied first
-static inline rotor3f r3f_multiply(rotor3f r1,rotor3f r2)
+static inline rotor3f r3f_mul(rotor3f r1,rotor3f r2)
 {
     /// figured out via geometric product of r1 & r2
     return(rotor3f)
@@ -1247,29 +1436,7 @@ static inline rotor3f r3f_multiply(rotor3f r1,rotor3f r2)
         .zx=r1.s*r2.zx-r1.xy*r2.yz+r1.yz*r2.xy+r1.zx*r2.s
     };
 }
-
-/// for these simplify multiplication as if r1 represents a rotation about the respective axes
-/// treated as if a LHS multiplier (applied as rotation before extant rotation r)
-static inline rotor3f r3f_rotate_around_x_axis(rotor3f r,float a)
-{
-    float s=sinf(a*0.5f);
-    float c=cosf(a*0.5f);
-    return (rotor3f){.s=c*r.s-s*r.yz, .xy=c*r.xy-s*r.zx, .yz=c*r.yz+s*r.s, .zx=c*r.zx+s*r.xy};
-}
-static inline rotor3f r3f_rotate_around_y_axis(rotor3f r,float a)
-{
-    float s=sinf(a*0.5f);
-    float c=cosf(a*0.5f);
-    return (rotor3f){.s=c*r.s-s*r.zx, .xy=c*r.xy+s*r.yz, .yz=c*r.yz-s*r.xy, .zx=c*r.zx+s*r.s};
-}
-static inline rotor3f r3f_rotate_around_z_axis(rotor3f r,float a)
-{
-    float s=sinf(a*0.5f);
-    float c=cosf(a*0.5f);
-    return (rotor3f){.s=c*r.s-s*r.xy, .xy=c*r.xy+s*r.s, .yz=c*r.yz+s*r.zx, .zx=c*r.zx-s*r.yz};
-}
-
-static inline matrix3f r3f_to_m3f(rotor3f r)
+static inline mat33f r3f_to_m3f(rotor3f r)
 {
     /**
     // unoptimised included for educational purposes, is acquired by applying geometric product of rotor (r) over axis each axis(v) as -rvr
@@ -1321,7 +1488,9 @@ static inline matrix3f r3f_to_m3f(rotor3f r)
 		 + y   ( f 2 (sa + cb)  +  g (1 - 2 aa - 2 bb)  +  h 2 (ca - bs) )
 		 + z   ( f 2 (ab - sc)  +  g 2 (ac + sb)  +  h (1 - 2 bb - 2 cc) )
 
-	// now substite a,b,c = xy,yz,zx for rotor and f,g,h = x,y,z for vector and put in matrix form and note every rotor component is multiplied by another which are in turn multiplied by 2
+	// now substite a,b,c = xy,yz,zx for rotor and f,g,h = x,y,z for vector and put in matrix form
+	// also note every rotor component is multiplied by another which are in turn multiplied by 2
+	//   ^ ergo we can premultiply all components by sqrt 2 to avoid unnecessary multiplications
     */
 
     r.s*=(float)SQRT_2;
@@ -1329,7 +1498,7 @@ static inline matrix3f r3f_to_m3f(rotor3f r)
     r.yz*=(float)SQRT_2;
     r.zx*=(float)SQRT_2;
 
-    return (matrix3f)
+    return (mat33f)
     {
         .x=
         {
@@ -1351,7 +1520,6 @@ static inline matrix3f r3f_to_m3f(rotor3f r)
         }
     };
 }
-
 static inline vec3f r3f_rotate_v3f(rotor3f r,vec3f v)
 {
     return(vec3f)
@@ -1361,7 +1529,6 @@ static inline vec3f r3f_rotate_v3f(rotor3f r,vec3f v)
         .z=2.0f*(v.x*(r.xy*r.yz - r.zx*r.s) + v.y*(r.xy*r.zx + r.yz*r.s) + v.z*(0.5f - r.zx*r.zx - r.yz*r.yz))
     };
 }
-
 static inline vec3f r3f_derotate_v3f(rotor3f r,vec3f v)
 {
     /// reverse the rotation that would be performed by r, can be figured out based on rotation operation of r on v (as in r3f_rotate_v3f)
@@ -1374,23 +1541,36 @@ static inline vec3f r3f_derotate_v3f(rotor3f r,vec3f v)
         .z=2.0f*(v.x*(r.yz*r.xy + r.s*r.zx) + v.y*(r.zx*r.xy - r.yz*r.s) + v.z*(0.5f - r.zx*r.zx - r.yz*r.yz))
     };
 }
-
+static inline rotor3f r3f_rotate_around_x_axis(rotor3f r,float a)
+{
+    float s=sinf(a*0.5f);
+    float c=cosf(a*0.5f);
+    return (rotor3f){.s=c*r.s-s*r.yz, .xy=c*r.xy-s*r.zx, .yz=c*r.yz+s*r.s, .zx=c*r.zx+s*r.xy};
+}
+static inline rotor3f r3f_rotate_around_y_axis(rotor3f r,float a)
+{
+    float s=sinf(a*0.5f);
+    float c=cosf(a*0.5f);
+    return (rotor3f){.s=c*r.s-s*r.zx, .xy=c*r.xy+s*r.yz, .yz=c*r.yz-s*r.xy, .zx=c*r.zx+s*r.s};
+}
+static inline rotor3f r3f_rotate_around_z_axis(rotor3f r,float a)
+{
+    float s=sinf(a*0.5f);
+    float c=cosf(a*0.5f);
+    return (rotor3f){.s=c*r.s-s*r.xy, .xy=c*r.xy+s*r.s, .yz=c*r.yz+s*r.zx, .zx=c*r.zx-s*r.yz};
+}
 static inline vec3f r3f_get_x_axis(rotor3f r)
 {
     return(vec3f){.x=1.0f-2.0f*(r.xy*r.xy + r.zx*r.zx),.y=2.0f*(r.zx*r.yz + r.xy*r.s),.z=2.0f*(r.xy*r.yz - r.zx*r.s)};
 }
-
 static inline vec3f r3f_get_y_axis(rotor3f r)
 {
     return(vec3f){.x=2.0f*(r.yz*r.zx - r.s*r.xy),.y=1.0f-2.0f*(r.xy*r.xy + r.yz*r.yz),.z=2.0f*(r.xy*r.zx + r.yz*r.s)};
 }
-
 static inline vec3f r3f_get_z_axis(rotor3f r)
 {
     return(vec3f){.x=2.0f*(r.yz*r.xy + r.s*r.zx),.y=2.0f*(r.zx*r.xy - r.yz*r.s),.z=1.0f-2.0f*(r.zx*r.zx + r.yz*r.yz)};
 }
-
-
 static inline rotor3f r3f_isolate_xy_rotation(rotor3f r)/// isolates the rotation about the z axis
 {
     /**
@@ -1459,7 +1639,6 @@ static inline rotor3f r3f_isolate_xy_rotation(rotor3f r)/// isolates the rotatio
     float im=1.0f/sqrtf(r.s*r.s+r.xy*r.xy);///inverse magnitude
     return(rotor3f){.s=r.s*im,.xy=r.xy*im,.yz=0.0,.zx=0.0};
 }
-
 static inline rotor3f r3f_isolate_yz_rotation(rotor3f r)/// isolates the rotation about the x axis
 {
     /// logic/maths the same as in r3f_isolate_xy_rotation, just for different bivector
@@ -1467,7 +1646,6 @@ static inline rotor3f r3f_isolate_yz_rotation(rotor3f r)/// isolates the rotatio
     float im=1.0f/sqrtf(r.s*r.s+r.yz*r.yz);///inverse magnitude
     return(rotor3f){.s=r.s*im,.xy=0.0,.yz=r.yz*im,.zx=0.0};
 }
-
 static inline rotor3f r3f_isolate_zx_rotation(rotor3f r)/// isolates the rotation about the y axis
 {
     /// logic/maths the same as in r3f_isolate_xy_rotation, just for different bivector
@@ -1475,7 +1653,6 @@ static inline rotor3f r3f_isolate_zx_rotation(rotor3f r)/// isolates the rotatio
     float im=1.0f/sqrtf(r.s*r.s+r.zx*r.zx);///inverse magnitude
     return(rotor3f){.s=r.s*im,.xy=0.0,.yz=0.0,.zx=r.zx*im};
 }
-
 static inline rotor3f r3f_isolate_x_axis_rotation(rotor3f r)
 {
     /**
@@ -1518,7 +1695,6 @@ static inline rotor3f r3f_isolate_x_axis_rotation(rotor3f r)
     float im=1.0f/m;///inverse magnitude
     return(rotor3f){.s=m,.xy=(r.yz*r.zx+r.s*r.xy)*im,.yz=0.0,.zx=(r.s*r.zx-r.xy*r.yz)*im};
 }
-
 static inline rotor3f r3f_isolate_y_axis_rotation(rotor3f r)
 {
     /**
@@ -1561,7 +1737,6 @@ static inline rotor3f r3f_isolate_y_axis_rotation(rotor3f r)
     float im=1.0f/m;///inverse magnitude
     return(rotor3f){.s=m,.xy=(r.s*r.xy-r.yz*r.zx)*im,.yz=(r.xy*r.zx+r.s*r.yz)*im,.zx=0.0};
 }
-
 static inline rotor3f r3f_isolate_z_axis_rotation(rotor3f r)
 {
     /**
@@ -1586,7 +1761,7 @@ static inline rotor3f r3f_isolate_z_axis_rotation(rotor3f r)
     .s = (1+dot_product)*im
        = (2-2*dd-2*cc)*0.5f/sqrt(1-dd-cc)
        = (1-dd-cc)/sqrt(1-dd-cc)
-       = sqrt(1-dd-cc)
+       = sqrt(1-dd-cc)r3f_bnlerp
        = sqrt(aa+bb) // aa+bb+cc+dd = 1   therefore   1-cc-dd = aa+bb
 
     .xy = 0 // no v1.z, makes sense as we're avoiding this component
@@ -1604,15 +1779,7 @@ static inline rotor3f r3f_isolate_z_axis_rotation(rotor3f r)
     float im=1.0f/m;///inverse magnitude
     return(rotor3f){.s=m,.xy=0.0,.yz=(r.s*r.yz-r.zx*r.xy)*im,.zx=(r.xy*r.yz +r.s*r.zx)*im};
 }
-
-///useful for ensuring object rotation doesn't start introducing skew as error accumulates over time
-static inline rotor3f r3f_normalize(rotor3f r)
-{
-    float im=1.0f/sqrtf(r.s*r.s+r.xy*r.xy+r.yz*r.yz+r.zx*r.zx);///inverse magnitude
-    return(rotor3f){.s=r.s*im,.xy=r.xy*im,.yz=r.yz*im,.zx=r.zx*im};
-}
-
-static inline rotor3f r3f_lerp(rotor3f r1,rotor3f r2,float t)
+static inline rotor3f r3f_nlerp(rotor3f r1,rotor3f r2,float t)
 {
     float u;
     u=1.0f-t;
@@ -1630,8 +1797,7 @@ static inline rotor3f r3f_lerp(rotor3f r1,rotor3f r2,float t)
 
     return r1;
 }
-
-static inline rotor3f r3f_bezier_interp(rotor3f r0,rotor3f r1,rotor3f r2,rotor3f r3,float t)
+static inline rotor3f r3f_bnlerp(rotor3f r0,rotor3f r1,rotor3f r2,rotor3f r3,float t)///bezier interp
 {
     float u,uut,utt;
 
@@ -1654,15 +1820,11 @@ static inline rotor3f r3f_bezier_interp(rotor3f r0,rotor3f r1,rotor3f r2,rotor3f
 
     return r1;
 }
-
-static inline rotor3f r3f_spherical_interp(rotor3f r1,rotor3f r2,float t)
+static inline rotor3f r3f_slerp(rotor3f r1,rotor3f r2,float t)
 {
-    ///dont yet have derivation for this
-    ///may want to extend to r3f_bezier_spherical_interp
-
     float u,m,d;
 
-    m=acosf(r1.s*r2.s+r1.xy*r2.xy+r1.yz*r2.yz+r1.zx*r2.zx);
+    m=acosf(r3f_dot(r1,r2));
     d=1.0f/sinf(m);
 
     u=sinf((1.0f-t)*m)*d;
@@ -1675,10 +1837,33 @@ static inline rotor3f r3f_spherical_interp(rotor3f r1,rotor3f r2,float t)
 
     return r1;
 }
+#endif
 
 
 
 
+
+
+
+
+
+static inline float m3f_det(mat33f m)
+{
+    assert(false);///needs to be vonverted to vector/intrinsic ops, though really would to prefer not using m3x3S
+    return m.x.x*m.y.y*m.z.z + m.y.x*m.z.y*m.x.z + m.z.x*m.x.y*m.y.z - m.z.x*m.y.y*m.x.z - m.y.x*m.x.y*m.z.z - m.x.x*m.z.y*m.y.z;
+}
+
+
+mat44f m44f_mul(mat44f l,mat44f r);
+mat44f m44f_inv(mat44f m);
+
+mat33f m33f_mul(mat33f l,mat33f r);
+mat33f m33f_inv(mat33f m);
+mat33f m33f_inv_det(mat33f m,float * determinant);
+
+
+void m44f_print(mat44f m);
+void m33f_print(mat33f m);
 
 
 #endif

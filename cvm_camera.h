@@ -1,5 +1,5 @@
 /**
-Copyright 2020,2021,2022 Carl van Mastrigt
+Copyright 2020,2021,2022,2023 Carl van Mastrigt
 
 This file is part of cvm_shared.
 
@@ -48,8 +48,8 @@ typedef struct cvm_camera
     int current_zoom_step;
     int max_zoom_step;
 
-    matrix4f view_matrix;
-    matrix4f view_matrix_inverse;
+    mat44f view_matrix;
+    mat44f view_matrix_inverse;
 
     plane bounds[num_frustrum_bounds];
 
@@ -74,16 +74,16 @@ void initialise_camera(int screen_w,int screen_h,float fov,float near,int zoom_s
 void update_camera(int screen_w,int screen_h,cvm_camera * c);
 
 
-static inline matrix4f * get_view_matrix_pointer(cvm_camera * c)
+static inline mat44f * get_view_matrix_pointer(cvm_camera * c)
 {
     return &c->view_matrix;
 }
-static inline matrix4f * get_view_matrix_inverse_pointer(cvm_camera * c)
+static inline mat44f * get_view_matrix_inverse_pointer(cvm_camera * c)
 {
     return &c->view_matrix_inverse;
 }
-matrix4f get_view_matrix(cvm_camera * c);
-matrix4f get_view_matrix_inverse(cvm_camera * c);
+mat44f get_view_matrix(cvm_camera * c);
+mat44f get_view_matrix_inverse(cvm_camera * c);
 
 bool test_in_camera_bounds(vec3f position,float radius,cvm_camera * c);
 

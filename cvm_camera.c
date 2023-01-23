@@ -61,7 +61,7 @@ void initialise_camera(int screen_w,int screen_h,float fov, float near,int zoom_
 
 void update_camera(int screen_w,int screen_h,cvm_camera * c)
 {
-    matrix4f vm,vmi,rx,rz,z,proj;
+    mat44f vm,vmi,rx,rz,z,proj;
     float ca,sa,ar,tan_half_fov;
     vec3f ftr,ftl,fbr,fbl;
 
@@ -109,13 +109,13 @@ void update_camera(int screen_w,int screen_h,cvm_camera * c)
     proj.x.z=0.0f;                  proj.y.z=0.0f;              proj.z.z=0.0f;  proj.w.z=c->near;
     proj.x.w=0.0f;                  proj.y.w=0.0f;              proj.z.w=1.0f; proj.w.w=0.0;
 
-    c->view_matrix=vm=m4f_mult(proj,m4f_mult(z,m4f_mult(rx,rz)));
-    c->view_matrix_inverse=vmi=m4f_inv(vm);
+    c->view_matrix=vm=m44f_mul(proj,m44f_mul(z,m44f_mul(rx,rz)));
+    c->view_matrix_inverse=vmi=m44f_inv(vm);
 
-    ftr=v3f_sub(m4f_v4f_mult_p(vmi,(vec4f){.x=  1.0f,.y=  1.0f,.z=1.0f,.w=1.0f}),c->position);
-    ftl=v3f_sub(m4f_v4f_mult_p(vmi,(vec4f){.x= -1.0f,.y=  1.0f,.z=1.0f,.w=1.0f}),c->position);
-    fbl=v3f_sub(m4f_v4f_mult_p(vmi,(vec4f){.x= -1.0f,.y= -1.0f,.z=1.0f,.w=1.0f}),c->position);
-    fbr=v3f_sub(m4f_v4f_mult_p(vmi,(vec4f){.x=  1.0f,.y= -1.0f,.z=1.0f,.w=1.0f}),c->position);
+    ftr=v3f_sub(m44f_v4f_mul_p(vmi,(vec4f){.x=  1.0f,.y=  1.0f,.z=1.0f,.w=1.0f}),c->position);
+    ftl=v3f_sub(m44f_v4f_mul_p(vmi,(vec4f){.x= -1.0f,.y=  1.0f,.z=1.0f,.w=1.0f}),c->position);
+    fbl=v3f_sub(m44f_v4f_mul_p(vmi,(vec4f){.x= -1.0f,.y= -1.0f,.z=1.0f,.w=1.0f}),c->position);
+    fbr=v3f_sub(m44f_v4f_mul_p(vmi,(vec4f){.x=  1.0f,.y= -1.0f,.z=1.0f,.w=1.0f}),c->position);
 
     c->bounds[frus_face_t]=plane_from_normal_and_point(v3f_nrm(v3f_cross(ftr,ftl)),c->position);
     c->bounds[frus_face_b]=plane_from_normal_and_point(v3f_nrm(v3f_cross(fbl,fbr)),c->position);

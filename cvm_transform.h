@@ -1,5 +1,5 @@
 /**
-Copyright 2021,2022 Carl van Mastrigt
+Copyright 2021,2022,2023 Carl van Mastrigt
 
 This file is part of cvm_shared.
 
@@ -65,7 +65,8 @@ static inline void cvm_transform_stack_pop(cvm_transform_stack * ts)
 
 static inline void cvm_transform_construct_from_rotor_and_position(float * transform_data,rotor3f r,vec3f p)
 {
-    ///multiplying by SQRT_2 four times here removes 18 future multiplications by 2
+    assert((((uintptr_t)transform_data)&0xF)==0);
+
     r.s*=(float)SQRT_2;
     r.xy*=(float)SQRT_2;
     r.yz*=(float)SQRT_2;
@@ -98,6 +99,8 @@ static inline void cvm_transform_stack_get(cvm_transform_stack * ts,float * tran
 
 static inline void cvm_transform_stack_get_scaled(cvm_transform_stack * ts,float * transform_data,float scale)
 {
+    assert((((uintptr_t)transform_data)&0xF)==0);
+
     rotor3f r=ts->stack[ts->i].r;
     vec3f p=ts->stack[ts->i].p;
 
@@ -143,7 +146,7 @@ static inline vec3f cvm_transform_stack_get_x_axis(cvm_transform_stack * ts)
 
 static inline vec3f cvm_transform_stack_get_y_axis(cvm_transform_stack * ts)
 {
-    return r3f_get_y_axis(ts->stack[ts->i].r);;
+    return r3f_get_y_axis(ts->stack[ts->i].r);
 }
 
 static inline vec3f cvm_transform_stack_get_z_axis(cvm_transform_stack * ts)
@@ -173,12 +176,12 @@ static inline void cvm_transform_stack_rotate_around_z_axis(cvm_transform_stack 
 
 static inline void cvm_transform_stack_rotate_around_vector(cvm_transform_stack * ts,vec3f v,float a)
 {
-    ts->stack[ts->i].r=r3f_multiply(r3f_from_v3f_and_angle(v,a),ts->stack[ts->i].r);
+    ts->stack[ts->i].r=r3f_mul(r3f_from_angle(v,a),ts->stack[ts->i].r);
 }
 
 static inline void cvm_transform_stack_rotate(cvm_transform_stack * ts,rotor3f r)
 {
-    ts->stack[ts->i].r=r3f_multiply(r,ts->stack[ts->i].r);
+    ts->stack[ts->i].r=r3f_mul(r,ts->stack[ts->i].r);
 }
 
 #endif

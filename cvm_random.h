@@ -192,7 +192,22 @@ static inline float cvm_rng_even_zenith(uint64_t * state)
     return acosf(2.0f*cvm_rng_float_16_get(cvm_rng_pcg_a(state))-1.0f);
 }
 
+//#define CVM_INTRINSIC_MODE_NONE
+#define CVM_INTRINSIC_MODE_SSE /*this can trick IDE, when it doesn't pick up __SSE__ :p*/
 
+#if (defined __SSE__ || defined CVM_INTRINSIC_MODE_SSE) && !defined CVM_INTRINSIC_MODE_NONE
+static inline rotor3f cvm_rng_rotation_3d(uint64_t * state)
+{
+    uint32_t s=cvm_rng_pcg_a(state);
+    float a1=cvm_rng_float_16(&s)*(float)PI;
+    float a2=cvm_rng_float_16(&s)*(float)TAU;
+    float r1=cvm_rng_float_16_get(s);
+    float r2=sqrtf(1.0f-r1);
+    r1=sqrtf(r1);
+
+    return (rotor3f){.r=_mm_mul_ps(_mm_set_ps(r2,r2,r1,r1),_mm_set_ps(cosf(a2),sinf(a2),cosf(a1),sinf(a1)))};
+}
+#else
 static inline rotor3f cvm_rng_rotation_3d(uint64_t * state)
 {
     /// calculate rotor.s and xy ratio/values based on expected z distribution of resultant z axis (expected to be uniform!)
@@ -212,8 +227,11 @@ static inline rotor3f cvm_rng_rotation_3d(uint64_t * state)
     /// ergo how components are assigned here doesn't seem to matter at all
     /// only that radii are paired with the angles for the same circles is all that's important (is even this required ?)
 
+    /// s component should always be positive (effecive explaination is that negative rotation is identical to positive rotation in opposite direction)
+    /// easy way to accomplish this is to use PI range and take sine value of that angle
+
     uint32_t s=cvm_rng_pcg_a(state);
-    float a1=cvm_rng_float_16(&s)*(float)TAU;
+    float a1=cvm_rng_float_16(&s)*(float)PI;
     float a2=cvm_rng_float_16(&s)*(float)TAU;
     float r1=cvm_rng_float_16_get(s);
     float r2=sqrtf(1.0f-r1);
@@ -221,6 +239,8 @@ static inline rotor3f cvm_rng_rotation_3d(uint64_t * state)
 
     return (rotor3f){.s=r1*sinf(a1),.xy=r1*cosf(a1),.yz=r2*sinf(a2),.zx=r2*cosf(a2)};
 }
+#endif
+
 
 #endif
 
