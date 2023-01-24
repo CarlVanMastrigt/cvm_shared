@@ -63,6 +63,47 @@ static inline void cvm_transform_stack_pop(cvm_transform_stack * ts)
     ts->i--;
 }
 
+//#define CVM_INTRINSIC_MODE_NONE
+//#define CVM_INTRINSIC_MODE_SSE /*this can trick IDE, when it doesn't pick up __SSE__ :p*/
+
+#if (defined __SSE__ || defined CVM_INTRINSIC_MODE_SSE) && !defined CVM_INTRINSIC_MODE_NONE
+static inline void cvm_transform_construct_from_rotor_and_position(float * transform_data,rotor3f r,vec3f p)
+{
+    __m128 r2=_mm_mul_ps(r.r,_mm_set1_ps(SQRT_2));
+
+    __m128 xy_yz_zx=_mm_castsi128_ps(_mm_shuffle_epi32(_mm_castps_si128(r2),0x39));/// xy,yz,zx,s
+    __m128 zx_xy_yz=_mm_castsi128_ps(_mm_shuffle_epi32(_mm_castps_si128(r2),0x27));/// zx,xy,yz,s
+    __m128 yz_zx_xy=_mm_castsi128_ps(_mm_shuffle_epi32(_mm_castps_si128(r2),0x1E));/// yz,zx,xy,s
+    __m128 s3=_mm_castsi128_ps(_mm_shuffle_epi32(_mm_castps_si128(r2),0x00));/// s,s,s,s
+
+    __m128 sqred=_mm_sub_ps(_mm_sub_ps(_mm_set1_ps(1.0f),_mm_mul_ps(xy_yz_zx,xy_yz_zx)),_mm_mul_ps(zx_xy_yz,zx_xy_yz));
+    __m128 added=_mm_add_ps(_mm_mul_ps(zx_xy_yz,yz_zx_xy),_mm_mul_ps(xy_yz_zx,s3));
+    __m128 subed=_mm_sub_ps(_mm_mul_ps(xy_yz_zx,yz_zx_xy),_mm_mul_ps(zx_xy_yz,s3));
+
+    _mm_store_ps(transform_data+0,_mm_blend_ps(_mm_blend_ps(sqred,subed,0x02),_mm_blend_ps(added,_mm_castsi128_ps(_mm_shuffle_epi32(_mm_castps_si128(p.v),0x00)),0x08),0x0C));
+    _mm_store_ps(transform_data+4,_mm_blend_ps(_mm_blend_ps(sqred,subed,0x04),_mm_blend_ps(added,_mm_castsi128_ps(_mm_shuffle_epi32(_mm_castps_si128(p.v),0x55)),0x08),0x09));
+    _mm_store_ps(transform_data+8,_mm_blend_ps(_mm_blend_ps(sqred,subed,0x01),_mm_blend_ps(added,_mm_castsi128_ps(_mm_shuffle_epi32(_mm_castps_si128(p.v),0xAA)),0x08),0x0A));
+}
+static inline void cvm_transform_construct_from_rotor_and_position_scaled(float * transform_data,rotor3f r,vec3f p,float scale)
+{
+    __m128 r2=_mm_mul_ps(r.r,_mm_set1_ps(SQRT_2));
+
+    __m128 scale_v=_mm_set1_ps(scale);
+    __m128 xy_yz_zx=_mm_castsi128_ps(_mm_shuffle_epi32(_mm_castps_si128(r2),0x39));/// xy,yz,zx,s
+    __m128 zx_xy_yz=_mm_castsi128_ps(_mm_shuffle_epi32(_mm_castps_si128(r2),0x27));/// zx,xy,yz,s
+    __m128 yz_zx_xy=_mm_castsi128_ps(_mm_shuffle_epi32(_mm_castps_si128(r2),0x1E));/// yz,zx,xy,s
+    __m128 s3=_mm_castsi128_ps(_mm_shuffle_epi32(_mm_castps_si128(r2),0x00));/// s,s,s,s
+
+    __m128 sqred=_mm_mul_ps(scale_v,_mm_sub_ps(_mm_sub_ps(_mm_set1_ps(1.0f),_mm_mul_ps(xy_yz_zx,xy_yz_zx)),_mm_mul_ps(zx_xy_yz,zx_xy_yz)));
+    __m128 added=_mm_mul_ps(scale_v,_mm_add_ps(_mm_mul_ps(zx_xy_yz,yz_zx_xy),_mm_mul_ps(xy_yz_zx,s3)));
+    __m128 subed=_mm_mul_ps(scale_v,_mm_sub_ps(_mm_mul_ps(xy_yz_zx,yz_zx_xy),_mm_mul_ps(zx_xy_yz,s3)));
+
+
+    _mm_store_ps(transform_data+0,_mm_blend_ps(_mm_blend_ps(sqred,subed,0x02),_mm_blend_ps(added,_mm_castsi128_ps(_mm_shuffle_epi32(_mm_castps_si128(p.v),0x00)),0x08),0x0C));
+    _mm_store_ps(transform_data+4,_mm_blend_ps(_mm_blend_ps(sqred,subed,0x04),_mm_blend_ps(added,_mm_castsi128_ps(_mm_shuffle_epi32(_mm_castps_si128(p.v),0x55)),0x08),0x09));
+    _mm_store_ps(transform_data+8,_mm_blend_ps(_mm_blend_ps(sqred,subed,0x01),_mm_blend_ps(added,_mm_castsi128_ps(_mm_shuffle_epi32(_mm_castps_si128(p.v),0xAA)),0x08),0x0A));
+}
+#else
 static inline void cvm_transform_construct_from_rotor_and_position(float * transform_data,rotor3f r,vec3f p)
 {
     assert((((uintptr_t)transform_data)&0xF)==0);
@@ -91,18 +132,9 @@ static inline void cvm_transform_construct_from_rotor_and_position(float * trans
     transform_data[10]= 1.0f - r.zx*r.zx - r.yz*r.yz;
     transform_data[11]=p.z;
 }
-
-static inline void cvm_transform_stack_get(cvm_transform_stack * ts,float * transform_data)
-{
-    cvm_transform_construct_from_rotor_and_position(transform_data,ts->stack[ts->i].r,ts->stack[ts->i].p);
-}
-
-static inline void cvm_transform_stack_get_scaled(cvm_transform_stack * ts,float * transform_data,float scale)
+static inline void cvm_transform_construct_from_rotor_and_position_scaled(float * transform_data,rotor3f r,vec3f p,float scale)
 {
     assert((((uintptr_t)transform_data)&0xF)==0);
-
-    rotor3f r=ts->stack[ts->i].r;
-    vec3f p=ts->stack[ts->i].p;
 
     r.s*=(float)SQRT_2;
     r.xy*=(float)SQRT_2;
@@ -127,6 +159,17 @@ static inline void cvm_transform_stack_get_scaled(cvm_transform_stack * ts,float
     transform_data[9 ]= scale*(r.xy*r.zx + r.yz*r.s);
     transform_data[10]= scale*(1.0f - r.zx*r.zx - r.yz*r.yz);
     transform_data[11]= p.z;
+}
+#endif
+
+static inline void cvm_transform_stack_get(cvm_transform_stack * ts,float * transform_data)
+{
+    cvm_transform_construct_from_rotor_and_position(transform_data,ts->stack[ts->i].r,ts->stack[ts->i].p);
+}
+
+static inline void cvm_transform_stack_get_scaled(cvm_transform_stack * ts,float * transform_data,float scale)
+{
+    cvm_transform_construct_from_rotor_and_position_scaled(transform_data,ts->stack[ts->i].r,ts->stack[ts->i].p,scale);
 }
 
 static inline vec3f cvm_transform_stack_get_transformed_position(cvm_transform_stack * ts,vec3f p)
