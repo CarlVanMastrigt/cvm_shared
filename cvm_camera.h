@@ -36,13 +36,24 @@ frustrum_bound_names;
 
 typedef struct cvm_camera
 {
+    rotor3f rotation;
+    vec3f focal_point;///swap use w/ position
+
+
+
+
     vec3f position;
+
 
     ///these angles represent the direction from which the camera is observing the scene, NOT the direction the camera is facing, within the cameras coordinate system
     float azimuthal_angle;
     float zenith_angle;
+    /// replace above w/ rotation if at all possible
+    /// is possible, apply azimuth zenith rotations as separate quaternions, if zenith would push past either limit (up or down) then fix its value appropriately (will need specialised vector ops),
+    ///         limits will be s=1 and one component =1 respectively
+    ///         summed rotation in this scheme should always have one components extracted value as s=1 (i.e. that component = 0)
 
-    //float focal_distance;
+
     float max_focal_distance;
     float min_focal_distance;
     int current_zoom_step;

@@ -20,6 +20,8 @@ along with cvm_shared.  If not, see <https://www.gnu.org/licenses/>.
 #ifndef CVM_SHARED_H
 #define CVM_SHARED_H
 
+///needed for sincosf, may want to re-evaluate usage
+#define _GNU_SOURCE
 
 ///change to only include external headers that are actually needed try to reduce count overall
 #include <stdbool.h>
@@ -51,19 +53,36 @@ typedef union widget widget;
 
 
 ///make a file "cvm_intrinsics/builtins for these?
-static inline uint64_t cvm_po2_64_gte(uint64_t v){ return __bsrq(v-1)+1; }
-static inline uint64_t cvm_po2_64_lt(uint64_t v){ return __bsrq(v-1); }
+//static inline uint64_t cvm_po2_64_gte(uint64_t v){ return __bsrq(v-1)+1; }
+//static inline uint64_t cvm_po2_64_lt(uint64_t v){ return __bsrq(v-1); }
+//
+//static inline uint32_t cvm_po2_32_gte(uint32_t v){ return __bsrd(v-1)+1; }
+//static inline uint32_t cvm_po2_32_lt(uint32_t v){ return __bsrd(v-1); }
+//
+//static inline uint32_t cvm_allocation_increase_step(uint32_t current_size)
+//{
+//    assert(__bsrd(current_size)>=2);
+//    return 1u<<((__bsrd(current_size)-2u));
+//}
+//
+//static inline uint32_t cvm_lbs_32(uint32_t v){ return __bsfd(v); }
 
-static inline uint32_t cvm_po2_32_gte(uint32_t v){ return __bsrd(v-1)+1; }
-static inline uint32_t cvm_po2_32_lt(uint32_t v){ return __bsrd(v-1); }
+static inline uint64_t cvm_po2_64_gte(uint64_t v){ return 64-__builtin_clzl(v-1); }
+static inline uint64_t cvm_po2_64_gt(uint64_t v){ return 64-__builtin_clzl(v); }
+static inline uint64_t cvm_po2_64_lt(uint64_t v){ return 63-__builtin_clzl(v-1); }
+
+static inline uint32_t cvm_po2_32_gte(uint32_t v){ return 32-__builtin_clz(v-1); }
+static inline uint32_t cvm_po2_32_gt(uint32_t v){ return 32-__builtin_clz(v); }
+static inline uint32_t cvm_po2_32_lt(uint32_t v){ return 31-__builtin_clz(v-1); }
 
 static inline uint32_t cvm_allocation_increase_step(uint32_t current_size)
 {
-    assert(__bsrd(current_size)>=2);
-    return 1u<<((__bsrd(current_size)-2u));
+    uint32_t i=__builtin_clz(current_size);
+    assert(i<30);///must be at least 4 (less than 30 leading zeros)
+    return 1u<<(30-i);///add 1 quarter of current size rounded down ( cvm_po2_32_gt(current_size)-2)
 }
 
-static inline uint32_t cvm_lbs_32(uint32_t v){ return __bsfd(v); }
+static inline uint32_t cvm_lbs_32(uint32_t v){ return __builtin_ctz(v); }
 
 
 

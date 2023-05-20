@@ -142,42 +142,48 @@ static inline float cvm_rng_float_16_get(uint32_t s)
 ///following needs testing
 static inline vec3f cvm_rng_point_on_sphere(uint64_t * state)
 {
-    uint32_t s=cvm_rng_pcg_a(state);
-    float z=2.0f*cvm_rng_float_16(&s)-1.0f;
+    uint32_t st=cvm_rng_pcg_a(state);
+    float z=2.0f*cvm_rng_float_16(&st)-1.0f;
     /// acosf(2*rand-1)=zenith, calculated by probability distribution for surface of a sphere
     /// specifically inverting the integral of the relative probability of each angle over the circle (this probability is sin(angle))
     /// z from this zenith is cos(zenith) which is just 2*rand-1 !
     /// this means that every z coordinate is equally likely !
     float p=sqrtf(1.0f-z*z);
     ///equivalent to sin(zenith)
-    float a=cvm_rng_float_16_get(s)*(float)TAU;
-    return (vec3f){ .x=p*cosf(a),.y=p*sinf(a),.z=z};
+    float a=cvm_rng_float_16_get(st)*(float)TAU;
+    float s,c;
+    sincosf(a,&s,&c);
+    return v3f_ini(p*c,p*s,z);
 }
 
 static inline vec3f cvm_rng_point_in_ball(uint64_t * state)
 {
-    uint32_t s=cvm_rng_pcg_a(state);
-    float z=2.0f*cvm_rng_float_16(&s)-1.0f;///see notes above
+    uint32_t st=cvm_rng_pcg_a(state);
+    float z=2.0f*cvm_rng_float_16(&st)-1.0f;///see notes above
     float p=sqrtf(1.0f-z*z);
-    float a=cbrtf(cvm_rng_float_16(&s));///radius
+    float a=cbrtf(cvm_rng_float_16(&st));///radius
     p*=a;
     z*=a;
-    a=cvm_rng_float_16_get(s)*(float)TAU;
-    return (vec3f){ .x=p*cosf(a),.y=p*sinf(a),.z=z};
+    a=cvm_rng_float_16_get(st)*(float)TAU;
+    float s,c;
+    sincosf(a,&s,&c);
+    return v3f_ini(p*c,p*s,z);
 }
 
 static inline vec2f cvm_rng_point_on_circle(uint64_t * state)
 {
-    float a=(float)TAU*cvm_rng_float_16_get(cvm_rng_pcg_a(state));
-    return (vec2f){ .x=cosf(a),.y=sinf(a)};
+    float s,c;
+    sincosf((float)TAU*cvm_rng_float_16_get(cvm_rng_pcg_a(state)),&s,&c);
+    return v2f_ini(c,s);
 }
 
 static inline vec2f cvm_rng_point_in_disc(uint64_t * state)
 {
-    uint32_t s=cvm_rng_pcg_a(state);
-    float r=sqrtf(cvm_rng_float_16(&s));
-    float a=cvm_rng_float_16_get(s)*(float)TAU;
-    return (vec2f){ .x=r*cosf(a),.y=r*sinf(a)};
+    uint32_t st=cvm_rng_pcg_a(state);
+    float r=sqrtf(cvm_rng_float_16(&st));
+    float s,c;
+    sincosf((float)TAU*cvm_rng_float_16_get(st),&s,&c);
+    return v2f_ini(r*c,r*s);
 }
 
 static inline float cvm_rng_float(uint64_t * state)
@@ -192,20 +198,21 @@ static inline float cvm_rng_even_zenith(uint64_t * state)
     return acosf(2.0f*cvm_rng_float_16_get(cvm_rng_pcg_a(state))-1.0f);
 }
 
-//#define CVM_INTRINSIC_MODE_NONE
-#define CVM_INTRINSIC_MODE_SSE /*this can trick IDE, when it doesn't pick up __SSE__ :p*/
+#define CVM_INTRINSIC_MODE_NONE
+//#define CVM_INTRINSIC_MODE_SSE /*this can trick IDE, when it doesn't pick up __SSE__ :p*/
 
 #if (defined __SSE__ || defined CVM_INTRINSIC_MODE_SSE) && !defined CVM_INTRINSIC_MODE_NONE
 static inline rotor3f cvm_rng_rotation_3d(uint64_t * state)
 {
-    uint32_t s=cvm_rng_pcg_a(state);
-    float a1=cvm_rng_float_16(&s)*(float)PI;
-    float a2=cvm_rng_float_16(&s)*(float)TAU;
-    float r1=cvm_rng_float_16_get(s);
-    float r2=sqrtf(1.0f-r1);
+    float s1,c1,s2,c2,r1,r2;
+    uint32_t st=cvm_rng_pcg_a(state);
+    sincosf(cvm_rng_float_16(&st)*(float)PI,&s1,&c1);
+    sincosf(cvm_rng_float_16(&st)*(float)TAU,&s2,&c2);
+    r1=cvm_rng_float_16_get(st);
+    r2=sqrtf(1.0f-r1);
     r1=sqrtf(r1);
 
-    return (rotor3f){.r=_mm_mul_ps(_mm_set_ps(r2,r2,r1,r1),_mm_set_ps(cosf(a2),sinf(a2),cosf(a1),sinf(a1)))};
+    return (rotor3f){.r=_mm_mul_ps(_mm_set_ps(r2,r2,r1,r1),_mm_set_ps(c2,s2,c1,s1))};
 }
 #else
 static inline rotor3f cvm_rng_rotation_3d(uint64_t * state)
@@ -230,14 +237,15 @@ static inline rotor3f cvm_rng_rotation_3d(uint64_t * state)
     /// s component should always be positive (effecive explaination is that negative rotation is identical to positive rotation in opposite direction)
     /// easy way to accomplish this is to use PI range and take sine value of that angle
 
-    uint32_t s=cvm_rng_pcg_a(state);
-    float a1=cvm_rng_float_16(&s)*(float)PI;
-    float a2=cvm_rng_float_16(&s)*(float)TAU;
-    float r1=cvm_rng_float_16_get(s);
-    float r2=sqrtf(1.0f-r1);
+    float s1,c1,s2,c2,r1,r2;
+    uint32_t st=cvm_rng_pcg_a(state);
+    sincosf(cvm_rng_float_16(&st)*(float)PI,&s1,&c1);
+    sincosf(cvm_rng_float_16(&st)*(float)TAU,&s2,&c2);
+    r1=cvm_rng_float_16_get(st);
+    r2=sqrtf(1.0f-r1);
     r1=sqrtf(r1);
 
-    return (rotor3f){.s=r1*sinf(a1),.xy=r1*cosf(a1),.yz=r2*sinf(a2),.zx=r2*cosf(a2)};
+    return (rotor3f){.s=r1*s1,.xy=r1*c1,.yz=r2*s2,.zx=r2*c2};
 }
 #endif
 

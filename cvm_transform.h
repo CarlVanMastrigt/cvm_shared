@@ -47,8 +47,8 @@ cvm_transform_stack;
 static inline void cvm_transform_stack_reset(cvm_transform_stack * ts)
 {
     ts->i=0;
-    ts->stack[0].r=(rotor3f){.s=1.0f,.xy=0.0f,.yz=0.0f,.zx=0.0f};
-    ts->stack[0].p=(vec3f){.x=0.0f,.y=0.0f,.z=0.0f};
+    ts->stack[0].r=r3f_ini(1.0f,0.0f,0.0f,0.0f);
+    ts->stack[0].p=v3f_ini(0.0f,0.0f,0.0f);
 }
 
 static inline void cvm_transform_stack_push(cvm_transform_stack * ts)
