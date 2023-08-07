@@ -984,7 +984,7 @@ static inline rotor3f r3f_slerp(rotor3f r1,rotor3f r2,float t)/// spherical inte
 static inline rotor3f r3f_bslerp(rotor3f r0,rotor3f r1,rotor3f r2,rotor3f r3,float t)/// bezier spherical interpolate
 {
     rotor3f d02,d31;
-    float a02,a31,f,s02,s31,s02f,s31f,u,d;
+    float a02,a31,s02,s31,s02f,s31f;
 
     d02=r3f_mul(r2,r3f_inv(r0));
     d31=r3f_mul(r1,r3f_inv(r3));
