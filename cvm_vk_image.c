@@ -196,7 +196,8 @@ cvm_vk_image_atlas_tile * cvm_vk_acquire_image_atlas_tile(cvm_vk_image_atlas * i
     {
         if(ia->available_tiles_bitmasks[size_factor_h]>=1u<<desired_size_factor_v)
         {
-            size_factor_v=__builtin_ctz(ia->available_tiles_bitmasks[size_factor_h]&~((1<<desired_size_factor_v)-1));
+//            size_factor_v=__builtin_ctz(ia->available_tiles_bitmasks[size_factor_h]&~((1<<desired_size_factor_v)-1));
+            size_factor_v=__builtin_ctz(ia->available_tiles_bitmasks[size_factor_h]>>desired_size_factor_v)+desired_size_factor_v;
 
             if(!base || (uint32_t)base->size_factor_h+(uint32_t)base->size_factor_v > size_factor_h+size_factor_v)
             {
