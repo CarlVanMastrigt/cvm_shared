@@ -27,6 +27,7 @@ along with cvm_shared.  If not, see <https://www.gnu.org/licenses/>.
 
 
 #define CVM_VK_BASE_TILE_SIZE_FACTOR 2
+#define CVM_VK_BASE_TILE_SIZE (1u<<CVM_VK_BASE_TILE_SIZE_FACTOR)
 #define CVM_VK_RESERVED_IMAGE_ATLAS_TILE_COUNT 256
 
 
@@ -115,6 +116,12 @@ typedef struct cvm_vk_image_atlas
 cvm_vk_image_atlas;
 ///probably just going to use simple 2d version of PO2 allocator used in memory...
 
+
+static inline void cvm_vk_image_atlas_get_tile_coordinates(cvm_vk_image_atlas * ia,cvm_vk_image_atlas_tile * tile,uint16_t * x,uint16_t * y)
+{
+    *x=tile->x_pos<<CVM_VK_BASE_TILE_SIZE_FACTOR;
+    *y=tile->y_pos<<CVM_VK_BASE_TILE_SIZE_FACTOR;
+}
 
 void cvm_vk_create_image_atlas(cvm_vk_image_atlas * ia,VkImage image,VkImageView image_view,size_t bytes_per_pixel,uint32_t width,uint32_t height,bool multithreaded);
 void cvm_vk_destroy_image_atlas(cvm_vk_image_atlas * ia);

@@ -29,13 +29,11 @@ void cvm_vk_create_image_atlas(cvm_vk_image_atlas * ia,VkImage image,VkImageView
     ia->image_view=image_view;
     ia->bytes_per_pixel=bytes_per_pixel;
 
+    assert((width>=(1<<CVM_VK_BASE_TILE_SIZE_FACTOR)) && (height>=(1<<CVM_VK_BASE_TILE_SIZE_FACTOR)));/// IMAGE ATLAS TOO SMALL
     assert(!(width & (width-1)) && !(height & (height-1)));///IMAGE ATLAS MUST BE CREATED AT POWER OF 2 WIDTH AND HEIGHT
 
-    for(i=0;width>1u<<i;i++);
-    ia->num_tile_sizes_h=i-CVM_VK_BASE_TILE_SIZE_FACTOR+1;
-
-    for(i=0;height>1u<<i;i++);
-    ia->num_tile_sizes_v=i-CVM_VK_BASE_TILE_SIZE_FACTOR+1;
+    ia->num_tile_sizes_h=cvm_lbs_32(width)+1-CVM_VK_BASE_TILE_SIZE_FACTOR;
+    ia->num_tile_sizes_v=cvm_lbs_32(height)+1-CVM_VK_BASE_TILE_SIZE_FACTOR;
 
     ia->multithreaded=multithreaded;
     atomic_init(&ia->acquire_spinlock,0);
@@ -157,18 +155,22 @@ void cvm_vk_destroy_image_atlas(cvm_vk_image_atlas * ia)
 
 cvm_vk_image_atlas_tile * cvm_vk_acquire_image_atlas_tile(cvm_vk_image_atlas * ia,uint32_t width,uint32_t height)
 {
-    uint32_t size_h,size_v,i,j,c,u,d,o,o_mid,o_end;///a lot of these could be recycled...
+    uint32_t i,desired_size_factor_h,desired_size_factor_v,size_factor_h,size_factor_v,current,up,down,offset,offset_mid,offset_end;
     cvm_vk_image_atlas_tile *base,*partner,*adjacent;
     uint_fast32_t lock;
     cvm_vk_image_atlas_tile ** heap;
 
-    for(size_h=0;width>1u<<(size_h+CVM_VK_BASE_TILE_SIZE_FACTOR);size_h++);
-    for(size_v=0;height>1u<<(size_v+CVM_VK_BASE_TILE_SIZE_FACTOR);size_v++);
 
-    if(size_h>=ia->num_tile_sizes_h || size_v>=ia->num_tile_sizes_v)return NULL;///i dont expect this to get hit so dont bother doing earlier easier test
+    desired_size_factor_h=(width<CVM_VK_BASE_TILE_SIZE)?0:cvm_po2_32_gte(width)-CVM_VK_BASE_TILE_SIZE_FACTOR;
+    desired_size_factor_v=(height<CVM_VK_BASE_TILE_SIZE)?0:cvm_po2_32_gte(height)-CVM_VK_BASE_TILE_SIZE_FACTOR;
 
-    if(ia->multithreaded)do lock=atomic_load(&ia->acquire_spinlock);
-    while(lock!=0 || !atomic_compare_exchange_weak(&ia->acquire_spinlock,&lock,1));
+    if(desired_size_factor_h>=ia->num_tile_sizes_h || desired_size_factor_v>=ia->num_tile_sizes_v)return NULL;///i dont expect this to get hit so dont bother doing earlier easier test
+
+    if(ia->multithreaded)
+    {
+        do lock=atomic_load(&ia->acquire_spinlock);
+        while(lock!=0 || !atomic_compare_exchange_weak(&ia->acquire_spinlock,&lock,1));
+    }
 
     if(ia->unused_tile_count < ia->num_tile_sizes_h+ ia->num_tile_sizes_v)
     {
@@ -190,15 +192,15 @@ cvm_vk_image_atlas_tile * cvm_vk_acquire_image_atlas_tile(cvm_vk_image_atlas * i
 
     base=NULL;
 
-    for(i=size_h;i<ia->num_tile_sizes_h;i++)
+    for(size_factor_h=desired_size_factor_h;size_factor_h<ia->num_tile_sizes_h;size_factor_h++)
     {
-        if(ia->available_tiles_bitmasks[i]>=1u<<size_v)
+        if(ia->available_tiles_bitmasks[size_factor_h]>=1u<<desired_size_factor_v)
         {
-            for(j=size_v;!(ia->available_tiles_bitmasks[i] & 1u<<j);j++);///get lowest bitmasked entry
+            size_factor_v=__builtin_ctz(ia->available_tiles_bitmasks[size_factor_h]&~((1<<desired_size_factor_v)-1));
 
-            if(!base || (uint32_t)base->size_factor_h+(uint32_t)base->size_factor_v > i+j)
+            if(!base || (uint32_t)base->size_factor_h+(uint32_t)base->size_factor_v > size_factor_h+size_factor_v)
             {
-                base=ia->available_tiles[i][j].heap[0];
+                base=ia->available_tiles[size_factor_h][size_factor_v].heap[0];
             }
         }
     }
@@ -212,34 +214,34 @@ cvm_vk_image_atlas_tile * cvm_vk_acquire_image_atlas_tile(cvm_vk_image_atlas * i
     ///extract from heap
     heap=ia->available_tiles[base->size_factor_h][base->size_factor_v].heap;
 
-    if((c= --ia->available_tiles[base->size_factor_h][base->size_factor_v].count))
+    if((current= --ia->available_tiles[base->size_factor_h][base->size_factor_v].count))
     {
-        u=0;
+        up=0;
 
-        while((d=(u<<1)+1)<c)
+        while((down=(up<<1)+1)<current)
         {
-            d+= (d+1<c) && (heap[d+1]->offset < heap[d]->offset);
-            if(heap[c]->offset < heap[d]->offset) break;
-            heap[d]->heap_index=u;///need to know (new) index in heap
-            heap[u]=heap[d];
-            u=d;
+            down+= (down+1<current) && (heap[down+1]->offset < heap[down]->offset);
+            if(heap[current]->offset < heap[down]->offset) break;
+            heap[down]->heap_index=up;///need to know (new) index in heap
+            heap[up]=heap[down];
+            up=down;
         }
 
-        heap[c]->heap_index=u;
-        heap[u]=heap[c];
+        heap[current]->heap_index=up;
+        heap[up]=heap[current];
     }
     else ia->available_tiles_bitmasks[base->size_factor_h]&= ~(1<<base->size_factor_v);///took last tile of this size
 
 
-    while(base->size_factor_h>size_h || base->size_factor_v>size_v)
+    while(base->size_factor_h>desired_size_factor_h || base->size_factor_v>desired_size_factor_v)
     {
         partner=ia->first_unused_tile;
         ia->first_unused_tile=partner->next_h;
         ia->unused_tile_count--;
 
-        ///here if offset(o) isnt equal to relevant adjacent position then adjacent is larger and starts before the relevant (v/h) block that contains the tile we're splitting
+        ///here if offset isnt equal to relevant adjacent position then adjacent is larger and starts before the relevant (v/h) block that contains the tile we're splitting
 
-        if(base->size_factor_h != size_h && (base->size_factor_v==size_v || base->size_factor_h>base->size_factor_v))///try to keep tiles square where possible, with slight bias towards longer thinner tiles
+        if(base->size_factor_h != desired_size_factor_h && (base->size_factor_v==desired_size_factor_v || base->size_factor_h>=base->size_factor_v))///try to keep tiles square where possible, with slight bias towards wider tiles
         {
             ///split vertically
             base->size_factor_h--;
@@ -254,39 +256,48 @@ cvm_vk_image_atlas_tile * cvm_vk_acquire_image_atlas_tile(cvm_vk_image_atlas * i
             ///adjust adjacency info, traverse all edges finding tiles that should link to partner now
 
             ///traverse right edge
-            o=base->y_pos;
-            o_end=o+(1<<base->size_factor_v);
-            if(adjacent && adjacent->y_pos == o) while(o < o_end)
+            offset=base->y_pos;
+            offset_end=offset+(1<<base->size_factor_v);
+            if(adjacent && adjacent->y_pos == offset)
             {
-                adjacent->prev_h=partner;
-                o+=1<<adjacent->size_factor_v;
-                adjacent=adjacent->next_v;
+                while(offset < offset_end)
+                {
+                    adjacent->prev_h=partner;
+                    offset+=1<<adjacent->size_factor_v;
+                    adjacent=adjacent->next_v;
+                }
             }
 
             ///traverse bottom edge
             adjacent=partner->next_v=base->next_v;
-            o=base->x_pos;
-            o_mid=o+(1<<base->size_factor_h);
-            o_end=o_mid+(1<<base->size_factor_h);
-            if(adjacent && adjacent->x_pos == o) while(o < o_end)
+            offset=base->x_pos;
+            offset_mid=offset+(1<<base->size_factor_h);
+            offset_end=offset_mid+(1<<base->size_factor_h);
+            if(adjacent && adjacent->x_pos == offset)
             {
-                if(o==o_mid)partner->next_v=adjacent;
-                if(o>=o_mid)adjacent->prev_v=partner;
-                o+=1<<adjacent->size_factor_h;
-                adjacent=adjacent->next_h;
+                while(offset < offset_end)
+                {
+                    if(offset==offset_mid)partner->next_v=adjacent;
+                    if(offset>=offset_mid)adjacent->prev_v=partner;
+                    offset+=1<<adjacent->size_factor_h;
+                    adjacent=adjacent->next_h;
+                }
             }
 
             ///traverse top edge
             adjacent=partner->prev_v=base->prev_v;
-            o=base->x_pos;
+            offset=base->x_pos;
             /// o_mid and o_end unchanged
-            if(adjacent && adjacent->x_pos == o) while(o < o_end)
+            if(adjacent && adjacent->x_pos == offset)
             {
-                while(adjacent->next_v!=base) adjacent=adjacent->next_v;
-                if(o==o_mid)partner->prev_v=adjacent;
-                if(o>=o_mid)adjacent->next_v=partner;
-                o+=1<<adjacent->size_factor_h;
-                adjacent=adjacent->next_h;
+                while(offset < offset_end)
+                {
+                    while(adjacent->next_v!=base) adjacent=adjacent->next_v;
+                    if(offset==offset_mid)partner->prev_v=adjacent;
+                    if(offset>=offset_mid)adjacent->next_v=partner;
+                    offset+=1<<adjacent->size_factor_h;
+                    adjacent=adjacent->next_h;
+                }
             }
         }
         else
@@ -304,39 +315,48 @@ cvm_vk_image_atlas_tile * cvm_vk_acquire_image_atlas_tile(cvm_vk_image_atlas * i
             ///adjust adjacency info, traverse all edges finding tiles that should link to partner now
 
             ///traverse bottom edge
-            o=base->x_pos;
-            o_end=o+(1<<base->size_factor_h);
-            if(adjacent && adjacent->x_pos == o) while(o < o_end)
+            offset=base->x_pos;
+            offset_end=offset+(1<<base->size_factor_h);
+            if(adjacent && adjacent->x_pos == offset)
             {
-                adjacent->prev_v=partner;
-                o+=1<<adjacent->size_factor_h;
-                adjacent=adjacent->next_h;
+                while(offset < offset_end)
+                {
+                    adjacent->prev_v=partner;
+                    offset+=1<<adjacent->size_factor_h;
+                    adjacent=adjacent->next_h;
+                }
             }
 
             ///traverse right edge
             adjacent=partner->next_h=base->next_h;
-            o=base->y_pos;
-            o_mid=o+(1<<base->size_factor_v);
-            o_end=o_mid+(1<<base->size_factor_v);
-            if(adjacent && adjacent->y_pos == o) while(o < o_end)
+            offset=base->y_pos;
+            offset_mid=offset+(1<<base->size_factor_v);
+            offset_end=offset_mid+(1<<base->size_factor_v);
+            if(adjacent && adjacent->y_pos == offset)
             {
-                if(o==o_mid)partner->next_h=adjacent;
-                if(o>=o_mid)adjacent->prev_h=partner;
-                o+=1<<adjacent->size_factor_v;
-                adjacent=adjacent->next_v;
+                while(offset < offset_end)
+                {
+                    if(offset==offset_mid)partner->next_h=adjacent;
+                    if(offset>=offset_mid)adjacent->prev_h=partner;
+                    offset+=1<<adjacent->size_factor_v;
+                    adjacent=adjacent->next_v;
+                }
             }
 
             ///traverse left edge
             adjacent=partner->prev_h=base->prev_h;
-            o=base->y_pos;
+            offset=base->y_pos;
             /// o_mid and o_end unchanged
-            if(adjacent && adjacent->y_pos == o) while(o < o_end)
+            if(adjacent && adjacent->y_pos == offset)
             {
-                while(adjacent->next_h!=base) adjacent=adjacent->next_h; /// not the case when t starts before o
-                if(o==o_mid)partner->prev_h=adjacent;
-                if(o>=o_mid)adjacent->next_h=partner;
-                o+=1<<adjacent->size_factor_v;
-                adjacent=adjacent->next_v;
+                while(offset < offset_end)
+                {
+                    while(adjacent->next_h!=base) adjacent=adjacent->next_h;
+                    if(offset==offset_mid)partner->prev_h=adjacent;
+                    if(offset>=offset_mid)adjacent->next_h=partner;
+                    offset+=1<<adjacent->size_factor_v;
+                    adjacent=adjacent->next_v;
+                }
             }
         }
 
@@ -358,36 +378,36 @@ cvm_vk_image_atlas_tile * cvm_vk_acquire_image_atlas_tile(cvm_vk_image_atlas * i
     return base;
 }
 
-static inline void remove_tile_from_availability_heap(cvm_vk_image_atlas * ia,cvm_vk_image_atlas_tile * t,uint32_t s_h,uint32_t s_v)
+static inline void remove_tile_from_availability_heap(cvm_vk_image_atlas * ia,cvm_vk_image_atlas_tile * t,uint32_t size_factor_h,uint32_t size_factor_v)
 {
     cvm_vk_image_atlas_tile ** heap;
-    uint32_t c,u,d;
+    uint32_t current,up,down;
 
-    if((c= --ia->available_tiles[s_h][s_v].count))
+    if((current= --ia->available_tiles[size_factor_h][size_factor_v].count))
     {
-        heap=ia->available_tiles[s_h][s_v].heap;
+        heap=ia->available_tiles[size_factor_h][size_factor_v].heap;
 
-        d=t->heap_index;
-        while(d && heap[c]->offset < heap[(u=(d-1)>>1)]->offset)///try moving up heap
+        down=t->heap_index;
+        while(down && heap[current]->offset < heap[(up=(down-1)>>1)]->offset)///try moving up heap
         {
-            heap[u]->heap_index=d;
-            heap[d]=heap[u];
-            d=u;
+            heap[up]->heap_index=down;
+            heap[down]=heap[up];
+            down=up;
         }
-        u=d;
-        while((d=(u<<1)+1)<c)///try moving down heap
+        up=down;
+        while((down=(up<<1)+1)<current)///try moving down heap
         {
-            d+= d+1<c && heap[d+1]->offset < heap[d]->offset;
-            if(heap[c]->offset < heap[d]->offset) break;
-            heap[d]->heap_index=u;
-            heap[u]=heap[d];
-            u=d;
+            down+= down+1<current && heap[down+1]->offset < heap[down]->offset;
+            if(heap[current]->offset < heap[down]->offset) break;
+            heap[down]->heap_index=up;
+            heap[up]=heap[down];
+            up=down;
         }
 
-        heap[c]->heap_index=u;
-        heap[u]=heap[c];
+        heap[current]->heap_index=up;
+        heap[up]=heap[current];
     }
-    else ia->available_tiles_bitmasks[s_h]&= ~(1<<s_v);///partner was last available tile of this size
+    else ia->available_tiles_bitmasks[size_factor_h]&= ~(1<<size_factor_v);///partner was last available tile of this size
 
 
     ///add to list of unused tiles
@@ -398,7 +418,7 @@ static inline void remove_tile_from_availability_heap(cvm_vk_image_atlas * ia,cv
 
 void cvm_vk_relinquish_image_atlas_tile(cvm_vk_image_atlas * ia,cvm_vk_image_atlas_tile * base)
 {
-    uint32_t u,d,o,o_end;///a lot of these could be recycled...  current_size_h,current_size_v,
+    uint32_t up,down,offset,offset_end;
     cvm_vk_image_atlas_tile *partner,*adjacent;
     uint_fast32_t lock;
     cvm_vk_image_atlas_tile ** heap;
@@ -408,8 +428,11 @@ void cvm_vk_relinquish_image_atlas_tile(cvm_vk_image_atlas * ia,cvm_vk_image_atl
 
     ///base,partner,test
 
-    if(ia->multithreaded)do lock=atomic_load(&ia->acquire_spinlock);
-    while(lock!=0 || !atomic_compare_exchange_weak(&ia->acquire_spinlock,&lock,1));
+    if(ia->multithreaded)
+    {
+        do lock=atomic_load(&ia->acquire_spinlock);
+        while(lock!=0 || !atomic_compare_exchange_weak(&ia->acquire_spinlock,&lock,1));
+    }
 
     finished_h=finished_v=false;
 
@@ -425,37 +448,46 @@ void cvm_vk_relinquish_image_atlas_tile(cvm_vk_image_atlas * ia,cvm_vk_image_atl
                     base->offset=partner->offset;
                     ///traverse left side
                     adjacent=base->prev_h=partner->prev_h;
-                    o=partner->y_pos;
-                    o_end=o+(1<<base->size_factor_v);
-                    if(adjacent && adjacent->y_pos==o) while(o < o_end)
+                    offset=partner->y_pos;
+                    offset_end=offset+(1<<base->size_factor_v);
+                    if(adjacent && adjacent->y_pos==offset)
                     {
-                        while(adjacent->next_h!=partner)adjacent=adjacent->next_h;
-                        adjacent->next_h=base;
-                        o+=1<<adjacent->size_factor_v;
-                        adjacent=adjacent->next_v;
+                        while(offset < offset_end)
+                        {
+                            while(adjacent->next_h!=partner)adjacent=adjacent->next_h;
+                            adjacent->next_h=base;
+                            offset+=1<<adjacent->size_factor_v;
+                            adjacent=adjacent->next_v;
+                        }
                     }
 
                     ///traverse bottom side
                     adjacent=base->next_v=partner->next_v;
-                    o=partner->x_pos;
-                    o_end=o+(1<<base->size_factor_h);
-                    if(adjacent && adjacent->x_pos==o) while(o < o_end)
+                    offset=partner->x_pos;
+                    offset_end=offset+(1<<base->size_factor_h);
+                    if(adjacent && adjacent->x_pos==offset)
                     {
-                        adjacent->prev_v=base;
-                        o+=1<<adjacent->size_factor_h;
-                        adjacent=adjacent->next_h;
+                        while(offset < offset_end)
+                        {
+                            adjacent->prev_v=base;
+                            offset+=1<<adjacent->size_factor_h;
+                            adjacent=adjacent->next_h;
+                        }
                     }
 
                     ///traverse top side
                     adjacent=base->prev_v=partner->prev_v;
-                    o=partner->x_pos;
+                    offset=partner->x_pos;
                     ///o_end hasn't changed
-                    if(adjacent && adjacent->x_pos==o) while(o < o_end)
+                    if(adjacent && adjacent->x_pos==offset)
                     {
-                        while(adjacent->next_v!=partner)adjacent=adjacent->next_v;
-                        adjacent->next_v=base;
-                        o+=1<<adjacent->size_factor_h;
-                        adjacent=adjacent->next_h;
+                        while(offset < offset_end)
+                        {
+                            while(adjacent->next_v!=partner)adjacent=adjacent->next_v;
+                            adjacent->next_v=base;
+                            offset+=1<<adjacent->size_factor_h;
+                            adjacent=adjacent->next_h;
+                        }
                     }
 
                     remove_tile_from_availability_heap(ia,partner,base->size_factor_h,base->size_factor_v);
@@ -472,36 +504,45 @@ void cvm_vk_relinquish_image_atlas_tile(cvm_vk_image_atlas * ia,cvm_vk_image_atl
                 {
                     ///traverse right side
                     adjacent=base->next_h=partner->next_h;
-                    o=partner->y_pos;
-                    o_end=o+(1<<base->size_factor_v);
-                    if(adjacent && adjacent->y_pos==o) while(o < o_end)
+                    offset=partner->y_pos;
+                    offset_end=offset+(1<<base->size_factor_v);
+                    if(adjacent && adjacent->y_pos==offset)
                     {
-                        adjacent->prev_h=base;
-                        o+=1<<adjacent->size_factor_v;
-                        adjacent=adjacent->next_v;
+                        while(offset < offset_end)
+                        {
+                            adjacent->prev_h=base;
+                            offset+=1<<adjacent->size_factor_v;
+                            adjacent=adjacent->next_v;
+                        }
                     }
 
                     ///traverse bottom side
                     adjacent=partner->next_v;
-                    o=partner->x_pos;
-                    o_end=o+(1<<base->size_factor_h);
-                    if(adjacent && adjacent->x_pos==o) while(o < o_end)
+                    offset=partner->x_pos;
+                    offset_end=offset+(1<<base->size_factor_h);
+                    if(adjacent && adjacent->x_pos==offset)
                     {
-                        adjacent->prev_v=base;
-                        o+=1<<adjacent->size_factor_h;
-                        adjacent=adjacent->next_h;
+                        while(offset < offset_end)
+                        {
+                            adjacent->prev_v=base;
+                            offset+=1<<adjacent->size_factor_h;
+                            adjacent=adjacent->next_h;
+                        }
                     }
 
                     ///traverse top side
                     adjacent=partner->prev_v;
-                    o=partner->x_pos;
+                    offset=partner->x_pos;
                     ///o_end hasn't changed
-                    if(adjacent && adjacent->x_pos==o) while(o < o_end)
+                    if(adjacent && adjacent->x_pos==offset)
                     {
-                        while(adjacent->next_v!=partner)adjacent=adjacent->next_v;
-                        adjacent->next_v=base;
-                        o+=1<<adjacent->size_factor_h;
-                        adjacent=adjacent->next_h;
+                        while(offset < offset_end)
+                        {
+                            while(adjacent->next_v!=partner)adjacent=adjacent->next_v;
+                            adjacent->next_v=base;
+                            offset+=1<<adjacent->size_factor_h;
+                            adjacent=adjacent->next_h;
+                        }
                     }
 
                     remove_tile_from_availability_heap(ia,partner,base->size_factor_h,base->size_factor_v);
@@ -524,37 +565,46 @@ void cvm_vk_relinquish_image_atlas_tile(cvm_vk_image_atlas * ia,cvm_vk_image_atl
                     base->offset=partner->offset;
                     ///traverse top side
                     adjacent=base->prev_v=partner->prev_v;
-                    o=partner->x_pos;
-                    o_end=o+(1<<base->size_factor_h);
-                    if(adjacent && adjacent->x_pos==o) while(o < o_end)
+                    offset=partner->x_pos;
+                    offset_end=offset+(1<<base->size_factor_h);
+                    if(adjacent && adjacent->x_pos==offset)
                     {
-                        while(adjacent->next_v!=partner)adjacent=adjacent->next_v;
-                        adjacent->next_v=base;
-                        o+=1<<adjacent->size_factor_h;
-                        adjacent=adjacent->next_h;
+                        while(offset < offset_end)
+                        {
+                            while(adjacent->next_v!=partner)adjacent=adjacent->next_v;
+                            adjacent->next_v=base;
+                            offset+=1<<adjacent->size_factor_h;
+                            adjacent=adjacent->next_h;
+                        }
                     }
 
                     ///traverse left side
                     adjacent=base->prev_h=partner->prev_h;
-                    o=partner->y_pos;
-                    o_end=o+(1<<base->size_factor_v);
-                    if(adjacent && adjacent->y_pos==o) while(o < o_end)
+                    offset=partner->y_pos;
+                    offset_end=offset+(1<<base->size_factor_v);
+                    if(adjacent && adjacent->y_pos==offset)
                     {
-                        while(adjacent->next_h!=partner)adjacent=adjacent->next_h;
-                        adjacent->next_h=base;
-                        o+=1<<adjacent->size_factor_v;
-                        adjacent=adjacent->next_v;
+                        while(offset < offset_end)
+                        {
+                            while(adjacent->next_h!=partner)adjacent=adjacent->next_h;
+                            adjacent->next_h=base;
+                            offset+=1<<adjacent->size_factor_v;
+                            adjacent=adjacent->next_v;
+                        }
                     }
 
                     ///traverse right side
                     adjacent=base->next_h=partner->next_h;
-                    o=partner->y_pos;
+                    offset=partner->y_pos;
                     ///o_end hasn't changed
-                    if(adjacent && adjacent->y_pos==o) while(o < o_end)
+                    if(adjacent && adjacent->y_pos==offset)
                     {
-                        adjacent->prev_h=base;
-                        o+=1<<adjacent->size_factor_v;
-                        adjacent=adjacent->next_v;
+                        while(offset < offset_end)
+                        {
+                            adjacent->prev_h=base;
+                            offset+=1<<adjacent->size_factor_v;
+                            adjacent=adjacent->next_v;
+                        }
                     }
 
                     remove_tile_from_availability_heap(ia,partner,base->size_factor_h,base->size_factor_v);
@@ -571,36 +621,45 @@ void cvm_vk_relinquish_image_atlas_tile(cvm_vk_image_atlas * ia,cvm_vk_image_atl
                 {
                     ///traverse bottom side
                     adjacent=base->next_v=partner->next_v;
-                    o=partner->x_pos;
-                    o_end=o+(1<<base->size_factor_h);
-                    if(adjacent && adjacent->x_pos==o) while(o < o_end)
+                    offset=partner->x_pos;
+                    offset_end=offset+(1<<base->size_factor_h);
+                    if(adjacent && adjacent->x_pos==offset)
                     {
-                        adjacent->prev_v=base;
-                        o+=1<<adjacent->size_factor_h;
-                        adjacent=adjacent->next_h;
+                        while(offset < offset_end)
+                        {
+                            adjacent->prev_v=base;
+                            offset+=1<<adjacent->size_factor_h;
+                            adjacent=adjacent->next_h;
+                        }
                     }
 
                     ///traverse left side
                     adjacent=partner->prev_h;
-                    o=partner->y_pos;
-                    o_end=o+(1<<base->size_factor_v);
-                    if(adjacent && adjacent->y_pos==o) while(o < o_end)
+                    offset=partner->y_pos;
+                    offset_end=offset+(1<<base->size_factor_v);
+                    if(adjacent && adjacent->y_pos==offset)
                     {
-                        while(adjacent->next_h!=partner)adjacent=adjacent->next_h;
-                        adjacent->next_h=base;
-                        o+=1<<adjacent->size_factor_v;
-                        adjacent=adjacent->next_v;
+                        while(offset < offset_end)
+                        {
+                            while(adjacent->next_h!=partner)adjacent=adjacent->next_h;
+                            adjacent->next_h=base;
+                            offset+=1<<adjacent->size_factor_v;
+                            adjacent=adjacent->next_v;
+                        }
                     }
 
                     ///traverse right side
                     adjacent=partner->next_h;
-                    o=partner->y_pos;
+                    offset=partner->y_pos;
                     ///o_end hasn't changed
-                    if(adjacent && adjacent->y_pos==o) while(o < o_end)
+                    if(adjacent && adjacent->y_pos==offset)
                     {
-                        adjacent->prev_h=base;
-                        o+=1<<adjacent->size_factor_v;
-                        adjacent=adjacent->next_v;
+                        while(offset < offset_end)
+                        {
+                            adjacent->prev_h=base;
+                            offset+=1<<adjacent->size_factor_v;
+                            adjacent=adjacent->next_v;
+                        }
                     }
 
                     remove_tile_from_availability_heap(ia,partner,base->size_factor_h,base->size_factor_v);
@@ -617,24 +676,24 @@ void cvm_vk_relinquish_image_atlas_tile(cvm_vk_image_atlas * ia,cvm_vk_image_atl
     while(!finished_h || !finished_v);
 
 
-    d=ia->available_tiles[base->size_factor_h][base->size_factor_v].count++;
+    down=ia->available_tiles[base->size_factor_h][base->size_factor_v].count++;
     heap=ia->available_tiles[base->size_factor_h][base->size_factor_v].heap;
 
-    if(d==ia->available_tiles[base->size_factor_h][base->size_factor_v].space)
+    if(down==ia->available_tiles[base->size_factor_h][base->size_factor_v].space)
     {
         heap=ia->available_tiles[base->size_factor_h][base->size_factor_v].heap=realloc(heap,sizeof(cvm_vk_image_atlas_tile*)*(ia->available_tiles[base->size_factor_h][base->size_factor_v].space*=2));
     }
 
-    while(d && heap[(u=(d-1)>>1)]->offset > base->offset)
+    while(down && heap[(up=(down-1)>>1)]->offset > base->offset)
     {
-        heap[u]->heap_index=d;
-        heap[d]=heap[u];
-        d=u;
+        heap[up]->heap_index=down;
+        heap[down]=heap[up];
+        down=up;
     }
 
-    base->heap_index=d;
+    base->heap_index=down;
     base->available=true;
-    heap[d]=base;
+    heap[down]=base;
 
     ia->available_tiles_bitmasks[base->size_factor_h]|=1<<base->size_factor_v;///partner was last available tile of this size
 
