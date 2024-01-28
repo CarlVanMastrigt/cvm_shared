@@ -51,6 +51,9 @@ along with cvm_shared.  If not, see <https://www.gnu.org/licenses/>.
 #define CVM_INVALID_U32_INDEX 0xFFFFFFFF
 typedef union widget widget;
 
+#define CVM_CAT2_MACRO(A,B) A ## B
+#define CVM_CAT2(A, B) CVM_CAT2_MACRO(A, B)
+
 
 ///make a file "cvm_intrinsics/builtins for these?
 //static inline uint64_t cvm_po2_64_gte(uint64_t v){ return __bsrq(v-1)+1; }
@@ -96,7 +99,8 @@ static inline uint32_t cvm_lbs_32(uint32_t v){ return __builtin_ctz(v); }
 #include "cvm_camera.h"
 #include "cvm_mesh.h"
 #include "cvm_thread.h"
-
+#include "cvm_gate.h"
+#include "cvm_task.h"
 
 #include "cvm_debug_render.h"
 

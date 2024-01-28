@@ -393,5 +393,4 @@ void cvm_coherent_limted_queue_del( cvm_coherent_limted_queue * list );
 
 
 
-
 #endif
