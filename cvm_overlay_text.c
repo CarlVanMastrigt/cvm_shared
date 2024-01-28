@@ -274,7 +274,7 @@ static inline cvm_overlay_glyph * cvm_overlay_find_glpyh(cvm_overlay_font * font
                 .tile=NULL,
                 .glyph_index=gi,
                 .usage_counter=0,
-                .pos={0,0,0,0},
+                .pos={.x1=0,.x2=0,.y1=0,.y2=0},
                 .advance=0
             };
 

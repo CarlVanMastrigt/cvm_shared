@@ -52,7 +52,8 @@ static void popup_widget_set_w(overlay_theme * theme,widget * w)
 
 static void popup_widget_set_h(overlay_theme * theme,widget * w)
 {
-    int16_t delta_x,delta_y,width,height,max;
+    #warning make int16_t
+    int delta_x,delta_y,width,height,max;
     organise_widget_vertically(w->popup.contents,0,w->base.min_h);
 
     widget *contained,*external,*internal;

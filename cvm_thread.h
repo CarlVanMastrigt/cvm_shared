@@ -57,10 +57,11 @@ typedef struct cvm_synchronous_thread_group_data cvm_synchronous_thread_group_da
 
 typedef struct cvm_synchronous_thread
 {
-    thrd_t thread;
-    mtx_t mutex;
     cvm_synchronous_thread_group_data * group_data;
     void * data;
+    thrd_t thread;
+    mtx_t mutex;
+    bool waiting;
 }
 cvm_synchronous_thread;
 

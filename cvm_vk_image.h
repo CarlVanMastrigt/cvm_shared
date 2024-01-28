@@ -47,6 +47,7 @@ struct cvm_vk_image_atlas_tile/// (dont ref this by pointer, only store index)
 
     union
     {
+        //replace with: max_x_y:12,x:12,y:12, and sort by max_x_y! (this should give best distribution strategy!)--does limit max texture size, which will need an assert
         uint32_t offset;
         struct
         {
