@@ -51,11 +51,6 @@ typedef void(*cvm_task_function)(void*);
 #define CVM_TASK_MAX_SUCESSOR_GATES ((1<<CVM_TASK_MAX_SUCESSOR_GATES_EXPONENT)-1)
 #define CVM_TASK_POOL_MAX_WORKER_THREADS ((1<<CVM_TASK_POOL_MAX_WORKER_THREAD_EXPONENT)-1)
 
-#define CVM_TASK_POOL_BATCH_COUNT_EXPONENT 12
-#define CVM_TASK_POOL_BATCH_SIZE_EXPONENT 12
-
-
-
 struct cvm_task
 {
     cvm_task_system * task_system;
@@ -63,9 +58,6 @@ struct cvm_task
 
     cvm_task_function task_func;
     void * task_func_input;
-
-    /// because everything is a singly linked queue/stack we need a link to the next, but also we need to know the location/identity of this task in memory when its a "free floating" pointer (not on either the pending or available task lists)
-    uint32_t next;
 
     /// need to only init atomics once: "If obj was not default-constructed, or this function is called twice on the same obj, the behavior is undefined."
 
@@ -83,15 +75,6 @@ struct cvm_task
 };
 
 
-#define CVM_LOCKFREE_POOL_TYPE cvm_task_pool
-#define CVM_LOCKFREE_POOL_ENTRY_TYPE cvm_task
-#define CVM_LOCKFREE_POOL_FUNCTION_PREFIX cvm_task_pool
-#define CVM_LOCKFREE_LIST_TYPE cvm_task_list
-#define CVM_LOCKFREE_LIST_FUNCTION_PREFIX cvm_task_list
-
-#include "cvm_lockfree_list.h"
-
-
 /// do we want a syetem to spin up new workers if/when a gate is stalled?
 
 
@@ -106,8 +89,8 @@ struct cvm_task_system
     /// predecessors/successors
 
 
-    cvm_task_pool task_pool;
-    cvm_task_list pending_tasks;
+    cvm_coherent_queue_pool task_pool;
+    cvm_coherent_queue pending_tasks;
 
     thrd_t * worker_threads;/// make this system extensible (to a degree) should stalled threads want to be switched to a worker thread (can perhaps do this without relying on scheduler though)
     uint32_t worker_thread_count;

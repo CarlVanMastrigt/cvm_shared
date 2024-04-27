@@ -33,6 +33,7 @@ along with cvm_shared.  If not, see <https://www.gnu.org/licenses/>.
 #include <threads.h>
 #include <time.h>
 #include <assert.h>
+#include <stdalign.h>
 
 #include <immintrin.h>
 
@@ -49,10 +50,18 @@ along with cvm_shared.  If not, see <https://www.gnu.org/licenses/>.
 ///own headers
 
 #define CVM_INVALID_U32_INDEX 0xFFFFFFFF
+#define CVM_INVALID_U16_INDEX 0xFFFF
+
+#define CVM_U16_U64_UPPER_MASK ((uint_fast64_t)0xFFFFFFFFFFFF0000)
+#define CVM_U16_U64_LOWER_MASK ((uint_fast64_t)0x000000000000FFFF)
+
+#define CVM_U16_U64_UPPER_UNIT ((uint_fast64_t)0x0000000000010000)
+#define CVM_U16_U64_LOWER_UNIT ((uint_fast64_t)0x0000000000000001)
+
 typedef union widget widget;
 
-#define CVM_CAT2_MACRO(A,B) A ## B
-#define CVM_CAT2(A, B) CVM_CAT2_MACRO(A, B)
+#define CVM_CONCAT2_MACRO(A,B) A ## B
+#define CVM_CONCAT2(A, B) CVM_CONCAT2_MACRO(A, B)
 
 
 ///make a file "cvm_intrinsics/builtins for these?
@@ -99,6 +108,8 @@ static inline uint32_t cvm_lbs_32(uint32_t v){ return __builtin_ctz(v); }
 #include "cvm_camera.h"
 #include "cvm_mesh.h"
 #include "cvm_thread.h"
+#include "cvm_coherent_queue.h"
+#include "cvm_lockfree_stack.h"
 #include "cvm_gate.h"
 #include "cvm_task.h"
 
