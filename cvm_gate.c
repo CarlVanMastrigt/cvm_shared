@@ -27,7 +27,7 @@ cvm_gate * cvm_gate_acquire(cvm_gate_pool * pool)
 {
     cvm_gate * gate;
 
-    gate=cvm_lockfree_stack_pool_acquire_entry(&pool->available_gates);
+    gate=cvm_lockfree_pool_acquire_entry(&pool->available_gates);
     assert(atomic_load(&gate->status)==0);
     /// this is 0 dependencies and in the non-waiting state, this could be made some high count with a fetch sub in `cvm_gate_wait_and_relinquish` if error checking is desirable
 
@@ -105,7 +105,7 @@ void cvm_gate_wait_and_relinquish(cvm_gate * gate)
     }
 
     /// at this point anything else that would use (signal) this gate must have completed, so we're safe to recycle
-    cvm_lockfree_stack_pool_relinquish_entry(&gate->pool->available_gates,gate);
+    cvm_lockfree_pool_relinquish_entry(&gate->pool->available_gates,gate);
 }
 
 void cvm_gate_add_dependencies(cvm_gate * gate, uint32_t dependency_count)
@@ -116,16 +116,22 @@ void cvm_gate_add_dependencies(cvm_gate * gate, uint32_t dependency_count)
 }
 
 
+static void cvm_gate_signal_func(void * primitive)
+{
+    cvm_gate_signal(primitive);
+}
 
 static void cvm_gate_initialise(void * elem, void * data)
 {
     cvm_gate * gate = elem;
     cvm_gate_pool * pool = data;
 
+    gate->signal_function = &cvm_gate_signal_func;
+    gate->pool = pool;
+
     cnd_init(&gate->condition);
     mtx_init(&gate->mutex, mtx_plain);
     atomic_init(&gate->status, 0);
-    gate->pool = pool;
 }
 
 static void cvm_gate_terminate(void * elem, void * data)
@@ -138,16 +144,12 @@ static void cvm_gate_terminate(void * elem, void * data)
 
 void cvm_gate_pool_initialise(cvm_gate_pool * pool, size_t capacity_exponent)
 {
-    cvm_lockfree_stack_pool_initialise(&pool->available_gates,capacity_exponent,sizeof(cvm_gate));
-    cvm_lockfree_stack_pool_call_for_every_entry(&pool->available_gates, &cvm_gate_initialise, pool);
+    cvm_lockfree_pool_initialise(&pool->available_gates,capacity_exponent,sizeof(cvm_gate));
+    cvm_lockfree_pool_call_for_every_entry(&pool->available_gates, &cvm_gate_initialise, pool);
 }
 
 void cvm_gate_pool_terminate(cvm_gate_pool * pool)
 {
-    cvm_lockfree_stack_pool_call_for_every_entry(&pool->available_gates, &cvm_gate_terminate, NULL);
-    cvm_lockfree_stack_pool_terminate(&pool->available_gates);
+    cvm_lockfree_pool_call_for_every_entry(&pool->available_gates, &cvm_gate_terminate, NULL);
+    cvm_lockfree_pool_terminate(&pool->available_gates);
 }
-
-
-
-#warning possibly implement a barrier

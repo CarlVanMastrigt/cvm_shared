@@ -20,7 +20,7 @@ along with cvm_shared.  If not, see <https://www.gnu.org/licenses/>.
 #include "cvm_shared.h"
 
 
-void cvm_lockfree_stack_initialise(cvm_lockfree_stack * stack, cvm_lockfree_stack_pool * pool)
+void cvm_lockfree_stack_initialise(cvm_lockfree_stack * stack, cvm_lockfree_pool * pool)
 {
     atomic_init(&stack->head,((uint_fast64_t)CVM_INVALID_U16_INDEX));
     stack->next_buffer=pool->available_entries.next_buffer;
@@ -75,59 +75,4 @@ void * cvm_lockfree_stack_get(cvm_lockfree_stack * stack)
 
     return stack->entry_data + entry_index*stack->entry_size;
 }
-
-
-void cvm_lockfree_stack_pool_initialise(cvm_lockfree_stack_pool * pool, size_t capacity_exponent, size_t entry_size)
-{
-    size_t i,count;
-    assert(capacity_exponent<=16);///requested more capacity than possible (consider switching next to be a u32)
-
-    /// the available entries will store the actual pointers rather than duplicates (like other stacks created from this pool)
-    atomic_init(&pool->available_entries.head,0);
-    pool->available_entries.next_buffer=malloc(sizeof(uint16_t)<<capacity_exponent);
-    pool->available_entries.entry_data=malloc(entry_size<<capacity_exponent);
-    pool->available_entries.entry_size=entry_size;
-    pool->available_entries.capacity_exponent=capacity_exponent;
-
-    count=(size_t)1<<capacity_exponent;
-
-    for(i=0;i<count-1;i++)
-    {
-        pool->available_entries.next_buffer[i]=i+1;
-    }
-    pool->available_entries.next_buffer[count-1]=CVM_INVALID_U16_INDEX;
-}
-
-void cvm_lockfree_stack_pool_terminate(cvm_lockfree_stack_pool * pool)
-{
-    free(pool->available_entries.next_buffer);
-    free(pool->available_entries.entry_data);
-}
-
-
-
-void * cvm_lockfree_stack_pool_acquire_entry(cvm_lockfree_stack_pool * pool)
-{
-    return cvm_lockfree_stack_get(&pool->available_entries);
-}
-
-void cvm_lockfree_stack_pool_relinquish_entry(cvm_lockfree_stack_pool * pool, void * entry)
-{
-    cvm_lockfree_stack_add(&pool->available_entries,entry);
-}
-
-
-void * cvm_lockfree_stack_pool_call_for_every_entry(cvm_lockfree_stack_pool * pool,void (*func)(void * elem, void * data), void * data)
-{
-    size_t i,count;
-    count = (size_t)1 << pool->available_entries.capacity_exponent;
-
-    for(i=0;i<count;i++)
-    {
-        func(pool->available_entries.entry_data + i*pool->available_entries.entry_size, data);
-    }
-}
-
-
-
 

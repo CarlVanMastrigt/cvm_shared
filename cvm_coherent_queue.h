@@ -21,32 +21,12 @@ along with cvm_shared.  If not, see <https://www.gnu.org/licenses/>.
 #include "cvm_shared.h"
 #endif
 
-typedef struct cvm_coherent_queue_pool
-{
-    //available entries stored as stack
-    alignas(128) atomic_uint_fast64_t next_stack_head;
-    uint16_t * next_buffer;
-
-    ///data backing, extensible?
-    char * entry_data;
-    size_t entry_size;
-    size_t capacity_exponent;
-}
-cvm_coherent_queue_pool;
-
-void cvm_coherent_queue_pool_initialise(cvm_coherent_queue_pool * pool, size_t capacity_exponent, size_t entry_size);
-void cvm_coherent_queue_pool_terminate(cvm_coherent_queue_pool * pool);
-
-void * cvm_coherent_queue_pool_acquire_entry(cvm_coherent_queue_pool * pool);
-void   cvm_coherent_queue_pool_relinquish_entry(cvm_coherent_queue_pool * pool, void * entry);
-
-
 typedef struct cvm_coherent_queue
 {
     /// faster under contention, slower when not contended
-    alignas(128) atomic_uint_fast64_t add_index; /// will contain the stall count information
-    alignas(128) atomic_uint_fast64_t add_fence;
-    alignas(128) atomic_uint_fast64_t get_index;
+    _Alignas(128) atomic_uint_fast64_t add_index; /// will contain the stall count information
+    _Alignas(128) atomic_uint_fast64_t add_fence;
+    _Alignas(128) atomic_uint_fast64_t get_index;
     /// usually 65536 max elements?
     uint16_t * entry_indices;
     uint_fast64_t entry_mask;/// (2 ^ size factor) -1
@@ -57,19 +37,20 @@ typedef struct cvm_coherent_queue
 cvm_coherent_queue;
 
 
-void cvm_coherent_queue_initiasise(cvm_coherent_queue_pool * pool,cvm_coherent_queue * queue);
+void cvm_coherent_queue_initialise(cvm_coherent_queue * queue,cvm_lockfree_pool * pool);
 void cvm_coherent_queue_terminate(cvm_coherent_queue * queue);
 
 void cvm_coherent_queue_add(cvm_coherent_queue * queue, void * entry);
 void * cvm_coherent_queue_get(cvm_coherent_queue * queue);///returns NULL on failure (b/c no elements remain)
 
 
-typedef struct cvm_coherent_fail_tracking_queue
+
+typedef struct cvm_coherent_queue_fail_tracking
 {
     /// faster under contention, slower when not contended
-    alignas(128) atomic_uint_fast64_t add_index; /// will contain the stall count information
-    alignas(128) atomic_uint_fast64_t add_fence;
-    alignas(128) atomic_uint_fast64_t get_index;
+    _Alignas(128) atomic_uint_fast64_t add_index; /// will contain the stall count information
+    _Alignas(128) atomic_uint_fast64_t add_fence;
+    _Alignas(128) atomic_uint_fast64_t get_index;
     /// usually 65536 max elements?
     uint16_t * entry_indices;
     uint_fast64_t entry_mask;/// (2 ^ size factor) -1
@@ -77,18 +58,18 @@ typedef struct cvm_coherent_fail_tracking_queue
     size_t entry_size;
     size_t capacity_exponent;
 }
-cvm_coherent_fail_tracking_queue;
+cvm_coherent_queue_fail_tracking;
 
-void cvm_coherent_fail_tracking_queue_initiasise(cvm_coherent_queue_pool * pool,cvm_coherent_fail_tracking_queue * queue);
-void cvm_coherent_fail_tracking_queue_terminate(cvm_coherent_fail_tracking_queue * queue);
+void cvm_coherent_queue_fail_tracking_initialise(cvm_coherent_queue_fail_tracking * queue,cvm_lockfree_pool * pool);
+void cvm_coherent_queue_fail_tracking_terminate(cvm_coherent_queue_fail_tracking * queue);
 
 /// these have no effect on the fail counter
-void   cvm_coherent_fail_tracking_queue_add(cvm_coherent_fail_tracking_queue * queue, void * entry);
-void * cvm_coherent_fail_tracking_queue_get(cvm_coherent_fail_tracking_queue * queue);///returns NULL on failure (b/c no elements remain)
+void   cvm_coherent_queue_fail_tracking_add(cvm_coherent_queue_fail_tracking * queue, void * entry);
+void * cvm_coherent_queue_fail_tracking_get(cvm_coherent_queue_fail_tracking * queue);///returns NULL on failure (b/c no elements remain)
 
 /// these will attempt to add/get and increment/decrement a counter which tracks getters that have been stalled waiting on new elements
-bool cvm_coherent_fail_tracking_queue_add_and_decrement_fails(cvm_coherent_fail_tracking_queue * queue, void * entry);///returns true if fail counter was nonzero, also decrements in this case
-void * cvm_coherent_fail_tracking_queue_get_or_increment_fails(cvm_coherent_fail_tracking_queue * queue);///returns NULL on failure (b/c no elements remain) and increments fail counter
+bool cvm_coherent_queue_fail_tracking_add_and_decrement_fails(cvm_coherent_queue_fail_tracking * queue, void * entry);///returns true if fail counter was nonzero, also decrements in this case
+void * cvm_coherent_queue_fail_tracking_get_or_increment_fails(cvm_coherent_queue_fail_tracking * queue);///returns NULL on failure (b/c no elements remain) and increments fail counter
 
 /// can use similar to cvm_thread_safe_queue but with managed pool
 

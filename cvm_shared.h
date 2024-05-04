@@ -98,6 +98,7 @@ static inline uint32_t cvm_lbs_32(uint32_t v){ return __builtin_ctz(v); }
 
 
 
+
 #include "cvm_math.h"
 #include "cvm_data_structures.h"
 #include "cvm_random.h"
@@ -107,11 +108,10 @@ static inline uint32_t cvm_lbs_32(uint32_t v){ return __builtin_ctz(v); }
 #include "cvm_transform.h"
 #include "cvm_camera.h"
 #include "cvm_mesh.h"
+#include "cvm_coherent_data_structures.h"
 #include "cvm_thread.h"
-#include "cvm_coherent_queue.h"
-#include "cvm_lockfree_stack.h"
-#include "cvm_gate.h"
-#include "cvm_task.h"
+#include "cvm_synchronization_primitives.h"
+
 
 #include "cvm_debug_render.h"
 

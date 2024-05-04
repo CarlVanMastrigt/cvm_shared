@@ -19,124 +19,106 @@ along with cvm_shared.  If not, see <https://www.gnu.org/licenses/>.
 
 #include "cvm_shared.h"
 
-//
-//static void cvm_task_init(cvm_task * task)
-//{
-//    task->sucessor_lock = (atomic_flag)ATOMIC_FLAG_INIT;
-//    atomic_init(&task->execution_dependencies,0);
-//    atomic_init(&task->cleanup_dependencies,0);
-//}
-//
-////static void cvm_task_destroy(cvm_task * task)
-////{
-////}
-//
-//
-//#define CVM_LOCKFREE_POOL_ENTRY_TYPE cvm_task
-//
-//#define CVM_LOCKFREE_POOL_TYPE cvm_task_pool
-//#define CVM_LOCKFREE_POOL_FUNCTION_PREFIX cvm_task_pool
-//
-//#define CVM_LOCKFREE_LIST_TYPE cvm_task_list
-//#define CVM_LOCKFREE_LIST_FUNCTION_PREFIX cvm_task_list
-//
-//#define CVM_LOCKFREE_POOL_BATCH_COUNT_EXPONENT CVM_TASK_POOL_BATCH_COUNT_EXPONENT
-//#define CVM_LOCKFREE_POOL_BATCH_SIZE_EXPONENT  CVM_TASK_POOL_BATCH_SIZE_EXPONENT
-//#define CVM_LOCKFREE_POOL_STALL_COUNT_EXPONENT CVM_TASK_POOL_MAX_WORKER_THREAD_EXPONENT
-//
-//#define CVM_LOCKFREE_POOL_ENTRY_INIT_FUNCTION cvm_task_init
-////#define CVM_LOCKFREE_POOL_ENTRY_DESTROY_FUNCTION cvm_task_destroy
-//
-//#include "cvm_lockfree_list.c"
-//
-//void cvm_task_add_execution_dependencies(cvm_task * task, uint32_t dependencies)
-//{
-//    /// this operation doesn't form a gate, the paired signaling of this task (cvm_ts_signal_task_dependency) that does that and thus needs strict memory ordering
-//    uint_fast16_t old_count=atomic_fetch_add_explicit(&task->execution_dependencies, dependencies, memory_order_relaxed);
-//    assert(old_count>0);/// should not be adding dependencies when none still exist (need held dependencies to addsetup more dependencies)
-//}
-//
-//void cvm_task_signal_execution_dependency(cvm_task * task)
-//{
-//    uint_fast16_t old_count;
-//    bool unstall_worker;
-//    cvm_task_system * task_system=task->task_system;
-//
-//    /// this is responsible for coalescing all modifications, but also for making them available to the next thread/atomic to recieve this memory (after the potential release in this function)
-//    old_count=atomic_fetch_sub_explicit(&task->execution_dependencies, 1, memory_order_acq_rel);
-//    assert(old_count>0);///must not make dep. count go negative
-//
-//    if(old_count==1)/// this is the last dependency this task was waiting on, put it on list of available tasks and make sure there's a worker thread to satisfy it
-//    {
-//        /// acquire stall count here?
-//        unstall_worker=cvm_task_list_add_and_try_unstall(&task_system->pending_tasks,task);
-//
-//        if(unstall_worker)
-//        {
-//            mtx_lock(&task_system->worker_thread_mutex);
-//
-//            assert(task_system->debug_stalled_count!=0);
-//            assert(task_system->signalled_unstalls < CVM_TASK_POOL_MAX_WORKER_THREADS);/// somehow exceeded maximum worker threads
-//            task_system->signalled_unstalls--;
-//
-//            cnd_signal(&task_system->worker_thread_condition);
-//            mtx_unlock(&task_system->worker_thread_mutex);
-//        }
-//    }
-//}
-//
-//void cvm_task_add_cleanup_dependencies(cvm_task * task, uint32_t dependencies)
-//{
-//    uint_fast16_t old_count=atomic_fetch_add_explicit(&task->cleanup_dependencies, dependencies, memory_order_relaxed);
-//    assert(old_count!=0);/// should not be adding successors reservations when none still exist (need held successors reservations to addsetup more successors reservations)
-//}
-//
-//void cvm_task_signal_cleanup_dependency(cvm_task * task)
-//{
-//    /// need to release to prevent reads/writes of successor/completion data being moved after this operation
-//    uint_fast16_t old_count=atomic_fetch_sub_explicit(&task->cleanup_dependencies,1,memory_order_release);
-//    assert(old_count>0);/// have completed more sucessor reservations than were made
-//    if(old_count==1)
-//    {
-//        /// this should only happen after task completion, BUT the only time this counter can (if used properly) hit zero is if the task HAS completed!
-//        cvm_task_pool_relinquish_entry(task->pool,task);
-//    }
-//}
-//
-//
-//
-//cvm_task * cvm_create_task(cvm_task_system * task_system, cvm_task_function function, void * data)
-//{
-//    cvm_task * task;
-//
-//    task=cvm_task_pool_acquire_entry(&task_system->task_pool);
-//
-//    task->task_system=task_system;
-//
-//    task->task_func=function;
-//    task->task_func_input=data;
-//
-//    task->complete=false;
-//    task->successor_task_count=0;
-//    task->successor_gate_count=0;
-//
-//    /// need to wait on "enqueue" op before beginning, ergo need one extra wait for that (enqueue is really just a signal)
-//    atomic_store_explicit(&task->execution_dependencies,1,memory_order_relaxed);
-//    atomic_store_explicit(&task->cleanup_dependencies,1,memory_order_relaxed);
-//
-//    /// task is about to become "free floating" so next should reference itself
-//
-//    return task;
-//}
-//
-//void cvm_enqueue_task(cvm_task * task)
-//{
-//    /// this is basically just called differently to account for the "hidden" wait counter added on task creation
-//    cvm_task_signal_execution_dependency(task);
-//}
-//
-//
-//
+
+void cvm_task_add_dependencies(cvm_task * task, uint16_t count)
+{
+    uint_fast16_t old_count=atomic_fetch_add_explicit(&task->dependency_count, count, memory_order_relaxed);
+    assert(old_count>0);/// should not be adding dependencies when none still exist (need held dependencies to addsetup more dependencies)
+}
+
+void cvm_task_signal_dependencies(cvm_task * task, uint16_t count)
+{
+    uint_fast16_t old_count;
+    bool unstall_worker;
+    cvm_task_system * task_system=task->task_system;
+
+    /// this is responsible for coalescing all modifications, but also for making them available to the next thread/atomic to recieve this memory (after the potential release in this function)
+    old_count=atomic_fetch_sub_explicit(&task->dependency_count, count, memory_order_acq_rel);
+    assert(old_count>0);///must not make dep. count go negative
+
+    if(old_count==count)/// this is the last dependency this task was waiting on, put it on list of available tasks and make sure there's a worker thread to satisfy it
+    {
+        /// acquire stall count here?
+        unstall_worker=cvm_coherent_queue_fail_tracking_add_and_decrement_fails(&task_system->pending_tasks, task);
+
+        if(unstall_worker)
+        {
+            mtx_lock(&task_system->worker_thread_mutex);
+
+            assert(task_system->debug_stalled_count > 0);/// weren't actually any stalled workers
+            assert(task_system->signalled_unstalls < task_system->worker_thread_count);/// somehow exceeded maximum worker threads
+            task_system->signalled_unstalls++;
+
+            cnd_signal(&task_system->worker_thread_condition);
+            mtx_unlock(&task_system->worker_thread_mutex);
+        }
+    }
+}
+
+void cvm_task_signal_dependency(cvm_task * task)
+{
+    cvm_task_signal_dependencies(task, 1);
+}
+
+void cvm_task_add_retainers(cvm_task * task, uint16_t count)
+{
+    uint_fast16_t old_count=atomic_fetch_add_explicit(&task->retain_count, count, memory_order_relaxed);
+    assert(old_count!=0);/// should not be adding successors reservations when none still exist (need held successors reservations to addsetup more successors reservations)
+}
+
+void cvm_task_release_retainers(cvm_task * task, uint16_t count)
+{
+    /// need to release to prevent reads/writes of successor/completion data being moved after this operation
+    uint_fast16_t old_count=atomic_fetch_sub_explicit(&task->retain_count, count, memory_order_release);
+
+    assert(old_count>0);/// have completed more sucessor reservations than were made
+
+    if(old_count==count)
+    {
+        /// this should only happen after task completion, BUT the only time this counter can (if used properly) hit zero is if the task HAS completed!
+//        cvm_task_pool_relinquish_entry(task->pool, task);
+        cvm_lockfree_pool_relinquish_entry(&task->task_system->task_pool, task);
+    }
+}
+
+void cvm_task_release_retainer(cvm_task * task)
+{
+    cvm_task_release_retainers(task, 1);
+}
+
+
+
+cvm_task * cvm_create_task(cvm_task_system * task_system, cvm_task_function function, void * data)
+{
+    cvm_task * task;
+
+    task = cvm_lockfree_pool_acquire_entry(&task_system->task_pool);
+
+    task->task_system = task_system;
+
+    task->task_func=function;
+    task->task_func_input=data;
+
+    task->complete=false;
+    task->successor_count = 0;
+
+    /// need to wait on "enqueue" op before beginning, ergo need one extra wait for that (enqueue is really just a signal)
+    atomic_store_explicit(&task->dependency_count, 1, memory_order_relaxed);
+    atomic_store_explicit(&task->retain_count, 1, memory_order_relaxed);
+
+    /// task is about to become "free floating" so next should reference itself
+
+    return task;
+}
+
+void cvm_enqueue_task(cvm_task * task)
+{
+    /// this is basically just called differently to account for the "hidden" wait counter added on task creation
+    cvm_task_signal_dependency(task);
+}
+
+
+
 //static int cvm_task_worker_thread_function(void * in)
 //{
 //    cvm_task_system * task_system=in;
@@ -260,46 +242,31 @@ along with cvm_shared.  If not, see <https://www.gnu.org/licenses/>.
 //    cvm_task_pool_terminate(&task_system->task_pool);
 //}
 //
-//
-//
-//void cvm_add_task_task_dependency(cvm_task * a, cvm_task * b)
-//{
-//    bool already_executed;
-//
-//    assert(atomic_load_explicit(&a->cleanup_dependencies,memory_order_relaxed)>0);/// must have dependency to set up other dependencies
-//    while(atomic_flag_test_and_set_explicit(&a->sucessor_lock, memory_order_acq_rel));
-//    assert(a->successor_task_count<CVM_TASK_MAX_SUCESSOR_TASKS);/// trying to set up too many sucessors (in debug could track this total separely to ones added prior to execution)
-//    already_executed=a->complete;
-//    if(!already_executed)
-//    {
-//        a->successor_tasks[a->successor_task_count++]=b;
-//    }
-//    atomic_flag_clear_explicit(&a->sucessor_lock, memory_order_release);
-//
-//    assert(atomic_load_explicit(&b->execution_dependencies,memory_order_relaxed)>0);/// must have dependency to set up other dependencies
-//    if(!already_executed)
-//    {
-//        cvm_task_add_execution_dependencies(b,1);
-//    }
-//}
-//
-//void cvm_add_task_gate_dependency(cvm_task * a, cvm_gate * b)
-//{
-//    bool already_executed;
-//
-//    assert(atomic_load_explicit(&a->cleanup_dependencies,memory_order_relaxed)>0);/// must have dependency to set up other dependencies
-//    while(atomic_flag_test_and_set_explicit(&a->sucessor_lock, memory_order_acq_rel));
-//    assert(a->successor_gate_count<CVM_TASK_MAX_SUCESSOR_GATES);/// trying to set up too many sucessors (in debug could track this total separely to ones added prior to execution)
-//    already_executed=a->complete;
-//    if(!already_executed)
-//    {
-//        a->successor_gates[a->successor_gate_count++]=b;
-//    }
-//    atomic_flag_clear_explicit(&a->sucessor_lock, memory_order_release);
-//
-//    if(!already_executed)
-//    {
-//        cvm_gate_add_dependencies(b,1);
-//    }
-//}
+
+
+
+void cvm_task_add_sucessor(cvm_task * task, cvm_synchronization_primitive * sucessor)
+{
+    bool already_completed;
+
+    assert(atomic_load_explicit(&task->retain_count, memory_order_relaxed));/// task must be retained to set up sucessors (can technically be satisfied illegally, using queue for re-use will make detection better but not infallible)
+
+    while(atomic_flag_test_and_set_explicit(&task->sucessor_lock, memory_order_acquire));
+
+    assert(task->successor_count < CVM_TASK_MAX_SUCESSORS);/// trying to set up too many sucessors (in debug could track this total separely to ones added prior to execution)
+
+    already_completed = task->complete;
+
+    if(!already_completed)
+    {
+        task->successors[task->successor_count++] = sucessor;
+    }
+
+    atomic_flag_clear_explicit(&task->sucessor_lock, memory_order_release);
+
+    if(already_completed)
+    {
+        sucessor->signal_function(sucessor);
+    }
+}
 

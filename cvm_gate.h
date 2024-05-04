@@ -26,12 +26,15 @@ along with cvm_shared.  If not, see <https://www.gnu.org/licenses/>.
 
 typedef struct cvm_gate_pool
 {
-    cvm_lockfree_stack_pool available_gates;
+    cvm_lockfree_pool available_gates;
 }
 cvm_gate_pool;
 
 typedef struct cvm_gate
 {
+    cvm_synchronization_primitive_signal_function * signal_function;
+    ///add gate signal func so that it can be called polymorphically
+
     cvm_gate_pool * pool;
 
     atomic_uint_fast32_t status;

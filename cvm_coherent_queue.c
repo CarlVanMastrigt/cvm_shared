@@ -20,85 +20,15 @@ along with cvm_shared.  If not, see <https://www.gnu.org/licenses/>.
 #include "cvm_shared.h"
 
 
-void cvm_coherent_queue_pool_initialise(cvm_coherent_queue_pool * pool, size_t capacity_exponent, size_t entry_size)
+
+
+void cvm_coherent_queue_initialise(cvm_coherent_queue * queue,cvm_lockfree_pool * pool)
 {
-    size_t i,count;
-
-    assert(capacity_exponent<16);
-
-    pool->entry_data=malloc(entry_size << capacity_exponent);
-    pool->next_buffer=malloc(sizeof(uint16_t) << capacity_exponent);
-    pool->capacity_exponent=capacity_exponent;
-    pool->entry_size=entry_size;
-
-    count=(size_t)1 << capacity_exponent;
-
-    atomic_init(&pool->next_stack_head,0);
-    for(i=0;i<count-1;i++)// all entries start off in the available queue
-    {
-        pool->next_buffer[i]=i+1;
-    }
-    pool->next_buffer[count-1]=CVM_INVALID_U16_INDEX;
-}
-void cvm_coherent_queue_pool_terminate(cvm_coherent_queue_pool * pool)
-{
-    free(pool->next_buffer);
-    free(pool->entry_data);
-}
-
-
-
-void * cvm_coherent_queue_pool_acquire_entry(cvm_coherent_queue_pool * pool)
-{
-    uint_fast64_t entry_index,current_header_value,replacement_header_value;
-
-    current_header_value=atomic_load_explicit(&pool->next_stack_head, memory_order_acquire);
-    do
-    {
-        entry_index = current_header_value & CVM_U16_U64_LOWER_MASK;
-        /// if there are no more entries in this list then return NULL
-        if(entry_index == CVM_INVALID_U16_INDEX)
-        {
-            return NULL;
-        }
-
-        replacement_header_value = ((current_header_value & CVM_U16_U64_UPPER_MASK) + CVM_U16_U64_UPPER_UNIT) | (uint_fast64_t)(pool->next_buffer[entry_index]);
-    }
-    while(!atomic_compare_exchange_weak_explicit(&pool->next_stack_head, &current_header_value, replacement_header_value, memory_order_acquire, memory_order_acquire));
-    /// success memory order could (conceptually) be relaxed here as we don't need to release/acquire any changes when that happens as nothing outside the atomic has changed
-    /// but fail must acquire as the "next" member of "first" element may have changed
-
-    assert(entry_index < ((uint_fast64_t)1 << pool->capacity_exponent));
-
-    return pool->entry_data + entry_index*pool->entry_size;
-}
-void cvm_coherent_queue_pool_relinquish_entry(cvm_coherent_queue_pool * pool, void * entry)
-{
-    uint_fast64_t entry_index,current_header_value,replacement_header_value;
-    entry_index = (uint_fast64_t)(( ((char*)entry) - pool->entry_data )/pool->entry_size);
-    assert(entry_index < ((uint_fast64_t)1 << pool->capacity_exponent));
-
-    current_header_value=atomic_load_explicit(&pool->next_stack_head, memory_order_relaxed);
-    do
-    {
-        pool->next_buffer[entry_index] = (uint16_t)(current_header_value & CVM_U16_U64_LOWER_MASK);
-        replacement_header_value=((current_header_value & CVM_U16_U64_UPPER_MASK) + CVM_U16_U64_UPPER_UNIT) | entry_index;
-    }
-    while(!atomic_compare_exchange_weak_explicit(&pool->next_stack_head, &current_header_value, replacement_header_value, memory_order_release, memory_order_relaxed));
-}
-
-
-
-
-
-
-void cvm_coherent_queue_initiasise(cvm_coherent_queue_pool * pool,cvm_coherent_queue * queue)
-{
-    queue->entry_data=pool->entry_data;
-    queue->entry_size=pool->entry_size;
-    queue->capacity_exponent=pool->capacity_exponent;
-    queue->entry_indices=malloc(sizeof(uint16_t) << pool->capacity_exponent);
-    queue->entry_mask=(((uint_fast64_t)1) << pool->capacity_exponent)-1;
+    queue->entry_data=pool->available_entries.entry_data;
+    queue->entry_size=pool->available_entries.entry_size;
+    queue->capacity_exponent=pool->available_entries.capacity_exponent;
+    queue->entry_indices=malloc(sizeof(uint16_t) << pool->available_entries.capacity_exponent);
+    queue->entry_mask=(((uint_fast64_t)1) << pool->available_entries.capacity_exponent)-1;
     atomic_init(&queue->add_index,0);
     atomic_init(&queue->add_fence,0);
     atomic_init(&queue->get_index,0);
@@ -158,24 +88,24 @@ void * cvm_coherent_queue_get(cvm_coherent_queue * queue)
 #define CVM_COHERENT_QUEUE_FAILURE_MASK ((uint_fast64_t)0xFFFFFFFF00000000)
 #define CVM_COHERENT_QUEUE_FAILURE_UNIT ((uint_fast64_t)0x0000000100000000)
 
-void cvm_coherent_fail_tracking_queue_initiasise(cvm_coherent_queue_pool * pool,cvm_coherent_fail_tracking_queue * queue)
+void cvm_coherent_queue_fail_tracking_initialise(cvm_coherent_queue_fail_tracking * queue,cvm_lockfree_pool * pool)
 {
-    queue->entry_data=pool->entry_data;
-    queue->entry_size=pool->entry_size;
-    queue->capacity_exponent=pool->capacity_exponent;
-    queue->entry_indices=malloc(sizeof(uint16_t) << pool->capacity_exponent);
-    queue->entry_mask=((uint_fast64_t)1 << pool->capacity_exponent)-1;
+    queue->entry_data=pool->available_entries.entry_data;
+    queue->entry_size=pool->available_entries.entry_size;
+    queue->capacity_exponent=pool->available_entries.capacity_exponent;
+    queue->entry_indices=malloc(sizeof(uint16_t) << pool->available_entries.capacity_exponent);
+    queue->entry_mask=((uint_fast64_t)1 << pool->available_entries.capacity_exponent)-1;
     atomic_init(&queue->add_index,0);
     atomic_init(&queue->add_fence,0);
     atomic_init(&queue->get_index,0);
 }
 
-void cvm_coherent_fail_tracking_queue_terminate(cvm_coherent_fail_tracking_queue * queue)
+void cvm_coherent_queue_fail_tracking_terminate(cvm_coherent_queue_fail_tracking * queue)
 {
     free(queue->entry_indices);
 }
 
-void cvm_coherent_fail_tracking_queue_add(cvm_coherent_fail_tracking_queue * queue, void * entry)
+void cvm_coherent_queue_fail_tracking_add(cvm_coherent_queue_fail_tracking * queue, void * entry)
 {
     uint_fast64_t queue_index,expected_fence_value,replacement_fence_value,entry_index,failure_counter;
     size_t entry_offset;
@@ -205,7 +135,7 @@ void cvm_coherent_fail_tracking_queue_add(cvm_coherent_fail_tracking_queue * que
     }
 }
 
-void * cvm_coherent_fail_tracking_queue_get(cvm_coherent_fail_tracking_queue * queue)
+void * cvm_coherent_queue_fail_tracking_get(cvm_coherent_queue_fail_tracking * queue)
 {
     uint_fast64_t queue_index,entry_index,current_fence_value;
 
@@ -225,7 +155,7 @@ void * cvm_coherent_fail_tracking_queue_get(cvm_coherent_fail_tracking_queue * q
     return queue->entry_data + entry_index*queue->entry_size;
 }
 
-bool cvm_coherent_fail_tracking_queue_add_and_decrement_fails(cvm_coherent_fail_tracking_queue * queue, void * entry)
+bool cvm_coherent_queue_fail_tracking_add_and_decrement_fails(cvm_coherent_queue_fail_tracking * queue, void * entry)
 {
     uint_fast64_t queue_index,expected_fence_value,replacement_fence_value,entry_index,failure_counter;
     size_t entry_offset;
@@ -262,7 +192,7 @@ bool cvm_coherent_fail_tracking_queue_add_and_decrement_fails(cvm_coherent_fail_
 
     return decremented_failure_counter;
 }
-void * cvm_coherent_fail_tracking_queue_get_or_increment_fails(cvm_coherent_fail_tracking_queue * queue)
+void * cvm_coherent_queue_fail_tracking_get_or_increment_fails(cvm_coherent_queue_fail_tracking * queue)
 {
     uint_fast64_t queue_index,entry_index,current_fence_value,replacement_fence_value;
 
