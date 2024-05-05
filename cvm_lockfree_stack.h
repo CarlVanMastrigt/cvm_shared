@@ -36,7 +36,7 @@ typedef struct cvm_lockfree_stack
 cvm_lockfree_stack;
 
 void cvm_lockfree_stack_initialise(cvm_lockfree_stack * stack, cvm_lockfree_pool * pool);
-/// terminate needn't actually do anything so doesn't exist
+void cvm_lockfree_stack_terminate(cvm_lockfree_stack * stack);
 
 void cvm_lockfree_stack_add(cvm_lockfree_stack * stack, void * entry);
 void * cvm_lockfree_stack_get(cvm_lockfree_stack * stack);

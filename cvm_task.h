@@ -36,7 +36,7 @@ typedef void(cvm_task_function)(void*);
 
 typedef struct cvm_task
 {
-    cvm_synchronization_primitive_signal_function * signal_function;
+    cvm_synchronization_primitive_signal_function * signal_function;/// polymorphic base
 
     cvm_task_system * task_system;
 
@@ -46,7 +46,7 @@ typedef struct cvm_task
     /// need to only init atomics once: "If obj was not default-constructed, or this function is called twice on the same obj, the behavior is undefined."
 
     atomic_uint_fast16_t dependency_count;
-    atomic_uint_fast16_t retain_count;
+    atomic_uint_fast16_t reference_count;
 
     atomic_flag sucessor_lock;
 
@@ -89,7 +89,7 @@ cvm_task * cvm_create_task(cvm_task_system * task_system, cvm_task_function func
 
 /// allows a task to be executed (is basically just another signal task call lol)
 /// must either add all associated dependencies before calling this or add dependencies and retain the task as necessary to set up the dependencies later
-void cvm_enqueue_task(cvm_task * task);
+void cvm_task_enqueue(cvm_task * task);
 
 
 
@@ -109,11 +109,11 @@ void cvm_task_signal_dependency(cvm_task * task);
 
 /// corresponds to the number of times a matching `cvm_task_release_retainer` must be called for the task before it can be destroyed/released
 /// at least one retainer must be held in order to set up a successor to that task if it has already been enqueued
-void cvm_task_add_retainers(cvm_task * task, uint16_t count);
+void cvm_task_retain_reference(cvm_task * task, uint16_t count);
 
 /// signal that we are done setting up things that must happen before cleanup (e.g. setting up sucessors tasks/gates)
-void cvm_task_release_retainers(cvm_task * task, uint16_t count);
-void cvm_task_release_retainer(cvm_task * task);
+void cvm_task_release_references(cvm_task * task, uint16_t count);
+void cvm_task_release_reference(cvm_task * task);
 
 
 /// the dependency on the sucessor must have been set up before calling this function

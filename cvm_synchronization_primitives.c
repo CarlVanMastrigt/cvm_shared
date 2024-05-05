@@ -22,8 +22,6 @@ along with cvm_shared.  If not, see <https://www.gnu.org/licenses/>.
 #warning do we want a syetem to spin up new workers if/when a gate is stalled? (trylock or atomic checking only?)
 
 
-
-
 void cvm_add_task_task_dependency(cvm_task * a, cvm_task * b)
 {
     cvm_task_add_dependencies(b, 1);

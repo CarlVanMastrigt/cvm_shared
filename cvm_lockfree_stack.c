@@ -29,6 +29,11 @@ void cvm_lockfree_stack_initialise(cvm_lockfree_stack * stack, cvm_lockfree_pool
     stack->capacity_exponent=pool->available_entries.capacity_exponent;
 }
 
+void cvm_lockfree_stack_terminate(cvm_lockfree_stack * stack)
+{
+    assert((uint16_t)(atomic_load_explicit(&stack->head, memory_order_relaxed) & CVM_U16_U64_LOWER_MASK) == CVM_INVALID_U16_INDEX);/// stack should be empty upon termination
+}
+
 void cvm_lockfree_stack_add(cvm_lockfree_stack * stack, void * entry)
 {
     uint_fast64_t entry_index,current_head,replacement_head;

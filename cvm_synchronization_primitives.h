@@ -34,12 +34,10 @@ typedef union cvm_synchronization_primitive cvm_synchronization_primitive;
 
 union cvm_synchronization_primitive
 {
-    cvm_synchronization_primitive_signal_function * signal_function;
+    cvm_synchronization_primitive_signal_function * signal_function;// base of all elements in union
     cvm_task task;
     cvm_gate gate;
 };
-
-
 
 /// adds a successor/dependency relationship to the 2 tasks
 void cvm_add_task_task_dependency(cvm_task * a, cvm_task * b);/// names? a before b is actually kind of understandable, before and after was somewhat confusing

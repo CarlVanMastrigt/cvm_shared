@@ -32,8 +32,7 @@ cvm_gate_pool;
 
 typedef struct cvm_gate
 {
-    cvm_synchronization_primitive_signal_function * signal_function;
-    ///add gate signal func so that it can be called polymorphically
+    cvm_synchronization_primitive_signal_function * signal_function;/// polymorphic base
 
     cvm_gate_pool * pool;
 

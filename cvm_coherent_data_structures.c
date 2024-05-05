@@ -44,6 +44,7 @@ void cvm_lockfree_pool_terminate(cvm_lockfree_pool * pool)
 {
     free(pool->available_entries.next_buffer);
     free(pool->available_entries.entry_data);
+    /// do NOT terminate the backing entries
 }
 
 
