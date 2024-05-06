@@ -184,7 +184,7 @@ bool cvm_coherent_queue_fail_tracking_add_and_decrement_fails(cvm_coherent_queue
         /// expected_fence_value has current fence value here
         failure_counter = (expected_fence_value & CVM_COHERENT_QUEUE_FAILURE_MASK);
         expected_fence_value = (queue_index & CVM_COHERENT_QUEUE_FENCE_MASK) | failure_counter;
-        nonzero_fail_count = failure_counter > 0;
+        nonzero_fail_count = failure_counter != 0;
         assert(failure_counter>=CVM_COHERENT_QUEUE_FAILURE_UNIT || failure_counter==0);
 
         replacement_fence_value = ((queue_index+1) & CVM_COHERENT_QUEUE_FENCE_MASK) | (failure_counter - (nonzero_fail_count ? CVM_COHERENT_QUEUE_FAILURE_UNIT : 0));
@@ -203,6 +203,7 @@ void * cvm_coherent_queue_fail_tracking_get_or_increment_fails(cvm_coherent_queu
     {
         current_fence_value = atomic_load_explicit(&queue->add_fence,memory_order_acquire);
 
+        #warning CHECK; fence value could thoretically be so out of date that  this passes because fence is SMALLER than get index, release-acquire on get index writes/reads should correct this by ordering get relative to fence (also analyse/fix in non failing variant)  (also why did this work on ARM?)
         while((queue_index&CVM_COHERENT_QUEUE_FENCE_MASK) == (current_fence_value&CVM_COHERENT_QUEUE_FENCE_MASK))
         {
             /// despite being in a loop i'm unsure this should be weak instead of strong

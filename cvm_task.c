@@ -46,11 +46,8 @@ void cvm_task_signal_dependencies(cvm_task * task, uint16_t count)
             mtx_lock(&task_system->worker_thread_mutex);
 
             assert(task_system->debug_stalled_count > 0);/// weren't actually any stalled workers
+            assert(task_system->signalled_unstalls <= task_system->worker_thread_count);/// somehow exceeded maximum worker threads
 
-            #warning remove
-            if(task_system->signalled_unstalls >= task_system->worker_thread_count) printf("debug stall count: %u\n",task_system->debug_stalled_count);
-
-            assert(task_system->signalled_unstalls < task_system->worker_thread_count);/// somehow exceeded maximum worker threads
             task_system->signalled_unstalls++;/// required for preventing spurrious wakeup
 
             cnd_signal(&task_system->worker_thread_condition);
@@ -135,6 +132,8 @@ static int cvm_task_worker_thread_function(void * in)
 
     while(running)
     {
+        /// difficult to solve cleanly situation: we need to perform one last ditch get attempt upon failure, so we NEED to support the task being non-null here
+
         if(task==NULL)/// task could be null b/c we're initialising or b/c this worker has just woken up from stalling on not being able to acquire a task
         {
             task=cvm_coherent_queue_fail_tracking_get(&task_system->pending_tasks);
@@ -181,9 +180,14 @@ static int cvm_task_worker_thread_function(void * in)
                 }
                 while(task_system->signalled_unstalls==0 && task_system->running);
 
-                task_system->signalled_unstalls--;/// we have unstalled successfully
-
-                task_system->debug_stalled_count--;
+                /// only counts as a wakeup if one was requested, if we're no longer running could have been woken up to exit the thread, in which case don't incorrectly alter the spurrious wakeup tracking
+                /// ^ (but note legitimate wakeups are indistinguishable from broadcast exit wakeups)
+                if(task_system->running || task_system->signalled_unstalls)
+                {
+                    assert(task_system->signalled_unstalls > 0);
+                    task_system->signalled_unstalls--;/// we have unstalled successfully
+                    task_system->debug_stalled_count--;
+                }
             }
         }
         else
