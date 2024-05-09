@@ -65,7 +65,9 @@ void * cvm_coherent_queue_get(cvm_coherent_queue * queue)
 {
     uint_fast64_t queue_index,entry_index,current_fence_value;
 
-    queue_index = atomic_load_explicit(&queue->get_index, memory_order_relaxed);
+    queue_index = atomic_load_explicit(&queue->get_index, memory_order_acquire);
+
+    /// by releasing the prior get index upon success we also release (and carry) the fence being greater than (or equal to the new) get index and all the changes that occurr with it to the next get index acquire
 
     do
     {
@@ -75,7 +77,7 @@ void * cvm_coherent_queue_get(cvm_coherent_queue * queue)
             return NULL;
         }
     }
-    while(!atomic_compare_exchange_weak_explicit(&queue->get_index,&queue_index,queue_index+1,memory_order_release,memory_order_relaxed));
+    while(!atomic_compare_exchange_weak_explicit(&queue->get_index,&queue_index,queue_index+1,memory_order_release,memory_order_acquire));
 
     entry_index=queue->entry_indices[queue_index&queue->entry_mask];
     return queue->entry_data + entry_index*queue->entry_size;
@@ -141,7 +143,7 @@ void * cvm_coherent_queue_fail_tracking_get(cvm_coherent_queue_fail_tracking * q
 {
     uint_fast64_t queue_index,entry_index,current_fence_value;
 
-    queue_index = atomic_load_explicit(&queue->get_index, memory_order_relaxed);
+    queue_index = atomic_load_explicit(&queue->get_index, memory_order_acquire);
 
     do
     {
@@ -151,7 +153,7 @@ void * cvm_coherent_queue_fail_tracking_get(cvm_coherent_queue_fail_tracking * q
             return NULL;
         }
     }
-    while(!atomic_compare_exchange_weak_explicit(&queue->get_index,&queue_index,queue_index+1,memory_order_release,memory_order_relaxed));
+    while(!atomic_compare_exchange_weak_explicit(&queue->get_index,&queue_index,queue_index+1,memory_order_release,memory_order_acquire));
 
     entry_index=queue->entry_indices[queue_index&queue->entry_mask];
     return queue->entry_data + entry_index*queue->entry_size;
@@ -197,13 +199,12 @@ void * cvm_coherent_queue_fail_tracking_get_or_increment_fails(cvm_coherent_queu
 {
     uint_fast64_t queue_index,entry_index,current_fence_value,replacement_fence_value;
 
-    queue_index = atomic_load_explicit(&queue->get_index, memory_order_relaxed);
+    queue_index = atomic_load_explicit(&queue->get_index, memory_order_acquire);
 
     do
     {
         current_fence_value = atomic_load_explicit(&queue->add_fence,memory_order_acquire);
 
-        #warning CHECK; fence value could thoretically be so out of date that  this passes because fence is SMALLER than get index, release-acquire on get index writes/reads should correct this by ordering get relative to fence (also analyse/fix in non failing variant)  (also why did this work on ARM?)
         while((queue_index&CVM_COHERENT_QUEUE_FENCE_MASK) == (current_fence_value&CVM_COHERENT_QUEUE_FENCE_MASK))
         {
             /// despite being in a loop i'm unsure this should be weak instead of strong
@@ -216,7 +217,7 @@ void * cvm_coherent_queue_fail_tracking_get_or_increment_fails(cvm_coherent_queu
             }
         }
     }
-    while(!atomic_compare_exchange_weak_explicit(&queue->get_index,&queue_index,queue_index+1,memory_order_release,memory_order_relaxed));
+    while(!atomic_compare_exchange_weak_explicit(&queue->get_index,&queue_index,queue_index+1,memory_order_release,memory_order_acquire));
 
     entry_index=queue->entry_indices[queue_index&queue->entry_mask];
     return queue->entry_data + entry_index*queue->entry_size;
