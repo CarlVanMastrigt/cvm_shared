@@ -73,7 +73,7 @@ struct cvm_task_system
     uint32_t signalled_unstalls;
     uint32_t stalled_thread_count;
 
-    bool running;
+    bool shutdown_completed;
     bool shutdown_initiated;
 
     /// pool size for types and expected pool count (to allow over use without pointer change in cases where a second pool would overrun memory capabilities and crash)

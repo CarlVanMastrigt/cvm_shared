@@ -45,7 +45,7 @@ void cvm_task_signal_dependencies(cvm_task * task, uint16_t count)
         {
             mtx_lock(&task_system->worker_thread_mutex);
 
-            assert(task_system->running);/// shouldnt have stopped running if tasks have yet to complete
+            assert(!task_system->shutdown_completed);/// shouldnt have stopped running if tasks have yet to complete
             assert(task_system->stalled_thread_count > 0);/// weren't actually any stalled workers!
             assert(task_system->signalled_unstalls < task_system->stalled_thread_count);///invalid unstall request
 
@@ -137,8 +137,8 @@ static inline cvm_task * cvm_task_worker_thread_get_task(cvm_task_system * task_
         mtx_lock(&task_system->worker_thread_mutex);
 
         /// this will increment local stall counter if it fails (which note: is inside the mutex lock)
-        /// needs to be inside mutex lock such that when we add a task we KNOW there is a worker thread (at least this one) that has already stalled by the time that addition tries to wake a worker
-        ///     ^ (add wakes workers inside this mutex)
+        /// needs to be inside mutex lock such that when we add a task we KNOW there is a worker thread (at least this one) that has already stalled by the time that queue addition tries to wake a worker
+        ///     ^ (queue addition wakes workers inside this mutex)
         task=cvm_coherent_queue_fail_tracking_get_or_increment_fails(&task_system->pending_tasks);
         if(task)
         {
@@ -153,10 +153,10 @@ static inline cvm_task * cvm_task_worker_thread_get_task(cvm_task_system * task_
             task_system->stalled_thread_count++;
 
             /// if all threads are stalled (there is no work left to do) and we've asked the system to shut down (this requires there are no more tasks being created) then we can finalise shutdown
-            if(task_system->shutdown_initiated && task_system->stalled_thread_count == task_system->worker_thread_count)
+            if(task_system->shutdown_initiated && (task_system->stalled_thread_count == task_system->worker_thread_count))
             {
                 task_system->stalled_thread_count--;
-                task_system->running=false;
+                task_system->shutdown_completed=true;
                 cnd_broadcast(&task_system->worker_thread_condition);/// wake up all stalled threads so that they can exit
                 mtx_unlock(&task_system->worker_thread_mutex);
                 return NULL;
@@ -167,15 +167,13 @@ static inline cvm_task * cvm_task_worker_thread_get_task(cvm_task_system * task_
 
             task_system->stalled_thread_count--;
 
-            if(!task_system->running)
+            if(task_system->shutdown_completed)
             {
                 mtx_unlock(&task_system->worker_thread_mutex);
                 return NULL;
             }
         }
 
-
-        assert(task_system->signalled_unstalls > 0);///if the task system is running we should only have been woken up by a legitimate unstall request
         task_system->signalled_unstalls--;/// we have unstalled successfully
 
         mtx_unlock(&task_system->worker_thread_mutex);
@@ -244,7 +242,7 @@ void cvm_task_system_initialise(cvm_task_system * task_system, uint32_t worker_t
     cnd_init(&task_system->worker_thread_condition);
     mtx_init(&task_system->worker_thread_mutex, mtx_plain);
 
-    task_system->running=true;
+    task_system->shutdown_completed=false;
     task_system->shutdown_initiated=false;
 
     task_system->stalled_thread_count=0;
@@ -268,7 +266,7 @@ void cvm_task_system_terminate(cvm_task_system * task_system)
     {
         cnd_wait(&task_system->worker_thread_condition, &task_system->worker_thread_mutex);
     }
-    while(task_system->running);
+    while(!task_system->shutdown_completed);
     mtx_unlock(&task_system->worker_thread_mutex);
 
     for(i=0;i<task_system->worker_thread_count;i++)
