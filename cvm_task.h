@@ -1,5 +1,5 @@
 /**
-Copyright 2023,2024 Carl van Mastrigt
+Copyright 2024 Carl van Mastrigt
 
 This file is part of cvm_shared.
 
@@ -71,9 +71,10 @@ struct cvm_task_system
     mtx_t worker_thread_mutex;
 
     uint32_t signalled_unstalls;
-    uint32_t debug_stalled_count;/// not necessary but good for debugging
+    uint32_t stalled_thread_count;
 
     bool running;
+    bool shutdown_initiated;
 
     /// pool size for types and expected pool count (to allow over use without pointer change in cases where a second pool would overrun memory capabilities and crash)
     /// is above too much to expose to user? maybe take expected pool size and quarter it?

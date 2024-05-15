@@ -1,5 +1,5 @@
 /**
-Copyright 2023,2024 Carl van Mastrigt
+Copyright 2024 Carl van Mastrigt
 
 This file is part of cvm_shared.
 
@@ -45,12 +45,14 @@ void cvm_task_signal_dependencies(cvm_task * task, uint16_t count)
         {
             mtx_lock(&task_system->worker_thread_mutex);
 
-            assert(task_system->debug_stalled_count > 0);/// weren't actually any stalled workers
-            assert(task_system->signalled_unstalls <= task_system->worker_thread_count);/// somehow exceeded maximum worker threads
+            assert(task_system->running);/// shouldnt have stopped running if tasks have yet to complete
+            assert(task_system->stalled_thread_count > 0);/// weren't actually any stalled workers!
+            assert(task_system->signalled_unstalls < task_system->stalled_thread_count);///invalid unstall request
 
             task_system->signalled_unstalls++;/// required for preventing spurrious wakeup
 
             cnd_signal(&task_system->worker_thread_condition);
+
             mtx_unlock(&task_system->worker_thread_mutex);
         }
     }
@@ -119,90 +121,94 @@ void cvm_task_enqueue(cvm_task * task)
 }
 
 
+static inline cvm_task * cvm_task_worker_thread_get_task(cvm_task_system * task_system)
+{
+    cvm_task * task;
+
+    while(true)
+    {
+        task=cvm_coherent_queue_fail_tracking_get(&task_system->pending_tasks);
+        if(task)
+        {
+            return task;
+        }
+
+        /// there were no more tasks to perform
+        mtx_lock(&task_system->worker_thread_mutex);
+
+        /// this will increment local stall counter if it fails (which note: is inside the mutex lock)
+        /// needs to be inside mutex lock such that when we add a task we KNOW there is a worker thread (at least this one) that has already stalled by the time that addition tries to wake a worker
+        ///     ^ (add wakes workers inside this mutex)
+        task=cvm_coherent_queue_fail_tracking_get_or_increment_fails(&task_system->pending_tasks);
+        if(task)
+        {
+            mtx_unlock(&task_system->worker_thread_mutex);
+            return task;
+        }
+
+        /// if this thread was going to sleep but something else grabbed the mutex first and requested a wakeup it makes sense to snatch that first and never actually wait
+        ///     ^ and let a later wakeup be treated as spurrious
+        while(task_system->signalled_unstalls==0)
+        {
+            task_system->stalled_thread_count++;
+
+            /// if all threads are stalled (there is no work left to do) and we've asked the system to shut down (this requires there are no more tasks being created) then we can finalise shutdown
+            if(task_system->shutdown_initiated && task_system->stalled_thread_count == task_system->worker_thread_count)
+            {
+                task_system->stalled_thread_count--;
+                task_system->running=false;
+                cnd_broadcast(&task_system->worker_thread_condition);/// wake up all stalled threads so that they can exit
+                mtx_unlock(&task_system->worker_thread_mutex);
+                return NULL;
+            }
+
+            /// wait untill more workers are needed or we're shutting down (with appropriate checks in case of spurrious wakeup)
+            cnd_wait(&task_system->worker_thread_condition, &task_system->worker_thread_mutex);
+
+            task_system->stalled_thread_count--;
+
+            if(!task_system->running)
+            {
+                mtx_unlock(&task_system->worker_thread_mutex);
+                return NULL;
+            }
+        }
+
+
+        assert(task_system->signalled_unstalls > 0);///if the task system is running we should only have been woken up by a legitimate unstall request
+        task_system->signalled_unstalls--;/// we have unstalled successfully
+
+        mtx_unlock(&task_system->worker_thread_mutex);
+    }
+}
+
 
 static int cvm_task_worker_thread_function(void * in)
 {
     cvm_task_system * task_system=in;
     cvm_task * task;
     uint_fast16_t i,sucessor_count;
-    bool running;
 
-    running=true;
-    task=NULL;
-
-    while(running)
+    while((task=cvm_task_worker_thread_get_task(task_system)))
     {
-        /// difficult to solve cleanly situation: we need to perform one last ditch get attempt upon failure, so we NEED to support the task being non-null here
+        task->task_func(task->task_func_input);
 
-        if(task==NULL)/// task could be null b/c we're initialising or b/c this worker has just woken up from stalling on not being able to acquire a task
+        while(atomic_flag_test_and_set_explicit(&task->sucessor_lock, memory_order_acquire));
+        assert(!task->complete);/// how did a task get completed twice!? was it re-used without being reset?
+        task->complete=true;
+        sucessor_count=task->successor_count;
+        atomic_flag_clear_explicit(&task->sucessor_lock, memory_order_release);/// once completed is set to true no more sucessors will be added, so is safe to use these counts here
+
+        for(i=0;i<sucessor_count;i++)
         {
-            task=cvm_coherent_queue_fail_tracking_get(&task_system->pending_tasks);
+            task->successors[i]->signal_function(task->successors[i]);/// this op should release changes
         }
 
-        /// if there are no more pending tasks
-        while(task)
-        {
-            ///perform the task
-            task->task_func(task->task_func_input);
-
-            while(atomic_flag_test_and_set_explicit(&task->sucessor_lock, memory_order_acquire));
-            assert(!task->complete);/// how did a task get completed twice!? was it re-used without being reset?
-            task->complete=true;
-            sucessor_count=task->successor_count;
-            atomic_flag_clear_explicit(&task->sucessor_lock, memory_order_release);/// once completed is set to true no more sucessors will be added, so is safe to use these counts here
-
-            for(i=0;i<sucessor_count;i++)
-            {
-                task->successors[i]->signal_function(task->successors[i]);/// this op should release changes
-            }
-
-            cvm_task_release_reference(task);
-
-            task=cvm_coherent_queue_fail_tracking_get(&task_system->pending_tasks);
-        }
-
-        /// there were no more tasks to perform
-        mtx_lock(&task_system->worker_thread_mutex);
-
-        /// probably reasonable to make shutdown rely on all tasks having been completed in a way managed by user/programmer
-        if(task_system->running)
-        {
-            task=cvm_coherent_queue_fail_tracking_get_or_increment_fails(&task_system->pending_tasks);/// this will increment local stall counter if it fails (which note: is inside the mutex lock)
-
-            if(!task)
-            {
-                task_system->debug_stalled_count++;
-
-                do
-                {
-                    /// wait untill more workers are needed or we're shutting down (with appropriate checks in case of spurrious wakeup)
-                    cnd_wait(&task_system->worker_thread_condition, &task_system->worker_thread_mutex);
-                }
-                while(task_system->signalled_unstalls==0 && task_system->running);
-
-                /// only counts as a wakeup if one was requested, if we're no longer running could have been woken up to exit the thread, in which case don't incorrectly alter the spurrious wakeup tracking
-                /// ^ (but note legitimate wakeups are indistinguishable from broadcast exit wakeups)
-                if(task_system->running || task_system->signalled_unstalls)
-                {
-                    assert(task_system->signalled_unstalls > 0);
-                    task_system->signalled_unstalls--;/// we have unstalled successfully
-                    task_system->debug_stalled_count--;
-                }
-            }
-        }
-        else
-        {
-            /// nothing left to do and task system is being shut down, we can exit
-            running=false;
-        }
-
-        mtx_unlock(&task_system->worker_thread_mutex);
+        cvm_task_release_reference(task);
     }
 
     return 0;
 }
-
-
 
 /// for polymorphism
 static void cvm_task_signal_func(void * primitive)
@@ -239,8 +245,9 @@ void cvm_task_system_initialise(cvm_task_system * task_system, uint32_t worker_t
     mtx_init(&task_system->worker_thread_mutex, mtx_plain);
 
     task_system->running=true;
+    task_system->shutdown_initiated=false;
 
-    task_system->debug_stalled_count=0;
+    task_system->stalled_thread_count=0;
     task_system->signalled_unstalls=0;
 
     /// will need setup mutex locked here if we want to wait on all workers to start before progressing (maybe useful to have, but I can't think of a reason)
@@ -255,8 +262,13 @@ void cvm_task_system_terminate(cvm_task_system * task_system)
     uint32_t i;
 
     mtx_lock(&task_system->worker_thread_mutex);
-    task_system->running=false;
-    cnd_broadcast(&task_system->worker_thread_condition);/// wake up all stalled threads
+    task_system->shutdown_initiated=true;
+    cnd_signal(&task_system->worker_thread_condition);/// ensure at least one worker is awake to finalise shutdown
+    do
+    {
+        cnd_wait(&task_system->worker_thread_condition, &task_system->worker_thread_mutex);
+    }
+    while(task_system->running);
     mtx_unlock(&task_system->worker_thread_mutex);
 
     for(i=0;i<task_system->worker_thread_count;i++)
@@ -264,6 +276,7 @@ void cvm_task_system_terminate(cvm_task_system * task_system)
         /// if thread gets stuck here its possible that not all tasks were able to complete, perhaps because things werent shut down correctly and some tasks have outstanding dependencies
         thrd_join(task_system->worker_threads[i], NULL);
     }
+    assert(task_system->stalled_thread_count==0);/// make sure everyone woke up okay
 
     free(task_system->worker_threads);
 
