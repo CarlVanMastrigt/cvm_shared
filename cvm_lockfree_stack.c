@@ -19,10 +19,9 @@ along with cvm_shared.  If not, see <https://www.gnu.org/licenses/>.
 
 #include "cvm_shared.h"
 
-
 void cvm_lockfree_stack_initialise(cvm_lockfree_stack * stack, cvm_lockfree_pool * pool)
 {
-    atomic_init(&stack->head,((uint_fast64_t)CVM_INVALID_U16_INDEX));
+    atomic_init(&stack->head,CVM_LOCKFREE_STACK_INVALID_ENTRY);
     stack->next_buffer=pool->available_entries.next_buffer;
     stack->entry_data=pool->available_entries.entry_data;
     stack->entry_size=pool->available_entries.entry_size;
@@ -31,7 +30,7 @@ void cvm_lockfree_stack_initialise(cvm_lockfree_stack * stack, cvm_lockfree_pool
 
 void cvm_lockfree_stack_terminate(cvm_lockfree_stack * stack)
 {
-    assert((uint16_t)(atomic_load_explicit(&stack->head, memory_order_relaxed) & CVM_U16_U64_LOWER_MASK) == CVM_INVALID_U16_INDEX);/// stack should be empty upon termination
+    assert((atomic_load_explicit(&stack->head, memory_order_relaxed) & CVM_LOCKFREE_STACK_ENTRY_MASK) == CVM_LOCKFREE_STACK_INVALID_ENTRY);/// stack should be empty upon termination
 }
 
 void cvm_lockfree_stack_add(cvm_lockfree_stack * stack, void * entry)
@@ -49,8 +48,8 @@ void cvm_lockfree_stack_add(cvm_lockfree_stack * stack, void * entry)
     current_head=atomic_load_explicit(&stack->head, memory_order_relaxed);
     do
     {
-        stack->next_buffer[entry_index] = (uint16_t)(current_head & CVM_U16_U64_LOWER_MASK);
-        replacement_head=((current_head & CVM_U16_U64_UPPER_MASK) + CVM_U16_U64_UPPER_UNIT) | entry_index;
+        stack->next_buffer[entry_index] = (uint16_t)(current_head & CVM_LOCKFREE_STACK_ENTRY_MASK);
+        replacement_head=((current_head & CVM_LOCKFREE_STACK_CHECK_MASK) + CVM_LOCKFREE_STACK_CHECK_UNIT) | entry_index;
     }
     while(!atomic_compare_exchange_weak_explicit(&stack->head, &current_head, replacement_head, memory_order_release, memory_order_relaxed));
 }
@@ -62,14 +61,14 @@ void * cvm_lockfree_stack_get(cvm_lockfree_stack * stack)
     current_head=atomic_load_explicit(&stack->head, memory_order_acquire);
     do
     {
-        entry_index = current_head & CVM_U16_U64_LOWER_MASK;
+        entry_index = current_head & CVM_LOCKFREE_STACK_ENTRY_MASK;
         /// if there are no more entries in this list then return NULL
-        if(entry_index == CVM_INVALID_U16_INDEX)
+        if(entry_index == CVM_LOCKFREE_STACK_INVALID_ENTRY)
         {
             return NULL;
         }
 
-        replacement_head = ((current_head & CVM_U16_U64_UPPER_MASK) + CVM_U16_U64_UPPER_UNIT) | (uint_fast64_t)(stack->next_buffer[entry_index]);
+        replacement_head = ((current_head & CVM_LOCKFREE_STACK_CHECK_MASK) + CVM_LOCKFREE_STACK_CHECK_UNIT) | (uint_fast64_t)(stack->next_buffer[entry_index]);
     }
     while(!atomic_compare_exchange_weak_explicit(&stack->head, &current_head, replacement_head, memory_order_acquire, memory_order_acquire));
     /// success memory order could (conceptually) be relaxed here as we don't need to release/acquire any changes when that happens as nothing outside the atomic has changed

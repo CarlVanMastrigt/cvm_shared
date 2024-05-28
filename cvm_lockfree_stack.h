@@ -24,6 +24,13 @@ along with cvm_shared.  If not, see <https://www.gnu.org/licenses/>.
 #ifndef CVM_LOCKFREE_STACK_H
 #define CVM_LOCKFREE_STACK_H
 
+#define CVM_LOCKFREE_STACK_CHECK_MASK ((uint_fast64_t)0xFFFFFFFFFFFF0000llu)
+#define CVM_LOCKFREE_STACK_ENTRY_MASK ((uint_fast64_t)0x000000000000FFFFllu)
+
+#define CVM_LOCKFREE_STACK_INVALID_ENTRY ((uint_fast64_t)0x000000000000FFFFllu)
+
+#define CVM_LOCKFREE_STACK_CHECK_UNIT ((uint_fast64_t)0x0000000000010000llu)
+
 typedef struct cvm_lockfree_stack
 {
     _Alignas(128) atomic_uint_fast64_t head;
@@ -35,6 +42,7 @@ typedef struct cvm_lockfree_stack
 }
 cvm_lockfree_stack;
 
+/// a stack uses a pool for backing
 void cvm_lockfree_stack_initialise(cvm_lockfree_stack * stack, cvm_lockfree_pool * pool);
 void cvm_lockfree_stack_terminate(cvm_lockfree_stack * stack);
 

@@ -37,7 +37,7 @@ void cvm_lockfree_pool_initialise(cvm_lockfree_pool * pool, size_t capacity_expo
     {
         pool->available_entries.next_buffer[i]=i+1;
     }
-    pool->available_entries.next_buffer[count-1]=CVM_INVALID_U16_INDEX;
+    pool->available_entries.next_buffer[count-1]=CVM_LOCKFREE_STACK_INVALID_ENTRY;
 }
 
 void cvm_lockfree_pool_terminate(cvm_lockfree_pool * pool)

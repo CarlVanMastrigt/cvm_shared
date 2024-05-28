@@ -52,32 +52,10 @@ along with cvm_shared.  If not, see <https://www.gnu.org/licenses/>.
 #define CVM_INVALID_U32_INDEX 0xFFFFFFFF
 #define CVM_INVALID_U16_INDEX 0xFFFF
 
-#define CVM_U16_U64_UPPER_MASK ((uint_fast64_t)0xFFFFFFFFFFFF0000)
-#define CVM_U16_U64_LOWER_MASK ((uint_fast64_t)0x000000000000FFFF)
-
-#define CVM_U16_U64_UPPER_UNIT ((uint_fast64_t)0x0000000000010000)
-#define CVM_U16_U64_LOWER_UNIT ((uint_fast64_t)0x0000000000000001)
-
-typedef union widget widget;
-
 #define CVM_CONCAT2_MACRO(A,B) A ## B
 #define CVM_CONCAT2(A, B) CVM_CONCAT2_MACRO(A, B)
 
-
-///make a file "cvm_intrinsics/builtins for these?
-//static inline uint64_t cvm_po2_64_gte(uint64_t v){ return __bsrq(v-1)+1; }
-//static inline uint64_t cvm_po2_64_lt(uint64_t v){ return __bsrq(v-1); }
-//
-//static inline uint32_t cvm_po2_32_gte(uint32_t v){ return __bsrd(v-1)+1; }
-//static inline uint32_t cvm_po2_32_lt(uint32_t v){ return __bsrd(v-1); }
-//
-//static inline uint32_t cvm_allocation_increase_step(uint32_t current_size)
-//{
-//    assert(__bsrd(current_size)>=2);
-//    return 1u<<((__bsrd(current_size)-2u));
-//}
-//
-//static inline uint32_t cvm_lbs_32(uint32_t v){ return __bsfd(v); }
+typedef union widget widget;
 
 static inline uint64_t cvm_po2_64_gte(uint64_t v){ return 64-__builtin_clzl(v-1); }
 static inline uint64_t cvm_po2_64_gt(uint64_t v){ return 64-__builtin_clzl(v); }
@@ -110,7 +88,7 @@ static inline uint32_t cvm_lbs_32(uint32_t v){ return __builtin_ctz(v); }
 #include "cvm_mesh.h"
 #include "cvm_coherent_data_structures.h"
 #include "cvm_thread.h"
-#include "cvm_synchronization_primitives.h"
+#include "cvm_sync_primitives.h"
 
 
 #include "cvm_debug_render.h"

@@ -76,7 +76,7 @@ void cvm_task_release_references(cvm_task * task, uint16_t count)
     /// need to release to prevent reads/writes of successor/completion data being moved after this operation
     uint_fast16_t old_count=atomic_fetch_sub_explicit(&task->reference_count, count, memory_order_release);
 
-    assert(old_count >= count);/// have completed more sucessor reservations than were made
+    assert(old_count >= count);/// have completed more successor reservations than were made
 
     if(old_count==count)
     {
@@ -103,12 +103,11 @@ cvm_task * cvm_create_task(cvm_task_system * task_system, cvm_task_function func
     task->task_func=function;
     task->task_func_input=data;
 
-    task->complete=false;
-    task->successor_count = 0;
+    cvm_lockfree_hopper_reset(&task->successor_hopper);
 
     /// need to wait on "enqueue" op before beginning, ergo need one extra dependency for that (enqueue is really just a signal)
     atomic_store_explicit(&task->dependency_count, 1, memory_order_relaxed);
-    /// need to retain a reference until the sucessors are actually signalled, ergo one extra reference that will be released after completing the task
+    /// need to retain a reference until the successors are actually signalled, ergo one extra reference that will be released after completing the task
     atomic_store_explicit(&task->reference_count, 1, memory_order_relaxed);
 
     return task;
@@ -185,21 +184,19 @@ static int cvm_task_worker_thread_function(void * in)
 {
     cvm_task_system * task_system=in;
     cvm_task * task;
-    uint_fast16_t i,sucessor_count;
+    cvm_sync_primitive ** successor_ptr;
 
     while((task=cvm_task_worker_thread_get_task(task_system)))
     {
         task->task_func(task->task_func_input);
 
-        while(atomic_flag_test_and_set_explicit(&task->sucessor_lock, memory_order_acquire));
-        assert(!task->complete);/// how did a task get completed twice!? was it re-used without being reset?
-        task->complete=true;
-        sucessor_count=task->successor_count;
-        atomic_flag_clear_explicit(&task->sucessor_lock, memory_order_release);/// once completed is set to true no more sucessors will be added, so is safe to use these counts here
+        ///could be for loop but w/e
+        successor_ptr = cvm_lockfree_hopper_lock_and_get_first(&task->successor_hopper, &task_system->successor_pool);
 
-        for(i=0;i<sucessor_count;i++)
+        while(successor_ptr)
         {
-            task->successors[i]->signal_function(task->successors[i]);/// this op should release changes
+            (*successor_ptr)->signal_function(*successor_ptr);
+            successor_ptr = cvm_lockfree_hopper_relinquish_and_get_next(&task_system->successor_pool, successor_ptr);
         }
 
         cvm_task_release_reference(task);
@@ -222,17 +219,20 @@ static void cvm_task_initialise(void * elem, void * data)
     task->signal_function = cvm_task_signal_func;
     task->task_system = task_system;
 
+    cvm_lockfree_hopper_initialise(&task->successor_hopper,&task_system->successor_pool);
+
     atomic_init(&task->dependency_count, 0);
     atomic_init(&task->reference_count, 0);
-    task->sucessor_lock = (atomic_flag)ATOMIC_FLAG_INIT;
 }
 
-void cvm_task_system_initialise(cvm_task_system * task_system, uint32_t worker_thread_count, size_t total_task_exponent)
+void cvm_task_system_initialise(cvm_task_system * task_system, uint32_t worker_thread_count, size_t total_task_exponent, size_t total_successor_exponent)
 {
     uint32_t i;
 
     cvm_lockfree_pool_initialise(&task_system->task_pool, total_task_exponent, sizeof(cvm_task));
-    cvm_lockfree_pool_call_for_every_entry(&task_system->task_pool, &cvm_task_initialise, &task_system);
+    cvm_lockfree_pool_initialise(&task_system->successor_pool, total_successor_exponent, sizeof(cvm_sync_primitive**));
+
+    cvm_lockfree_pool_call_for_every_entry(&task_system->task_pool, &cvm_task_initialise, task_system);
 
     cvm_coherent_queue_fail_tracking_initialise(&task_system->pending_tasks, &task_system->task_pool);
 
@@ -281,33 +281,41 @@ void cvm_task_system_terminate(cvm_task_system * task_system)
     cnd_destroy(&task_system->worker_thread_condition);
     mtx_destroy(&task_system->worker_thread_mutex);
 
+    cvm_lockfree_pool_terminate(&task_system->successor_pool);
+
     cvm_coherent_queue_fail_tracking_terminate(&task_system->pending_tasks);
     cvm_lockfree_pool_terminate(&task_system->task_pool);
 }
 
 
-void cvm_task_add_sucessor(cvm_task * task, cvm_synchronization_primitive * sucessor)
+void cvm_task_add_successor(cvm_task * task, cvm_sync_primitive * successor)
 {
-    bool already_completed;
+    cvm_lockfree_pool * successor_pool;
+    cvm_sync_primitive ** successor_ptr;
 
-    assert(atomic_load_explicit(&task->reference_count, memory_order_relaxed));/// task must be retained to set up sucessors (can technically be satisfied illegally, using queue for re-use will make detection better but not infallible)
+    assert(atomic_load_explicit(&task->reference_count, memory_order_relaxed));
+    /// task must be retained to set up successors (can technically be satisfied illegally, using queue for re-use will make detection better but not infallible)
 
-    while(atomic_flag_test_and_set_explicit(&task->sucessor_lock, memory_order_acquire));
-
-    assert(task->successor_count < CVM_TASK_MAX_SUCESSORS);/// trying to set up too many sucessors (in debug could track this total separely to ones added prior to execution)
-
-    already_completed = task->complete;
-
-    if(!already_completed)
+    if(cvm_lockfree_hopper_check_if_locked(&task->successor_hopper))
     {
-        task->successors[task->successor_count++] = sucessor;
+        /// if hopper already locked then task has been completed, can signal
+        successor->signal_function(successor);
     }
-
-    atomic_flag_clear_explicit(&task->sucessor_lock, memory_order_release);
-
-    if(already_completed)
+    else
     {
-        sucessor->signal_function(sucessor);
+        successor_pool = &task->task_system->successor_pool;
+
+        successor_ptr = cvm_lockfree_pool_acquire_entry(successor_pool);
+        assert(successor_ptr);///ran out of successors
+
+        *successor_ptr = successor;
+
+        if(!cvm_lockfree_hopper_add(&task->successor_hopper, successor_pool, successor_ptr))
+        {
+            /// if we failed to add the successor then the task has already been completed, relinquish the storage and signal the successor
+            cvm_lockfree_pool_relinquish_entry(successor_pool, successor_ptr);
+            successor->signal_function(successor);
+        }
     }
 }
 

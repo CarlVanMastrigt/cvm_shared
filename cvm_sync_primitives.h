@@ -21,29 +21,29 @@ along with cvm_shared.  If not, see <https://www.gnu.org/licenses/>.
 #include "cvm_shared.h"
 #endif
 
-#ifndef CVM_SYNCHRONIZATION_PRIMITIVES_H
-#define CVM_SYNCHRONIZATION_PRIMITIVES_H
+#ifndef CVM_SYNC_PRIMITIVES_H
+#define CVM_SYNC_PRIMITIVES_H
 
 ///polymorphic base for primitives (gate, task &c.)
-typedef void (cvm_synchronization_primitive_signal_function)(void * primitive);
+typedef void (cvm_sync_primitive_signal_function)(void * primitive);
 
-typedef union cvm_synchronization_primitive cvm_synchronization_primitive;
+typedef union cvm_sync_primitive cvm_sync_primitive;
 
 #include "cvm_task.h"
 #include "cvm_gate.h"
 
-union cvm_synchronization_primitive
+union cvm_sync_primitive
 {
-    cvm_synchronization_primitive_signal_function * signal_function;// base of all elements in union
+    cvm_sync_primitive_signal_function * signal_function;// base of all elements in union
     cvm_task task;
     cvm_gate gate;
 };
 
 /// adds a successor/dependency relationship to the 2 tasks
-void cvm_add_task_task_dependency(cvm_task * a, cvm_task * b);/// names? a before b is actually kind of understandable, before and after was somewhat confusing
+void cvm_sync_task_happens_before_task(cvm_task * a, cvm_task * b);
 /// are aliases of above more confusing/undesirable? otherwise could alias as add_dependency and add_dependent
 
 /// use to ensure a task runs before the gate is signalled
-void cvm_add_task_gate_dependency(cvm_task * a, cvm_gate * b);
+void cvm_sync_task_happens_before_gate(cvm_task * a, cvm_gate * b);
 
 #endif

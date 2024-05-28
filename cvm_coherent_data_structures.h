@@ -28,6 +28,7 @@ along with cvm_shared.  If not, see <https://www.gnu.org/licenses/>.
 typedef struct cvm_lockfree_pool cvm_lockfree_pool;
 
 #include "cvm_lockfree_stack.h"
+#include "cvm_lockfree_hopper.h"
 #include "cvm_coherent_queue.h"
 
 /// declared in another struct for type protection

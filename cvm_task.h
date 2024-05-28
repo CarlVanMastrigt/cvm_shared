@@ -31,12 +31,9 @@ typedef void(cvm_task_function)(void*);
 // probably want tie in to an "actor" subsystem (single threaded process) should that actually be determined to be a desirable thing to have
 //      ^ could just have series of tasks that trigger each other and/or mailbox that ensures it either has a task executing or enqueues execution of a task to handle the work (unified work system)
 
-
-#define CVM_TASK_MAX_SUCESSORS 8
-
 typedef struct cvm_task
 {
-    cvm_synchronization_primitive_signal_function * signal_function;/// polymorphic base
+    cvm_sync_primitive_signal_function * signal_function;/// polymorphic base
 
     cvm_task_system * task_system;
 
@@ -48,12 +45,7 @@ typedef struct cvm_task
     atomic_uint_fast16_t dependency_count;
     atomic_uint_fast16_t reference_count;
 
-    atomic_flag sucessor_lock;
-
-    bool complete;/// has the task completed
-    uint32_t successor_count;
-
-    cvm_synchronization_primitive * successors[CVM_TASK_MAX_SUCESSORS];
+    cvm_lockfree_hopper successor_hopper;
 }
 cvm_task;
 
@@ -63,6 +55,8 @@ struct cvm_task_system
 {
     cvm_lockfree_pool task_pool;
     cvm_coherent_queue_fail_tracking pending_tasks;
+
+    cvm_lockfree_pool successor_pool;///pool for storing successors (linked list/hopper per task)
 
     thrd_t * worker_threads;/// make this system extensible (to a degree) should stalled threads want to be switched to a worker thread (can perhaps do this without relying on scheduler though)
     uint32_t worker_thread_count;
@@ -80,7 +74,7 @@ struct cvm_task_system
     /// is above too much to expose to user? maybe take expected pool size and quarter it?
 };
 
-void cvm_task_system_initialise(cvm_task_system * task_system, uint32_t worker_thread_count, size_t total_task_exponent);
+void cvm_task_system_initialise(cvm_task_system * task_system, uint32_t worker_thread_count, size_t total_task_exponent, size_t total_successor_exponent);
 
 /// any outstanding tasks will be executed before this returns
 /// as such any task still in flight must not have dependencies that would only be satisfied after this function has returned
@@ -94,32 +88,40 @@ void cvm_task_enqueue(cvm_task * task);
 
 
 
+/// everything from here is only useful if task successors/predecessors want to be set up AFTER the task has been enqueued
+/// they can be seen
+
+
+
 /// corresponds to the number of times a matching `cvm_task_signal_dependency` must be called for the task before it can be executed
 /// at least one dependency must be held in order to set up a dependency to that task if it has already been enqueued
 void cvm_task_add_dependencies(cvm_task * task, uint16_t count);
 
-// do we need a "mass signal" variant?
-/// use this to signal that some set of data and/or dependencies required by the task have been set up, must be matched to the count provided to cvm_ts_add_task_signal_dependencies
+/// use this to signal that some set of data and/or dependencies required by the task have been set up, total must be matched to the count provided to cvm_ts_add_task_signal_dependencies
 void cvm_task_signal_dependencies(cvm_task * task, uint16_t count);
 void cvm_task_signal_dependency(cvm_task * task);
 
 
-/// execution dependencies also act as cleanup dependencies (because we cannot clean up a task ultil it has been executed)
+/// execution dependencies also act as retained references (because we cannot clean up a task until it has been executed) as such if a dependency is required anyway then a refernce need not be held as well
 
 
 
-/// corresponds to the number of times a matching `cvm_task_release_retainer` must be called for the task before it can be destroyed/released
+/// corresponds to the number of times a matching `cvm_task_release_retainer` must be called for the task before it can be destroyed/released (i.e. the pointer becomes an invalid way to refernce this task)
 /// at least one retainer must be held in order to set up a successor to that task if it has already been enqueued
 void cvm_task_retain_reference(cvm_task * task, uint16_t count);
 
-/// signal that we are done setting up things that must happen before cleanup (e.g. setting up sucessors tasks/gates)
+/// signal that we are done setting up things that must happen before cleanup (e.g. setting up successors tasks/gates)
 void cvm_task_release_references(cvm_task * task, uint16_t count);
 void cvm_task_release_reference(cvm_task * task);
 
 
-/// the dependency on the sucessor must have been set up before calling this function
-/// if the task has already been completed this will signal the sucessor immediately
-void cvm_task_add_sucessor(cvm_task * task, cvm_synchronization_primitive * sucessor);
+
+
+
+/// the dependency on the successor must have been set up before calling this function
+/// this is because if the task has already been completed this will signal the successor immediately
+/// should only be called as part of setting up a cvm_sync_primitive happens before relationship
+void cvm_task_add_successor(cvm_task * task, cvm_sync_primitive * successor);
 
 
 
