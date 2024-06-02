@@ -89,7 +89,6 @@ void cvm_task_enqueue(cvm_task * task);
 
 
 /// everything from here is only useful if task successors/predecessors want to be set up AFTER the task has been enqueued
-/// they can be seen
 
 
 

@@ -481,12 +481,12 @@ static inline void stage_copy_action(cvm_vk_managed_buffer * mb,queue_transfer_s
 {
     cvm_atomic_lock_acquire(&mb->copy_spinlock);
 
-    *cvm_vk_buffer_copy_stack_new(&mb->pending_copies)=(VkBufferCopy)
+    cvm_vk_buffer_copy_stack_add(&mb->pending_copies,(VkBufferCopy)
     {
         .srcOffset=staging_offset,
         .dstOffset=dst_offset,
         .size=size
-    };
+    });
 
     mb->copy_queue_bitmask|=1<<dst_queue_id;
 
@@ -494,7 +494,7 @@ static inline void stage_copy_action(cvm_vk_managed_buffer * mb,queue_transfer_s
 
     if(cvm_vk_get_transfer_queue_family()==transfer_data->associated_queue_family_index)
     {
-        *cvm_vk_buffer_barrier_stack_new(&mb->copy_release_barriers)=(VkBufferMemoryBarrier2)
+        cvm_vk_buffer_barrier_stack_add(&mb->copy_release_barriers,(VkBufferMemoryBarrier2)
         {
             .sType=VK_STRUCTURE_TYPE_BUFFER_MEMORY_BARRIER_2,
             .pNext=NULL,
@@ -507,13 +507,13 @@ static inline void stage_copy_action(cvm_vk_managed_buffer * mb,queue_transfer_s
             .buffer=mb->buffer,
             .offset=dst_offset,
             .size=size
-        };
+        });
 
         cvm_atomic_lock_release(&mb->copy_spinlock);
     }
     else
     {
-        *cvm_vk_buffer_barrier_stack_new(&mb->copy_release_barriers)=(VkBufferMemoryBarrier2)
+        cvm_vk_buffer_barrier_stack_add(&mb->copy_release_barriers,(VkBufferMemoryBarrier2)
         {
             .sType=VK_STRUCTURE_TYPE_BUFFER_MEMORY_BARRIER_2,
             .pNext=NULL,
@@ -526,7 +526,7 @@ static inline void stage_copy_action(cvm_vk_managed_buffer * mb,queue_transfer_s
             .buffer=mb->buffer,
             .offset=dst_offset,
             .size=size
-        };
+        });
 
         cvm_atomic_lock_release(&mb->copy_spinlock);
 
@@ -536,7 +536,7 @@ static inline void stage_copy_action(cvm_vk_managed_buffer * mb,queue_transfer_s
 
         cvm_atomic_lock_acquire(&transfer_data->spinlock);
 
-        *cvm_vk_buffer_barrier_stack_new(&transfer_data->acquire_barriers)=(VkBufferMemoryBarrier2)
+        cvm_vk_buffer_barrier_stack_add(&transfer_data->acquire_barriers,(VkBufferMemoryBarrier2)
         {
             .sType=VK_STRUCTURE_TYPE_BUFFER_MEMORY_BARRIER_2,
             .pNext=NULL,
@@ -549,7 +549,7 @@ static inline void stage_copy_action(cvm_vk_managed_buffer * mb,queue_transfer_s
             .buffer=mb->buffer,
             .offset=dst_offset,
             .size=size
-        };
+        });
 
         transfer_data->wait_stages|=use_stage_mask;
 
