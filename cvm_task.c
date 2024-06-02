@@ -39,7 +39,7 @@ void cvm_task_signal_dependencies(cvm_task * task, uint16_t count)
     if(old_count==count)/// this is the last dependency this task was waiting on, put it on list of available tasks and make sure there's a worker thread to satisfy it
     {
         /// acquire stall count here?
-        unstall_worker=cvm_coherent_queue_fail_tracking_add_and_decrement_fails(&task_system->pending_tasks, task);
+        unstall_worker=cvm_coherent_queue_with_counter_add_and_decrement(&task_system->pending_tasks, task);
 
         if(unstall_worker)
         {
@@ -126,7 +126,7 @@ static inline cvm_task * cvm_task_worker_thread_get_task(cvm_task_system * task_
 
     while(true)
     {
-        task=cvm_coherent_queue_fail_tracking_get(&task_system->pending_tasks);
+        task=cvm_coherent_queue_with_counter_get(&task_system->pending_tasks);
         if(task)
         {
             return task;
@@ -138,7 +138,7 @@ static inline cvm_task * cvm_task_worker_thread_get_task(cvm_task_system * task_
         /// this will increment local stall counter if it fails (which note: is inside the mutex lock)
         /// needs to be inside mutex lock such that when we add a task we KNOW there is a worker thread (at least this one) that has already stalled by the time that queue addition tries to wake a worker
         ///     ^ (queue addition wakes workers inside this mutex)
-        task=cvm_coherent_queue_fail_tracking_get_or_increment_fails(&task_system->pending_tasks);
+        task=cvm_coherent_queue_with_counter_get_or_increment(&task_system->pending_tasks);
         if(task)
         {
             mtx_unlock(&task_system->worker_thread_mutex);
@@ -234,7 +234,7 @@ void cvm_task_system_initialise(cvm_task_system * task_system, uint32_t worker_t
 
     cvm_lockfree_pool_call_for_every_entry(&task_system->task_pool, &cvm_task_initialise, task_system);
 
-    cvm_coherent_queue_fail_tracking_initialise(&task_system->pending_tasks, &task_system->task_pool);
+    cvm_coherent_queue_with_counter_initialise(&task_system->pending_tasks, &task_system->task_pool);
 
     task_system->worker_threads=malloc(sizeof(thrd_t)*worker_thread_count);
     task_system->worker_thread_count=worker_thread_count;
@@ -283,7 +283,7 @@ void cvm_task_system_terminate(cvm_task_system * task_system)
 
     cvm_lockfree_pool_terminate(&task_system->successor_pool);
 
-    cvm_coherent_queue_fail_tracking_terminate(&task_system->pending_tasks);
+    cvm_coherent_queue_with_counter_terminate(&task_system->pending_tasks);
     cvm_lockfree_pool_terminate(&task_system->task_pool);
 }
 

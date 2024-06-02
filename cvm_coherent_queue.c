@@ -87,11 +87,11 @@ void * cvm_coherent_queue_get(cvm_coherent_queue * queue)
 
 
 /// these can support up to u32 sized queue and up to 2^31-1 fails tracked
-#define CVM_COHERENT_QUEUE_FENCE_MASK   ((uint_fast64_t)0x00000001FFFFFFFF)
-#define CVM_COHERENT_QUEUE_FAILURE_MASK ((uint_fast64_t)0xFFFFFFFE00000000)
-#define CVM_COHERENT_QUEUE_FAILURE_UNIT ((uint_fast64_t)0x0000000200000000)
+#define CVM_COHERENT_QUEUE_FENCE_MASK ((uint_fast64_t)0x00000001FFFFFFFF)
+#define CVM_COHERENT_QUEUE_COUNT_MASK ((uint_fast64_t)0xFFFFFFFE00000000)
+#define CVM_COHERENT_QUEUE_COUNT_UNIT ((uint_fast64_t)0x0000000200000000)
 
-void cvm_coherent_queue_fail_tracking_initialise(cvm_coherent_queue_fail_tracking * queue,cvm_lockfree_pool * pool)
+void cvm_coherent_queue_with_counter_initialise(cvm_coherent_queue_with_counter * queue,cvm_lockfree_pool * pool)
 {
     queue->entry_data=pool->available_entries.entry_data;
     queue->entry_size=pool->available_entries.entry_size;
@@ -103,15 +103,15 @@ void cvm_coherent_queue_fail_tracking_initialise(cvm_coherent_queue_fail_trackin
     atomic_init(&queue->get_index,0);
 }
 
-void cvm_coherent_queue_fail_tracking_terminate(cvm_coherent_queue_fail_tracking * queue)
+void cvm_coherent_queue_with_counter_terminate(cvm_coherent_queue_with_counter * queue)
 {
     /// could/should check all atomics are equal (except fence which needs to have its comparisons masked by CVM_COHERENT_QUEUE_FENCE_MASK
     free(queue->entry_indices);
 }
 
-void cvm_coherent_queue_fail_tracking_add(cvm_coherent_queue_fail_tracking * queue, void * entry)
+void cvm_coherent_queue_with_counter_add(cvm_coherent_queue_with_counter * queue, void * entry)
 {
-    uint_fast64_t queue_index,expected_fence_value,replacement_fence_value,entry_index,failure_counter;
+    uint_fast64_t queue_index,expected_fence_value,replacement_fence_value,entry_index,counter;
     size_t entry_offset;
 
     assert((char*)entry >= queue->entry_data);
@@ -126,20 +126,20 @@ void cvm_coherent_queue_fail_tracking_add(cvm_coherent_queue_fail_tracking * que
 
     queue->entry_indices[queue_index & queue->entry_mask] = entry_index;
 
-    ///assume no stalls by default
+    ///assume no count by default
     expected_fence_value = (queue_index & CVM_COHERENT_QUEUE_FENCE_MASK);
     replacement_fence_value = ((queue_index+1) & CVM_COHERENT_QUEUE_FENCE_MASK);
 
     while(!atomic_compare_exchange_weak_explicit(&queue->add_fence,&expected_fence_value,replacement_fence_value,memory_order_release,memory_order_relaxed))
     {
         /// expected_fence_value has current fence value here
-        failure_counter = (expected_fence_value & CVM_COHERENT_QUEUE_FAILURE_MASK);
-        expected_fence_value = (queue_index & CVM_COHERENT_QUEUE_FENCE_MASK) | failure_counter;
-        replacement_fence_value = ((queue_index+1) & CVM_COHERENT_QUEUE_FENCE_MASK) | failure_counter;
+        counter = (expected_fence_value & CVM_COHERENT_QUEUE_COUNT_MASK);
+        expected_fence_value = (queue_index & CVM_COHERENT_QUEUE_FENCE_MASK) | counter;
+        replacement_fence_value = ((queue_index+1) & CVM_COHERENT_QUEUE_FENCE_MASK) | counter;
     }
 }
 
-void * cvm_coherent_queue_fail_tracking_get(cvm_coherent_queue_fail_tracking * queue)
+void * cvm_coherent_queue_with_counter_get(cvm_coherent_queue_with_counter * queue)
 {
     uint_fast64_t queue_index,entry_index,current_fence_value;
 
@@ -159,11 +159,11 @@ void * cvm_coherent_queue_fail_tracking_get(cvm_coherent_queue_fail_tracking * q
     return queue->entry_data + entry_index*queue->entry_size;
 }
 
-bool cvm_coherent_queue_fail_tracking_add_and_decrement_fails(cvm_coherent_queue_fail_tracking * queue, void * entry)
+bool cvm_coherent_queue_with_counter_add_and_decrement(cvm_coherent_queue_with_counter * queue, void * entry)
 {
-    uint_fast64_t queue_index,expected_fence_value,replacement_fence_value,entry_index,failure_counter;
+    uint_fast64_t queue_index,expected_fence_value,replacement_fence_value,entry_index,counter;
     size_t entry_offset;
-    bool nonzero_fail_count = false;
+    bool nonzero_count = false;
 
     assert((char*)entry >= queue->entry_data);
 
@@ -184,18 +184,18 @@ bool cvm_coherent_queue_fail_tracking_add_and_decrement_fails(cvm_coherent_queue
     while(!atomic_compare_exchange_weak_explicit(&queue->add_fence,&expected_fence_value,replacement_fence_value,memory_order_release,memory_order_relaxed))
     {
         /// expected_fence_value has current fence value here
-        failure_counter = (expected_fence_value & CVM_COHERENT_QUEUE_FAILURE_MASK);
-        expected_fence_value = (queue_index & CVM_COHERENT_QUEUE_FENCE_MASK) | failure_counter;
-        nonzero_fail_count = failure_counter != 0;
-        assert(failure_counter>=CVM_COHERENT_QUEUE_FAILURE_UNIT || failure_counter==0);
+        counter = (expected_fence_value & CVM_COHERENT_QUEUE_COUNT_MASK);
+        expected_fence_value = (queue_index & CVM_COHERENT_QUEUE_FENCE_MASK) | counter;
+        nonzero_count = counter != 0;
+        assert(counter>=CVM_COHERENT_QUEUE_COUNT_UNIT || counter==0);
 
-        replacement_fence_value = ((queue_index+1) & CVM_COHERENT_QUEUE_FENCE_MASK) | (failure_counter - (nonzero_fail_count ? CVM_COHERENT_QUEUE_FAILURE_UNIT : 0));
+        replacement_fence_value = ((queue_index+1) & CVM_COHERENT_QUEUE_FENCE_MASK) | (counter - (nonzero_count ? CVM_COHERENT_QUEUE_COUNT_UNIT : 0));
     }
 
-    return nonzero_fail_count;
+    return nonzero_count;
 }
 
-void * cvm_coherent_queue_fail_tracking_get_or_increment_fails(cvm_coherent_queue_fail_tracking * queue)
+void * cvm_coherent_queue_with_counter_get_or_increment(cvm_coherent_queue_with_counter * queue)
 {
     uint_fast64_t queue_index,entry_index,current_fence_value,replacement_fence_value;
 
@@ -207,8 +207,8 @@ void * cvm_coherent_queue_fail_tracking_get_or_increment_fails(cvm_coherent_queu
 
         while((queue_index&CVM_COHERENT_QUEUE_FENCE_MASK) == (current_fence_value&CVM_COHERENT_QUEUE_FENCE_MASK))
         {
-            /// despite being in a loop i'm unsure this should be weak instead of strong
-            replacement_fence_value = current_fence_value + CVM_COHERENT_QUEUE_FAILURE_UNIT;
+            /// despite being in a loop i'm unsure this should be weak or strong
+            replacement_fence_value = current_fence_value + CVM_COHERENT_QUEUE_COUNT_UNIT;
             /// acquire only technically needed on failure as that represents external change to data that needs to be acquired, otherwise no changes need to be acquired
             if(atomic_compare_exchange_weak_explicit(&queue->add_fence,&current_fence_value,replacement_fence_value,memory_order_acquire,memory_order_acquire))
             {

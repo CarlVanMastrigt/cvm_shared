@@ -54,7 +54,7 @@ cvm_task;
 struct cvm_task_system
 {
     cvm_lockfree_pool task_pool;
-    cvm_coherent_queue_fail_tracking pending_tasks;
+    cvm_coherent_queue_with_counter pending_tasks;
 
     cvm_lockfree_pool successor_pool;///pool for storing successors (linked list/hopper per task)
 

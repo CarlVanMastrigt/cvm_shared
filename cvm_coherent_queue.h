@@ -45,7 +45,7 @@ void * cvm_coherent_queue_get(cvm_coherent_queue * queue);///returns NULL on fai
 
 
 
-typedef struct cvm_coherent_queue_fail_tracking
+typedef struct cvm_coherent_queue_with_counter
 {
     /// faster under contention, slower when not contended
     _Alignas(128) atomic_uint_fast64_t add_index; /// will contain the stall count information
@@ -58,18 +58,18 @@ typedef struct cvm_coherent_queue_fail_tracking
     size_t entry_size;
     size_t capacity_exponent;
 }
-cvm_coherent_queue_fail_tracking;
+cvm_coherent_queue_with_counter;
 
-void cvm_coherent_queue_fail_tracking_initialise(cvm_coherent_queue_fail_tracking * queue,cvm_lockfree_pool * pool);
-void cvm_coherent_queue_fail_tracking_terminate(cvm_coherent_queue_fail_tracking * queue);
+void cvm_coherent_queue_with_counter_initialise(cvm_coherent_queue_with_counter * queue,cvm_lockfree_pool * pool);
+void cvm_coherent_queue_with_counter_terminate(cvm_coherent_queue_with_counter * queue);
 
 /// these have no effect on the fail counter
-void   cvm_coherent_queue_fail_tracking_add(cvm_coherent_queue_fail_tracking * queue, void * entry);
-void * cvm_coherent_queue_fail_tracking_get(cvm_coherent_queue_fail_tracking * queue);///returns NULL on failure (b/c no elements remain)
+void   cvm_coherent_queue_with_counter_add(cvm_coherent_queue_with_counter * queue, void * entry);
+void * cvm_coherent_queue_with_counter_get(cvm_coherent_queue_with_counter * queue);///returns NULL on failure (b/c no elements remain)
 
 /// these will attempt to add/get and increment/decrement a counter which tracks getters that have been stalled waiting on new elements
-bool cvm_coherent_queue_fail_tracking_add_and_decrement_fails(cvm_coherent_queue_fail_tracking * queue, void * entry);///returns true if fail counter was nonzero, also decrements in this case
-void * cvm_coherent_queue_fail_tracking_get_or_increment_fails(cvm_coherent_queue_fail_tracking * queue);///returns NULL on failure (b/c no elements remain) and increments fail counter
+bool   cvm_coherent_queue_with_counter_add_and_decrement(cvm_coherent_queue_with_counter * queue, void * entry);///returns true if fail counter was nonzero, also decrements in this case
+void * cvm_coherent_queue_with_counter_get_or_increment(cvm_coherent_queue_with_counter * queue);///returns NULL on failure (b/c no elements remain) and increments fail counter
 
 /// can use similar to cvm_thread_safe_queue but with managed pool
 
