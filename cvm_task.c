@@ -255,6 +255,10 @@ void cvm_task_system_initialise(cvm_task_system * task_system, uint32_t worker_t
     }
 }
 
+#warning can't end the task system from inside the task system, would be good to split this into 2 functions such that we can start the end and then wait on it to complete
+
+#warning having arbitrary threads be able to do task work without needing to be started by the task system would also be good, does require adjustment of thread count inside thread mutex
+
 void cvm_task_system_terminate(cvm_task_system * task_system)
 {
     uint32_t i;
