@@ -68,8 +68,8 @@ void   cvm_coherent_queue_with_counter_add(cvm_coherent_queue_with_counter * que
 void * cvm_coherent_queue_with_counter_get(cvm_coherent_queue_with_counter * queue);///returns NULL on failure (b/c no elements remain)
 
 /// these will attempt to add/get and increment/decrement a counter which tracks getters that have been stalled waiting on new elements
-bool   cvm_coherent_queue_with_counter_add_and_decrement(cvm_coherent_queue_with_counter * queue, void * entry);///returns true if fail counter was nonzero, also decrements in this case
-void * cvm_coherent_queue_with_counter_get_or_increment(cvm_coherent_queue_with_counter * queue);///returns NULL on failure (b/c no elements remain) and increments fail counter
+bool   cvm_coherent_queue_with_counter_add_and_decrement(cvm_coherent_queue_with_counter * queue, void * entry);///returns true if counter was nonzero, also decrements in this case
+void * cvm_coherent_queue_with_counter_get_or_increment(cvm_coherent_queue_with_counter * queue);///returns NULL if no elements remain and increments counter, otherwise returns acquired element
 
 /// can use similar to cvm_thread_safe_queue but with managed pool
 

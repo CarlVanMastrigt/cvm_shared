@@ -49,6 +49,8 @@ along with cvm_shared.  If not, see <https://www.gnu.org/licenses/>.
 
 ///own headers
 
+#define CVM_SHARED_ENGINE_NAME "cvm_shared"
+
 #define CVM_INVALID_U32_INDEX 0xFFFFFFFF
 #define CVM_INVALID_U16_INDEX 0xFFFF
 

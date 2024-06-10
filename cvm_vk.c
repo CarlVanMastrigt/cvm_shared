@@ -21,32 +21,34 @@ along with cvm_shared.  If not, see <https://www.gnu.org/licenses/>.
 
 ///should probably have null initailisation of these vars, though that does obfuscate those that really do need to be statically initialised
 
-static VkInstance cvm_vk_instance;
-static VkPhysicalDevice cvm_vk_physical_device;
-static VkDevice cvm_vk_device;///"logical" device
+//static VkInstance cvm_vk_instance;
+//static VkPhysicalDevice cvm_vk_physical_device;
+static VkDevice cvm_vk_device;
 static VkSurfaceKHR cvm_vk_surface;
-static VkPhysicalDeviceMemoryProperties cvm_vk_memory_properties;
-static VkPhysicalDeviceProperties cvm_vk_device_properties;
-static VkPhysicalDeviceFeatures2 cvm_vk_device_features;
-static VkPhysicalDeviceVulkan11Features cvm_vk_device_features_11;
-static VkPhysicalDeviceVulkan12Features cvm_vk_device_features_12;
-static VkPhysicalDeviceVulkan13Features cvm_vk_device_features_13;
+//static VkPhysicalDeviceMemoryProperties cvm_vk_memory_properties;
+//static VkPhysicalDeviceProperties cvm_vk_device_properties;
+//static VkPhysicalDeviceFeatures2 cvm_vk_device_features;
+//static VkPhysicalDeviceVulkan11Features cvm_vk_device_features_11;
+//static VkPhysicalDeviceVulkan12Features cvm_vk_device_features_12;
+//static VkPhysicalDeviceVulkan13Features cvm_vk_device_features_13;
+
+
+static cvm_vk cvm_vk_;
 
 static VkSwapchainKHR cvm_vk_swapchain=VK_NULL_HANDLE;
 static VkSurfaceFormatKHR cvm_vk_surface_format;
 static VkPresentModeKHR cvm_vk_surface_present_mode;
 
 ///these can be the same
-static uint32_t cvm_vk_transfer_queue_family;
-static uint32_t cvm_vk_graphics_queue_family;
-static uint32_t cvm_vk_present_queue_family;
-static uint32_t cvm_vk_compute_queue_family;///perhaps its actually desirable to support multiple async compute queue families? doesnt seem to be a feature on any gpus
+//static uint32_t cvm_vk_transfer_queue_family;
+//static uint32_t cvm_vk_graphics_queue_family;
+//static uint32_t cvm_vk_present_queue_family;
+//static uint32_t cvm_vk_compute_queue_family;///perhaps its actually desirable to support multiple async compute queue families? doesnt seem to be a feature on any gpus
 ///only support one of each of above (allow these to be the same if above are as well?)
 static VkQueue cvm_vk_transfer_queue;
 static VkQueue cvm_vk_graphics_queue;///doesn't seem to be any (mainstream) hardware that supports more than one graphics queue
 static VkQueue cvm_vk_present_queue;
-static VkQueue * cvm_vk_asynchronous_compute_queues;
-static uint32_t cvm_vk_asynchronous_compute_queue_count;
+
 
 ///these command pools should only ever be used to create command buffers that are created once, then submitted multiple times, and only accessed internally (only ever used within this file)
 static VkCommandPool cvm_vk_internal_present_command_pool;
@@ -72,17 +74,19 @@ static cvm_vk_timeline_semaphore cvm_vk_graphics_timeline;
 static cvm_vk_timeline_semaphore cvm_vk_transfer_timeline;///cycled at the same rate as graphics(?), only incremented when there is work to be done, only to be used for low priority data transfers
 static cvm_vk_timeline_semaphore cvm_vk_present_timeline;
 ///high priority should be handled by command buffer that will use it
-static cvm_vk_timeline_semaphore * cvm_vk_asynchronous_compute_timelines;///same as number of compute queues (1 for each), needs to have a way to query the count (which will be associated with compute submission scheduling paradigm
-static cvm_vk_timeline_semaphore * cvm_vk_host_timelines;///used to wait on host events from different threads, needs to have count as input
-static uint32_t cvm_vk_host_timeline_count;
+//static cvm_vk_timeline_semaphore * cvm_vk_asynchronous_compute_timelines;///same as number of compute queues (1 for each), needs to have a way to query the count (which will be associated with compute submission scheduling paradigm
+//static cvm_vk_timeline_semaphore * cvm_vk_host_timelines;///used to wait on host events from different threads, needs to have count as input
+//static uint32_t cvm_vk_host_timeline_count;
 
+static cvm_vk cvm_vk_base;
+static cvm_vk_surface_swapchain cvm_vk_surface_swapchain_base;
 
-
-static void cvm_vk_create_instance(SDL_Window * window)
+#warning make more of this custom
+static void cvm_vk_create_instance(VkInstance * instance,SDL_Window * window, const char * application_name)
 {
     uint32_t extension_count;
     uint32_t api_version;
-    const char ** extension_names=NULL;
+    const char ** extension_names;
     const char * layer_names[]={"VK_LAYER_KHRONOS_validation"};///VK_LAYER_LUNARG_standard_validation
 
     CVM_VK_CHECK(vkEnumerateInstanceVersion(&api_version));
@@ -102,9 +106,9 @@ static void cvm_vk_create_instance(SDL_Window * window)
     {
         .sType=VK_STRUCTURE_TYPE_APPLICATION_INFO,
         .pNext=NULL,
-        .pApplicationName=" ",
+        .pApplicationName=application_name,
         .applicationVersion=0,
-        .pEngineName="cvm_shared",
+        .pEngineName=CVM_SHARED_ENGINE_NAME,
         .engineVersion=0,
         .apiVersion=api_version//VK_MAKE_VERSION(1,1,VK_HEADER_VERSION)
     };
@@ -119,201 +123,32 @@ static void cvm_vk_create_instance(SDL_Window * window)
         .ppEnabledExtensionNames=extension_names
     };
 
-    CVM_VK_CHECK(vkCreateInstance(&instance_creation_info,NULL,&cvm_vk_instance));
+    CVM_VK_CHECK(vkCreateInstance(&instance_creation_info,NULL,instance));
 
     free(extension_names);
 }
 
-static void cvm_vk_create_surface(SDL_Window * window)
+static void cvm_vk_create_surface_from_window(VkSurfaceKHR * surface, cvm_vk * vk, SDL_Window * window)
 {
-    SDL_bool r=SDL_Vulkan_CreateSurface(window,cvm_vk_instance,&cvm_vk_surface);
-    assert(r);///COULD NOT CREATE SDL VULKAN SURFACE
-}
-
-static bool check_physical_device_appropriate(bool dedicated_gpu_required,bool sync_compute_required)
-{
-    uint32_t i,queue_family_count,redundant_compute_queue_family;
-    VkQueueFamilyProperties * queue_family_properties=NULL;
-    VkBool32 surface_supported;
-    VkQueueFlags flags;
-
-    vkGetPhysicalDeviceProperties(cvm_vk_physical_device,&cvm_vk_device_properties);
-
-    if((dedicated_gpu_required)&&(cvm_vk_device_properties.deviceType!=VK_PHYSICAL_DEVICE_TYPE_DISCRETE_GPU))return false;
-
-    if(strstr(cvm_vk_device_properties.deviceName,"LLVM"))return false;///temp fix to exclude buggy LLVM implementation, need a better/more general way to avoid such "software" devices
-    //if(!strstr(cvm_vk_device_properties.deviceName,"LLVM"))return false;
-
-    printf("testing GPU : %s\n",cvm_vk_device_properties.deviceName);
-
-    printf("standard sample locations: %d\n",cvm_vk_device_properties.limits.standardSampleLocations);
-
-    VkPhysicalDeviceDynamicRenderingFeatures dr=
-    {
-        .sType=VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_DYNAMIC_RENDERING_FEATURES,
-        .pNext=NULL,
-        .dynamicRendering=2
-    };
-
-    VkPhysicalDeviceMultisampledRenderToSingleSampledFeaturesEXT mrstss=
-    {
-        .sType=VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_MULTISAMPLED_RENDER_TO_SINGLE_SAMPLED_FEATURES_EXT,
-        .pNext=&dr,
-        .multisampledRenderToSingleSampled=2
-    };
-
-    VkPhysicalDeviceSynchronization2Features s2=
-    {
-        .sType=VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_SYNCHRONIZATION_2_FEATURES,
-        .pNext=&mrstss,
-        .synchronization2=2
-    };
-
-
-
-
-    cvm_vk_device_features.sType=VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_FEATURES_2;
-    cvm_vk_device_features.pNext=&cvm_vk_device_features_11;
-
-    cvm_vk_device_features_11.sType=VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_VULKAN_1_1_FEATURES;
-    cvm_vk_device_features_11.pNext=&cvm_vk_device_features_12;
-
-    cvm_vk_device_features_12.sType=VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_VULKAN_1_2_FEATURES;
-    cvm_vk_device_features_12.pNext=&cvm_vk_device_features_13;
-
-    cvm_vk_device_features_13.sType=VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_VULKAN_1_3_FEATURES;
-    cvm_vk_device_features_13.pNext=&s2;
-    //cvm_vk_device_features_11.pNext=NULL;
-
-
-
-//    vkGetPhysicalDeviceFeatures(cvm_vk_physical_device,&cvm_vk_device_features);
-    vkGetPhysicalDeviceFeatures2(cvm_vk_physical_device,&cvm_vk_device_features);
-
-    ///VkPhysicalDeviceLineRasterizationFeaturesEXT
-    puts("");
-    puts("EXTENSIONS");
-    printf("synchronization2: %d\n",s2.synchronization2);
-    printf("multisample render to single sampled: %d\n",mrstss.multisampledRenderToSingleSampled);
-    printf("dynamic rendering: %d\n",dr.dynamicRendering);
-    puts("");
-
-    #warning test for required features. need comparitor struct to do this?   enable all by default for time being?
-    puts("CORE");
-    ///SIMPLE EXAMPLE TEST: printf("geometry shader: %d\n",features.geometryShader);
-    printf("geometry shader: %d\n",cvm_vk_device_features.features.geometryShader);
-    printf("sample rate shading: %d\n",cvm_vk_device_features.features.sampleRateShading);
-    printf("wide lines: %d\n",cvm_vk_device_features.features.wideLines);
-    printf("timeline semaphores: %d\n",cvm_vk_device_features_12.timelineSemaphore);
-    puts("");
-
-    vkGetPhysicalDeviceQueueFamilyProperties(cvm_vk_physical_device,&queue_family_count,NULL);
-    queue_family_properties=malloc(sizeof(VkQueueFamilyProperties)*queue_family_count);
-    vkGetPhysicalDeviceQueueFamilyProperties(cvm_vk_physical_device,&queue_family_count,queue_family_properties);
-
-    cvm_vk_graphics_queue_family=queue_family_count;
-    cvm_vk_transfer_queue_family=queue_family_count;
-    cvm_vk_present_queue_family=queue_family_count;
-    cvm_vk_compute_queue_family=queue_family_count;
-    redundant_compute_queue_family=queue_family_count;
-
-    for(i=0;i<queue_family_count;i++)
-    {
-        printf("queue family %u\n available queue count: %u\nqueue family properties %x\n\n",i,queue_family_properties[i].queueCount,queue_family_properties[i].queueFlags);
-
-        flags=queue_family_properties[i].queueFlags;
-
-
-        /// If an implementation exposes any queue family that supports graphics operations,
-        /// at least one queue family of at least one physical device exposed by the implementation must support both graphics and compute operations.
-
-        if((cvm_vk_graphics_queue_family==queue_family_count)&&(flags&VK_QUEUE_GRAPHICS_BIT)&&(flags&VK_QUEUE_COMPUTE_BIT || !sync_compute_required))
-        {
-            cvm_vk_graphics_queue_family=i;
-        }
-
-        ///if an explicit transfer queue family separate from selected graphics and compute queue families exists use it independently
-        if((cvm_vk_transfer_queue_family==queue_family_count) && (flags&VK_QUEUE_TRANSFER_BIT) && !(flags&(VK_QUEUE_GRAPHICS_BIT|VK_QUEUE_COMPUTE_BIT)))
-        {
-            cvm_vk_transfer_queue_family=i;
-        }
-
-        ///prefer async if possible (non-graphics)
-        if((cvm_vk_compute_queue_family==queue_family_count) && (flags&VK_QUEUE_COMPUTE_BIT) && !(flags&VK_QUEUE_GRAPHICS_BIT))
-        {
-            cvm_vk_compute_queue_family=i;
-        }
-
-        ///set up redundant though otherwise
-        if((redundant_compute_queue_family==queue_family_count) && (flags&VK_QUEUE_COMPUTE_BIT))
-        {
-            redundant_compute_queue_family=i;
-        }
-
-        if(cvm_vk_present_queue_family==queue_family_count)
-        {
-            CVM_VK_CHECK(vkGetPhysicalDeviceSurfaceSupportKHR(cvm_vk_physical_device,i,cvm_vk_surface,&surface_supported));
-            if(surface_supported==VK_TRUE)cvm_vk_present_queue_family=i;
-        }
-    }
-
-    if(cvm_vk_transfer_queue_family==queue_family_count)
-    {
-        ///graphics must support transfer, even if not specified
-        cvm_vk_transfer_queue_family=cvm_vk_graphics_queue_family;
-    }
-
-    if(cvm_vk_compute_queue_family==queue_family_count)
-    {
-        assert(redundant_compute_queue_family!=queue_family_count);
-        cvm_vk_compute_queue_family=redundant_compute_queue_family;///graphics must support transfer, even if not specified
-    }
-
-    free(queue_family_properties);
-
-    printf("Queue Families count:%u g:%u t:%u p:%u c:%u\n",queue_family_count,cvm_vk_graphics_queue_family,cvm_vk_transfer_queue_family,cvm_vk_present_queue_family,cvm_vk_compute_queue_family);
-
-    return ((cvm_vk_graphics_queue_family != queue_family_count)&&
-            (cvm_vk_transfer_queue_family != queue_family_count)&&
-            (cvm_vk_present_queue_family  != queue_family_count)&&
-            (cvm_vk_compute_queue_family  != queue_family_count));
-    ///return true only if all queue families needed can be satisfied
-}
-
-static void cvm_vk_create_physical_device(bool sync_compute_required)
-{
-    ///pick best physical device with all required features
-
-    uint32_t i,device_count,format_count,present_mode_count;
-    VkPhysicalDevice * physical_devices;
+    uint32_t i,format_count,present_mode_count;
+    SDL_bool created_surface;
     VkSurfaceFormatKHR * formats=NULL;
     VkPresentModeKHR * present_modes=NULL;
+    VkBool32 surface_supported;
 
-    CVM_VK_CHECK(vkEnumeratePhysicalDevices(cvm_vk_instance,&device_count,NULL));
-    physical_devices=malloc(sizeof(VkPhysicalDevice)*device_count);
-    CVM_VK_CHECK(vkEnumeratePhysicalDevices(cvm_vk_instance,&device_count,physical_devices));
 
-    for(i=0;i<device_count;i++)///check for dedicated gfx cards first
-    {
-        cvm_vk_physical_device=physical_devices[i];
-        if(check_physical_device_appropriate(true,sync_compute_required)) break;
-    }
+    created_surface=SDL_Vulkan_CreateSurface(window,vk->instance,surface);
+    assert(created_surface);///COULD NOT CREATE SDL VULKAN SURFACE
 
-    if(i==device_count)for(i=0;i<device_count;i++)///check for non-dedicated (integrated) gfx cards next
-    {
-        cvm_vk_physical_device=physical_devices[i];
-        if(check_physical_device_appropriate(false,sync_compute_required)) break;
-    }
 
-    free(physical_devices);
-
-    assert(i!=device_count || fprintf(stderr,"NONE OF %d PHYSICAL DEVICES MEET REQUIREMENTS\n",device_count));
+    CVM_VK_CHECK(vkGetPhysicalDeviceSurfaceSupportKHR(vk->physical_device,vk->present_queue_family_index,*surface,&surface_supported));
+    assert(surface_supported==VK_TRUE);///presenting not supported on provided window
 
 
     ///select screen image format
-    CVM_VK_CHECK(vkGetPhysicalDeviceSurfaceFormatsKHR(cvm_vk_physical_device,cvm_vk_surface,&format_count,NULL));
+    CVM_VK_CHECK(vkGetPhysicalDeviceSurfaceFormatsKHR(vk->physical_device,*surface,&format_count,NULL));
     formats=malloc(sizeof(VkSurfaceFormatKHR)*format_count);
-    CVM_VK_CHECK(vkGetPhysicalDeviceSurfaceFormatsKHR(cvm_vk_physical_device,cvm_vk_surface,&format_count,formats));
+    CVM_VK_CHECK(vkGetPhysicalDeviceSurfaceFormatsKHR(vk->physical_device,*surface,&format_count,formats));
 
     cvm_vk_surface_format=formats[0];///search for preferred/fallback instead of taking first?
 
@@ -321,9 +156,9 @@ static void cvm_vk_create_physical_device(bool sync_compute_required)
 
 
     ///select screen present mode
-    CVM_VK_CHECK(vkGetPhysicalDeviceSurfacePresentModesKHR(cvm_vk_physical_device,cvm_vk_surface,&present_mode_count,NULL));
+    CVM_VK_CHECK(vkGetPhysicalDeviceSurfacePresentModesKHR(vk->physical_device,*surface,&present_mode_count,NULL));
     present_modes=malloc(sizeof(VkPresentModeKHR)*present_mode_count);
-    CVM_VK_CHECK(vkGetPhysicalDeviceSurfacePresentModesKHR(cvm_vk_physical_device,cvm_vk_surface,&present_mode_count,present_modes));
+    CVM_VK_CHECK(vkGetPhysicalDeviceSurfacePresentModesKHR(vk->physical_device,*surface,&present_mode_count,present_modes));
 
     printf("present modes: %u\n",present_mode_count);
     for(i=0;i<present_mode_count;i++)
@@ -336,37 +171,389 @@ static void cvm_vk_create_physical_device(bool sync_compute_required)
     ///maybe want do do something meaningful here in later versions, below should be fine for now
     cvm_vk_surface_present_mode=VK_PRESENT_MODE_FIFO_KHR;///guaranteed to exist
 
-    vkGetPhysicalDeviceMemoryProperties(cvm_vk_physical_device,&cvm_vk_memory_properties);
-    printf("memory types: %u\nheap count: %u\n",cvm_vk_memory_properties.memoryTypeCount,cvm_vk_memory_properties.memoryHeapCount);
-    for(i=0;i<cvm_vk_memory_properties.memoryTypeCount;i++)
-    {
-//        if(cvm_vk_memory_properties.memoryTypes[i].propertyFlags&VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT)
-//        {
-//            printf("device local memory type: %u using heap: %u\n",i,cvm_vk_memory_properties.memoryTypes[i].heapIndex);
-//        }
-        printf("memory type %u has properties %x\n",i,cvm_vk_memory_properties.memoryTypes[i].propertyFlags);
-    }
-
     free(present_modes);
 }
 
-static void cvm_vk_create_logical_device(const char ** requested_extensions,uint32_t requested_extension_count)
+
+static bool cvm_vk_internal_device_feature_validation_function(const VkBaseInStructure* valid_list,
+                                                               const VkPhysicalDeviceProperties* device_properties,
+                                                               const VkPhysicalDeviceMemoryProperties* memory_properties,
+                                                               const VkExtensionProperties* extension_properties,
+                                                               uint32_t extension_count)
+{
+    const VkBaseInStructure* entry;
+    const VkPhysicalDeviceVulkan12Features * features_12;
+    const VkPhysicalDeviceVulkan13Features * features_13;
+
+    /// properties unused
+    (void)device_properties;
+    (void)memory_properties;
+    (void)extension_properties;
+    (void)extension_count;
+
+    for(entry = valid_list;entry;entry=entry->pNext)
+    {
+        switch(entry->sType)
+        {
+            case VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_VULKAN_1_2_FEATURES:
+                features_12 = (const VkPhysicalDeviceVulkan12Features*)entry;
+                if(features_12->timelineSemaphore==VK_FALSE)return false;
+                break;
+
+            case VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_VULKAN_1_3_FEATURES:
+                features_13 = (const VkPhysicalDeviceVulkan13Features*)entry;
+                if(features_13->synchronization2==VK_FALSE)return false;
+                break;
+
+            default: break;
+        }
+    }
+
+    return true;
+}
+
+static void cvm_vk_internal_device_feature_request_function(VkBaseOutStructure* set_list,
+                                                            const VkBaseInStructure* valid_list,
+                                                            const VkPhysicalDeviceProperties* device_properties,
+                                                            const VkPhysicalDeviceMemoryProperties* memory_properties,
+                                                            const VkExtensionProperties* extension_properties,
+                                                            uint32_t extension_count)
+{
+    VkBaseOutStructure* set_entry;
+    VkPhysicalDeviceVulkan12Features * set_features_12;
+    VkPhysicalDeviceVulkan13Features * features_13;
+
+    /// properties unused
+    (void)device_properties;
+    (void)memory_properties;
+    (void)extension_properties;
+    (void)extension_count;
+
+    for(set_entry = set_list;set_entry;set_entry = set_entry->pNext)
+    {
+        switch(set_entry->sType)
+        {
+            case VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_VULKAN_1_2_FEATURES:
+                set_features_12 = (VkPhysicalDeviceVulkan12Features*)set_entry;
+                set_features_12->timelineSemaphore=VK_TRUE;
+                break;
+
+            case VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_VULKAN_1_3_FEATURES:
+                features_13 = (VkPhysicalDeviceVulkan13Features*)set_entry;
+                features_13->synchronization2=VK_TRUE;
+                break;
+
+            default: break;
+        }
+    }
+}
+
+
+/// also removes duplicates!
+static void cvm_vk_internal_device_setup_create(cvm_vk_device_setup * internal, const cvm_vk_device_setup * external)
+{
+    static const char* const swapchain_extension="VK_KHR_swapchain";
+    VkStructureType feature_struct_types[3]={VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_VULKAN_1_1_FEATURES, VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_VULKAN_1_2_FEATURES, VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_VULKAN_1_3_FEATURES};
+    size_t feature_struct_sizes[3]={sizeof(VkPhysicalDeviceVulkan11Features), sizeof(VkPhysicalDeviceVulkan12Features), sizeof(VkPhysicalDeviceVulkan13Features)};
+    uint32_t i,j;
+
+    internal->feature_validation=malloc(sizeof(cvm_vk_device_feature_validation_function*)*(external->feature_validation_count+1));
+    internal->feature_validation_count=external->feature_validation_count+1;
+    internal->feature_validation[0]=&cvm_vk_internal_device_feature_validation_function;
+    memcpy(internal->feature_validation+1,external->feature_validation,sizeof(cvm_vk_device_feature_validation_function*)*external->feature_validation_count);
+
+    internal->feature_request=malloc(sizeof(cvm_vk_device_feature_request_function*)*(external->feature_request_count+1));
+    internal->feature_request_count=external->feature_request_count+1;
+    internal->feature_request[0]=&cvm_vk_internal_device_feature_request_function;
+    memcpy(internal->feature_request+1,external->feature_request,sizeof(cvm_vk_device_feature_request_function*)*external->feature_request_count);
+
+
+    ///following ones shouldnt contain duplicates
+    internal->device_feature_struct_types=malloc(sizeof(VkStructureType)*(external->device_feature_struct_count+3));
+    internal->device_feature_struct_sizes=malloc(sizeof(size_t)*(external->device_feature_struct_count+3));
+    internal->device_feature_struct_count=3;
+    memcpy(internal->device_feature_struct_types, feature_struct_types, sizeof(VkStructureType)*3);
+    memcpy(internal->device_feature_struct_sizes, feature_struct_sizes, sizeof(size_t)*3);
+
+    for(i=0;i<external->device_feature_struct_count;i++)
+    {
+        for(j=0;j<internal->device_feature_struct_count;j++)
+        {
+            if(external->device_feature_struct_types[i]==internal->device_feature_struct_types[j] || external->device_feature_struct_types[i]==VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_FEATURES_2)
+            {
+                break;
+            }
+        }
+        if(j==internal->device_feature_struct_count)
+        {
+            internal->device_feature_struct_types[j]=external->device_feature_struct_types[i];
+            internal->device_feature_struct_sizes[j]=external->device_feature_struct_sizes[i];
+            internal->device_feature_struct_count++;
+        }
+    }
+
+    internal->extensions=malloc(sizeof(const char*)*(external->extension_count+1));
+    internal->extension_count=1;
+    internal->extensions[0]=swapchain_extension;
+    for(i=0;i<external->extension_count;i++)
+    {
+        for(j=0;j<internal->extension_count;j++)
+        {
+            if(strcmp(external->extensions[i],internal->extensions[j])==0)
+            {
+                break;
+            }
+        }
+        if(j==internal->extension_count)
+        {
+            internal->extensions[j]=external->extensions[i];
+            internal->extension_count++;
+        }
+    }
+}
+
+static void cvm_vk_internal_device_setup_destroy(cvm_vk_device_setup * setup)
+{
+    free(setup->feature_validation);
+    free(setup->feature_request);
+    free(setup->device_feature_struct_types);
+    free(setup->device_feature_struct_sizes);
+    free(setup->extensions);
+}
+
+
+
+static bool check_physical_device_appropriate_and_get_properties(cvm_vk * vk, VkPhysicalDevice physical_device_to_test, VkPhysicalDeviceFeatures2 * features, VkSurfaceKHR test_surface, bool dedicated_gpu_required, bool sync_compute_required, const cvm_vk_device_setup * device_setup)
+{
+    uint32_t i,queue_family_count,redundant_compute_queue_family_index,extension_count;
+    VkQueueFamilyProperties * queue_family_properties=NULL;
+    VkBool32 surface_supported;
+    VkQueueFlags flags;
+    VkExtensionProperties * extensions;
+
+    vk->physical_device=physical_device_to_test;
+
+    vkGetPhysicalDeviceProperties(vk->physical_device, &vk->physical_device_properties);
+    vkGetPhysicalDeviceMemoryProperties(vk->physical_device,&vk->physical_device_memory_properties);
+
+    vkGetPhysicalDeviceFeatures2(vk->physical_device,features);
+
+    vkEnumerateDeviceExtensionProperties(cvm_vk_.physical_device,NULL,&extension_count,NULL);
+    extensions=malloc(sizeof(VkExtensionProperties)*extension_count);
+    vkEnumerateDeviceExtensionProperties(cvm_vk_.physical_device,NULL,&extension_count,extensions);
+
+
+
+    if((dedicated_gpu_required)&&(vk->physical_device_properties.deviceType!=VK_PHYSICAL_DEVICE_TYPE_DISCRETE_GPU))goto check_physical_device_appropriate_and_get_properties_FAIL;
+
+    if(strstr(vk->physical_device_properties.deviceName,"LLVM"))goto check_physical_device_appropriate_and_get_properties_FAIL;
+    /// ^ temp fix to exclude buggy LLVM implementation, need a better/more general way to avoid such "software" devices
+
+    printf("testing GPU : %s\n",vk->physical_device_properties.deviceName);
+
+    /// external feature requirements
+    for(i=0;i<device_setup->feature_validation_count;i++)
+    {
+        if(!device_setup->feature_validation[i]((VkBaseInStructure*)features,&vk->physical_device_properties,&vk->physical_device_memory_properties,extensions,extension_count))
+        {
+            goto check_physical_device_appropriate_and_get_properties_FAIL;
+        }
+    }
+
+    vkGetPhysicalDeviceQueueFamilyProperties(vk->physical_device,&queue_family_count,NULL);
+    queue_family_properties=malloc(sizeof(VkQueueFamilyProperties)*queue_family_count);
+    vkGetPhysicalDeviceQueueFamilyProperties(vk->physical_device,&queue_family_count,queue_family_properties);
+
+    vk->graphics_queue_family_index=queue_family_count;
+    vk->transfer_queue_family_index=queue_family_count;
+    vk->present_queue_family_index=queue_family_count;
+    vk->compute_queue_family_index=queue_family_count;
+    redundant_compute_queue_family_index=queue_family_count;
+
+    for(i=0;i<queue_family_count;i++)
+    {
+        printf("queue family %u\n available queue count: %u\nqueue family properties %x\n\n",i,queue_family_properties[i].queueCount,queue_family_properties[i].queueFlags);
+
+        flags=queue_family_properties[i].queueFlags;
+
+
+        /// If an implementation exposes any queue family that supports graphics operations,
+        /// at least one queue family of at least one physical device exposed by the implementation must support both graphics and compute operations.
+
+        if((vk->graphics_queue_family_index==queue_family_count)&&(flags&VK_QUEUE_GRAPHICS_BIT)&&(flags&VK_QUEUE_COMPUTE_BIT || !sync_compute_required))
+        {
+            vk->graphics_queue_family_index=i;
+        }
+
+        ///if an explicit transfer queue family separate from selected graphics and compute queue families exists use it independently
+        if((vk->transfer_queue_family_index==queue_family_count) && (flags&VK_QUEUE_TRANSFER_BIT) && !(flags&(VK_QUEUE_GRAPHICS_BIT|VK_QUEUE_COMPUTE_BIT)))
+        {
+            vk->transfer_queue_family_index=i;
+        }
+
+        ///prefer async if possible (non-graphics)
+        if((vk->compute_queue_family_index==queue_family_count) && (flags&VK_QUEUE_COMPUTE_BIT) && !(flags&VK_QUEUE_GRAPHICS_BIT))
+        {
+            vk->compute_queue_family_index=i;
+        }
+
+        ///set up redundant though otherwise
+        if((redundant_compute_queue_family_index==queue_family_count) && (flags&VK_QUEUE_COMPUTE_BIT))
+        {
+            redundant_compute_queue_family_index=i;
+        }
+
+        if(vk->present_queue_family_index==queue_family_count)
+        {
+            CVM_VK_CHECK(vkGetPhysicalDeviceSurfaceSupportKHR(vk->physical_device,i,test_surface,&surface_supported));
+            if(surface_supported)vk->present_queue_family_index=i;
+        }
+    }
+
+    if(vk->transfer_queue_family_index==queue_family_count)
+    {
+        ///graphics must support transfer, even if not specified
+        vk->transfer_queue_family_index=vk->graphics_queue_family_index;
+    }
+
+    if(vk->compute_queue_family_index==queue_family_count)
+    {
+        assert(redundant_compute_queue_family_index!=queue_family_count);
+        vk->compute_queue_family_index=redundant_compute_queue_family_index;
+    }
+
+    free(queue_family_properties);
+
+    printf("Queue Families count:%u g:%u t:%u p:%u c:%u\n",queue_family_count,vk->graphics_queue_family_index,vk->transfer_queue_family_index,vk->present_queue_family_index,vk->compute_queue_family_index);
+
+    if ((vk->graphics_queue_family_index == queue_family_count)||
+        (vk->transfer_queue_family_index == queue_family_count)||
+        (vk->present_queue_family_index  == queue_family_count)||
+        (vk->compute_queue_family_index  == queue_family_count))
+    {
+        goto check_physical_device_appropriate_and_get_properties_FAIL;
+    }
+
+    vk->available_physical_device_extensions=extensions;
+    vk->available_device_extension_count=extension_count;
+    return true;
+
+    check_physical_device_appropriate_and_get_properties_FAIL:
+    free(extensions);
+    return false;
+    ///return true only if all queue families needed can be satisfied
+}
+
+static VkPhysicalDeviceFeatures2* cvm_vk_create_device_feature_structure_list(const cvm_vk_device_setup * device_setup)
+{
+    uint32_t i;
+    VkBaseInStructure * last_feature_struct;
+    VkBaseInStructure * feature_struct;
+    VkPhysicalDeviceFeatures2 * features;
+
+    /// set up chain of features, used to ensure
+    /// init to zero, which is false for when this will be setting up only required features
+    features = calloc(1,sizeof(VkPhysicalDeviceFeatures2));
+    features->sType=VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_FEATURES_2;
+    features->pNext=NULL;
+
+    last_feature_struct=(VkBaseInStructure*)features;
+
+    for(i=0;i<device_setup->device_feature_struct_count;i++)
+    {
+        /// init to zero, which is false for when this will be setting up only required features
+        feature_struct = calloc(1,device_setup->device_feature_struct_sizes[i]);
+        feature_struct->sType = device_setup->device_feature_struct_types[i];
+        feature_struct->pNext = NULL;
+
+        last_feature_struct->pNext = feature_struct;
+        last_feature_struct = feature_struct;
+    }
+
+    return features;
+}
+
+static void cvm_vk_destroy_device_feature_structure_list(VkPhysicalDeviceFeatures2 * features)
+{
+    VkBaseInStructure * s_next;
+    VkBaseInStructure * s;
+
+    for(s=(VkBaseInStructure*)features; s; s=s_next)
+    {
+        s_next=(VkBaseInStructure*)s->pNext;
+        free(s);
+    }
+}
+
+static void cvm_vk_create_physical_device(cvm_vk * vk, bool sync_compute_required, const cvm_vk_device_setup * device_setup)
+{
+    ///pick best physical device with all required features
+
+    uint32_t i,device_count;
+    VkPhysicalDevice * physical_devices;
+    SDL_Window * test_window;
+    VkSurfaceKHR test_surface;
+    SDL_bool created_surface;
+    VkPhysicalDeviceFeatures2 * features;
+
+
+    test_window = SDL_CreateWindow("",SDL_WINDOWPOS_UNDEFINED,SDL_WINDOWPOS_UNDEFINED,0,0,SDL_WINDOW_HIDDEN | SDL_WINDOW_VULKAN);
+    assert(test_window);/// test window could not be created
+    created_surface=SDL_Vulkan_CreateSurface(test_window,vk->instance,&test_surface);
+    assert(created_surface);/// test surface could not be created
+
+
+    features = cvm_vk_create_device_feature_structure_list(device_setup);
+
+
+    CVM_VK_CHECK(vkEnumeratePhysicalDevices(vk->instance,&device_count,NULL));
+    physical_devices=malloc(sizeof(VkPhysicalDevice)*device_count);
+    CVM_VK_CHECK(vkEnumeratePhysicalDevices(vk->instance,&device_count,physical_devices));
+
+    for(i=0;i<device_count;i++)///check for dedicated gfx cards first
+    {
+        if(check_physical_device_appropriate_and_get_properties(vk,physical_devices[i],features,test_surface,true,sync_compute_required,device_setup))
+        {
+            break;
+        }
+    }
+
+    if(i==device_count) for(i=0;i<device_count;i++)///check for non-dedicated (integrated) gfx cards next
+    {
+
+        if(check_physical_device_appropriate_and_get_properties(vk,physical_devices[i],features,test_surface,false,sync_compute_required,device_setup))
+        {
+            break;
+        }
+    }
+
+    free(physical_devices);
+
+    cvm_vk_destroy_device_feature_structure_list(features);///feature list used for validation no longer required
+
+    vkDestroySurfaceKHR(vk->instance,test_surface,NULL);
+    SDL_DestroyWindow(test_window);
+
+    assert(i!=device_count || fprintf(stderr,"NONE OF %d PHYSICAL DEVICES MEET REQUIREMENTS\n",device_count));
+
+//    printf("memory types: %u\nheap count: %u\n",vk->physical_device_memory_properties.memoryTypeCount,vk->physical_device_memory_properties.memoryHeapCount);
+//    for(i=0;i<vk->physical_device_memory_properties.memoryTypeCount;i++)
+//    {
+//        if(vk->physical_device_memory_properties.memoryTypes[i].propertyFlags&VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT)
+//        {
+//            printf("device local memory type: %u using heap: %u\n",i,vk->physical_device_memory_properties.memoryTypes[i].heapIndex);
+//        }
+//        printf("memory type %u has properties %x\n",i,vk->physical_device_memory_properties.memoryTypes[i].propertyFlags);
+//    }
+}
+
+static void cvm_vk_create_logical_device(cvm_vk * vk, const cvm_vk_device_setup * device_setup)
 {
     const char * layer_names[]={"VK_LAYER_KHRONOS_validation"};///VK_LAYER_LUNARG_standard_validation
     float queue_priority=1.0;
-    VkExtensionProperties * possible_extensions;
-    uint32_t possible_extension_count,i,j,found_extensions;
+    uint32_t i,j,found_extensions;
     ///if implementing separate transfer queue use a lower priority?
     /// should also probably try putting transfers on separate queue (when possible) even when they require the same queue family
-
-    VkPhysicalDeviceFeatures features=(VkPhysicalDeviceFeatures){0};
-    features.geometryShader=VK_TRUE;
-    features.multiDrawIndirect=VK_TRUE;
-    features.sampleRateShading=VK_TRUE;
-    features.fillModeNonSolid=VK_TRUE;
-    features.fragmentStoresAndAtomics=VK_TRUE;
-    features.wideLines=VK_TRUE;
-//    features=cvm_vk_device_features;
 
     VkDeviceQueueCreateInfo device_queue_creation_infos[3];///3 is max queues
     uint32_t queue_family_count=0;
@@ -377,106 +564,89 @@ static void cvm_vk_create_logical_device(const char ** requested_extensions,uint
         .sType=VK_STRUCTURE_TYPE_DEVICE_QUEUE_CREATE_INFO,
         .pNext=NULL,
         .flags=0,
-        .queueFamilyIndex=cvm_vk_graphics_queue_family,
+        .queueFamilyIndex=cvm_vk_.graphics_queue_family_index,
         .queueCount=1,
         .pQueuePriorities= &queue_priority
     };
 
-    if(cvm_vk_transfer_queue_family != cvm_vk_graphics_queue_family)
+    if(cvm_vk_.transfer_queue_family_index != cvm_vk_.graphics_queue_family_index)
     device_queue_creation_infos[queue_family_count++]=(VkDeviceQueueCreateInfo)
     {
         .sType=VK_STRUCTURE_TYPE_DEVICE_QUEUE_CREATE_INFO,
         .pNext=NULL,
         .flags=0,
-        .queueFamilyIndex=cvm_vk_transfer_queue_family,
+        .queueFamilyIndex=cvm_vk_.transfer_queue_family_index,
         .queueCount=1,
         .pQueuePriorities= &queue_priority
     };
 
-    if(cvm_vk_present_queue_family != cvm_vk_graphics_queue_family)
+    if(cvm_vk_.present_queue_family_index != cvm_vk_.graphics_queue_family_index)
     device_queue_creation_infos[queue_family_count++]=(VkDeviceQueueCreateInfo)
     {
         .sType=VK_STRUCTURE_TYPE_DEVICE_QUEUE_CREATE_INFO,
         .pNext=NULL,
         .flags=0,
-        .queueFamilyIndex=cvm_vk_present_queue_family,
+        .queueFamilyIndex=cvm_vk_.present_queue_family_index,
         .queueCount=1,
         .pQueuePriorities= &queue_priority
     };
 
-
-    vkEnumerateDeviceExtensionProperties(cvm_vk_physical_device,NULL,&possible_extension_count,NULL);
-    possible_extensions=malloc(sizeof(VkExtensionProperties)*possible_extension_count);
-    vkEnumerateDeviceExtensionProperties(cvm_vk_physical_device,NULL,&possible_extension_count,possible_extensions);
-
-
-    for(i=0;i<requested_extension_count && strcmp(requested_extensions[i],"VK_KHR_swapchain");i++);
-    assert(i!=requested_extension_count);///REQUESTING VK_KHR_swapchain IS MANDATORY
-
-    for(found_extensions=0,i=0;i<possible_extension_count && found_extensions<requested_extension_count;i++)
+    found_extensions=0;
+    for(i=0;i<vk->available_device_extension_count;i++)
     {
-        for(j=0;j<requested_extension_count;j++)found_extensions+=(0==strcmp(possible_extensions[i].extensionName,requested_extensions[j]));
+//        puts(vk->available_physical_device_extensions[i].extensionName);
+        for(j=0;j<device_setup->extension_count;j++)
+        {
+            found_extensions+=(0==strcmp(vk->available_physical_device_extensions[i].extensionName,device_setup->extensions[j]));
+        }
     }
 
-    assert(i!=possible_extension_count);///REQUESTED EXTENSION NOT FOUND
+
+    assert(found_extensions==device_setup->extension_count);///REQUESTED EXTENSION NOT FOUND
     #warning could/should implement this to instead print WHICH ext wasnt found
 
-//    for(i=0;i<possible_extension_count;i++)
-//    {
-//        puts(possible_extensions[i].extensionName);
-//    }
+    vk->enabled_physical_device_features = cvm_vk_create_device_feature_structure_list(device_setup);
 
-    free(possible_extensions);
-
-
-
-    VkPhysicalDeviceSynchronization2Features s2=
+    for(i=0;i<device_setup->feature_request_count;i++)
     {
-        .sType=VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_SYNCHRONIZATION_2_FEATURES,
-        .pNext=NULL,
-        .synchronization2=VK_TRUE
-    };
-
-    VkPhysicalDeviceVulkan12Features features_12=
-    {
-        .sType=VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_VULKAN_1_2_FEATURES,
-        .pNext=&s2,
-//        .pNext=NULL,
-        .timelineSemaphore=VK_TRUE
-    };
+        device_setup->feature_request[i]((VkBaseOutStructure*)vk->enabled_physical_device_features,
+                                         (VkBaseInStructure*)vk->available_physical_device_features,
+                                         &vk->physical_device_properties,
+                                         &vk->physical_device_memory_properties,
+                                         vk->available_physical_device_extensions,
+                                         vk->available_device_extension_count);
+    }
 
     VkDeviceCreateInfo device_creation_info=(VkDeviceCreateInfo)
     {
         .sType=VK_STRUCTURE_TYPE_DEVICE_CREATE_INFO,
-        .pNext=&features_12,
-//        .pNext=NULL,
+        .pNext=vk->enabled_physical_device_features,
         .flags=0,
         .queueCreateInfoCount=queue_family_count,
         .pQueueCreateInfos= device_queue_creation_infos,
         .enabledLayerCount=1,///make 0 for release version (no validation), test performance diff
         .ppEnabledLayerNames=layer_names,
-        .enabledExtensionCount=requested_extension_count,
-        .ppEnabledExtensionNames=requested_extensions,
-        .pEnabledFeatures= &features
+        .enabledExtensionCount=device_setup->extension_count,
+        .ppEnabledExtensionNames=device_setup->extensions,
+        .pEnabledFeatures=NULL,///using features2 in pNext chain instead
     };
 
-    CVM_VK_CHECK(vkCreateDevice(cvm_vk_physical_device,&device_creation_info,NULL,&cvm_vk_device));
-
-    vkGetDeviceQueue(cvm_vk_device,cvm_vk_graphics_queue_family,0,&cvm_vk_graphics_queue);
-    vkGetDeviceQueue(cvm_vk_device,cvm_vk_transfer_queue_family,0,&cvm_vk_transfer_queue);
-    vkGetDeviceQueue(cvm_vk_device,cvm_vk_present_queue_family,0,&cvm_vk_present_queue);
+    CVM_VK_CHECK(vkCreateDevice(cvm_vk_.physical_device,&device_creation_info,NULL,&cvm_vk_device));
+    vkGetDeviceQueue(cvm_vk_device,cvm_vk_.graphics_queue_family_index,0,&cvm_vk_graphics_queue);
+    vkGetDeviceQueue(cvm_vk_device,cvm_vk_.transfer_queue_family_index,0,&cvm_vk_transfer_queue);
+    vkGetDeviceQueue(cvm_vk_device,cvm_vk_.present_queue_family_index,0,&cvm_vk_present_queue);
 }
 
 static void cvm_vk_create_internal_command_pools(void)
 {
-    if(cvm_vk_present_queue_family!=cvm_vk_graphics_queue_family)
+    if(cvm_vk_.present_queue_family_index!=cvm_vk_.graphics_queue_family_index)
     {
         VkCommandPoolCreateInfo command_pool_create_info=(VkCommandPoolCreateInfo)
         {
             .sType=VK_STRUCTURE_TYPE_COMMAND_POOL_CREATE_INFO,
             .pNext=NULL,
             .flags=0,
-            .queueFamilyIndex=cvm_vk_present_queue_family
+            .queueFamilyIndex=cvm_vk_.present_queue_family_index,
         };
 
         CVM_VK_CHECK(vkCreateCommandPool(cvm_vk_device,&command_pool_create_info,NULL,&cvm_vk_internal_present_command_pool));
@@ -485,7 +655,7 @@ static void cvm_vk_create_internal_command_pools(void)
 
 static void cvm_vk_destroy_internal_command_pools(void)
 {
-    if(cvm_vk_present_queue_family!=cvm_vk_graphics_queue_family)
+    if(cvm_vk_.present_queue_family_index!=cvm_vk_.graphics_queue_family_index)
     {
         vkDestroyCommandPool(cvm_vk_device,cvm_vk_internal_present_command_pool,NULL);
     }
@@ -512,7 +682,7 @@ void cvm_vk_create_swapchain(void)
     uint32_t old_swapchain_image_count=cvm_vk_swapchain_image_count;
 
     ///swapchain
-    CVM_VK_CHECK(vkGetPhysicalDeviceSurfaceCapabilitiesKHR(cvm_vk_physical_device,cvm_vk_surface,&surface_capabilities));
+    CVM_VK_CHECK(vkGetPhysicalDeviceSurfaceCapabilitiesKHR(cvm_vk_.physical_device,cvm_vk_surface,&surface_capabilities));
 
     cvm_vk_swapchain_image_count=((surface_capabilities.minImageCount > cvm_vk_min_swapchain_images) ? surface_capabilities.minImageCount : cvm_vk_min_swapchain_images);
 
@@ -621,7 +791,7 @@ void cvm_vk_create_swapchain(void)
 
 
         ///queue ownership transfer stuff (needs testing)
-        if(cvm_vk_present_queue_family!=cvm_vk_graphics_queue_family)
+        if(cvm_vk_.present_queue_family_index!=cvm_vk_.graphics_queue_family_index)
         {
             VkCommandBufferAllocateInfo command_buffer_allocate_info=(VkCommandBufferAllocateInfo)
             {
@@ -663,8 +833,8 @@ void cvm_vk_create_swapchain(void)
                         .dstAccessMask=0,
                         .oldLayout=VK_IMAGE_LAYOUT_PRESENT_SRC_KHR,///colour attachment optimal? modify  renderpasses as necessary to accommodate this (must match graphics relinquish)
                         .newLayout=VK_IMAGE_LAYOUT_PRESENT_SRC_KHR,
-                        .srcQueueFamilyIndex=cvm_vk_graphics_queue_family,
-                        .dstQueueFamilyIndex=cvm_vk_present_queue_family,
+                        .srcQueueFamilyIndex=cvm_vk_.graphics_queue_family_index,
+                        .dstQueueFamilyIndex=cvm_vk_.present_queue_family_index,
                         .image=swapchain_images[i],
                         .subresourceRange=(VkImageSubresourceRange)
                         {
@@ -722,12 +892,14 @@ void cvm_vk_destroy_swapchain(void)
         vkDestroyImageView(cvm_vk_device,cvm_vk_presenting_images[i].image_view,NULL);
 
         ///queue ownership transfer stuff
-        if(cvm_vk_present_queue_family!=cvm_vk_graphics_queue_family)
+        if(cvm_vk_.present_queue_family_index!=cvm_vk_.graphics_queue_family_index)
         {
             vkFreeCommandBuffers(cvm_vk_device,cvm_vk_internal_present_command_pool,1,&cvm_vk_presenting_images[i].present_acquire_command_buffer);
         }
     }
 }
+
+
 
 static void cvm_vk_create_timeline_semaphore(cvm_vk_timeline_semaphore * timeline_semaphore)
 {
@@ -807,7 +979,7 @@ static void cvm_vk_create_timeline_semaphores(void)
 {
     cvm_vk_create_timeline_semaphore(&cvm_vk_graphics_timeline);
     cvm_vk_create_timeline_semaphore(&cvm_vk_transfer_timeline);
-    if(cvm_vk_present_queue_family!=cvm_vk_graphics_queue_family)
+    if(cvm_vk_.present_queue_family_index!=cvm_vk_.graphics_queue_family_index)
     {
         cvm_vk_create_timeline_semaphore(&cvm_vk_present_timeline);
     }
@@ -817,16 +989,10 @@ static void cvm_vk_destroy_timeline_semaphores(void)
 {
     vkDestroySemaphore(cvm_vk_device,cvm_vk_graphics_timeline.semaphore,NULL);
     vkDestroySemaphore(cvm_vk_device,cvm_vk_transfer_timeline.semaphore,NULL);
-    if(cvm_vk_present_queue_family!=cvm_vk_graphics_queue_family)
+    if(cvm_vk_.present_queue_family_index!=cvm_vk_.graphics_queue_family_index)
     {
         vkDestroySemaphore(cvm_vk_device,cvm_vk_present_timeline.semaphore,NULL);
     }
-}
-
-
-VkPhysicalDeviceFeatures2 * cvm_vk_get_device_features(void)
-{
-    return &cvm_vk_device_features;
 }
 
 VkFormat cvm_vk_get_screen_format(void)
@@ -850,19 +1016,26 @@ VkImage cvm_vk_get_swapchain_image(uint32_t index)
 }
 
 
-void cvm_vk_initialise(SDL_Window * window,uint32_t min_swapchain_images,bool sync_compute_required,const char ** requested_extensions,int requested_extension_count)
+
+void cvm_vk_initialise(SDL_Window * window,uint32_t min_swapchain_images,bool sync_compute_required, const cvm_vk_device_setup * external_device_setup)
 {
+    cvm_vk_device_setup device_setup;
+
+    cvm_vk_internal_device_setup_create(&device_setup, external_device_setup);
+
     cvm_vk_min_swapchain_images=min_swapchain_images;
 
-    cvm_vk_create_instance(window);
-    cvm_vk_create_surface(window);
-    cvm_vk_create_physical_device(sync_compute_required);
-    cvm_vk_create_logical_device(requested_extensions,requested_extension_count);
+    cvm_vk_create_instance(&cvm_vk_.instance,window," ");
+    cvm_vk_create_physical_device(&cvm_vk_,sync_compute_required,&device_setup);
+    cvm_vk_create_surface_from_window(&cvm_vk_surface,&cvm_vk_,window);
+    cvm_vk_create_logical_device(&cvm_vk_, &device_setup);
     cvm_vk_create_internal_command_pools();
     cvm_vk_create_transfer_chain();
     cvm_vk_create_timeline_semaphores();
 
     cvm_vk_create_defaults();
+
+    cvm_vk_internal_device_setup_destroy(&device_setup);
 }
 
 void cvm_vk_terminate(void)
@@ -879,9 +1052,59 @@ void cvm_vk_terminate(void)
 
     vkDestroySwapchainKHR(cvm_vk_device,cvm_vk_swapchain,NULL);
     vkDestroyDevice(cvm_vk_device,NULL);
-    vkDestroySurfaceKHR(cvm_vk_instance,cvm_vk_surface,NULL);
-    vkDestroyInstance(cvm_vk_instance,NULL);
+    vkDestroySurfaceKHR(cvm_vk_.instance,cvm_vk_surface,NULL);
+    vkDestroyInstance(cvm_vk_.instance,NULL);
 }
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+#warning window will be removed after SDL3 integration
+void cvm_vk_initialse_2(cvm_vk * vk, const char * application_name, SDL_Window * window)
+{
+    cvm_vk_create_instance(&vk->instance, window, application_name);
+}
+
+void cvm_vk_terminate_2(cvm_vk * vk)
+{
+}
+
+
+
 
 
 /// MUST be called AFTER present for the frame
@@ -919,7 +1142,7 @@ uint32_t cvm_vk_prepare_for_next_frame(bool rendering_resources_invalid)
                 assert(presenting_image->successfully_acquired);///SOMEHOW PREPARING/CLEANING UP FRAME THAT WAS SUBMITTED BUT NOT ACQUIRED
                 cvm_vk_wait_on_timeline_semaphore(&cvm_vk_graphics_timeline,presenting_image->graphics_wait_value,1000000000);
                 cvm_vk_wait_on_timeline_semaphore(&cvm_vk_transfer_timeline,presenting_image->transfer_wait_value,1000000000);
-                if(cvm_vk_present_queue_family!=cvm_vk_graphics_queue_family)
+                if(cvm_vk_.present_queue_family_index!=cvm_vk_.graphics_queue_family_index)
                 {
                     cvm_vk_wait_on_timeline_semaphore(&cvm_vk_present_timeline,presenting_image->present_wait_value,1000000000);
                 }
@@ -982,12 +1205,7 @@ cvm_vk_timeline_semaphore cvm_vk_submit_graphics_work(cvm_vk_module_work_payload
     if(flags&CVM_VK_PAYLOAD_LAST_QUEUE_USE)
     {
         ///add final semaphore and other synchronization
-        if(cvm_vk_present_queue_family==cvm_vk_graphics_queue_family)
-        {
-            /// presenting_image->present_semaphore triggered either here or below when CVM_VK_PAYLOAD_LAST_SWAPCHAIN_USE, this path being taken when present queue == graphics queue
-            signal_semaphores[signal_count++]=cvm_vk_create_binary_semaphore_submit_info(presenting_image->present_semaphore,VK_PIPELINE_STAGE_2_COLOR_ATTACHMENT_OUTPUT_BIT);
-        }
-        else ///requires QFOT
+        if(cvm_vk_.present_queue_family_index!=cvm_vk_.graphics_queue_family_index)///requires QFOT
         {
             VkDependencyInfo graphics_relinquish_dependencies=
             {
@@ -1010,8 +1228,8 @@ cvm_vk_timeline_semaphore cvm_vk_submit_graphics_work(cvm_vk_module_work_payload
                         .dstAccessMask=0,///should be 0 by spec
                         .oldLayout=VK_IMAGE_LAYOUT_PRESENT_SRC_KHR,///colour attachment optimal? modify  renderpasses as necessary to accommodate this (must match present acquire)
                         .newLayout=VK_IMAGE_LAYOUT_PRESENT_SRC_KHR,
-                        .srcQueueFamilyIndex=cvm_vk_graphics_queue_family,
-                        .dstQueueFamilyIndex=cvm_vk_present_queue_family,
+                        .srcQueueFamilyIndex=cvm_vk_.graphics_queue_family_index,
+                        .dstQueueFamilyIndex=cvm_vk_.present_queue_family_index,
                         .image=presenting_image->image,
                         .subresourceRange=(VkImageSubresourceRange)
                         {
@@ -1026,6 +1244,11 @@ cvm_vk_timeline_semaphore cvm_vk_submit_graphics_work(cvm_vk_module_work_payload
             };
 
             vkCmdPipelineBarrier2(payload->command_buffer,&graphics_relinquish_dependencies);
+        }
+        else
+        {
+            /// presenting_image->present_semaphore triggered either here or below when CVM_VK_PAYLOAD_LAST_SWAPCHAIN_USE, this path being taken when present queue == graphics queue
+            signal_semaphores[signal_count++]=cvm_vk_create_binary_semaphore_submit_info(presenting_image->present_semaphore,VK_PIPELINE_STAGE_2_COLOR_ATTACHMENT_OUTPUT_BIT);
         }
 
         signal_semaphores[signal_count++]=cvm_vk_create_timeline_semaphore_signal_submit_info(&cvm_vk_graphics_timeline,payload->signal_stages | VK_PIPELINE_STAGE_2_COLOR_ATTACHMENT_OUTPUT_BIT);
@@ -1071,7 +1294,7 @@ cvm_vk_timeline_semaphore cvm_vk_submit_graphics_work(cvm_vk_module_work_payload
     if(flags&CVM_VK_PAYLOAD_LAST_QUEUE_USE)
     {
         ///acquire on presenting queue if necessary, reuse submit info
-        if(cvm_vk_present_queue_family!=cvm_vk_graphics_queue_family)
+        if(cvm_vk_.present_queue_family_index!=cvm_vk_.graphics_queue_family_index)
         {
             ///fixed count and layout of wait and signal semaphores here
             wait_semaphores[0]=cvm_vk_create_timeline_semaphore_wait_submit_info(&cvm_vk_graphics_timeline,VK_PIPELINE_STAGE_2_COLOR_ATTACHMENT_OUTPUT_BIT);///stages is likely wrong/unnecessary...
@@ -1160,7 +1383,7 @@ bool cvm_vk_check_for_remaining_frames(uint32_t * completed_frame_index)
             {
                 cvm_vk_wait_on_timeline_semaphore(&cvm_vk_graphics_timeline,cvm_vk_presenting_images[i].graphics_wait_value,1000000000);
                 cvm_vk_wait_on_timeline_semaphore(&cvm_vk_transfer_timeline,cvm_vk_presenting_images[i].transfer_wait_value,1000000000);
-                if(cvm_vk_present_queue_family!=cvm_vk_graphics_queue_family)
+                if(cvm_vk_.present_queue_family_index!=cvm_vk_.graphics_queue_family_index)
                 {
                     cvm_vk_wait_on_timeline_semaphore(&cvm_vk_present_timeline,cvm_vk_presenting_images[i].present_wait_value,1000000000);
                 }
@@ -1324,9 +1547,9 @@ void cvm_vk_destroy_image(VkImage image)
 static bool cvm_vk_find_appropriate_memory_type(uint32_t supported_type_bits,VkMemoryPropertyFlags required_properties,uint32_t * index)
 {
     uint32_t i;
-    for(i=0;i<cvm_vk_memory_properties.memoryTypeCount;i++)
+    for(i=0;i<cvm_vk_.physical_device_memory_properties.memoryTypeCount;i++)
     {
-        if(( supported_type_bits & 1<<i ) && ((cvm_vk_memory_properties.memoryTypes[i].propertyFlags & required_properties) == required_properties))
+        if(( supported_type_bits & 1<<i ) && ((cvm_vk_.physical_device_memory_properties.memoryTypes[i].propertyFlags & required_properties) == required_properties))
         {
             *index=i;
             return true;
@@ -1447,11 +1670,11 @@ void cvm_vk_create_buffer(VkBuffer * buffer,VkDeviceMemory * memory,VkBufferUsag
 
     CVM_VK_CHECK(vkBindBufferMemory(cvm_vk_device,*buffer,*memory,0));///offset/alignment kind of irrelevant because of 1 buffer per allocation paradigm
 
-    if(cvm_vk_memory_properties.memoryTypes[memory_type_index].propertyFlags&VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT)
+    if(cvm_vk_.physical_device_memory_properties.memoryTypes[memory_type_index].propertyFlags&VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT)
     {
         CVM_VK_CHECK(vkMapMemory(cvm_vk_device,*memory,0,VK_WHOLE_SIZE,0,mapping));
 
-        *mapping_coherent=!!(cvm_vk_memory_properties.memoryTypes[memory_type_index].propertyFlags&VK_MEMORY_PROPERTY_HOST_COHERENT_BIT);
+        *mapping_coherent=!!(cvm_vk_.physical_device_memory_properties.memoryTypes[memory_type_index].propertyFlags&VK_MEMORY_PROPERTY_HOST_COHERENT_BIT);
     }
     else
     {
@@ -1486,20 +1709,20 @@ uint32_t cvm_vk_get_buffer_alignment_requirements(VkBufferUsageFlags usage)
     /// index: size of index type used
     /// indirect: 4
 
-    if(usage & (VK_BUFFER_USAGE_TRANSFER_SRC_BIT|VK_BUFFER_USAGE_TRANSFER_DST_BIT) && alignment < cvm_vk_device_properties.limits.optimalBufferCopyOffsetAlignment)
-        alignment=cvm_vk_device_properties.limits.optimalBufferCopyOffsetAlignment;
+    if(usage & (VK_BUFFER_USAGE_TRANSFER_SRC_BIT|VK_BUFFER_USAGE_TRANSFER_DST_BIT) && alignment < cvm_vk_.physical_device_properties.limits.optimalBufferCopyOffsetAlignment)
+        alignment=cvm_vk_.physical_device_properties.limits.optimalBufferCopyOffsetAlignment;
 
-    if(usage & (VK_BUFFER_USAGE_UNIFORM_TEXEL_BUFFER_BIT|VK_BUFFER_USAGE_STORAGE_TEXEL_BUFFER_BIT) && alignment < cvm_vk_device_properties.limits.minTexelBufferOffsetAlignment)
-        alignment = cvm_vk_device_properties.limits.minTexelBufferOffsetAlignment;
+    if(usage & (VK_BUFFER_USAGE_UNIFORM_TEXEL_BUFFER_BIT|VK_BUFFER_USAGE_STORAGE_TEXEL_BUFFER_BIT) && alignment < cvm_vk_.physical_device_properties.limits.minTexelBufferOffsetAlignment)
+        alignment = cvm_vk_.physical_device_properties.limits.minTexelBufferOffsetAlignment;
 
-    if(usage & VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT && alignment < cvm_vk_device_properties.limits.minUniformBufferOffsetAlignment)
-        alignment = cvm_vk_device_properties.limits.minUniformBufferOffsetAlignment;
+    if(usage & VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT && alignment < cvm_vk_.physical_device_properties.limits.minUniformBufferOffsetAlignment)
+        alignment = cvm_vk_.physical_device_properties.limits.minUniformBufferOffsetAlignment;
 
-    if(usage & VK_BUFFER_USAGE_STORAGE_BUFFER_BIT && alignment < cvm_vk_device_properties.limits.minStorageBufferOffsetAlignment)
-        alignment = cvm_vk_device_properties.limits.minStorageBufferOffsetAlignment;
+    if(usage & VK_BUFFER_USAGE_STORAGE_BUFFER_BIT && alignment < cvm_vk_.physical_device_properties.limits.minStorageBufferOffsetAlignment)
+        alignment = cvm_vk_.physical_device_properties.limits.minStorageBufferOffsetAlignment;
 
-    if(alignment<cvm_vk_device_properties.limits.nonCoherentAtomSize)
-        alignment=cvm_vk_device_properties.limits.nonCoherentAtomSize;
+    if(alignment<cvm_vk_.physical_device_properties.limits.nonCoherentAtomSize)
+        alignment=cvm_vk_.physical_device_properties.limits.nonCoherentAtomSize;
 
     return alignment;
 }
@@ -1507,7 +1730,7 @@ uint32_t cvm_vk_get_buffer_alignment_requirements(VkBufferUsageFlags usage)
 bool cvm_vk_format_check_optimal_feature_support(VkFormat format,VkFormatFeatureFlags flags)
 {
     VkFormatProperties prop;
-    vkGetPhysicalDeviceFormatProperties(cvm_vk_physical_device,format,&prop);
+    vkGetPhysicalDeviceFormatProperties(cvm_vk_.physical_device,format,&prop);
     return (prop.optimalTilingFeatures&flags)==flags;
 }
 
@@ -1524,7 +1747,7 @@ static void cvm_vk_create_module_sub_batch(cvm_vk_module_sub_batch * msb)
         .sType=VK_STRUCTURE_TYPE_COMMAND_POOL_CREATE_INFO,
         .pNext=NULL,
         .flags= VK_COMMAND_POOL_CREATE_TRANSIENT_BIT,
-        .queueFamilyIndex=cvm_vk_graphics_queue_family
+        .queueFamilyIndex=cvm_vk_.graphics_queue_family_index
     };
 
     CVM_VK_CHECK(vkCreateCommandPool(cvm_vk_device,&command_pool_create_info,NULL,&msb->graphics_pool));
@@ -1561,14 +1784,14 @@ static void cvm_vk_create_module_batch(cvm_vk_module_batch * mb,uint32_t sub_bat
     mb->graphics_pcb_space=0;
     mb->graphics_pcb_count=0;
 
-    if(cvm_vk_transfer_queue_family!=cvm_vk_graphics_queue_family)
+    if(cvm_vk_.transfer_queue_family_index!=cvm_vk_.graphics_queue_family_index)
     {
         VkCommandPoolCreateInfo command_pool_create_info=(VkCommandPoolCreateInfo)
         {
             .sType=VK_STRUCTURE_TYPE_COMMAND_POOL_CREATE_INFO,
             .pNext=NULL,
             .flags= VK_COMMAND_POOL_CREATE_TRANSIENT_BIT,
-            .queueFamilyIndex=cvm_vk_transfer_queue_family
+            .queueFamilyIndex=cvm_vk_.transfer_queue_family_index,
         };
 
         CVM_VK_CHECK(vkCreateCommandPool(cvm_vk_device,&command_pool_create_info,NULL,&mb->transfer_pool));
@@ -1604,7 +1827,7 @@ static void cvm_vk_destroy_module_batch(cvm_vk_module_batch * mb,uint32_t sub_ba
 
     vkFreeCommandBuffers(cvm_vk_device,mb->transfer_pool,1,&mb->transfer_cb);
 
-    if(cvm_vk_transfer_queue_family!=cvm_vk_graphics_queue_family)
+    if(cvm_vk_.transfer_queue_family_index!=cvm_vk_.graphics_queue_family_index)
     {
         vkDestroyCommandPool(cvm_vk_device,mb->transfer_pool,NULL);
     }
@@ -1657,7 +1880,7 @@ void cvm_vk_create_module_data(cvm_vk_module_data * module_data,uint32_t sub_bat
         cvm_vk_buffer_barrier_stack_ini(&module_data->transfer_data[i].acquire_barriers);
         module_data->transfer_data[i].transfer_semaphore_wait_value=0;
         module_data->transfer_data[i].wait_stages=VK_PIPELINE_STAGE_2_NONE;
-        module_data->transfer_data[i].associated_queue_family_index = (i==CVM_VK_GRAPHICS_QUEUE_INDEX)?cvm_vk_graphics_queue_family:cvm_vk_graphics_queue_family;
+        module_data->transfer_data[i].associated_queue_family_index = (i==CVM_VK_GRAPHICS_QUEUE_INDEX)?cvm_vk_.graphics_queue_family_index:cvm_vk_.graphics_queue_family_index;
         #warning NEED TO SET ABOVE COMPUTE VARIANT APPROPRIATELY! USING cvm_vk_graphics_queue_family WILL NOT DO!
     }
 }
@@ -1698,7 +1921,7 @@ cvm_vk_module_batch * cvm_vk_get_module_batch(cvm_vk_module_data * module_data,u
 
         batch->graphics_pcb_count=0;
 
-        if(cvm_vk_transfer_queue_family!=cvm_vk_graphics_queue_family)
+        if(cvm_vk_.transfer_queue_family_index!=cvm_vk_.graphics_queue_family_index)
         {
             vkResetCommandPool(cvm_vk_device,batch->transfer_pool,0);
         }
@@ -1854,7 +2077,7 @@ void cvm_vk_setup_new_graphics_payload_from_batch(cvm_vk_module_work_payload * p
         ///shouldnt need spinlock as this should be appropriately threaded
         if(transfer_data->acquire_barriers.count)///should always be zero if no QFOT is required, (see assert below)
         {
-            assert(cvm_vk_graphics_queue_family!=cvm_vk_transfer_queue_family);
+            assert(cvm_vk_.graphics_queue_family_index!=cvm_vk_.transfer_queue_family_index);
 
             ///add resource acquisition side of QFOT
             VkDependencyInfo copy_aquire_dependencies=
@@ -1896,10 +2119,10 @@ void cvm_vk_setup_new_graphics_payload_from_batch(cvm_vk_module_work_payload * p
 
 uint32_t cvm_vk_get_transfer_queue_family(void)
 {
-    return cvm_vk_transfer_queue_family;
+    return cvm_vk_.transfer_queue_family_index;
 }
 
 uint32_t cvm_vk_get_graphics_queue_family(void)
 {
-    return cvm_vk_graphics_queue_family;
+    return cvm_vk_.graphics_queue_family_index;
 }

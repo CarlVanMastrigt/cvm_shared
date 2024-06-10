@@ -108,11 +108,98 @@ typedef struct cvm_vk_swapchain_image_present_data
 }
 cvm_vk_swapchain_image_present_data;
 
+typedef struct cvm_vk
+{
+    /// base shared structures
+    VkInstance instance;
+    VkPhysicalDevice physical_device;
+//    VkDevice device;///"logical" device
+
+    /// properties & features
+    VkPhysicalDeviceProperties physical_device_properties;
+    VkPhysicalDeviceMemoryProperties physical_device_memory_properties;
+
+    const VkPhysicalDeviceFeatures2 * enabled_physical_device_features;
+    const VkPhysicalDeviceFeatures2 * available_physical_device_features;
+    const VkExtensionProperties * available_physical_device_extensions;///NULL terminated
+    uint32_t available_device_extension_count;
+
+
+    ///these can be the same
+    uint32_t transfer_queue_family_index;
+    uint32_t graphics_queue_family_index;
+    uint32_t present_queue_family_index;
+    uint32_t compute_queue_family_index;///perhaps its actually desirable to support multiple async compute queue families? doesnt seem to be a feature on any gpus
+
+    ///only support one of each of above (allow these to be the same if above are as well?)
+//    VkQueue cvm_vk_transfer_queue;
+//    VkQueue cvm_vk_graphics_queue;///doesn't seem to be any (mainstream) hardware that supports more than one graphics queue
+//    VkQueue cvm_vk_present_queue;
+
+//    VkQueue * cvm_vk_asynchronous_compute_queues;
+//    uint32_t cvm_vk_asynchronous_compute_queue_count;
+
+    /// ONLY used for simple internal commands
+//    VkCommandPool cvm_vk_internal_present_command_pool;
+}
+cvm_vk;
+
+typedef bool cvm_vk_device_feature_validation_function(const VkBaseInStructure*, const VkPhysicalDeviceProperties*, const VkPhysicalDeviceMemoryProperties*, const VkExtensionProperties*,uint32_t);
+typedef void cvm_vk_device_feature_request_function(VkBaseOutStructure*,const VkBaseInStructure*, const VkPhysicalDeviceProperties*, const VkPhysicalDeviceMemoryProperties*, const VkExtensionProperties*,uint32_t);
+
+typedef struct cvm_vk_device_setup
+{
+    cvm_vk_device_feature_validation_function ** feature_validation;
+    uint32_t feature_validation_count;
+
+    cvm_vk_device_feature_request_function ** feature_request;
+    uint32_t feature_request_count;
+
+    VkStructureType * device_feature_struct_types;
+    size_t * device_feature_struct_sizes;
+    uint32_t device_feature_struct_count;
+
+    const char ** extensions;
+    uint32_t extension_count;
+}
+cvm_vk_device_setup;
+
+/// all the data associated with a window and rendering to a surface(usually a window)
+typedef struct cvm_vk_surface_swapchain
+{
+    /// effectively the window
+    VkSurfaceKHR cvm_vk_surface;
+
+    VkSwapchainKHR cvm_vk_swapchain;//VK_NULL_HANDLE
+    VkSurfaceFormatKHR cvm_vk_surface_format;
+    VkPresentModeKHR cvm_vk_surface_present_mode;
+
+    ///may want to rename cvm_vk_frames, cvm_vk_presentation_instance probably isnt that bad tbh...
+    ///realloc these only if number of swapchain image count changes (it wont really)
+    VkSemaphore * cvm_vk_image_acquisition_semaphores;///number of these should match swapchain image count
+    cvm_vk_swapchain_image_present_data * cvm_vk_presenting_images;
+    uint32_t cvm_vk_swapchain_image_count;/// this is also the number of swapchain images
+    uint32_t cvm_vk_current_acquired_image_index;///CVM_INVALID_U32_INDEX
+
+    ///both frames in flight and frames acquired by rendereer
+    uint32_t cvm_vk_acquired_image_count;/// init as 0
+
+    ///following used to determine number of swapchain images to allocate
+    uint32_t cvm_vk_min_swapchain_images;///user defined!
+    bool cvm_vk_rendering_resources_valid;/// starts false, used to determine if rebuilding of resources is required due to swapchain invalidation (e.g. because
+}
+cvm_vk_surface_swapchain;
+
+
+void cvm_vk_initialse_2(cvm_vk * vk, const char * application_name, SDL_Window * window);///window will be removed after SDL3 integration
+void cvm_vk_terminate_2(cvm_vk * vk);
+
+void cvm_vk_surface_swapchain_initialse_for_SDL_window(cvm_vk_surface_swapchain * surface_swapchain, cvm_vk * vk, SDL_Window * window,uint32_t min_swapchain_images);
+void cvm_vk_surface_swapchain_terminate(cvm_vk_surface_swapchain * surface_swapchain, cvm_vk * vk);
 
 
 
-
-void cvm_vk_initialise(SDL_Window * window,uint32_t min_swapchain_images,bool sync_compute_required,const char ** requested_extensions,int requested_extension_count);
+void cvm_vk_initialise(SDL_Window * window,uint32_t min_swapchain_images,bool sync_compute_required,const cvm_vk_device_setup * device_setup);
 ///above extra is the max extra used by any module
 void cvm_vk_terminate(void);///also terminates swapchain dependant data at same time
 
@@ -164,9 +251,6 @@ void cvm_vk_create_buffer(VkBuffer * buffer,VkDeviceMemory * memory,VkBufferUsag
 void cvm_vk_destroy_buffer(VkBuffer buffer,VkDeviceMemory memory,void * mapping);
 void cvm_vk_flush_buffer_memory_range(VkMappedMemoryRange * flush_range);
 uint32_t cvm_vk_get_buffer_alignment_requirements(VkBufferUsageFlags usage);
-
-
-VkPhysicalDeviceFeatures2 * cvm_vk_get_device_features(void);
 
 VkFormat cvm_vk_get_screen_format(void);///can remove?
 uint32_t cvm_vk_get_swapchain_image_count(void);
