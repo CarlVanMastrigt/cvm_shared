@@ -87,7 +87,8 @@ static void cvm_vk_create_instance(VkInstance * instance,SDL_Window * window, co
     uint32_t extension_count;
     uint32_t api_version;
     const char ** extension_names;
-    const char * layer_names[]={"VK_LAYER_KHRONOS_validation"};///VK_LAYER_LUNARG_standard_validation
+    const char * layer_names[]={"VK_LAYER_KHRONOS_validation"};
+    #warning disable above in release
 
     CVM_VK_CHECK(vkEnumerateInstanceVersion(&api_version));
 
@@ -181,6 +182,7 @@ static bool cvm_vk_internal_device_feature_validation_function(const VkBaseInStr
                                                                const VkExtensionProperties* extension_properties,
                                                                uint32_t extension_count)
 {
+    uint32_t i,extensions_found;
     const VkBaseInStructure* entry;
     const VkPhysicalDeviceVulkan12Features * features_12;
     const VkPhysicalDeviceVulkan13Features * features_13;
@@ -209,25 +211,36 @@ static bool cvm_vk_internal_device_feature_validation_function(const VkBaseInStr
         }
     }
 
+    extensions_found=0;
+    for(i=0;i<extension_count;i++)
+    {
+        if(strcmp(extension_properties[i].extensionName,"VK_KHR_swapchain")==0)
+        {
+            extensions_found++;
+        }
+    }
+    if(extensions_found!=1)return false;
+
     return true;
 }
 
 static void cvm_vk_internal_device_feature_request_function(VkBaseOutStructure* set_list,
+                                                            bool* extension_set_table,
                                                             const VkBaseInStructure* valid_list,
                                                             const VkPhysicalDeviceProperties* device_properties,
                                                             const VkPhysicalDeviceMemoryProperties* memory_properties,
                                                             const VkExtensionProperties* extension_properties,
                                                             uint32_t extension_count)
 {
+    uint32_t i;
     VkBaseOutStructure* set_entry;
     VkPhysicalDeviceVulkan12Features * set_features_12;
     VkPhysicalDeviceVulkan13Features * features_13;
 
     /// properties unused
+    (void)valid_list;
     (void)device_properties;
     (void)memory_properties;
-    (void)extension_properties;
-    (void)extension_count;
 
     for(set_entry = set_list;set_entry;set_entry = set_entry->pNext)
     {
@@ -246,16 +259,30 @@ static void cvm_vk_internal_device_feature_request_function(VkBaseOutStructure* 
             default: break;
         }
     }
+
+    for(i=0;i<extension_count;i++)
+    {
+        if(strcmp(extension_properties[i].extensionName,"VK_KHR_swapchain")==0)
+        {
+            extension_set_table[i]=true;
+        }
+    }
 }
 
 
 /// also removes duplicates!
-static void cvm_vk_internal_device_setup_create(cvm_vk_device_setup * internal, const cvm_vk_device_setup * external)
+static void cvm_vk_internal_device_setup_init(cvm_vk_device_setup * internal, const cvm_vk_device_setup * external)
 {
     static const char* const swapchain_extension="VK_KHR_swapchain";
+    static const cvm_vk_device_setup empty_device_setup = (cvm_vk_device_setup){};
     VkStructureType feature_struct_types[3]={VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_VULKAN_1_1_FEATURES, VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_VULKAN_1_2_FEATURES, VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_VULKAN_1_3_FEATURES};
     size_t feature_struct_sizes[3]={sizeof(VkPhysicalDeviceVulkan11Features), sizeof(VkPhysicalDeviceVulkan12Features), sizeof(VkPhysicalDeviceVulkan13Features)};
     uint32_t i,j;
+
+    if(!external)
+    {
+        external=&empty_device_setup;
+    }
 
     internal->feature_validation=malloc(sizeof(cvm_vk_device_feature_validation_function*)*(external->feature_validation_count+1));
     internal->feature_validation_count=external->feature_validation_count+1;
@@ -291,25 +318,6 @@ static void cvm_vk_internal_device_setup_create(cvm_vk_device_setup * internal, 
             internal->device_feature_struct_count++;
         }
     }
-
-    internal->extensions=malloc(sizeof(const char*)*(external->extension_count+1));
-    internal->extension_count=1;
-    internal->extensions[0]=swapchain_extension;
-    for(i=0;i<external->extension_count;i++)
-    {
-        for(j=0;j<internal->extension_count;j++)
-        {
-            if(strcmp(external->extensions[i],internal->extensions[j])==0)
-            {
-                break;
-            }
-        }
-        if(j==internal->extension_count)
-        {
-            internal->extensions[j]=external->extensions[i];
-            internal->extension_count++;
-        }
-    }
 }
 
 static void cvm_vk_internal_device_setup_destroy(cvm_vk_device_setup * setup)
@@ -318,51 +326,59 @@ static void cvm_vk_internal_device_setup_destroy(cvm_vk_device_setup * setup)
     free(setup->feature_request);
     free(setup->device_feature_struct_types);
     free(setup->device_feature_struct_sizes);
-    free(setup->extensions);
 }
 
 
 
-static bool check_physical_device_appropriate_and_get_properties(cvm_vk * vk, VkPhysicalDevice physical_device_to_test, VkPhysicalDeviceFeatures2 * features, VkSurfaceKHR test_surface, bool dedicated_gpu_required, bool sync_compute_required, const cvm_vk_device_setup * device_setup)
+static bool cvm_vk_test_and_set_physical_device_capabilities(cvm_vk * vk,VkPhysicalDevice physical_device_to_test, VkSurfaceKHR test_surface, bool dedicated_gpu_required, bool sync_compute_required, const cvm_vk_device_setup * device_setup)
 {
-    uint32_t i,queue_family_count,redundant_compute_queue_family_index,extension_count;
+    uint32_t i,queue_family_count,redundant_compute_queue_family_index;
     VkQueueFamilyProperties * queue_family_properties=NULL;
     VkBool32 surface_supported;
     VkQueueFlags flags;
-    VkExtensionProperties * extensions;
 
-    vk->physical_device=physical_device_to_test;
+    vkGetPhysicalDeviceProperties(physical_device_to_test, &vk->capabilities.properties);
+    vkGetPhysicalDeviceMemoryProperties(physical_device_to_test,&vk->capabilities.memory_properties);
 
-    vkGetPhysicalDeviceProperties(vk->physical_device, &vk->physical_device_properties);
-    vkGetPhysicalDeviceMemoryProperties(vk->physical_device,&vk->physical_device_memory_properties);
+    vkGetPhysicalDeviceFeatures2(physical_device_to_test,vk->capabilities.features);
 
-    vkGetPhysicalDeviceFeatures2(vk->physical_device,features);
-
-    vkEnumerateDeviceExtensionProperties(cvm_vk_.physical_device,NULL,&extension_count,NULL);
-    extensions=malloc(sizeof(VkExtensionProperties)*extension_count);
-    vkEnumerateDeviceExtensionProperties(cvm_vk_.physical_device,NULL,&extension_count,extensions);
+    vkEnumerateDeviceExtensionProperties(physical_device_to_test,NULL,&vk->capabilities.extension_count,NULL);
+    vk->capabilities.extensions=malloc(sizeof(VkExtensionProperties)*vk->capabilities.extension_count);
+    vkEnumerateDeviceExtensionProperties(physical_device_to_test,NULL,&vk->capabilities.extension_count,vk->capabilities.extensions);
 
 
+    if((dedicated_gpu_required)&&(vk->capabilities.properties.deviceType!=VK_PHYSICAL_DEVICE_TYPE_DISCRETE_GPU))
+    {
+        free(vk->capabilities.extensions);
+        return false;
+    }
 
-    if((dedicated_gpu_required)&&(vk->physical_device_properties.deviceType!=VK_PHYSICAL_DEVICE_TYPE_DISCRETE_GPU))goto check_physical_device_appropriate_and_get_properties_FAIL;
+    if(strstr(vk->capabilities.properties.deviceName,"LLVM"))
+    {
+        /// temp fix to exclude buggy LLVM implementation, need a better/more general way to avoid such "software" devices
+        free(vk->capabilities.extensions);
+        return false;
+    }
 
-    if(strstr(vk->physical_device_properties.deviceName,"LLVM"))goto check_physical_device_appropriate_and_get_properties_FAIL;
-    /// ^ temp fix to exclude buggy LLVM implementation, need a better/more general way to avoid such "software" devices
-
-    printf("testing GPU : %s\n",vk->physical_device_properties.deviceName);
+    printf("testing GPU : %s\n",vk->capabilities.properties.deviceName);
 
     /// external feature requirements
     for(i=0;i<device_setup->feature_validation_count;i++)
     {
-        if(!device_setup->feature_validation[i]((VkBaseInStructure*)features,&vk->physical_device_properties,&vk->physical_device_memory_properties,extensions,extension_count))
+        if(!device_setup->feature_validation[i]((VkBaseInStructure*)vk->capabilities.features,
+                                                &vk->capabilities.properties,
+                                                &vk->capabilities.memory_properties,
+                                                vk->capabilities.extensions,
+                                                vk->capabilities.extension_count))
         {
-            goto check_physical_device_appropriate_and_get_properties_FAIL;
+            free(vk->capabilities.extensions);
+            return false;
         }
     }
 
-    vkGetPhysicalDeviceQueueFamilyProperties(vk->physical_device,&queue_family_count,NULL);
+    vkGetPhysicalDeviceQueueFamilyProperties(physical_device_to_test,&queue_family_count,NULL);
     queue_family_properties=malloc(sizeof(VkQueueFamilyProperties)*queue_family_count);
-    vkGetPhysicalDeviceQueueFamilyProperties(vk->physical_device,&queue_family_count,queue_family_properties);
+    vkGetPhysicalDeviceQueueFamilyProperties(physical_device_to_test,&queue_family_count,queue_family_properties);
 
     vk->graphics_queue_family_index=queue_family_count;
     vk->transfer_queue_family_index=queue_family_count;
@@ -403,9 +419,10 @@ static bool check_physical_device_appropriate_and_get_properties(cvm_vk * vk, Vk
             redundant_compute_queue_family_index=i;
         }
 
-        if(vk->present_queue_family_index==queue_family_count)
+        if(vk->present_queue_family_index==queue_family_count || vk->present_queue_family_index==vk->graphics_queue_family_index)
+//        if(vk->present_queue_family_index==queue_family_count)
         {
-            CVM_VK_CHECK(vkGetPhysicalDeviceSurfaceSupportKHR(vk->physical_device,i,test_surface,&surface_supported));
+            CVM_VK_CHECK(vkGetPhysicalDeviceSurfaceSupportKHR(physical_device_to_test,i,test_surface,&surface_supported));
             if(surface_supported)vk->present_queue_family_index=i;
         }
     }
@@ -431,17 +448,11 @@ static bool check_physical_device_appropriate_and_get_properties(cvm_vk * vk, Vk
         (vk->present_queue_family_index  == queue_family_count)||
         (vk->compute_queue_family_index  == queue_family_count))
     {
-        goto check_physical_device_appropriate_and_get_properties_FAIL;
+        free(vk->capabilities.extensions);
+        return false;
     }
 
-    vk->available_physical_device_extensions=extensions;
-    vk->available_device_extension_count=extension_count;
     return true;
-
-    check_physical_device_appropriate_and_get_properties_FAIL:
-    free(extensions);
-    return false;
-    ///return true only if all queue families needed can be satisfied
 }
 
 static VkPhysicalDeviceFeatures2* cvm_vk_create_device_feature_structure_list(const cvm_vk_device_setup * device_setup)
@@ -485,6 +496,8 @@ static void cvm_vk_destroy_device_feature_structure_list(VkPhysicalDeviceFeature
     }
 }
 
+
+/// returns the available device features and extensions
 static void cvm_vk_create_physical_device(cvm_vk * vk, bool sync_compute_required, const cvm_vk_device_setup * device_setup)
 {
     ///pick best physical device with all required features
@@ -494,8 +507,6 @@ static void cvm_vk_create_physical_device(cvm_vk * vk, bool sync_compute_require
     SDL_Window * test_window;
     VkSurfaceKHR test_surface;
     SDL_bool created_surface;
-    VkPhysicalDeviceFeatures2 * features;
-
 
     test_window = SDL_CreateWindow("",SDL_WINDOWPOS_UNDEFINED,SDL_WINDOWPOS_UNDEFINED,0,0,SDL_WINDOW_HIDDEN | SDL_WINDOW_VULKAN);
     assert(test_window);/// test window could not be created
@@ -503,7 +514,7 @@ static void cvm_vk_create_physical_device(cvm_vk * vk, bool sync_compute_require
     assert(created_surface);/// test surface could not be created
 
 
-    features = cvm_vk_create_device_feature_structure_list(device_setup);
+    vk->capabilities.features = cvm_vk_create_device_feature_structure_list(device_setup);
 
 
     CVM_VK_CHECK(vkEnumeratePhysicalDevices(vk->instance,&device_count,NULL));
@@ -512,46 +523,42 @@ static void cvm_vk_create_physical_device(cvm_vk * vk, bool sync_compute_require
 
     for(i=0;i<device_count;i++)///check for dedicated gfx cards first
     {
-        if(check_physical_device_appropriate_and_get_properties(vk,physical_devices[i],features,test_surface,true,sync_compute_required,device_setup))
+        if(cvm_vk_test_and_set_physical_device_capabilities(vk,physical_devices[i],test_surface,true,sync_compute_required,device_setup))
         {
+            vk->physical_device=physical_devices[i];
             break;
         }
     }
 
     if(i==device_count) for(i=0;i<device_count;i++)///check for non-dedicated (integrated) gfx cards next
     {
-
-        if(check_physical_device_appropriate_and_get_properties(vk,physical_devices[i],features,test_surface,false,sync_compute_required,device_setup))
+        if(cvm_vk_test_and_set_physical_device_capabilities(vk,physical_devices[i],test_surface,false,sync_compute_required,device_setup))
         {
+            vk->physical_device=physical_devices[i];
             break;
         }
     }
 
     free(physical_devices);
 
-    cvm_vk_destroy_device_feature_structure_list(features);///feature list used for validation no longer required
+//    cvm_vk_destroy_device_feature_structure_list(features);///feature list used for validation no longer required
 
     vkDestroySurfaceKHR(vk->instance,test_surface,NULL);
     SDL_DestroyWindow(test_window);
 
     assert(i!=device_count || fprintf(stderr,"NONE OF %d PHYSICAL DEVICES MEET REQUIREMENTS\n",device_count));
-
-//    printf("memory types: %u\nheap count: %u\n",vk->physical_device_memory_properties.memoryTypeCount,vk->physical_device_memory_properties.memoryHeapCount);
-//    for(i=0;i<vk->physical_device_memory_properties.memoryTypeCount;i++)
-//    {
-//        if(vk->physical_device_memory_properties.memoryTypes[i].propertyFlags&VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT)
-//        {
-//            printf("device local memory type: %u using heap: %u\n",i,vk->physical_device_memory_properties.memoryTypes[i].heapIndex);
-//        }
-//        printf("memory type %u has properties %x\n",i,vk->physical_device_memory_properties.memoryTypes[i].propertyFlags);
-//    }
 }
 
 static void cvm_vk_create_logical_device(cvm_vk * vk, const cvm_vk_device_setup * device_setup)
 {
     const char * layer_names[]={"VK_LAYER_KHRONOS_validation"};///VK_LAYER_LUNARG_standard_validation
     float queue_priority=1.0;
-    uint32_t i,j,found_extensions;
+    uint32_t i,j,enabled_extension_count;
+    bool * enabled_extensions_table;
+    VkExtensionProperties * enabled_extensions;
+    const char ** enabled_extension_names;
+    VkPhysicalDeviceFeatures2 * enabled_features;
+
     ///if implementing separate transfer queue use a lower priority?
     /// should also probably try putting transfers on separate queue (when possible) even when they require the same queue family
 
@@ -591,50 +598,77 @@ static void cvm_vk_create_logical_device(cvm_vk * vk, const cvm_vk_device_setup 
         .pQueuePriorities= &queue_priority
     };
 
-    found_extensions=0;
-    for(i=0;i<vk->available_device_extension_count;i++)
-    {
-//        puts(vk->available_physical_device_extensions[i].extensionName);
-        for(j=0;j<device_setup->extension_count;j++)
-        {
-            found_extensions+=(0==strcmp(vk->available_physical_device_extensions[i].extensionName,device_setup->extensions[j]));
-        }
-    }
 
 
-    assert(found_extensions==device_setup->extension_count);///REQUESTED EXTENSION NOT FOUND
-    #warning could/should implement this to instead print WHICH ext wasnt found
+    enabled_features = cvm_vk_create_device_feature_structure_list(device_setup);
 
-    vk->enabled_physical_device_features = cvm_vk_create_device_feature_structure_list(device_setup);
+
+    enabled_extensions_table=calloc(vk->capabilities.extension_count,sizeof(bool));
+
 
     for(i=0;i<device_setup->feature_request_count;i++)
     {
-        device_setup->feature_request[i]((VkBaseOutStructure*)vk->enabled_physical_device_features,
-                                         (VkBaseInStructure*)vk->available_physical_device_features,
-                                         &vk->physical_device_properties,
-                                         &vk->physical_device_memory_properties,
-                                         vk->available_physical_device_extensions,
-                                         vk->available_device_extension_count);
+        device_setup->feature_request[i]((VkBaseOutStructure*)enabled_features,
+                                         enabled_extensions_table,
+                                         (VkBaseInStructure*)vk->capabilities.features,
+                                         &vk->capabilities.properties,
+                                         &vk->capabilities.memory_properties,
+                                         vk->capabilities.extensions,
+                                         vk->capabilities.extension_count);
     }
+
+    enabled_extension_count=0;
+    for(i=0;i<vk->capabilities.extension_count;i++)
+    {
+        if(enabled_extensions_table[i])
+        {
+            enabled_extension_count++;
+        }
+    }
+
+    enabled_extension_names=malloc(sizeof(const char*)*enabled_extension_count);
+    enabled_extensions=malloc(sizeof(VkExtensionProperties)*enabled_extension_count);
+
+    enabled_extension_count=0;
+    for(i=0;i<vk->capabilities.extension_count;i++)
+    {
+        if(enabled_extensions_table[i])
+        {
+            enabled_extensions[enabled_extension_count]=vk->capabilities.extensions[i];
+            enabled_extension_names[enabled_extension_count]=vk->capabilities.extensions[i].extensionName;
+            enabled_extension_count++;
+        }
+    }
+
+    /// replace available capabilities with enabled capabilities
+
+    cvm_vk_destroy_device_feature_structure_list(vk->capabilities.features);
+    free(vk->capabilities.extensions);
+
+    vk->capabilities.features = enabled_features;
+    vk->capabilities.extensions = enabled_extensions;
+    vk->capabilities.extension_count = enabled_extension_count;
 
     VkDeviceCreateInfo device_creation_info=(VkDeviceCreateInfo)
     {
         .sType=VK_STRUCTURE_TYPE_DEVICE_CREATE_INFO,
-        .pNext=vk->enabled_physical_device_features,
+        .pNext=enabled_features,
         .flags=0,
         .queueCreateInfoCount=queue_family_count,
         .pQueueCreateInfos= device_queue_creation_infos,
-        .enabledLayerCount=1,///make 0 for release version (no validation), test performance diff
-        .ppEnabledLayerNames=layer_names,
-        .enabledExtensionCount=device_setup->extension_count,
-        .ppEnabledExtensionNames=device_setup->extensions,
+        .enabledExtensionCount=enabled_extension_count,
+        .ppEnabledExtensionNames=enabled_extension_names,
         .pEnabledFeatures=NULL,///using features2 in pNext chain instead
     };
 
     CVM_VK_CHECK(vkCreateDevice(cvm_vk_.physical_device,&device_creation_info,NULL,&cvm_vk_device));
+
     vkGetDeviceQueue(cvm_vk_device,cvm_vk_.graphics_queue_family_index,0,&cvm_vk_graphics_queue);
     vkGetDeviceQueue(cvm_vk_device,cvm_vk_.transfer_queue_family_index,0,&cvm_vk_transfer_queue);
     vkGetDeviceQueue(cvm_vk_device,cvm_vk_.present_queue_family_index,0,&cvm_vk_present_queue);
+
+    free(enabled_extensions_table);
+    free(enabled_extension_names);
 }
 
 static void cvm_vk_create_internal_command_pools(void)
@@ -1021,7 +1055,11 @@ void cvm_vk_initialise(SDL_Window * window,uint32_t min_swapchain_images,bool sy
 {
     cvm_vk_device_setup device_setup;
 
-    cvm_vk_internal_device_setup_create(&device_setup, external_device_setup);
+
+
+
+
+    cvm_vk_internal_device_setup_init(&device_setup, external_device_setup);
 
     cvm_vk_min_swapchain_images=min_swapchain_images;
 
@@ -1029,6 +1067,8 @@ void cvm_vk_initialise(SDL_Window * window,uint32_t min_swapchain_images,bool sy
     cvm_vk_create_physical_device(&cvm_vk_,sync_compute_required,&device_setup);
     cvm_vk_create_surface_from_window(&cvm_vk_surface,&cvm_vk_,window);
     cvm_vk_create_logical_device(&cvm_vk_, &device_setup);
+
+
     cvm_vk_create_internal_command_pools();
     cvm_vk_create_transfer_chain();
     cvm_vk_create_timeline_semaphores();
@@ -1054,6 +1094,9 @@ void cvm_vk_terminate(void)
     vkDestroyDevice(cvm_vk_device,NULL);
     vkDestroySurfaceKHR(cvm_vk_.instance,cvm_vk_surface,NULL);
     vkDestroyInstance(cvm_vk_.instance,NULL);
+
+    cvm_vk_destroy_device_feature_structure_list(cvm_vk_.capabilities.features);
+    free(cvm_vk_.capabilities.extensions);
 }
 
 
@@ -1224,6 +1267,7 @@ cvm_vk_timeline_semaphore cvm_vk_submit_graphics_work(cvm_vk_module_work_payload
                         .pNext=NULL,
                         .srcStageMask=VK_PIPELINE_STAGE_2_COLOR_ATTACHMENT_OUTPUT_BIT,
                         .srcAccessMask=VK_ACCESS_2_COLOR_ATTACHMENT_WRITE_BIT,
+                        /// ignored by QFOT??
                         .dstStageMask=0,///no relevant stage representing present... (afaik), maybe VK_PIPELINE_STAGE_2_BOTTOM_OF_PIPE_BIT ??
                         .dstAccessMask=0,///should be 0 by spec
                         .oldLayout=VK_IMAGE_LAYOUT_PRESENT_SRC_KHR,///colour attachment optimal? modify  renderpasses as necessary to accommodate this (must match present acquire)
@@ -1293,15 +1337,17 @@ cvm_vk_timeline_semaphore cvm_vk_submit_graphics_work(cvm_vk_module_work_payload
     /// present if last payload that uses the swapchain
     if(flags&CVM_VK_PAYLOAD_LAST_QUEUE_USE)
     {
+        ///dstAccessMask member of the VkImageMemoryBarrier should be set to 0, and the dstStageMask parameter should be set to VK_PIPELINE_STAGE_BOTTOM_OF_PIPE_BIT.
+
         ///acquire on presenting queue if necessary, reuse submit info
         if(cvm_vk_.present_queue_family_index!=cvm_vk_.graphics_queue_family_index)
         {
             ///fixed count and layout of wait and signal semaphores here
-            wait_semaphores[0]=cvm_vk_create_timeline_semaphore_wait_submit_info(&cvm_vk_graphics_timeline,VK_PIPELINE_STAGE_2_COLOR_ATTACHMENT_OUTPUT_BIT);///stages is likely wrong/unnecessary...
+            wait_semaphores[0]=cvm_vk_create_timeline_semaphore_wait_submit_info(&cvm_vk_graphics_timeline,VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT);
 
             /// presenting_image->present_semaphore triggered either here or above when CVM_VK_PAYLOAD_LAST_SWAPCHAIN_USE, this path being taken when present queue != graphics queue
-            signal_semaphores[0]=cvm_vk_create_binary_semaphore_submit_info(presenting_image->present_semaphore,VK_PIPELINE_STAGE_2_COLOR_ATTACHMENT_OUTPUT_BIT);///stages is likely wrong/unnecessary...
-            signal_semaphores[1]=cvm_vk_create_timeline_semaphore_signal_submit_info(&cvm_vk_present_timeline,VK_PIPELINE_STAGE_2_COLOR_ATTACHMENT_OUTPUT_BIT);///stages is likely wrong/unnecessary...
+            signal_semaphores[0]=cvm_vk_create_binary_semaphore_submit_info(presenting_image->present_semaphore,VK_PIPELINE_STAGE_BOTTOM_OF_PIPE_BIT);
+            signal_semaphores[1]=cvm_vk_create_timeline_semaphore_signal_submit_info(&cvm_vk_present_timeline,VK_PIPELINE_STAGE_BOTTOM_OF_PIPE_BIT);
 
             submit_info=(VkSubmitInfo2)
             {
@@ -1316,7 +1362,7 @@ cvm_vk_timeline_semaphore cvm_vk_submit_graphics_work(cvm_vk_module_work_payload
                     {
                         .sType=VK_STRUCTURE_TYPE_COMMAND_BUFFER_SUBMIT_INFO,
                         .pNext=NULL,
-                        .commandBuffer=payload->command_buffer,
+                        .commandBuffer=presenting_image->present_acquire_command_buffer,
                         .deviceMask=0
                     }
                 },
@@ -1547,9 +1593,9 @@ void cvm_vk_destroy_image(VkImage image)
 static bool cvm_vk_find_appropriate_memory_type(uint32_t supported_type_bits,VkMemoryPropertyFlags required_properties,uint32_t * index)
 {
     uint32_t i;
-    for(i=0;i<cvm_vk_.physical_device_memory_properties.memoryTypeCount;i++)
+    for(i=0;i<cvm_vk_.capabilities.memory_properties.memoryTypeCount;i++)
     {
-        if(( supported_type_bits & 1<<i ) && ((cvm_vk_.physical_device_memory_properties.memoryTypes[i].propertyFlags & required_properties) == required_properties))
+        if(( supported_type_bits & 1<<i ) && ((cvm_vk_.capabilities.memory_properties.memoryTypes[i].propertyFlags & required_properties) == required_properties))
         {
             *index=i;
             return true;
@@ -1670,11 +1716,11 @@ void cvm_vk_create_buffer(VkBuffer * buffer,VkDeviceMemory * memory,VkBufferUsag
 
     CVM_VK_CHECK(vkBindBufferMemory(cvm_vk_device,*buffer,*memory,0));///offset/alignment kind of irrelevant because of 1 buffer per allocation paradigm
 
-    if(cvm_vk_.physical_device_memory_properties.memoryTypes[memory_type_index].propertyFlags&VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT)
+    if(cvm_vk_.capabilities.memory_properties.memoryTypes[memory_type_index].propertyFlags&VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT)
     {
         CVM_VK_CHECK(vkMapMemory(cvm_vk_device,*memory,0,VK_WHOLE_SIZE,0,mapping));
 
-        *mapping_coherent=!!(cvm_vk_.physical_device_memory_properties.memoryTypes[memory_type_index].propertyFlags&VK_MEMORY_PROPERTY_HOST_COHERENT_BIT);
+        *mapping_coherent=!!(cvm_vk_.capabilities.memory_properties.memoryTypes[memory_type_index].propertyFlags&VK_MEMORY_PROPERTY_HOST_COHERENT_BIT);
     }
     else
     {
@@ -1709,20 +1755,20 @@ uint32_t cvm_vk_get_buffer_alignment_requirements(VkBufferUsageFlags usage)
     /// index: size of index type used
     /// indirect: 4
 
-    if(usage & (VK_BUFFER_USAGE_TRANSFER_SRC_BIT|VK_BUFFER_USAGE_TRANSFER_DST_BIT) && alignment < cvm_vk_.physical_device_properties.limits.optimalBufferCopyOffsetAlignment)
-        alignment=cvm_vk_.physical_device_properties.limits.optimalBufferCopyOffsetAlignment;
+    if(usage & (VK_BUFFER_USAGE_TRANSFER_SRC_BIT|VK_BUFFER_USAGE_TRANSFER_DST_BIT) && alignment < cvm_vk_.capabilities.properties.limits.optimalBufferCopyOffsetAlignment)
+        alignment=cvm_vk_.capabilities.properties.limits.optimalBufferCopyOffsetAlignment;
 
-    if(usage & (VK_BUFFER_USAGE_UNIFORM_TEXEL_BUFFER_BIT|VK_BUFFER_USAGE_STORAGE_TEXEL_BUFFER_BIT) && alignment < cvm_vk_.physical_device_properties.limits.minTexelBufferOffsetAlignment)
-        alignment = cvm_vk_.physical_device_properties.limits.minTexelBufferOffsetAlignment;
+    if(usage & (VK_BUFFER_USAGE_UNIFORM_TEXEL_BUFFER_BIT|VK_BUFFER_USAGE_STORAGE_TEXEL_BUFFER_BIT) && alignment < cvm_vk_.capabilities.properties.limits.minTexelBufferOffsetAlignment)
+        alignment = cvm_vk_.capabilities.properties.limits.minTexelBufferOffsetAlignment;
 
-    if(usage & VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT && alignment < cvm_vk_.physical_device_properties.limits.minUniformBufferOffsetAlignment)
-        alignment = cvm_vk_.physical_device_properties.limits.minUniformBufferOffsetAlignment;
+    if(usage & VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT && alignment < cvm_vk_.capabilities.properties.limits.minUniformBufferOffsetAlignment)
+        alignment = cvm_vk_.capabilities.properties.limits.minUniformBufferOffsetAlignment;
 
-    if(usage & VK_BUFFER_USAGE_STORAGE_BUFFER_BIT && alignment < cvm_vk_.physical_device_properties.limits.minStorageBufferOffsetAlignment)
-        alignment = cvm_vk_.physical_device_properties.limits.minStorageBufferOffsetAlignment;
+    if(usage & VK_BUFFER_USAGE_STORAGE_BUFFER_BIT && alignment < cvm_vk_.capabilities.properties.limits.minStorageBufferOffsetAlignment)
+        alignment = cvm_vk_.capabilities.properties.limits.minStorageBufferOffsetAlignment;
 
-    if(alignment<cvm_vk_.physical_device_properties.limits.nonCoherentAtomSize)
-        alignment=cvm_vk_.physical_device_properties.limits.nonCoherentAtomSize;
+    if(alignment<cvm_vk_.capabilities.properties.limits.nonCoherentAtomSize)
+        alignment=cvm_vk_.capabilities.properties.limits.nonCoherentAtomSize;
 
     return alignment;
 }

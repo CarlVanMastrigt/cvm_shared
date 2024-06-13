@@ -108,6 +108,17 @@ typedef struct cvm_vk_swapchain_image_present_data
 }
 cvm_vk_swapchain_image_present_data;
 
+typedef struct cvm_vk_device_capabilities
+{
+    VkPhysicalDeviceProperties properties;
+    VkPhysicalDeviceMemoryProperties memory_properties;
+
+    const VkPhysicalDeviceFeatures2 * features;
+    const VkExtensionProperties * extensions;
+    uint32_t extension_count;
+}
+cvm_vk_device_capabilities;
+
 typedef struct cvm_vk
 {
     /// base shared structures
@@ -116,13 +127,16 @@ typedef struct cvm_vk
 //    VkDevice device;///"logical" device
 
     /// properties & features
-    VkPhysicalDeviceProperties physical_device_properties;
-    VkPhysicalDeviceMemoryProperties physical_device_memory_properties;
+    cvm_vk_device_capabilities capabilities;/// initially available capabilities, after device selection becomes enabled capabilities
 
-    const VkPhysicalDeviceFeatures2 * enabled_physical_device_features;
-    const VkPhysicalDeviceFeatures2 * available_physical_device_features;
-    const VkExtensionProperties * available_physical_device_extensions;///NULL terminated
-    uint32_t available_device_extension_count;
+//    const VkPhysicalDeviceFeatures2 * enabled_physical_device_features;
+//    const VkExtensionProperties * enabled_physical_device_extensions;
+//    uint32_t enabled_physical_device_extension_count;
+//
+//    const VkPhysicalDeviceFeatures2 * available_physical_device_features;
+//    const VkExtensionProperties * available_physical_device_extensions;
+//    uint32_t available_device_extension_count;
+
 
 
     ///these can be the same
@@ -145,7 +159,7 @@ typedef struct cvm_vk
 cvm_vk;
 
 typedef bool cvm_vk_device_feature_validation_function(const VkBaseInStructure*, const VkPhysicalDeviceProperties*, const VkPhysicalDeviceMemoryProperties*, const VkExtensionProperties*,uint32_t);
-typedef void cvm_vk_device_feature_request_function(VkBaseOutStructure*,const VkBaseInStructure*, const VkPhysicalDeviceProperties*, const VkPhysicalDeviceMemoryProperties*, const VkExtensionProperties*,uint32_t);
+typedef void cvm_vk_device_feature_request_function(VkBaseOutStructure*,bool*,const VkBaseInStructure*, const VkPhysicalDeviceProperties*, const VkPhysicalDeviceMemoryProperties*, const VkExtensionProperties*,uint32_t);
 
 typedef struct cvm_vk_device_setup
 {
@@ -158,9 +172,6 @@ typedef struct cvm_vk_device_setup
     VkStructureType * device_feature_struct_types;
     size_t * device_feature_struct_sizes;
     uint32_t device_feature_struct_count;
-
-    const char ** extensions;
-    uint32_t extension_count;
 }
 cvm_vk_device_setup;
 
