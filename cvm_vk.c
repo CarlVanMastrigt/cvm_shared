@@ -98,6 +98,8 @@ static void cvm_vk_create_instance(VkInstance * instance,SDL_Window * window, co
     r=SDL_Vulkan_GetInstanceExtensions(window,&extension_count,NULL);
     assert(r);///COULD NOT GET SDL WINDOW EXTENSION COUNT
 
+    #warning is there a better/more generic/sdl detached way to get extensions than querying the window??
+
     extension_names=malloc(sizeof(const char*)*extension_count);
     r=SDL_Vulkan_GetInstanceExtensions(window,&extension_count,extension_names);
     assert(r);///COULD NOT GET SDL WINDOW EXTENSIONS
@@ -262,6 +264,7 @@ static void cvm_vk_internal_device_feature_request_function(VkBaseOutStructure* 
 
     for(i=0;i<extension_count;i++)
     {
+        #warning (somehow) only do this if a surface is provided
         if(strcmp(extension_properties[i].extensionName,"VK_KHR_swapchain")==0)
         {
             extension_set_table[i]=true;
@@ -273,8 +276,7 @@ static void cvm_vk_internal_device_feature_request_function(VkBaseOutStructure* 
 /// also removes duplicates!
 static void cvm_vk_internal_device_setup_init(cvm_vk_device_setup * internal, const cvm_vk_device_setup * external)
 {
-    static const char* const swapchain_extension="VK_KHR_swapchain";
-    static const cvm_vk_device_setup empty_device_setup = (cvm_vk_device_setup){};
+    static const cvm_vk_device_setup empty_device_setup = (cvm_vk_device_setup){0};
     VkStructureType feature_struct_types[3]={VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_VULKAN_1_1_FEATURES, VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_VULKAN_1_2_FEATURES, VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_VULKAN_1_3_FEATURES};
     size_t feature_struct_sizes[3]={sizeof(VkPhysicalDeviceVulkan11Features), sizeof(VkPhysicalDeviceVulkan12Features), sizeof(VkPhysicalDeviceVulkan13Features)};
     uint32_t i,j;
@@ -318,6 +320,11 @@ static void cvm_vk_internal_device_setup_init(cvm_vk_device_setup * internal, co
             internal->device_feature_struct_count++;
         }
     }
+
+    internal->require_present  = external->require_present;
+
+    internal->desired_graphics_queues = external->desired_graphics_queues;
+    internal->desired_async_compute_queues = external->desired_async_compute_queues;
 }
 
 static void cvm_vk_internal_device_setup_destroy(cvm_vk_device_setup * setup)
@@ -326,133 +333,6 @@ static void cvm_vk_internal_device_setup_destroy(cvm_vk_device_setup * setup)
     free(setup->feature_request);
     free(setup->device_feature_struct_types);
     free(setup->device_feature_struct_sizes);
-}
-
-
-
-static bool cvm_vk_test_and_set_physical_device_capabilities(cvm_vk * vk,VkPhysicalDevice physical_device_to_test, VkSurfaceKHR test_surface, bool dedicated_gpu_required, bool sync_compute_required, const cvm_vk_device_setup * device_setup)
-{
-    uint32_t i,queue_family_count,redundant_compute_queue_family_index;
-    VkQueueFamilyProperties * queue_family_properties=NULL;
-    VkBool32 surface_supported;
-    VkQueueFlags flags;
-
-    vkGetPhysicalDeviceProperties(physical_device_to_test, &vk->capabilities.properties);
-    vkGetPhysicalDeviceMemoryProperties(physical_device_to_test,&vk->capabilities.memory_properties);
-
-    vkGetPhysicalDeviceFeatures2(physical_device_to_test,vk->capabilities.features);
-
-    vkEnumerateDeviceExtensionProperties(physical_device_to_test,NULL,&vk->capabilities.extension_count,NULL);
-    vk->capabilities.extensions=malloc(sizeof(VkExtensionProperties)*vk->capabilities.extension_count);
-    vkEnumerateDeviceExtensionProperties(physical_device_to_test,NULL,&vk->capabilities.extension_count,vk->capabilities.extensions);
-
-
-    if((dedicated_gpu_required)&&(vk->capabilities.properties.deviceType!=VK_PHYSICAL_DEVICE_TYPE_DISCRETE_GPU))
-    {
-        free(vk->capabilities.extensions);
-        return false;
-    }
-
-    if(strstr(vk->capabilities.properties.deviceName,"LLVM"))
-    {
-        /// temp fix to exclude buggy LLVM implementation, need a better/more general way to avoid such "software" devices
-        free(vk->capabilities.extensions);
-        return false;
-    }
-
-    printf("testing GPU : %s\n",vk->capabilities.properties.deviceName);
-
-    /// external feature requirements
-    for(i=0;i<device_setup->feature_validation_count;i++)
-    {
-        if(!device_setup->feature_validation[i]((VkBaseInStructure*)vk->capabilities.features,
-                                                &vk->capabilities.properties,
-                                                &vk->capabilities.memory_properties,
-                                                vk->capabilities.extensions,
-                                                vk->capabilities.extension_count))
-        {
-            free(vk->capabilities.extensions);
-            return false;
-        }
-    }
-
-    vkGetPhysicalDeviceQueueFamilyProperties(physical_device_to_test,&queue_family_count,NULL);
-    queue_family_properties=malloc(sizeof(VkQueueFamilyProperties)*queue_family_count);
-    vkGetPhysicalDeviceQueueFamilyProperties(physical_device_to_test,&queue_family_count,queue_family_properties);
-
-    vk->graphics_queue_family_index=queue_family_count;
-    vk->transfer_queue_family_index=queue_family_count;
-    vk->present_queue_family_index=queue_family_count;
-    vk->compute_queue_family_index=queue_family_count;
-    redundant_compute_queue_family_index=queue_family_count;
-
-    for(i=0;i<queue_family_count;i++)
-    {
-        printf("queue family %u\n available queue count: %u\nqueue family properties %x\n\n",i,queue_family_properties[i].queueCount,queue_family_properties[i].queueFlags);
-
-        flags=queue_family_properties[i].queueFlags;
-
-
-        /// If an implementation exposes any queue family that supports graphics operations,
-        /// at least one queue family of at least one physical device exposed by the implementation must support both graphics and compute operations.
-
-        if((vk->graphics_queue_family_index==queue_family_count)&&(flags&VK_QUEUE_GRAPHICS_BIT)&&(flags&VK_QUEUE_COMPUTE_BIT || !sync_compute_required))
-        {
-            vk->graphics_queue_family_index=i;
-        }
-
-        ///if an explicit transfer queue family separate from selected graphics and compute queue families exists use it independently
-        if((vk->transfer_queue_family_index==queue_family_count) && (flags&VK_QUEUE_TRANSFER_BIT) && !(flags&(VK_QUEUE_GRAPHICS_BIT|VK_QUEUE_COMPUTE_BIT)))
-        {
-            vk->transfer_queue_family_index=i;
-        }
-
-        ///prefer async if possible (non-graphics)
-        if((vk->compute_queue_family_index==queue_family_count) && (flags&VK_QUEUE_COMPUTE_BIT) && !(flags&VK_QUEUE_GRAPHICS_BIT))
-        {
-            vk->compute_queue_family_index=i;
-        }
-
-        ///set up redundant though otherwise
-        if((redundant_compute_queue_family_index==queue_family_count) && (flags&VK_QUEUE_COMPUTE_BIT))
-        {
-            redundant_compute_queue_family_index=i;
-        }
-
-        if(vk->present_queue_family_index==queue_family_count || vk->present_queue_family_index==vk->graphics_queue_family_index)
-//        if(vk->present_queue_family_index==queue_family_count)
-        {
-            CVM_VK_CHECK(vkGetPhysicalDeviceSurfaceSupportKHR(physical_device_to_test,i,test_surface,&surface_supported));
-            if(surface_supported)vk->present_queue_family_index=i;
-        }
-    }
-
-    if(vk->transfer_queue_family_index==queue_family_count)
-    {
-        ///graphics must support transfer, even if not specified
-        vk->transfer_queue_family_index=vk->graphics_queue_family_index;
-    }
-
-    if(vk->compute_queue_family_index==queue_family_count)
-    {
-        assert(redundant_compute_queue_family_index!=queue_family_count);
-        vk->compute_queue_family_index=redundant_compute_queue_family_index;
-    }
-
-    free(queue_family_properties);
-
-    printf("Queue Families count:%u g:%u t:%u p:%u c:%u\n",queue_family_count,vk->graphics_queue_family_index,vk->transfer_queue_family_index,vk->present_queue_family_index,vk->compute_queue_family_index);
-
-    if ((vk->graphics_queue_family_index == queue_family_count)||
-        (vk->transfer_queue_family_index == queue_family_count)||
-        (vk->present_queue_family_index  == queue_family_count)||
-        (vk->compute_queue_family_index  == queue_family_count))
-    {
-        free(vk->capabilities.extensions);
-        return false;
-    }
-
-    return true;
 }
 
 static VkPhysicalDeviceFeatures2* cvm_vk_create_device_feature_structure_list(const cvm_vk_device_setup * device_setup)
@@ -496,6 +376,148 @@ static void cvm_vk_destroy_device_feature_structure_list(VkPhysicalDeviceFeature
     }
 }
 
+static bool cvm_vk_test_physical_device_capabilities(VkPhysicalDevice physical_device_to_test, VkSurfaceKHR test_surface, bool dedicated_gpu_required, const cvm_vk_device_setup * device_setup)
+{
+    uint32_t i,queue_family_count,extension_count;
+    VkQueueFamilyProperties * queue_family_properties=NULL;
+    VkBool32 surface_supported;
+    VkPhysicalDeviceProperties properties;
+    VkPhysicalDeviceMemoryProperties memory_properties;
+    VkPhysicalDeviceFeatures2 * features;
+    VkExtensionProperties * extensions;
+    bool capable;
+
+
+    capable = true;
+
+
+    vkGetPhysicalDeviceProperties(physical_device_to_test, &properties);
+    vkGetPhysicalDeviceMemoryProperties(physical_device_to_test,&memory_properties);
+
+    features = cvm_vk_create_device_feature_structure_list(device_setup);
+    vkGetPhysicalDeviceFeatures2(physical_device_to_test,features);
+
+    vkEnumerateDeviceExtensionProperties(physical_device_to_test,NULL,&extension_count,NULL);
+    extensions=malloc(sizeof(VkExtensionProperties)*extension_count);
+    vkEnumerateDeviceExtensionProperties(physical_device_to_test,NULL,&extension_count,extensions);
+
+    if(strstr(properties.deviceName,"LLVM"))
+    {
+        /// temp fix to exclude buggy LLVM implementation, need a better/more general way to avoid such "software" devices
+        capable=false;
+    }
+
+    printf("testing GPU : %s\n",properties.deviceName);
+
+    if((dedicated_gpu_required)&&(properties.deviceType!=VK_PHYSICAL_DEVICE_TYPE_DISCRETE_GPU))
+    {
+        capable=false;
+    }
+
+    vkGetPhysicalDeviceQueueFamilyProperties(physical_device_to_test,&queue_family_count,NULL);
+    queue_family_properties=malloc(sizeof(VkQueueFamilyProperties)*queue_family_count);
+    vkGetPhysicalDeviceQueueFamilyProperties(physical_device_to_test,&queue_family_count,queue_family_properties);
+
+
+    if(device_setup->require_present)
+    {
+        for(i=0;i<queue_family_count;i++)
+        {
+            CVM_VK_CHECK(vkGetPhysicalDeviceSurfaceSupportKHR(physical_device_to_test,i,test_surface,&surface_supported));
+            if(surface_supported) break;
+        }
+        capable = capable && i<queue_family_count;
+    }
+
+    /// external feature requirements
+    for(i=0;i<device_setup->feature_validation_count;i++)
+    {
+        #warning pass in queue_family_satisfactory_bits and queue families!
+        capable = capable && device_setup->feature_validation[i]((VkBaseInStructure*)features, &properties, &memory_properties, extensions, extension_count);
+    }
+
+    cvm_vk_destroy_device_feature_structure_list(features);
+    free(extensions);
+
+    return capable;
+
+/*
+    vk->graphics_queue_family_index=queue_family_count;
+    vk->transfer_queue_family_index=queue_family_count;
+    vk->present_queue_family_index=queue_family_count;
+    vk->compute_queue_family_index=queue_family_count;
+    redundant_compute_queue_family_index=queue_family_count;
+
+    for(i=0;i<queue_family_count;i++)
+    {
+        printf("queue family %u\n available queue count: %u\nqueue family properties %x\n\n",i,queue_family_properties[i].queueCount,queue_family_properties[i].queueFlags);
+
+        flags=queue_family_properties[i].queueFlags;
+
+
+        /// If an implementation exposes any queue family that supports graphics operations,
+        /// at least one queue family of at least one physical device exposed by the implementation must support both graphics and compute operations.
+
+        if((vk->graphics_queue_family_index==queue_family_count)&&(flags&VK_QUEUE_GRAPHICS_BIT)&&(flags&VK_QUEUE_COMPUTE_BIT || !sync_compute_required))
+        {
+            vk->graphics_queue_family_index=i;
+        }
+
+        ///if an explicit transfer queue family separate from selected graphics and compute queue families exists use it independently
+        if((vk->transfer_queue_family_index==queue_family_count) && (flags&VK_QUEUE_TRANSFER_BIT) && !(flags&(VK_QUEUE_GRAPHICS_BIT|VK_QUEUE_COMPUTE_BIT)))
+        {
+            vk->transfer_queue_family_index=i;
+        }
+
+        ///prefer async if possible (non-graphics)
+        if((vk->compute_queue_family_index==queue_family_count) && (flags&VK_QUEUE_COMPUTE_BIT) && !(flags&VK_QUEUE_GRAPHICS_BIT))
+        {
+            vk->compute_queue_family_index=i;
+        }
+
+        ///set up redundant though otherwise
+        if((redundant_compute_queue_family_index==queue_family_count) && (flags&VK_QUEUE_COMPUTE_BIT))
+        {
+            redundant_compute_queue_family_index=i;
+        }
+
+        #warning testing purposes
+        if(vk->present_queue_family_index==queue_family_count || vk->present_queue_family_index==vk->graphics_queue_family_index)
+//        if(vk->present_queue_family_index==queue_family_count)
+        {
+            CVM_VK_CHECK(vkGetPhysicalDeviceSurfaceSupportKHR(physical_device_to_test,i,test_surface,&surface_supported));
+            if(surface_supported)vk->present_queue_family_index=i;
+        }
+    }
+
+    if(vk->transfer_queue_family_index==queue_family_count)
+    {
+        ///graphics must support transfer, even if not specified
+        vk->transfer_queue_family_index=vk->graphics_queue_family_index;
+    }
+
+    if(vk->compute_queue_family_index==queue_family_count)
+    {
+        assert(redundant_compute_queue_family_index!=queue_family_count);
+        vk->compute_queue_family_index=redundant_compute_queue_family_index;
+    }
+
+    free(queue_family_properties);
+
+    printf("Queue Families count:%u g:%u t:%u p:%u c:%u\n",queue_family_count,vk->graphics_queue_family_index,vk->transfer_queue_family_index,vk->present_queue_family_index,vk->compute_queue_family_index);
+
+    if ((vk->graphics_queue_family_index == queue_family_count)||
+        (vk->transfer_queue_family_index == queue_family_count)||
+        (vk->present_queue_family_index  == queue_family_count)||
+        (vk->compute_queue_family_index  == queue_family_count))
+    {
+        free(vk->capabilities.extensions);
+        return false;
+    }
+*/
+    return true;
+}
+
 
 /// returns the available device features and extensions
 static void cvm_vk_create_physical_device(cvm_vk * vk, bool sync_compute_required, const cvm_vk_device_setup * device_setup)
@@ -514,7 +536,10 @@ static void cvm_vk_create_physical_device(cvm_vk * vk, bool sync_compute_require
     assert(created_surface);/// test surface could not be created
 
 
-    vk->capabilities.features = cvm_vk_create_device_feature_structure_list(device_setup);
+    #warning move the surface out, make present only exist if surface is specified
+
+
+
 
 
     CVM_VK_CHECK(vkEnumeratePhysicalDevices(vk->instance,&device_count,NULL));
@@ -523,7 +548,7 @@ static void cvm_vk_create_physical_device(cvm_vk * vk, bool sync_compute_require
 
     for(i=0;i<device_count;i++)///check for dedicated gfx cards first
     {
-        if(cvm_vk_test_and_set_physical_device_capabilities(vk,physical_devices[i],test_surface,true,sync_compute_required,device_setup))
+        if(cvm_vk_test_physical_device_capabilities(physical_devices[i],test_surface,true,device_setup))
         {
             vk->physical_device=physical_devices[i];
             break;
@@ -532,7 +557,7 @@ static void cvm_vk_create_physical_device(cvm_vk * vk, bool sync_compute_require
 
     if(i==device_count) for(i=0;i<device_count;i++)///check for non-dedicated (integrated) gfx cards next
     {
-        if(cvm_vk_test_and_set_physical_device_capabilities(vk,physical_devices[i],test_surface,false,sync_compute_required,device_setup))
+        if(cvm_vk_test_physical_device_capabilities(physical_devices[i],test_surface,false,device_setup))
         {
             vk->physical_device=physical_devices[i];
             break;
@@ -546,6 +571,14 @@ static void cvm_vk_create_physical_device(cvm_vk * vk, bool sync_compute_require
     vkDestroySurfaceKHR(vk->instance,test_surface,NULL);
     SDL_DestroyWindow(test_window);
 
+    #warning REMOVE
+    {
+        vk->graphics_queue_family_index=0;
+        vk->transfer_queue_family_index=0;
+        vk->present_queue_family_index=0;
+        vk->compute_queue_family_index=0;
+    }
+
     assert(i!=device_count || fprintf(stderr,"NONE OF %d PHYSICAL DEVICES MEET REQUIREMENTS\n",device_count));
 }
 
@@ -553,11 +586,23 @@ static void cvm_vk_create_logical_device(cvm_vk * vk, const cvm_vk_device_setup 
 {
     const char * layer_names[]={"VK_LAYER_KHRONOS_validation"};///VK_LAYER_LUNARG_standard_validation
     float queue_priority=1.0;
-    uint32_t i,j,enabled_extension_count;
+    uint32_t i,j,enabled_extension_count,available_extension_count;
     bool * enabled_extensions_table;
     VkExtensionProperties * enabled_extensions;
+    VkExtensionProperties * available_extensions;
     const char ** enabled_extension_names;
     VkPhysicalDeviceFeatures2 * enabled_features;
+    VkPhysicalDeviceFeatures2 * available_features;
+
+    vkGetPhysicalDeviceProperties(vk->physical_device, &vk->capabilities.properties);
+    vkGetPhysicalDeviceMemoryProperties(vk->physical_device,&vk->capabilities.memory_properties);
+
+    available_features = cvm_vk_create_device_feature_structure_list(device_setup);
+    vkGetPhysicalDeviceFeatures2(vk->physical_device,available_features);
+
+    vkEnumerateDeviceExtensionProperties(vk->physical_device,NULL,&available_extension_count,NULL);
+    available_extensions=malloc(sizeof(VkExtensionProperties)*available_extension_count);
+    vkEnumerateDeviceExtensionProperties(vk->physical_device,NULL,&available_extension_count,available_extensions);
 
     ///if implementing separate transfer queue use a lower priority?
     /// should also probably try putting transfers on separate queue (when possible) even when they require the same queue family
@@ -601,24 +646,22 @@ static void cvm_vk_create_logical_device(cvm_vk * vk, const cvm_vk_device_setup 
 
 
     enabled_features = cvm_vk_create_device_feature_structure_list(device_setup);
-
-
-    enabled_extensions_table=calloc(vk->capabilities.extension_count,sizeof(bool));
+    enabled_extensions_table=calloc(available_extension_count,sizeof(bool));
 
 
     for(i=0;i<device_setup->feature_request_count;i++)
     {
         device_setup->feature_request[i]((VkBaseOutStructure*)enabled_features,
                                          enabled_extensions_table,
-                                         (VkBaseInStructure*)vk->capabilities.features,
+                                         (VkBaseInStructure*)available_features,
                                          &vk->capabilities.properties,
                                          &vk->capabilities.memory_properties,
-                                         vk->capabilities.extensions,
-                                         vk->capabilities.extension_count);
+                                         available_extensions,
+                                         available_extension_count);
     }
 
     enabled_extension_count=0;
-    for(i=0;i<vk->capabilities.extension_count;i++)
+    for(i=0;i<available_extension_count;i++)
     {
         if(enabled_extensions_table[i])
         {
@@ -630,20 +673,20 @@ static void cvm_vk_create_logical_device(cvm_vk * vk, const cvm_vk_device_setup 
     enabled_extensions=malloc(sizeof(VkExtensionProperties)*enabled_extension_count);
 
     enabled_extension_count=0;
-    for(i=0;i<vk->capabilities.extension_count;i++)
+    for(i=0;i<available_extension_count;i++)
     {
         if(enabled_extensions_table[i])
         {
-            enabled_extensions[enabled_extension_count]=vk->capabilities.extensions[i];
-            enabled_extension_names[enabled_extension_count]=vk->capabilities.extensions[i].extensionName;
+            enabled_extensions[enabled_extension_count]=available_extensions[i];
+            enabled_extension_names[enabled_extension_count]=available_extensions[i].extensionName;
             enabled_extension_count++;
         }
     }
 
     /// replace available capabilities with enabled capabilities
 
-    cvm_vk_destroy_device_feature_structure_list(vk->capabilities.features);
-    free(vk->capabilities.extensions);
+    cvm_vk_destroy_device_feature_structure_list(available_features);
+    free(available_extensions);
 
     vk->capabilities.features = enabled_features;
     vk->capabilities.extensions = enabled_extensions;

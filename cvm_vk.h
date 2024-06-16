@@ -116,6 +116,10 @@ typedef struct cvm_vk_device_capabilities
     const VkPhysicalDeviceFeatures2 * features;
     const VkExtensionProperties * extensions;
     uint32_t extension_count;
+
+    uint32_t graphics_queue_count;
+    uint32_t async_compute_queue_count;
+    bool compute_on_graphics_queue;
 }
 cvm_vk_device_capabilities;
 
@@ -142,7 +146,7 @@ typedef struct cvm_vk
     ///these can be the same
     uint32_t transfer_queue_family_index;
     uint32_t graphics_queue_family_index;
-    uint32_t present_queue_family_index;
+    uint32_t present_queue_family_index;/// make this the fallback, try to present on queue where work was last done instead!
     uint32_t compute_queue_family_index;///perhaps its actually desirable to support multiple async compute queue families? doesnt seem to be a feature on any gpus
 
     ///only support one of each of above (allow these to be the same if above are as well?)
@@ -172,6 +176,13 @@ typedef struct cvm_vk_device_setup
     VkStructureType * device_feature_struct_types;
     size_t * device_feature_struct_sizes;
     uint32_t device_feature_struct_count;
+
+    /// will require compute and graphics by default-- does this make sense
+    bool require_present;///VkSurfaceKHR present_surface;///VK_NULL_HANDLE for no present
+
+    uint32_t desired_graphics_queues;
+    uint32_t desired_async_compute_queues;
+    ///hidden present on async compute request?? desirable if no graphics
 }
 cvm_vk_device_setup;
 
