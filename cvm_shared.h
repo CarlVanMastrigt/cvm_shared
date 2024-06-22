@@ -57,6 +57,10 @@ along with cvm_shared.  If not, see <https://www.gnu.org/licenses/>.
 #define CVM_CONCAT2_MACRO(A,B) A ## B
 #define CVM_CONCAT2(A, B) CVM_CONCAT2_MACRO(A, B)
 
+#define CVM_MAX(A,B) (((A)>(B))?(A):(B))
+#define CVM_MIN(A,B) (((A)<(B))?(A):(B))
+#define CVM_CLAMP(X,MIN,MAX) CVM_MAX(MIN,CVM_MIN(MAX,X))
+
 typedef union widget widget;
 
 static inline uint64_t cvm_po2_64_gte(uint64_t v){ return 64-__builtin_clzl(v-1); }

@@ -163,7 +163,7 @@ void create_debug_swapchain_dependent_render_data(VkRenderPass render_pass,uint3
                 .logicOpEnable=VK_FALSE,
                 .logicOp=VK_LOGIC_OP_COPY,
                 .attachmentCount=1,///must equal colorAttachmentCount in subpass
-                .pAttachments= (VkPipelineColorBlendAttachmentState[])
+                .pAttachments= (VkPipelineColorBlendAttachmentState[1])
                 {
                     cvm_vk_get_default_alpha_blend_state()
                 },
@@ -222,6 +222,9 @@ void render_debug(VkCommandBuffer cb,VkDescriptorSet * descriptor_set,debug_rend
 
     vkCmdDraw(cb,data->vertex_count,1,data->vertex_offset/sizeof(debug_vertex_data),0);
 }
+
+
+
 
 
 

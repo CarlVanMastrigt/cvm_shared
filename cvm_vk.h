@@ -25,6 +25,7 @@ along with cvm_shared.  If not, see <https://www.gnu.org/licenses/>.
 #ifndef CVM_VK_H
 #define CVM_VK_H
 
+#warning make this a function that returns false upon failure AND ACTUALLY HANDLE FAILURE
 #ifndef CVM_VK_CHECK
 #define CVM_VK_CHECK(f)                                                         \
 {                                                                               \
@@ -108,46 +109,39 @@ typedef struct cvm_vk_swapchain_image_present_data
 }
 cvm_vk_swapchain_image_present_data;
 
-typedef struct cvm_vk_device_capabilities
-{
-    VkPhysicalDeviceProperties properties;
-    VkPhysicalDeviceMemoryProperties memory_properties;
-
-    const VkPhysicalDeviceFeatures2 * features;
-    const VkExtensionProperties * extensions;
-    uint32_t extension_count;
-
-    uint32_t graphics_queue_count;
-    uint32_t async_compute_queue_count;
-    bool compute_on_graphics_queue;
-}
-cvm_vk_device_capabilities;
 
 typedef struct cvm_vk
 {
     /// base shared structures
     VkInstance instance;
     VkPhysicalDevice physical_device;
-//    VkDevice device;///"logical" device
+    VkDevice device;///"logical" device
 
-    /// properties & features
-    cvm_vk_device_capabilities capabilities;/// initially available capabilities, after device selection becomes enabled capabilities
+    /// capabilities (properties & features)
+    const VkPhysicalDeviceProperties properties;
+    const VkPhysicalDeviceMemoryProperties memory_properties;
 
-//    const VkPhysicalDeviceFeatures2 * enabled_physical_device_features;
-//    const VkExtensionProperties * enabled_physical_device_extensions;
-//    uint32_t enabled_physical_device_extension_count;
-//
-//    const VkPhysicalDeviceFeatures2 * available_physical_device_features;
-//    const VkExtensionProperties * available_physical_device_extensions;
-//    uint32_t available_device_extension_count;
+    const VkPhysicalDeviceFeatures2 * features;
+
+    const VkExtensionProperties * extensions;
+    uint32_t extension_count;
+
+    const VkQueueFamilyProperties * queue_family_properties;
+    uint32_t queue_family_count;
 
 
-
-    ///these can be the same
-    uint32_t transfer_queue_family_index;
+    /// these can be the same, though this should probably change
+    /// should have fallbacks...
+    /// rename to defaults as thats what they are really...
     uint32_t graphics_queue_family_index;
-    uint32_t present_queue_family_index;/// make this the fallback, try to present on queue where work was last done instead!
-    uint32_t compute_queue_family_index;///perhaps its actually desirable to support multiple async compute queue families? doesnt seem to be a feature on any gpus
+    uint32_t transfer_queue_family_index;
+    uint32_t async_compute_queue_family_index;
+
+    uint32_t * queue_family_queue_count;
+
+    uint32_t fallback_present_queue_family_index;
+    #warning remove present, this should be per swapchain image
+
 
     ///only support one of each of above (allow these to be the same if above are as well?)
 //    VkQueue cvm_vk_transfer_queue;
@@ -162,8 +156,8 @@ typedef struct cvm_vk
 }
 cvm_vk;
 
-typedef bool cvm_vk_device_feature_validation_function(const VkBaseInStructure*, const VkPhysicalDeviceProperties*, const VkPhysicalDeviceMemoryProperties*, const VkExtensionProperties*,uint32_t);
-typedef void cvm_vk_device_feature_request_function(VkBaseOutStructure*,bool*,const VkBaseInStructure*, const VkPhysicalDeviceProperties*, const VkPhysicalDeviceMemoryProperties*, const VkExtensionProperties*,uint32_t);
+typedef float cvm_vk_device_feature_validation_function(const VkBaseInStructure*, const VkPhysicalDeviceProperties*, const VkPhysicalDeviceMemoryProperties*, const VkExtensionProperties*, uint32_t, const VkQueueFamilyProperties*, uint32_t);
+typedef void cvm_vk_device_feature_request_function(VkBaseOutStructure*, bool*, const VkBaseInStructure*, const VkPhysicalDeviceProperties*, const VkPhysicalDeviceMemoryProperties*, const VkExtensionProperties*, uint32_t, const VkQueueFamilyProperties*, uint32_t);
 
 typedef struct cvm_vk_device_setup
 {
@@ -179,8 +173,10 @@ typedef struct cvm_vk_device_setup
 
     /// will require compute and graphics by default-- does this make sense
     bool require_present;///VkSurfaceKHR present_surface;///VK_NULL_HANDLE for no present
+    #warning edit above
 
     uint32_t desired_graphics_queues;
+    uint32_t desired_transfer_queues;
     uint32_t desired_async_compute_queues;
     ///hidden present on async compute request?? desirable if no graphics
 }
