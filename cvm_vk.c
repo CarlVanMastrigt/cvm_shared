@@ -27,6 +27,7 @@ static VkSurfaceKHR cvm_vk_surface;
 
 
 static cvm_vk cvm_vk_;
+static cvm_vk_surface_swapchain cvm_vk_surface_swapchain_;
 
 static VkSwapchainKHR cvm_vk_swapchain=VK_NULL_HANDLE;
 static VkSurfaceFormatKHR cvm_vk_surface_format;
@@ -49,6 +50,9 @@ static uint32_t cvm_vk_acquired_image_count=0;///both frames in flight and frame
 
 ///following used to determine number of swapchain images to allocate
 static uint32_t cvm_vk_min_swapchain_images;
+#warning remove above, move to swapchain?
+
+
 static bool cvm_vk_rendering_resources_valid=false;///can this be determined for next frame during critical section?
 
 
@@ -61,8 +65,7 @@ static cvm_vk_timeline_semaphore cvm_vk_present_timeline;
 //static cvm_vk_timeline_semaphore * cvm_vk_host_timelines;///used to wait on host events from different threads, needs to have count as input
 //static uint32_t cvm_vk_host_timeline_count;
 
-static cvm_vk cvm_vk_base;
-static cvm_vk_surface_swapchain cvm_vk_surface_swapchain_base;
+
 
 #warning make more of this custom
 static void cvm_vk_create_instance(VkInstance * instance,SDL_Window * window, const char * application_name)
@@ -315,8 +318,6 @@ static void cvm_vk_internal_device_setup_init(cvm_vk_device_setup * internal, co
         }
     }
 
-    internal->require_present  = external->require_present;
-
     internal->desired_graphics_queues = CVM_CLAMP(external->desired_graphics_queues,1,8);
     internal->desired_transfer_queues = CVM_CLAMP(external->desired_transfer_queues,1,8);
     internal->desired_async_compute_queues = CVM_CLAMP(external->desired_async_compute_queues,1,8);
@@ -372,7 +373,7 @@ static void cvm_vk_destroy_device_feature_structure_list(VkPhysicalDeviceFeature
 }
 
 #warning make device selection process float based (preference based) with 0 representing unusable
-static float cvm_vk_test_physical_device_capabilities(VkPhysicalDevice physical_device_to_test, VkSurfaceKHR test_surface, const cvm_vk_device_setup * device_setup)
+static float cvm_vk_test_physical_device_capabilities(VkPhysicalDevice physical_device_to_test, const cvm_vk_device_setup * device_setup)
 {
     uint32_t i,queue_family_count,extension_count;
     VkQueueFamilyProperties * queue_family_properties;
@@ -398,18 +399,6 @@ static float cvm_vk_test_physical_device_capabilities(VkPhysicalDevice physical_
     queue_family_properties=malloc(sizeof(VkQueueFamilyProperties)*queue_family_count);
     vkGetPhysicalDeviceQueueFamilyProperties(physical_device_to_test,&queue_family_count,queue_family_properties);
 
-
-    if(device_setup->require_present)
-    {
-        #warning move this (and test_surface) to default device testing function
-        for(i=0;i<queue_family_count;i++)
-        {
-            CVM_VK_CHECK(vkGetPhysicalDeviceSurfaceSupportKHR(physical_device_to_test,i,test_surface,&surface_supported));
-            if(surface_supported) break;
-        }
-        score *= i<queue_family_count ? 1.0 : 0.0;
-    }
-
     /// external feature requirements
     for(i=0;i<device_setup->feature_validation_count;i++)
     {
@@ -434,18 +423,9 @@ static VkPhysicalDevice cvm_vk_create_physical_device(VkInstance vk_instance, co
 
     uint32_t i,device_count;
     VkPhysicalDevice * physical_devices;
-    SDL_Window * test_window;
-    VkSurfaceKHR test_surface;
     SDL_bool created_surface;
     float score,best_score;
     VkPhysicalDevice best_device;
-
-    test_window = SDL_CreateWindow("",SDL_WINDOWPOS_UNDEFINED,SDL_WINDOWPOS_UNDEFINED,0,0,SDL_WINDOW_HIDDEN | SDL_WINDOW_VULKAN);
-    assert(test_window);/// test window could not be created
-    created_surface=SDL_Vulkan_CreateSurface(test_window,vk_instance,&test_surface);
-    assert(created_surface);/// test surface could not be created
-
-    #warning move the surface out, make present only exist if surface is specified
 
     CVM_VK_CHECK(vkEnumeratePhysicalDevices(vk_instance,&device_count,NULL));
     physical_devices=malloc(sizeof(VkPhysicalDevice)*device_count);
@@ -454,7 +434,7 @@ static VkPhysicalDevice cvm_vk_create_physical_device(VkInstance vk_instance, co
     best_score=0.0;
     for(i=0;i<device_count;i++)///check for dedicated gfx cards first
     {
-        score=cvm_vk_test_physical_device_capabilities(physical_devices[i],test_surface,device_setup);
+        score=cvm_vk_test_physical_device_capabilities(physical_devices[i],device_setup);
         if(score > best_score)
         {
             best_device=physical_devices[i];
@@ -462,13 +442,10 @@ static VkPhysicalDevice cvm_vk_create_physical_device(VkInstance vk_instance, co
         }
     }
 
-    assert(best_score > 0.0 || fprintf(stderr,"NONE OF %d PHYSICAL DEVICES MEET MIN REQUIREMENTS\n",device_count));
-    #warning instead return false (fail!)
-
     free(physical_devices);
 
-    vkDestroySurfaceKHR(vk_instance,test_surface,NULL);
-    SDL_DestroyWindow(test_window);
+    /// no applicable devices meet requirements
+    if(best_score==0.0) return VK_NULL_HANDLE;
 
     return best_device;
 }
@@ -1028,7 +1005,7 @@ VkImage cvm_vk_get_swapchain_image(uint32_t index)
 
 
 
-void cvm_vk_initialise(cvm_vk * vk, const cvm_vk_device_setup * external_device_setup, SDL_Window * window)
+int cvm_vk_initialise(cvm_vk * vk, const cvm_vk_device_setup * external_device_setup, const char * application_name, SDL_Window * window)
 {
     cvm_vk_device_setup device_setup;
 
@@ -1048,15 +1025,16 @@ void cvm_vk_initialise(cvm_vk * vk, const cvm_vk_device_setup * external_device_
 
 
 
-
-
-
     cvm_vk_min_swapchain_images=3;
 
-    cvm_vk_create_instance(&vk->instance,window," ");
+    cvm_vk_create_instance(&vk->instance,window,application_name);
+
     vk->physical_device=cvm_vk_create_physical_device(vk->instance,&device_setup);
-    cvm_vk_create_surface_from_window(&cvm_vk_surface,vk,window);
+    if(vk->physical_device==VK_NULL_HANDLE)return -1;
+
     cvm_vk_create_logical_device(vk, &device_setup);
+
+    cvm_vk_create_surface_from_window(&cvm_vk_surface,vk,window);
 
 
     cvm_vk_create_internal_command_pools();
@@ -1066,6 +1044,8 @@ void cvm_vk_initialise(cvm_vk * vk, const cvm_vk_device_setup * external_device_
     cvm_vk_create_defaults();
 
     cvm_vk_internal_device_setup_destroy(&device_setup);
+
+    return 0;
 }
 
 void cvm_vk_terminate(void)

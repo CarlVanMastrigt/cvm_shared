@@ -171,14 +171,10 @@ typedef struct cvm_vk_device_setup
     size_t * device_feature_struct_sizes;
     uint32_t device_feature_struct_count;
 
-    /// will require compute and graphics by default-- does this make sense
-    bool require_present;///VkSurfaceKHR present_surface;///VK_NULL_HANDLE for no present
-    #warning edit above
-
     uint32_t desired_graphics_queues;
     uint32_t desired_transfer_queues;
     uint32_t desired_async_compute_queues;
-    ///hidden present on async compute request?? desirable if no graphics
+    ///remove above and default to having just 2 (if possible) : low priority and high priority?
 }
 cvm_vk_device_setup;
 
@@ -186,37 +182,36 @@ cvm_vk_device_setup;
 typedef struct cvm_vk_surface_swapchain
 {
     /// effectively the window
-    VkSurfaceKHR cvm_vk_surface;
+    VkSurfaceKHR surface;
 
-    VkSwapchainKHR cvm_vk_swapchain;//VK_NULL_HANDLE
-    VkSurfaceFormatKHR cvm_vk_surface_format;
-    VkPresentModeKHR cvm_vk_surface_present_mode;
+    VkSwapchainKHR swapchain;//VK_NULL_HANDLE
+    VkSurfaceFormatKHR surface_format;
+    VkPresentModeKHR present_mode;
 
     ///may want to rename cvm_vk_frames, cvm_vk_presentation_instance probably isnt that bad tbh...
     ///realloc these only if number of swapchain image count changes (it wont really)
-    VkSemaphore * cvm_vk_image_acquisition_semaphores;///number of these should match swapchain image count
-    cvm_vk_swapchain_image_present_data * cvm_vk_presenting_images;
-    uint32_t cvm_vk_swapchain_image_count;/// this is also the number of swapchain images
-    uint32_t cvm_vk_current_acquired_image_index;///CVM_INVALID_U32_INDEX
+    VkSemaphore * image_acquisition_semaphores;///number of these should match swapchain image count
+    cvm_vk_swapchain_image_present_data * presenting_images;
+    uint32_t image_count;/// this is also the number of swapchain images
+    uint32_t acquired_image_index;///CVM_INVALID_U32_INDEX
 
     ///both frames in flight and frames acquired by rendereer
-    uint32_t cvm_vk_acquired_image_count;/// init as 0
+    uint32_t acquired_image_count;/// init as 0
 
     ///following used to determine number of swapchain images to allocate
-    uint32_t cvm_vk_min_swapchain_images;///user defined!
-    bool cvm_vk_rendering_resources_valid;/// starts false, used to determine if rebuilding of resources is required due to swapchain invalidation (e.g. because
+    bool cvm_vk_rendering_resources_valid;/// starts false, used to determine if rebuilding of resources is required due to swapchain invalidation (e.g. because window was resized)
 }
 cvm_vk_surface_swapchain;
 
 
 
 
-void cvm_vk_surface_swapchain_initialse_for_SDL_window(cvm_vk_surface_swapchain * surface_swapchain, cvm_vk * vk, SDL_Window * window,uint32_t min_swapchain_images);
-void cvm_vk_surface_swapchain_terminate(cvm_vk_surface_swapchain * surface_swapchain, cvm_vk * vk);
+void cvm_vk_swapchain_initialse(cvm_vk_surface_swapchain * swapchain, cvm_vk * vk, VkSurfaceKHR surface, uint32_t min_swapchain_images);
+void cvm_vk_swapchain_terminate(cvm_vk_surface_swapchain * swapchain, cvm_vk * vk);///does this need vk??
 
 
 
-void cvm_vk_initialise(cvm_vk * vk, const cvm_vk_device_setup * external_device_setup, SDL_Window * window);
+int cvm_vk_initialise(cvm_vk * vk, const cvm_vk_device_setup * external_device_setup, const char * application_name, SDL_Window * window);
 ///above extra is the max extra used by any module
 void cvm_vk_terminate(void);///also terminates swapchain dependant data at same time
 
