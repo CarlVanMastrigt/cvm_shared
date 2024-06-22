@@ -209,15 +209,14 @@ typedef struct cvm_vk_surface_swapchain
 cvm_vk_surface_swapchain;
 
 
-void cvm_vk_initialse_2(cvm_vk * vk, const char * application_name, SDL_Window * window);///window will be removed after SDL3 integration
-void cvm_vk_terminate_2(cvm_vk * vk);
+
 
 void cvm_vk_surface_swapchain_initialse_for_SDL_window(cvm_vk_surface_swapchain * surface_swapchain, cvm_vk * vk, SDL_Window * window,uint32_t min_swapchain_images);
 void cvm_vk_surface_swapchain_terminate(cvm_vk_surface_swapchain * surface_swapchain, cvm_vk * vk);
 
 
 
-void cvm_vk_initialise(SDL_Window * window,uint32_t min_swapchain_images,bool sync_compute_required,const cvm_vk_device_setup * device_setup);
+void cvm_vk_initialise(cvm_vk * vk, const cvm_vk_device_setup * external_device_setup, SDL_Window * window);
 ///above extra is the max extra used by any module
 void cvm_vk_terminate(void);///also terminates swapchain dependant data at same time
 
