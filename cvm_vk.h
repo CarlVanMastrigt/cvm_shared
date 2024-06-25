@@ -82,38 +82,53 @@ typedef struct cvm_vk_timeline_semaphore
 }
 cvm_vk_timeline_semaphore;
 
-typedef struct cvm_vk_swapchain_image_present_data
+typedef struct cvm_vk_instance_setup
 {
-    VkImage image;///theese are provided by the WSI
-    VkImageView image_view;
+    const char ** layer_names;
+    uint32_t layer_count;
 
-    VkSemaphore acquire_semaphore;///held temporarily by this struct, not owner, not created or destroyed as part of it
+    const char ** extension_names;
+    uint32_t extension_count;
 
-    //bool in_flight;///error checking
-    uint32_t successfully_acquired:1;
-    uint32_t successfully_submitted:1;
-
-    ///following only used if present and graphics are different
-    ///     ^ test as best as possible with bool that forces behaviour, and maybe try different queue/queue_family when possible (o.e. when available hardware allows)
-    /// timeline semaphore in renderer instead?
-    VkCommandBuffer present_acquire_command_buffer;
-
-    VkSemaphore present_semaphore;///needed by VkPresentInfoKHR
-
-    ///semaphore values
-    uint64_t graphics_wait_value;
-    uint64_t present_wait_value;
-    uint64_t transfer_wait_value;///should move this to the transferchain when that becomes a thing
-
-//    VkFence completion_fence;
+    const char * application_name;
+    uint32_t application_version;
 }
-cvm_vk_swapchain_image_present_data;
+cvm_vk_instance_setup;
 
 
-typedef struct cvm_vk
+typedef float cvm_vk_device_feature_validation_function(const VkBaseInStructure*, const VkPhysicalDeviceProperties*, const VkPhysicalDeviceMemoryProperties*, const VkExtensionProperties*, uint32_t, const VkQueueFamilyProperties*, uint32_t);
+typedef void cvm_vk_device_feature_request_function(VkBaseOutStructure*, bool*, const VkBaseInStructure*, const VkPhysicalDeviceProperties*, const VkPhysicalDeviceMemoryProperties*, const VkExtensionProperties*, uint32_t, const VkQueueFamilyProperties*, uint32_t);
+
+typedef struct cvm_vk_device_setup
+{
+    VkInstance instance;
+
+    cvm_vk_device_feature_validation_function ** feature_validation;
+    uint32_t feature_validation_count;
+
+    cvm_vk_device_feature_request_function ** feature_request;
+    uint32_t feature_request_count;
+
+    VkStructureType * device_feature_struct_types;
+    size_t * device_feature_struct_sizes;
+    uint32_t device_feature_struct_count;
+
+    uint32_t desired_graphics_queues;
+    uint32_t desired_transfer_queues;
+    uint32_t desired_async_compute_queues;
+    ///remove above and default to having just 2 (if possible) : low priority and high priority?
+}
+cvm_vk_device_setup;
+
+
+#warning separate device and instance?
+
+typedef struct cvm_vk_device
 {
     /// base shared structures
     VkInstance instance;
+    #warning remove above
+
     VkPhysicalDevice physical_device;
     VkDevice device;///"logical" device
 
@@ -142,6 +157,9 @@ typedef struct cvm_vk
     uint32_t fallback_present_queue_family_index;
     #warning remove present, this should be per swapchain image
 
+    VkCommandPool * internal_command_pools;
+    /// above used for long lived commands,
+
 
     ///only support one of each of above (allow these to be the same if above are as well?)
 //    VkQueue cvm_vk_transfer_queue;
@@ -154,35 +172,77 @@ typedef struct cvm_vk
     /// ONLY used for simple internal commands
 //    VkCommandPool cvm_vk_internal_present_command_pool;
 }
-cvm_vk;
+cvm_vk_device;
 
-typedef float cvm_vk_device_feature_validation_function(const VkBaseInStructure*, const VkPhysicalDeviceProperties*, const VkPhysicalDeviceMemoryProperties*, const VkExtensionProperties*, uint32_t, const VkQueueFamilyProperties*, uint32_t);
-typedef void cvm_vk_device_feature_request_function(VkBaseOutStructure*, bool*, const VkBaseInStructure*, const VkPhysicalDeviceProperties*, const VkPhysicalDeviceMemoryProperties*, const VkExtensionProperties*, uint32_t, const VkQueueFamilyProperties*, uint32_t);
 
-typedef struct cvm_vk_device_setup
+VkInstance cvm_vk_instance_initialise_for_SDL(const char * application_name,uint32_t application_version,bool validation_enabled);
+VkInstance cvm_vk_instance_initialise(const cvm_vk_instance_setup * setup);
+///above extra is the max extra used by any module
+void cvm_vk_instance_terminate(VkInstance instance);
+
+
+
+typedef struct cvm_vk_swapchain_setup
 {
-    cvm_vk_device_feature_validation_function ** feature_validation;
-    uint32_t feature_validation_count;
+    VkSurfaceKHR surface;
 
-    cvm_vk_device_feature_request_function ** feature_request;
-    uint32_t feature_request_count;
+    uint32_t min_image_count;
+    VkImageUsageFlagBits usage_flags;
+//    VkCompositeAlphaFlagsKHR compositing_mode;
 
-    VkStructureType * device_feature_struct_types;
-    size_t * device_feature_struct_sizes;
-    uint32_t device_feature_struct_count;
-
-    uint32_t desired_graphics_queues;
-    uint32_t desired_transfer_queues;
-    uint32_t desired_async_compute_queues;
-    ///remove above and default to having just 2 (if possible) : low priority and high priority?
+    VkSurfaceFormatKHR preferred_surface_format;
+    VkPresentModeKHR preferred_present_mode;
 }
-cvm_vk_device_setup;
+cvm_vk_swapchain_setup;
+
+typedef struct cvm_vk_swapchain_image_present_data
+{
+    VkImage image;///theese are provided by the WSI
+    VkImageView image_view;
+
+    VkSemaphore acquire_semaphore;///held temporarily by this struct, not owner, not created or destroyed as part of it
+
+    //bool in_flight;///error checking
+    uint32_t successfully_acquired:1;
+    uint32_t successfully_submitted:1;
+
+    ///following only used if present and graphics are different
+    ///     ^ test as best as possible with bool that forces behaviour, and maybe try different queue/queue_family when possible (o.e. when available hardware allows)
+    /// timeline semaphore in renderer instead?
+    VkCommandBuffer present_acquire_command_buffer;
+    #warning REMOVE ABOVE
+
+    VkSemaphore present_semaphore;///needed by VkPresentInfoKHR
+
+
+    ///if we can't present on the current queue family we'll present on the fallback (lowest indexed queue family that supports present)
+    uint32_t fallback_present_queue_family;
+    /// the command buffers to recieve the QFOT should be created as necessary
+    VkCommandBuffer * present_acquire_command_buffers;
+
+    ///semaphore values
+    uint64_t graphics_wait_value;
+    uint64_t present_wait_value;
+    uint64_t transfer_wait_value;///should move this to the transferchain when that becomes a thing
+
+//    VkFence completion_fence;
+}
+cvm_vk_swapchain_image_present_data;
 
 /// all the data associated with a window and rendering to a surface(usually a window)
 typedef struct cvm_vk_surface_swapchain
 {
     /// effectively the window
     VkSurfaceKHR surface;
+
+
+    uint32_t min_image_count;
+    VkImageUsageFlagBits usage_flags;
+
+    uint64_t queue_family_support_mask;
+
+    VkSurfaceCapabilitiesKHR surface_capabilities;
+
 
     VkSwapchainKHR swapchain;//VK_NULL_HANDLE
     VkSurfaceFormatKHR surface_format;
@@ -204,19 +264,29 @@ typedef struct cvm_vk_surface_swapchain
 cvm_vk_surface_swapchain;
 
 
+///generate
 
 
-void cvm_vk_swapchain_initialse(cvm_vk_surface_swapchain * swapchain, cvm_vk * vk, VkSurfaceKHR surface, uint32_t min_swapchain_images);
-void cvm_vk_swapchain_terminate(cvm_vk_surface_swapchain * swapchain, cvm_vk * vk);///does this need vk??
-
-
-
-int cvm_vk_initialise(cvm_vk * vk, const cvm_vk_device_setup * external_device_setup, const char * application_name, SDL_Window * window);
+int cvm_vk_device_initialise(cvm_vk_device * device, const cvm_vk_device_setup * external_device_setup, SDL_Window * window);
 ///above extra is the max extra used by any module
-void cvm_vk_terminate(void);///also terminates swapchain dependant data at same time
+void cvm_vk_device_terminate(cvm_vk_device * device);
+
+
+#warning following are placeholders for interoperability with old approach
+cvm_vk_device * cvm_vk_device_get(void);
+cvm_vk_surface_swapchain * cvm_vk_swapchain_get(void);
+
+
+int cvm_vk_swapchain_initialse(cvm_vk_surface_swapchain * swapchain, cvm_vk_device * device, const cvm_vk_swapchain_setup * setup);
+void cvm_vk_swapchain_terminate(cvm_vk_surface_swapchain * swapchain, cvm_vk_device * device);
+int cvm_vk_swapchain_regenerate(cvm_vk_surface_swapchain * swapchain, cvm_vk_device * device);
+
 
 void cvm_vk_create_swapchain(void);
 void cvm_vk_destroy_swapchain(void);
+
+
+
 
 
 void cvm_vk_wait_on_timeline_semaphore(cvm_vk_timeline_semaphore * timeline_semaphore,uint64_t value,uint64_t timeout_ns);

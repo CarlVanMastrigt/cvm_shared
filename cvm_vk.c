@@ -26,7 +26,7 @@ static VkSurfaceKHR cvm_vk_surface;
 
 
 
-static cvm_vk cvm_vk_;
+static cvm_vk_device cvm_vk_;
 static cvm_vk_surface_swapchain cvm_vk_surface_swapchain_;
 
 static VkSwapchainKHR cvm_vk_swapchain=VK_NULL_HANDLE;
@@ -65,59 +65,107 @@ static cvm_vk_timeline_semaphore cvm_vk_present_timeline;
 //static cvm_vk_timeline_semaphore * cvm_vk_host_timelines;///used to wait on host events from different threads, needs to have count as input
 //static uint32_t cvm_vk_host_timeline_count;
 
-
-
-#warning make more of this custom
-static void cvm_vk_create_instance(VkInstance * instance,SDL_Window * window, const char * application_name)
+cvm_vk_device * cvm_vk_device_get(void)
 {
-    uint32_t extension_count;
-    uint32_t api_version;
-    const char ** extension_names;
-    const char * layer_names[]={"VK_LAYER_KHRONOS_validation"};
-    #warning disable above in release
+    return &cvm_vk_;
+    #warning REMOVE THIS FUNCTION
+}
+
+cvm_vk_surface_swapchain * cvm_vk_swapchain_get(void)
+{
+    return &cvm_vk_surface_swapchain_;
+    #warning REMOVE THIS FUNCTION
+}
+
+VkInstance cvm_vk_instance_initialise(const cvm_vk_instance_setup * setup)
+{
+    VkInstance instance;
+    uint32_t api_version,major_version,minor_version,patch_version,variant;
 
     CVM_VK_CHECK(vkEnumerateInstanceVersion(&api_version));
 
-    printf("Vulkan API version: %u.%u.%u - %u\n",(api_version>>22)&0x7F,(api_version>>12)&0x3FF,api_version&0xFFF,api_version>>29);
-    SDL_bool r;
+    variant=api_version>>29;
+    major_version=(api_version>>22)&0x7F;
+    minor_version=(api_version>>12)&0x3FF;
+    patch_version=api_version&0xFFF;
+    printf("Vulkan API version: %u.%u.%u - %u\n",major_version,minor_version,patch_version,variant);
 
-    r=SDL_Vulkan_GetInstanceExtensions(window,&extension_count,NULL);
-    assert(r);///COULD NOT GET SDL WINDOW EXTENSION COUNT
-
-    #warning is there a better/more generic/sdl detached way to get extensions than querying the window??
-
-    extension_names=malloc(sizeof(const char*)*extension_count);
-    r=SDL_Vulkan_GetInstanceExtensions(window,&extension_count,extension_names);
-    assert(r);///COULD NOT GET SDL WINDOW EXTENSIONS
-
+    if(major_version==1 && minor_version<3) return VK_NULL_HANDLE;
+    if(variant) return VK_NULL_HANDLE;
 
     VkApplicationInfo application_info=(VkApplicationInfo)
     {
         .sType=VK_STRUCTURE_TYPE_APPLICATION_INFO,
         .pNext=NULL,
-        .pApplicationName=application_name,
-        .applicationVersion=0,
+        .pApplicationName=setup->application_name,
+        .applicationVersion=setup->application_version,
         .pEngineName=CVM_SHARED_ENGINE_NAME,
-        .engineVersion=0,
-        .apiVersion=api_version//VK_MAKE_VERSION(1,1,VK_HEADER_VERSION)
+        .engineVersion=CVM_SHARED_ENGINE_VERSION,
+        .apiVersion=api_version,
     };
+
+    uint32_t i;
+    for(i=0;i<setup->extension_count;i++)puts(setup->extension_names[i]);
 
     VkInstanceCreateInfo instance_creation_info=(VkInstanceCreateInfo)
     {
         .sType=VK_STRUCTURE_TYPE_INSTANCE_CREATE_INFO,
         .pApplicationInfo= &application_info,
-        .enabledLayerCount=1,///make 0 for release version (no validation), test performance diff
-        .ppEnabledLayerNames=layer_names,
-        .enabledExtensionCount=extension_count,
-        .ppEnabledExtensionNames=extension_names
+        .enabledLayerCount=setup->layer_count,
+        .ppEnabledLayerNames=setup->layer_names,
+        .enabledExtensionCount=setup->extension_count,
+        .ppEnabledExtensionNames=setup->extension_names,
     };
 
-    CVM_VK_CHECK(vkCreateInstance(&instance_creation_info,NULL,instance));
+    CVM_VK_CHECK(vkCreateInstance(&instance_creation_info,NULL,&instance));
 
-    free(extension_names);
+    return instance;
 }
 
-static void cvm_vk_create_surface_from_window(VkSurfaceKHR * surface, cvm_vk * vk, SDL_Window * window)
+VkInstance cvm_vk_instance_initialise_for_SDL(const char * application_name,uint32_t application_version,bool validation_enabled)
+{
+    VkInstance instance=VK_NULL_HANDLE;
+    cvm_vk_instance_setup setup;
+    SDL_Window * window;
+    const char * validation = "VK_LAYER_KHRONOS_validation";
+
+    if(validation_enabled)
+    {
+        setup.layer_names=&validation;
+        setup.layer_count=1;
+    }
+    else
+    {
+        setup.layer_count=0;
+    }
+
+    setup.application_name=application_name;
+    setup.application_version=application_version;
+
+    window = SDL_CreateWindow("",SDL_WINDOWPOS_UNDEFINED,SDL_WINDOWPOS_UNDEFINED,0,0,SDL_WINDOW_VULKAN|SDL_WINDOW_HIDDEN);
+
+    if(SDL_Vulkan_GetInstanceExtensions(window,&setup.extension_count,NULL))
+    {
+        setup.extension_names=malloc(sizeof(const char*)*setup.extension_count);
+        if(SDL_Vulkan_GetInstanceExtensions(window,&setup.extension_count,setup.extension_names))
+        {
+            instance=cvm_vk_instance_initialise(&setup);
+        }
+        free(setup.extension_names);
+    }
+
+    SDL_DestroyWindow(window);
+
+    return instance;
+}
+
+void cvm_vk_instance_terminate(VkInstance instance)
+{
+    vkDestroyInstance(instance,NULL);
+}
+
+#warning remove below
+static void cvm_vk_create_surface_from_window(VkSurfaceKHR * surface, cvm_vk_device * vk, SDL_Window * window,VkInstance instance)
 {
     uint32_t i,format_count,present_mode_count;
     SDL_bool created_surface;
@@ -126,7 +174,7 @@ static void cvm_vk_create_surface_from_window(VkSurfaceKHR * surface, cvm_vk * v
     VkBool32 surface_supported;
 
 
-    created_surface=SDL_Vulkan_CreateSurface(window,vk->instance,surface);
+    created_surface=SDL_Vulkan_CreateSurface(window,instance,surface);
     assert(created_surface);///COULD NOT CREATE SDL VULKAN SURFACE
 
 
@@ -138,6 +186,12 @@ static void cvm_vk_create_surface_from_window(VkSurfaceKHR * surface, cvm_vk * v
     CVM_VK_CHECK(vkGetPhysicalDeviceSurfaceFormatsKHR(vk->physical_device,*surface,&format_count,NULL));
     formats=malloc(sizeof(VkSurfaceFormatKHR)*format_count);
     CVM_VK_CHECK(vkGetPhysicalDeviceSurfaceFormatsKHR(vk->physical_device,*surface,&format_count,formats));
+
+    printf("surface formats: %u\n",format_count);
+    for(i=0;i<format_count;i++)
+    {
+        printf("%u %u\n",formats[i].colorSpace,formats[i].format);
+    }
 
     cvm_vk_surface_format=formats[0];///search for preferred/fallback instead of taking first?
 
@@ -321,6 +375,8 @@ static void cvm_vk_internal_device_setup_init(cvm_vk_device_setup * internal, co
     internal->desired_graphics_queues = CVM_CLAMP(external->desired_graphics_queues,1,8);
     internal->desired_transfer_queues = CVM_CLAMP(external->desired_transfer_queues,1,8);
     internal->desired_async_compute_queues = CVM_CLAMP(external->desired_async_compute_queues,1,8);
+
+    internal->instance=external->instance;
 }
 
 static void cvm_vk_internal_device_setup_destroy(cvm_vk_device_setup * setup)
@@ -450,7 +506,7 @@ static VkPhysicalDevice cvm_vk_create_physical_device(VkInstance vk_instance, co
     return best_device;
 }
 
-static void cvm_vk_create_logical_device(cvm_vk * vk, const cvm_vk_device_setup * device_setup)
+static void cvm_vk_create_logical_device(cvm_vk_device * device, const cvm_vk_device_setup * device_setup)
 {
     uint32_t i,j,count,enabled_extension_count,available_extension_count;
     bool * enabled_extensions_table;
@@ -465,30 +521,26 @@ static void cvm_vk_create_logical_device(cvm_vk * vk, const cvm_vk_device_setup 
     bool graphics, transfer, compute, present;
     float * priorities;
 
-    vkGetPhysicalDeviceProperties(vk->physical_device, (VkPhysicalDeviceProperties*)&vk->properties);
-    vkGetPhysicalDeviceMemoryProperties(vk->physical_device, (VkPhysicalDeviceMemoryProperties*)&vk->memory_properties);
+    vkGetPhysicalDeviceProperties(device->physical_device, (VkPhysicalDeviceProperties*)&device->properties);
+    vkGetPhysicalDeviceMemoryProperties(device->physical_device, (VkPhysicalDeviceMemoryProperties*)&device->memory_properties);
 
-    vkGetPhysicalDeviceQueueFamilyProperties(vk->physical_device, &vk->queue_family_count, NULL);
-    vk->queue_family_properties=malloc(sizeof(VkQueueFamilyProperties)*vk->queue_family_count);
-    vkGetPhysicalDeviceQueueFamilyProperties(vk->physical_device, &vk->queue_family_count, (VkQueueFamilyProperties*)vk->queue_family_properties);
+    vkGetPhysicalDeviceQueueFamilyProperties(device->physical_device, &device->queue_family_count, NULL);
+    device->queue_family_properties=malloc(sizeof(VkQueueFamilyProperties)*device->queue_family_count);
+    vkGetPhysicalDeviceQueueFamilyProperties(device->physical_device, &device->queue_family_count, (VkQueueFamilyProperties*)device->queue_family_properties);
 
-    vk->queue_family_queue_count=malloc(sizeof(uint32_t)*vk->queue_family_count);
-    for(i=0;i<vk->queue_family_count;i++)
+    device->queue_family_queue_count=malloc(sizeof(uint32_t)*device->queue_family_count);
+    for(i=0;i<device->queue_family_count;i++)
     {
         ///default
-        vk->queue_family_queue_count[i]=1;
+        device->queue_family_queue_count[i]=1;
     }
 
-
-
-
-
     available_features = cvm_vk_create_device_feature_structure_list(device_setup);
-    vkGetPhysicalDeviceFeatures2(vk->physical_device,available_features);
+    vkGetPhysicalDeviceFeatures2(device->physical_device,available_features);
 
-    vkEnumerateDeviceExtensionProperties(vk->physical_device,NULL,&available_extension_count,NULL);
+    vkEnumerateDeviceExtensionProperties(device->physical_device,NULL,&available_extension_count,NULL);
     available_extensions=malloc(sizeof(VkExtensionProperties)*available_extension_count);
-    vkEnumerateDeviceExtensionProperties(vk->physical_device,NULL,&available_extension_count,available_extensions);
+    vkEnumerateDeviceExtensionProperties(device->physical_device,NULL,&available_extension_count,available_extensions);
 
 
     enabled_features = cvm_vk_create_device_feature_structure_list(device_setup);
@@ -496,16 +548,15 @@ static void cvm_vk_create_logical_device(cvm_vk * vk, const cvm_vk_device_setup 
 
     for(i=0;i<device_setup->feature_request_count;i++)
     {
-        #warning pass in queue family count and capabilities
         device_setup->feature_request[i]((VkBaseOutStructure*)enabled_features,
                                          enabled_extensions_table,
                                          (VkBaseInStructure*)available_features,
-                                         &vk->properties,
-                                         &vk->memory_properties,
+                                         &device->properties,
+                                         &device->memory_properties,
                                          available_extensions,
                                          available_extension_count,
-                                         vk->queue_family_properties,
-                                         vk->queue_family_count);
+                                         device->queue_family_properties,
+                                         device->queue_family_count);
     }
 
     enabled_extension_count=0;
@@ -531,55 +582,55 @@ static void cvm_vk_create_logical_device(cvm_vk * vk, const cvm_vk_device_setup 
         }
     }
 
-    vk->features = enabled_features;
-    vk->extensions = enabled_extensions;
-    vk->extension_count = enabled_extension_count;
+    device->features = enabled_features;
+    device->extensions = enabled_extensions;
+    device->extension_count = enabled_extension_count;
 
 
-    vk->graphics_queue_family_index=CVM_INVALID_U32_INDEX;
-    vk->transfer_queue_family_index=CVM_INVALID_U32_INDEX;
-    vk->fallback_present_queue_family_index=CVM_INVALID_U32_INDEX;
-    vk->async_compute_queue_family_index=CVM_INVALID_U32_INDEX;
+    device->graphics_queue_family_index=CVM_INVALID_U32_INDEX;
+    device->transfer_queue_family_index=CVM_INVALID_U32_INDEX;
+    device->fallback_present_queue_family_index=CVM_INVALID_U32_INDEX;
+    device->async_compute_queue_family_index=CVM_INVALID_U32_INDEX;
 
-    i=vk->queue_family_count;
+    i=device->queue_family_count;
     while(i--)///assume lowest is best fit for anything in particular
     {
-        queue_flags=vk->queue_family_properties[i].queueFlags;
+        queue_flags=device->queue_family_properties[i].queueFlags;
         graphics=queue_flags & VK_QUEUE_GRAPHICS_BIT;
         transfer=queue_flags & VK_QUEUE_TRANSFER_BIT;
         compute =queue_flags & VK_QUEUE_COMPUTE_BIT;
 
         if(graphics)
         {
-            vk->graphics_queue_family_index=i;
-            vk->queue_family_queue_count[i] = CVM_MIN(vk->queue_family_properties[i].queueCount,device_setup->desired_graphics_queues);
+            device->graphics_queue_family_index=i;
+            device->queue_family_queue_count[i] = CVM_MIN(device->queue_family_properties[i].queueCount,device_setup->desired_graphics_queues);
         }
 
         if(transfer && !graphics && !compute)
         {
-            vk->transfer_queue_family_index=i;
-            vk->queue_family_queue_count[i] = CVM_MIN(vk->queue_family_properties[i].queueCount,device_setup->desired_transfer_queues);
+            device->transfer_queue_family_index=i;
+            device->queue_family_queue_count[i] = CVM_MIN(device->queue_family_properties[i].queueCount,device_setup->desired_transfer_queues);
         }
 
         if(compute && !graphics)
         {
-            vk->async_compute_queue_family_index=i;
-            vk->queue_family_queue_count[i] = CVM_MIN(vk->queue_family_properties[i].queueCount,device_setup->desired_async_compute_queues);
+            device->async_compute_queue_family_index=i;
+            device->queue_family_queue_count[i] = CVM_MIN(device->queue_family_properties[i].queueCount,device_setup->desired_async_compute_queues);
         }
     }
 
 
     #warning REMOVE THESE
-//    vk->fallback_present_queue_family_index = vk->async_compute_queue_family_index;
-    vk->fallback_present_queue_family_index = vk->graphics_queue_family_index;
-    if(vk->transfer_queue_family_index==CVM_INVALID_U32_INDEX)vk->transfer_queue_family_index=vk->graphics_queue_family_index;
+//    device->fallback_present_queue_family_index = device->async_compute_queue_family_index;
+    device->fallback_present_queue_family_index = device->graphics_queue_family_index;
+    if(device->transfer_queue_family_index==CVM_INVALID_U32_INDEX)device->transfer_queue_family_index=device->graphics_queue_family_index;
 
 
 
-    device_queue_creation_infos = malloc(sizeof(VkDeviceQueueCreateInfo)*vk->queue_family_count);
-    for(i=0;i<vk->queue_family_count;i++)
+    device_queue_creation_infos = malloc(sizeof(VkDeviceQueueCreateInfo)*device->queue_family_count);
+    for(i=0;i<device->queue_family_count;i++)
     {
-        count=vk->queue_family_queue_count[i];
+        count=device->queue_family_queue_count[i];
         priorities=malloc(sizeof(float)*count);
 
         for(j=0;j<count;j++)
@@ -603,16 +654,16 @@ static void cvm_vk_create_logical_device(cvm_vk * vk, const cvm_vk_device_setup 
         .sType=VK_STRUCTURE_TYPE_DEVICE_CREATE_INFO,
         .pNext=enabled_features,
         .flags=0,
-        .queueCreateInfoCount=vk->queue_family_count,
+        .queueCreateInfoCount=device->queue_family_count,
         .pQueueCreateInfos= device_queue_creation_infos,
         .enabledExtensionCount=enabled_extension_count,
         .ppEnabledExtensionNames=enabled_extension_names,
         .pEnabledFeatures=NULL,///using features2 in pNext chain instead
     };
 
-    CVM_VK_CHECK(vkCreateDevice(vk->physical_device,&device_creation_info,NULL,&vk->device));
+    CVM_VK_CHECK(vkCreateDevice(device->physical_device,&device_creation_info,NULL,&device->device));
 
-    for(i=0;i<vk->queue_family_count;i++)
+    for(i=0;i<device->queue_family_count;i++)
     {
         free((void*)device_queue_creation_infos[i].pQueuePriorities);
     }
@@ -625,28 +676,39 @@ static void cvm_vk_create_logical_device(cvm_vk * vk, const cvm_vk_device_setup 
     free(device_queue_creation_infos);
 }
 
-static void cvm_vk_create_internal_command_pools(void)
+static void cvm_vk_destroy_logical_device(cvm_vk_device * device)
 {
-    if(cvm_vk_.fallback_present_queue_family_index!=cvm_vk_.graphics_queue_family_index)
+    vkDestroyDevice(device->device,NULL);
+    cvm_vk_destroy_device_feature_structure_list((void*)device->features);
+    free((void*)device->extensions);
+}
+
+static void cvm_vk_create_internal_command_pools(cvm_vk_device * device)
+{
+    uint32_t i;
+    device->internal_command_pools=malloc(sizeof(VkCommandPool)*device->queue_family_count);
+    for(i=0;i<device->queue_family_count;i++)
     {
         VkCommandPoolCreateInfo command_pool_create_info=(VkCommandPoolCreateInfo)
         {
             .sType=VK_STRUCTURE_TYPE_COMMAND_POOL_CREATE_INFO,
             .pNext=NULL,
             .flags=0,
-            .queueFamilyIndex=cvm_vk_.fallback_present_queue_family_index,
+            .queueFamilyIndex=i,
         };
 
-        CVM_VK_CHECK(vkCreateCommandPool(cvm_vk_.device,&command_pool_create_info,NULL,&cvm_vk_internal_present_command_pool));
+        CVM_VK_CHECK(vkCreateCommandPool(device->device,&command_pool_create_info,NULL,device->internal_command_pools+i));
     }
 }
 
-static void cvm_vk_destroy_internal_command_pools(void)
+static void cvm_vk_destroy_internal_command_pools(cvm_vk_device * device)
 {
-    if(cvm_vk_.fallback_present_queue_family_index!=cvm_vk_.graphics_queue_family_index)
+    uint32_t i;
+    for(i=0;i<device->queue_family_count;i++)
     {
-        vkDestroyCommandPool(cvm_vk_.device,cvm_vk_internal_present_command_pool,NULL);
+        vkDestroyCommandPool(device->device,device->internal_command_pools[i],NULL);
     }
+    free(device->internal_command_pools);
 }
 
 
@@ -671,6 +733,12 @@ void cvm_vk_create_swapchain(void)
 
     ///swapchain
     CVM_VK_CHECK(vkGetPhysicalDeviceSurfaceCapabilitiesKHR(cvm_vk_.physical_device,cvm_vk_surface,&surface_capabilities));
+
+    printf("SD: %u %u - %u %u\n",surface_capabilities.minImageExtent.width,surface_capabilities.minImageExtent.height,surface_capabilities.maxImageExtent.width,surface_capabilities.maxImageExtent.height);
+    printf("U: %x %x\n",surface_capabilities.supportedCompositeAlpha,surface_capabilities.supportedUsageFlags);
+
+    assert(surface_capabilities.supportedUsageFlags&VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT);
+    assert(surface_capabilities.supportedUsageFlags&VK_IMAGE_USAGE_TRANSFER_DST_BIT);
 
     cvm_vk_swapchain_image_count=CVM_MAX(surface_capabilities.minImageCount,cvm_vk_min_swapchain_images);
 
@@ -774,9 +842,6 @@ void cvm_vk_create_swapchain(void)
         };
 
         CVM_VK_CHECK(vkCreateImageView(cvm_vk_.device,&image_view_create_info,NULL,&cvm_vk_presenting_images[i].image_view));
-
-
-
 
         ///queue ownership transfer stuff (needs testing)
         if(cvm_vk_.fallback_present_queue_family_index!=cvm_vk_.graphics_queue_family_index)
@@ -917,7 +982,7 @@ static inline VkSemaphoreSubmitInfo cvm_vk_create_timeline_semaphore_signal_subm
         .sType=VK_STRUCTURE_TYPE_SEMAPHORE_SUBMIT_INFO,
         .pNext=NULL,
         .semaphore=ts->semaphore,
-        .value=++ts->value,
+        .value= ++ts->value,
         .stageMask=stages,
         .deviceIndex=0
     };
@@ -1005,7 +1070,7 @@ VkImage cvm_vk_get_swapchain_image(uint32_t index)
 
 
 
-int cvm_vk_initialise(cvm_vk * vk, const cvm_vk_device_setup * external_device_setup, const char * application_name, SDL_Window * window)
+int cvm_vk_device_initialise(cvm_vk_device * device, const cvm_vk_device_setup * external_device_setup, SDL_Window * window)
 {
     cvm_vk_device_setup device_setup;
 
@@ -1018,27 +1083,20 @@ int cvm_vk_initialise(cvm_vk * vk, const cvm_vk_device_setup * external_device_s
         #warning set using defaults
     }
 
-    if(vk==NULL)
-    {
-        vk=&cvm_vk_;
-    }
-
-
-
     cvm_vk_min_swapchain_images=3;
 
-    cvm_vk_create_instance(&vk->instance,window,application_name);
+    device->physical_device=cvm_vk_create_physical_device(device_setup.instance,&device_setup);
+    if(device->physical_device==VK_NULL_HANDLE)return -1;
 
-    vk->physical_device=cvm_vk_create_physical_device(vk->instance,&device_setup);
-    if(vk->physical_device==VK_NULL_HANDLE)return -1;
+    cvm_vk_create_logical_device(device, &device_setup);
 
-    cvm_vk_create_logical_device(vk, &device_setup);
+    cvm_vk_create_internal_command_pools(device);
 
-    cvm_vk_create_surface_from_window(&cvm_vk_surface,vk,window);
+    cvm_vk_create_surface_from_window(&cvm_vk_surface,device,window,device_setup.instance);
 
+    device->instance=device_setup.instance;
 
-    cvm_vk_create_internal_command_pools();
-    cvm_vk_create_transfer_chain();
+    cvm_vk_create_transfer_chain();///make conditional on separate transfer queue?
     cvm_vk_create_timeline_semaphores();
 
     cvm_vk_create_defaults();
@@ -1048,25 +1106,27 @@ int cvm_vk_initialise(cvm_vk * vk, const cvm_vk_device_setup * external_device_s
     return 0;
 }
 
-void cvm_vk_terminate(void)
+void cvm_vk_device_terminate(cvm_vk_device * device)
 {
+    /// is the following necessary???
+    /// shouldnt we have waited on all things using this device before we terminate it?
+    vkDeviceWaitIdle(device->device);
+
+
     cvm_vk_destroy_defaults();
 
     cvm_vk_destroy_timeline_semaphores();
 
-    cvm_vk_destroy_transfer_chain();
-    cvm_vk_destroy_internal_command_pools();
+    cvm_vk_destroy_transfer_chain();///make conditional on separate transfer queue?
+    cvm_vk_destroy_internal_command_pools(device);
 
     free(cvm_vk_image_acquisition_semaphores);
     free(cvm_vk_presenting_images);
 
-    vkDestroySwapchainKHR(cvm_vk_.device,cvm_vk_swapchain,NULL);
-    vkDestroyDevice(cvm_vk_.device,NULL);
-    vkDestroySurfaceKHR(cvm_vk_.instance,cvm_vk_surface,NULL);
-    vkDestroyInstance(cvm_vk_.instance,NULL);
+    vkDestroySwapchainKHR(device->device,cvm_vk_swapchain,NULL);
+    vkDestroySurfaceKHR(device->instance,cvm_vk_surface,NULL);
 
-    cvm_vk_destroy_device_feature_structure_list((void*)cvm_vk_.features);
-    free((void*)cvm_vk_.extensions);
+    cvm_vk_destroy_logical_device(device);
 }
 
 
@@ -1079,13 +1139,273 @@ void cvm_vk_terminate(void)
 
 
 
+static inline int cvm_vk_swapchain_create(cvm_vk_surface_swapchain * swapchain, cvm_vk_device * device)
+{
+    uint32_t i,j,old_swapchain_image_count,fallback_present_queue_family;
+    VkBool32 surface_supported;
+    VkSwapchainKHR old_swapchain;
+
+    old_swapchain_image_count=swapchain->image_count;
+    old_swapchain=swapchain->swapchain;
+
+
+    swapchain->queue_family_support_mask=0;
+    for(i=device->queue_family_count;i--;)
+    {
+        CVM_VK_CHECK(vkGetPhysicalDeviceSurfaceSupportKHR(device->physical_device,i,swapchain->surface,&surface_supported));
+        if(surface_supported)
+        {
+            fallback_present_queue_family=i;
+            swapchain->queue_family_support_mask|=1<<i;
+        }
+    }
+    if(swapchain->queue_family_support_mask==0) return -1;///cannot present to this surface!
+
+    CVM_VK_CHECK(vkGetPhysicalDeviceSurfaceCapabilitiesKHR(device->physical_device,swapchain->surface,&swapchain->surface_capabilities));
+
+    if(swapchain->surface_capabilities.supportedUsageFlags&swapchain->usage_flags!=swapchain->usage_flags) return -1;///intened usage not supported
+    if((swapchain->surface_capabilities.maxImageCount != 0)&&(swapchain->surface_capabilities.maxImageCount < swapchain->min_image_count)) return -1;///cannot suppirt minimum image count
+    if(swapchain->surface_capabilities.supportedCompositeAlpha&VK_COMPOSITE_ALPHA_OPAQUE_BIT_KHR==0)return -1;///compositing not supported
+    /// would like to support different compositing, need to extend to allow this
+
+    VkSwapchainCreateInfoKHR swapchain_create_info=(VkSwapchainCreateInfoKHR)
+    {
+        .sType=VK_STRUCTURE_TYPE_SWAPCHAIN_CREATE_INFO_KHR,
+        .pNext=NULL,
+        .flags=0,
+        .surface=swapchain->surface,
+        .minImageCount=CVM_MAX(swapchain->surface_capabilities.minImageCount,swapchain->min_image_count),
+        .imageFormat=swapchain->surface_format.format,
+        .imageColorSpace=swapchain->surface_format.colorSpace,
+        .imageExtent=swapchain->surface_capabilities.currentExtent,
+        .imageArrayLayers=1,
+        .imageUsage=swapchain->usage_flags,
+        .imageSharingMode=VK_SHARING_MODE_EXCLUSIVE,///means QFOT is necessary, thus following should not be prescribed
+        .queueFamilyIndexCount=0,
+        .pQueueFamilyIndices=NULL,
+        .preTransform=swapchain->surface_capabilities.currentTransform,
+        .compositeAlpha=VK_COMPOSITE_ALPHA_OPAQUE_BIT_KHR,
+        .presentMode=swapchain->present_mode,
+        .clipped=VK_TRUE,
+        .oldSwapchain=swapchain->swapchain,
+    };
+
+    CVM_VK_CHECK(vkCreateSwapchainKHR(device->device,&swapchain_create_info,NULL,&swapchain->swapchain));
+
+    CVM_VK_CHECK(vkGetSwapchainImagesKHR(device->device,swapchain->swapchain,&swapchain->image_count,NULL));
+    VkImage * swapchain_images=malloc(sizeof(VkImage)*swapchain->image_count);
+    CVM_VK_CHECK(vkGetSwapchainImagesKHR(device->device,swapchain->swapchain,&swapchain->image_count,swapchain_images));
+
+    swapchain->acquired_image_index=CVM_INVALID_U32_INDEX;///no longer have a valid swapchain image
+
+    if(old_swapchain_image_count!=swapchain->image_count)
+    {
+        swapchain->image_acquisition_semaphores=realloc(swapchain->image_acquisition_semaphores,(swapchain->image_count+1)*sizeof(VkSemaphore));
+        swapchain->presenting_images=realloc(swapchain->presenting_images,swapchain->image_count*sizeof(cvm_vk_swapchain_image_present_data));
+    }
+
+    VkSemaphoreCreateInfo binary_semaphore_create_info=(VkSemaphoreCreateInfo)
+    {
+        .sType=VK_STRUCTURE_TYPE_SEMAPHORE_CREATE_INFO,
+        .pNext=NULL,
+        .flags=0
+    };
+
+    for(i=0;i<swapchain->image_count+1;i++)
+    {
+        ///require 1 extra semaphore on acquire b/c we request the next image before the prior one has completed/been made available (and as such all images may have their acquire semaphore in use)
+        CVM_VK_CHECK(vkCreateSemaphore(device->device,&binary_semaphore_create_info,NULL,swapchain->image_acquisition_semaphores+i));
+    }
+
+    for(i=0;i<cvm_vk_swapchain_image_count;i++)
+    {
+        swapchain->presenting_images[i]=(cvm_vk_swapchain_image_present_data)
+        {
+            .image=swapchain_images[i],
+            ///.image_view,//set later
+            .acquire_semaphore=VK_NULL_HANDLE,///set using one of the available image_acquisition_semaphores
+            .successfully_acquired=false,
+            .successfully_submitted=false,
+            ///.present_semaphore,//set later
+            .fallback_present_queue_family=fallback_present_queue_family,
+            ///.present_acquire_command_buffers,///set later
+
+            #warning being reliant upon graphics is a red flag, this needs to be generalised! make them per QFOT? per queue?? something else entirely?
+            #warning also: why TF is transfer here ? it should be added as a dependency on the ops that use it!
+            .graphics_wait_value=0,
+            .present_wait_value=0,
+            .transfer_wait_value=0,
+        };
+
+        /// acquired frames
+        CVM_VK_CHECK(vkCreateSemaphore(cvm_vk_.device,&binary_semaphore_create_info,NULL,&swapchain->presenting_images[i].present_semaphore));
+
+        ///image view
+        VkImageViewCreateInfo image_view_create_info=(VkImageViewCreateInfo)
+        {
+            .sType=VK_STRUCTURE_TYPE_IMAGE_VIEW_CREATE_INFO,
+            .pNext=NULL,
+            .flags=0,
+            .image=swapchain_images[i],
+            .viewType=VK_IMAGE_VIEW_TYPE_2D,
+            .format=swapchain->surface_format.format,
+            .components=(VkComponentMapping)
+            {
+                .r=VK_COMPONENT_SWIZZLE_IDENTITY,
+                .g=VK_COMPONENT_SWIZZLE_IDENTITY,
+                .b=VK_COMPONENT_SWIZZLE_IDENTITY,
+                .a=VK_COMPONENT_SWIZZLE_IDENTITY
+            },
+            .subresourceRange=(VkImageSubresourceRange)
+            {
+                .aspectMask=VK_IMAGE_ASPECT_COLOR_BIT,
+                .baseMipLevel=0,
+                .levelCount=1,
+                .baseArrayLayer=0,
+                .layerCount=1
+            }
+        };
+        CVM_VK_CHECK(vkCreateImageView(device->device,&image_view_create_info,NULL,&swapchain->presenting_images[i].image_view));
+
+        swapchain->presenting_images[i].present_acquire_command_buffers=malloc(sizeof(VkCommandBuffer)*device->queue_family_count);
+        for(j=0;j<device->queue_family_count;j++)
+        {
+            swapchain->presenting_images[i].present_acquire_command_buffers[j]=VK_NULL_HANDLE;
+        }
+    }
+
+    free(swapchain_images);
+
+    if(old_swapchain!=VK_NULL_HANDLE)
+    {
+        vkDestroySwapchainKHR(device->device,old_swapchain,NULL);
+    }
+
+    cvm_vk_create_swapchain_dependednt_defaults(swapchain->surface_capabilities.currentExtent.width,swapchain->surface_capabilities.currentExtent.height);
+    #warning make these defaults part of the swapchain!?
+
+    cvm_vk_rendering_resources_valid=true;
+}
+
+static inline void cvm_vk_swapchain_destroy(cvm_vk_surface_swapchain * swapchain, cvm_vk_device * device)
+{
+    #warning waiting might not be viable! (it isnt if other swapchain is in use) need to wait on all present completion semaphores (and maybe set them up?)
+    vkDeviceWaitIdle(device->device);
+    /// probably not the best place to put this, but so it goes, needed to ensure present workload has actually completed (and thus any batches referencing the present semaphore have completed before deleting it)
+    /// could probably just call queue wait idle on graphics and present queues?
+    #warning wait on present semaphores to ensure device swapchain isnt in use instead of waiting for device to be idle
+
+    uint32_t i,j;
+
+    cvm_vk_destroy_swapchain_dependednt_defaults();
+    #warning make above defaults part of the swapchain
+
+
+    assert(!cvm_vk_acquired_image_count);///MUST WAIT TILL ALL IMAGES ARE RETURNED BEFORE TERMINATING SWAPCHAIN
+
+    for(i=0;i<cvm_vk_swapchain_image_count+1;i++)
+    {
+        vkDestroySemaphore(device->device,swapchain->image_acquisition_semaphores[i],NULL);
+    }
+
+    for(i=0;i<cvm_vk_swapchain_image_count;i++)
+    {
+        /// acquired frames
+        vkDestroySemaphore(device->device,swapchain->presenting_images[i].present_semaphore,NULL);
+
+        /// swapchain frames
+        vkDestroyImageView(device->device,swapchain->presenting_images[i].image_view,NULL);
+
+        ///queue ownership transfer stuff
+        for(j=0;j<device->queue_family_count;i++)
+        {
+            if(swapchain->presenting_images[i].present_acquire_command_buffers[j]!=VK_NULL_HANDLE)
+            {
+                vkFreeCommandBuffers(device->device,device->internal_command_pools[j],1,cvm_vk_presenting_images[i].present_acquire_command_buffers+j);
+            }
+        }
+        free(swapchain->presenting_images[i].present_acquire_command_buffers);
+    }
+}
 
 
 
 
+int cvm_vk_swapchain_initialse(cvm_vk_surface_swapchain * swapchain, cvm_vk_device * device, const cvm_vk_swapchain_setup * setup)
+{
+    uint32_t i,format_count,present_mode_count;
+    SDL_bool created_surface;
+    VkSurfaceFormatKHR * formats=NULL;
+    VkPresentModeKHR * present_modes=NULL;
+    VkSurfaceFormatKHR preferred_surface_format;
+
+    swapchain->surface=setup->surface;
+    swapchain->swapchain=VK_NULL_HANDLE;
+
+    swapchain->min_image_count=setup->min_image_count;
+    swapchain->usage_flags=setup->usage_flags;
+
+    swapchain->image_acquisition_semaphores=NULL;
+    swapchain->presenting_images=NULL;
+
+    assert(device->queue_family_count<=64);/// cannot hold bitmask
+
+    #warning what amongst these needs to be called AGAIN after the surface gets recreated??
+
+    /// select screen image format
+    if(setup->preferred_surface_format.format) preferred_surface_format=setup->preferred_surface_format;
+    else preferred_surface_format=(VkSurfaceFormatKHR){.format=VK_FORMAT_B8G8R8A8_SRGB,.colorSpace=VK_COLOR_SPACE_SRGB_NONLINEAR_KHR};
+
+    CVM_VK_CHECK(vkGetPhysicalDeviceSurfaceFormatsKHR(device->physical_device,swapchain->surface,&format_count,NULL));
+    formats=malloc(sizeof(VkSurfaceFormatKHR)*format_count);
+    CVM_VK_CHECK(vkGetPhysicalDeviceSurfaceFormatsKHR(device->physical_device,swapchain->surface,&format_count,formats));
+
+    swapchain->surface_format=formats[0];///fallback in case preferred isnt found, required to have at least 1 at this point
+    for(i=0;i<format_count;i++)
+    {
+        if(preferred_surface_format.colorSpace==formats[i].colorSpace && preferred_surface_format.format==formats[i].format)
+        {
+            ///preferred format exists
+            swapchain->surface_format=preferred_surface_format;
+            break;
+        }
+    }
+    free(formats);
 
 
+    ///select screen present mode
+    CVM_VK_CHECK(vkGetPhysicalDeviceSurfacePresentModesKHR(device->physical_device,swapchain->surface,&present_mode_count,NULL));
+    present_modes=malloc(sizeof(VkPresentModeKHR)*present_mode_count);
+    CVM_VK_CHECK(vkGetPhysicalDeviceSurfacePresentModesKHR(device->physical_device,swapchain->surface,&present_mode_count,present_modes));
 
+    swapchain->present_mode=VK_PRESENT_MODE_FIFO_KHR;/// this is required to be supported
+    for(i=0;i<present_mode_count;i++)
+    {
+        if(present_modes[i]==setup->preferred_present_mode)
+        {
+            swapchain->present_mode=setup->preferred_present_mode;
+            break;
+        }
+    }
+    free(present_modes);
+
+    return cvm_vk_swapchain_create(swapchain,device);
+}
+
+void cvm_vk_swapchain_terminate(cvm_vk_surface_swapchain * swapchain, cvm_vk_device * device)
+{
+    cvm_vk_swapchain_destroy(swapchain,device);
+
+
+    vkDestroySwapchainKHR(device->device,swapchain->swapchain,NULL);
+    vkDestroySurfaceKHR(device->instance,swapchain->surface,NULL);
+}
+
+int cvm_vk_swapchain_regenerate(cvm_vk_surface_swapchain * swapchain, cvm_vk_device * device)
+{
+    cvm_vk_swapchain_destroy(swapchain,device);
+    return cvm_vk_swapchain_create(swapchain,device);
+}
 
 
 
