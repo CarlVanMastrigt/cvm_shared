@@ -180,6 +180,8 @@ VkInstance cvm_vk_instance_initialise(const cvm_vk_instance_setup * setup);
 ///above extra is the max extra used by any module
 void cvm_vk_instance_terminate(VkInstance instance);
 
+VkSurfaceKHR cvm_vk_create_surface_from_SDL_window(cvm_vk_device * vk, SDL_Window * window);
+
 
 
 typedef struct cvm_vk_swapchain_setup
@@ -259,7 +261,7 @@ typedef struct cvm_vk_surface_swapchain
     uint32_t acquired_image_count;/// init as 0
 
     ///following used to determine number of swapchain images to allocate
-    bool cvm_vk_rendering_resources_valid;/// starts false, used to determine if rebuilding of resources is required due to swapchain invalidation (e.g. because window was resized)
+    bool rendering_resources_valid;/// starts false, used to determine if rebuilding of resources is required due to swapchain invalidation (e.g. because window was resized)
 }
 cvm_vk_surface_swapchain;
 
