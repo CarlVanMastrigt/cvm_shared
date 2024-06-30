@@ -1,5 +1,5 @@
 /**
-Copyright 2020,2021,2022,2023 Carl van Mastrigt
+Copyright 2020,2021,2022,2023,2024 Carl van Mastrigt
 
 This file is part of cvm_shared.
 
@@ -75,12 +75,10 @@ going to have to rely on acquire op failing to know when to recreate swapchain
 ///could move these structs to the c file? - they should only ever be used by cvm_vk internally
 ///this struct contains the data needed to be known upfront when acquiring swapchain image (cvm_vk_swapchain_frame), some data could go in either struct though...
 
-typedef struct cvm_vk_timeline_semaphore
-{
-    VkSemaphore semaphore;
-    uint64_t value;
-}
-cvm_vk_timeline_semaphore;
+
+
+
+
 
 typedef struct cvm_vk_instance_setup
 {
@@ -158,21 +156,13 @@ typedef struct cvm_vk_device
     #warning remove present, this should be per swapchain image
 
     VkCommandPool * internal_command_pools;
-    /// above used for long lived commands,
-
-
-    ///only support one of each of above (allow these to be the same if above are as well?)
-//    VkQueue cvm_vk_transfer_queue;
-//    VkQueue cvm_vk_graphics_queue;///doesn't seem to be any (mainstream) hardware that supports more than one graphics queue
-//    VkQueue cvm_vk_present_queue;
-
-//    VkQueue * cvm_vk_asynchronous_compute_queues;
-//    uint32_t cvm_vk_asynchronous_compute_queue_count;
-
-    /// ONLY used for simple internal commands
-//    VkCommandPool cvm_vk_internal_present_command_pool;
+    /// above used for long lived commands
 }
 cvm_vk_device;
+
+
+#include "vk/timeline_semaphore.h"
+#include "vk/swapchain.h"
 
 
 VkInstance cvm_vk_instance_initialise_for_SDL(const char * application_name,uint32_t application_version,bool validation_enabled);
@@ -180,93 +170,10 @@ VkInstance cvm_vk_instance_initialise(const cvm_vk_instance_setup * setup);
 ///above extra is the max extra used by any module
 void cvm_vk_instance_terminate(VkInstance instance);
 
-VkSurfaceKHR cvm_vk_create_surface_from_SDL_window(cvm_vk_device * vk, SDL_Window * window);
+VkSurfaceKHR cvm_vk_create_surface_from_SDL_window(VkInstance instance, SDL_Window * window);
+void cvm_vk_destroy_surface(VkInstance instance, VkSurfaceKHR surface);
 
 
-
-typedef struct cvm_vk_swapchain_setup
-{
-    VkSurfaceKHR surface;
-
-    uint32_t min_image_count;
-    VkImageUsageFlagBits usage_flags;
-//    VkCompositeAlphaFlagsKHR compositing_mode;
-
-    VkSurfaceFormatKHR preferred_surface_format;
-    VkPresentModeKHR preferred_present_mode;
-}
-cvm_vk_swapchain_setup;
-
-typedef struct cvm_vk_swapchain_image_present_data
-{
-    VkImage image;///theese are provided by the WSI
-    VkImageView image_view;
-
-    VkSemaphore acquire_semaphore;///held temporarily by this struct, not owner, not created or destroyed as part of it
-
-    //bool in_flight;///error checking
-    uint32_t successfully_acquired:1;
-    uint32_t successfully_submitted:1;
-
-    ///following only used if present and graphics are different
-    ///     ^ test as best as possible with bool that forces behaviour, and maybe try different queue/queue_family when possible (o.e. when available hardware allows)
-    /// timeline semaphore in renderer instead?
-    VkCommandBuffer present_acquire_command_buffer;
-    #warning REMOVE ABOVE
-
-    VkSemaphore present_semaphore;///needed by VkPresentInfoKHR
-
-
-    ///if we can't present on the current queue family we'll present on the fallback (lowest indexed queue family that supports present)
-    uint32_t fallback_present_queue_family;
-    /// the command buffers to recieve the QFOT should be created as necessary
-    VkCommandBuffer * present_acquire_command_buffers;
-
-    ///semaphore values
-    uint64_t graphics_wait_value;
-    uint64_t present_wait_value;
-    uint64_t transfer_wait_value;///should move this to the transferchain when that becomes a thing
-
-//    VkFence completion_fence;
-}
-cvm_vk_swapchain_image_present_data;
-
-/// all the data associated with a window and rendering to a surface(usually a window)
-typedef struct cvm_vk_surface_swapchain
-{
-    /// effectively the window
-    VkSurfaceKHR surface;
-
-
-    uint32_t min_image_count;
-    VkImageUsageFlagBits usage_flags;
-
-    uint64_t queue_family_support_mask;
-
-    VkSurfaceCapabilitiesKHR surface_capabilities;
-
-
-    VkSwapchainKHR swapchain;//VK_NULL_HANDLE
-    VkSurfaceFormatKHR surface_format;
-    VkPresentModeKHR present_mode;
-
-    ///may want to rename cvm_vk_frames, cvm_vk_presentation_instance probably isnt that bad tbh...
-    ///realloc these only if number of swapchain image count changes (it wont really)
-    VkSemaphore * image_acquisition_semaphores;///number of these should match swapchain image count
-    cvm_vk_swapchain_image_present_data * presenting_images;
-    uint32_t image_count;/// this is also the number of swapchain images
-    uint32_t acquired_image_index;///CVM_INVALID_U32_INDEX
-
-    ///both frames in flight and frames acquired by rendereer
-    uint32_t acquired_image_count;/// init as 0
-
-    ///following used to determine number of swapchain images to allocate
-    bool rendering_resources_valid;/// starts false, used to determine if rebuilding of resources is required due to swapchain invalidation (e.g. because window was resized)
-}
-cvm_vk_surface_swapchain;
-
-
-///generate
 
 
 int cvm_vk_device_initialise(cvm_vk_device * device, const cvm_vk_device_setup * external_device_setup, SDL_Window * window);
@@ -277,21 +184,9 @@ void cvm_vk_device_terminate(cvm_vk_device * device);
 #warning following are placeholders for interoperability with old approach
 cvm_vk_device * cvm_vk_device_get(void);
 cvm_vk_surface_swapchain * cvm_vk_swapchain_get(void);
+cvm_vk_timeline_semaphore * cvm_vk_graphics_timeline_get(void);
+cvm_vk_timeline_semaphore * cvm_vk_transfer_timeline_get(void);
 
-
-int cvm_vk_swapchain_initialse(cvm_vk_surface_swapchain * swapchain, cvm_vk_device * device, const cvm_vk_swapchain_setup * setup);
-void cvm_vk_swapchain_terminate(cvm_vk_surface_swapchain * swapchain, cvm_vk_device * device);
-int cvm_vk_swapchain_regenerate(cvm_vk_surface_swapchain * swapchain, cvm_vk_device * device);
-
-
-void cvm_vk_create_swapchain(void);
-void cvm_vk_destroy_swapchain(void);
-
-
-
-
-
-void cvm_vk_wait_on_timeline_semaphore(cvm_vk_timeline_semaphore * timeline_semaphore,uint64_t value,uint64_t timeout_ns);
 
 
 void cvm_vk_create_render_pass(VkRenderPass * render_pass,VkRenderPassCreateInfo * info);
@@ -481,10 +376,6 @@ uint32_t cvm_vk_get_transfer_queue_family(void);
 uint32_t cvm_vk_get_graphics_queue_family(void);
 uint32_t cvm_vk_get_asynchronous_compute_queue_family(void);
 
-
-uint32_t cvm_vk_prepare_for_next_frame(bool rendering_resources_invalid);
-bool cvm_vk_recreate_rendering_resources(void);///this and operations resulting from it returning true, must be called in critical section
-bool cvm_vk_check_for_remaining_frames(uint32_t * completed_frame_index);
 
 #include "cvm_vk_memory.h"
 #include "cvm_vk_image.h"

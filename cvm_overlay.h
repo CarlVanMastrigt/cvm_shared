@@ -102,6 +102,7 @@ void terminate_overlay_swapchain_dependencies(void);
 void overlay_render_frame(int screen_w,int screen_h,widget * menu_widget);
 
 void overlay_frame_cleanup(uint32_t swapchain_image_index);
+#warning make above take `const cvm_vk_swapchain_presentable_image *` as input instead ??
 
 cvm_vk_image_atlas_tile * overlay_create_transparent_image_tile_with_staging(void ** staging,uint32_t w, uint32_t h);
 void overlay_destroy_transparent_image_tile(cvm_vk_image_atlas_tile * tile);
