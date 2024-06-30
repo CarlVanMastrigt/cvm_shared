@@ -28,9 +28,11 @@ along with cvm_shared.  If not, see <https://www.gnu.org/licenses/>.
 
 typedef struct cvm_vk_swapchain_setup
 {
+    const cvm_vk_device * device;
+
     VkSurfaceKHR surface;
 
-    uint32_t min_image_count;
+    uint32_t min_image_count;///0=use system minimum
     VkImageUsageFlagBits usage_flags;
 //    VkCompositeAlphaFlagsKHR compositing_mode;
 
@@ -69,9 +71,12 @@ cvm_vk_swapchain_presentable_image;
 /// all the data associated with a window and rendering to a surface(usually a window)
 typedef struct cvm_vk_surface_swapchain
 {
-    /// effectively the window
-    VkSurfaceKHR surface;
+    const cvm_vk_device * device;/// device that this swapchain belongs to
 
+    VkSurfaceKHR surface;/// effectively the window
+
+    VkFence metering_fence;///wait till previous fence is acquired before acquiring another
+    bool metering_fence_active;
 
     uint32_t min_image_count;
     uint32_t max_image_count;///max count experienced over the lifetime of this swapchain
@@ -107,14 +112,14 @@ typedef struct cvm_vk_surface_swapchain
 cvm_vk_surface_swapchain;
 
 
-int cvm_vk_swapchain_initialse(cvm_vk_surface_swapchain * swapchain, cvm_vk_device * device, const cvm_vk_swapchain_setup * setup);
-void cvm_vk_swapchain_terminate(cvm_vk_surface_swapchain * swapchain, cvm_vk_device * device);
+int cvm_vk_swapchain_initialse(cvm_vk_surface_swapchain * swapchain, const cvm_vk_swapchain_setup * setup);
+void cvm_vk_swapchain_terminate(cvm_vk_surface_swapchain * swapchain);
 
-int cvm_vk_swapchain_regenerate(cvm_vk_surface_swapchain * swapchain, cvm_vk_device * device);
+int cvm_vk_swapchain_regenerate(cvm_vk_surface_swapchain * swapchain);
 
 
-const cvm_vk_swapchain_presentable_image * cvm_vk_swapchain_acquire_presentable_image(cvm_vk_surface_swapchain * swapchain, cvm_vk_device * device, bool rendering_resources_invalid, uint32_t * cleanup_index);
-bool cvm_vk_check_for_remaining_frames(cvm_vk_surface_swapchain * swapchain, cvm_vk_device * device, uint32_t * cleanup_index);
+const cvm_vk_swapchain_presentable_image * cvm_vk_swapchain_acquire_presentable_image(cvm_vk_surface_swapchain * swapchain, bool rendering_resources_invalid, uint32_t * cleanup_index);
+bool cvm_vk_check_for_remaining_frames(cvm_vk_surface_swapchain * swapchain, uint32_t * cleanup_index);
 
 #endif
 

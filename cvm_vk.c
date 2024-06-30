@@ -920,6 +920,7 @@ cvm_vk_timeline_semaphore cvm_vk_submit_graphics_work(cvm_vk_module_work_payload
         {
 
             #warning replace cvm_vk_.graphics_queue_family_index with source queue family index
+            #warning requires synchronization! (uses shared internal command pool)
             if(presenting_image->present_acquire_command_buffers[cvm_vk_.graphics_queue_family_index]==VK_NULL_HANDLE)
             {
                 VkCommandBufferAllocateInfo command_buffer_allocate_info=(VkCommandBufferAllocateInfo)
@@ -1053,6 +1054,59 @@ cvm_vk_timeline_semaphore cvm_vk_submit_graphics_work(cvm_vk_module_work_payload
 
     return cvm_vk_graphics_timeline;
 }
+
+VkFence cvm_vk_create_fence(const cvm_vk_device * device,bool initially_signalled)
+{
+    VkFence fence;
+    VkResult r;
+
+    VkFenceCreateInfo create_info=
+    {
+        .sType=VK_STRUCTURE_TYPE_FENCE_CREATE_INFO,
+        .pNext=NULL,
+        .flags=initially_signalled ? VK_FENCE_CREATE_SIGNALED_BIT : 0,
+    };
+
+    r=vkCreateFence(device->device,&create_info,NULL,&fence);
+    assert(r==VK_SUCCESS);
+
+    return r==VK_SUCCESS ? fence : VK_NULL_HANDLE;
+}
+
+void cvm_vk_destroy_fence(const cvm_vk_device * device,VkFence fence)
+{
+    vkDestroyFence(device->device,fence,NULL);
+}
+
+void cvm_vk_wait_on_fence_and_reset(const cvm_vk_device * device,VkFence fence)
+{
+    CVM_VK_CHECK(vkWaitForFences(device->device,1,&fence,VK_TRUE,CVM_VK_DEFAULT_TIMEOUT));
+    vkResetFences(device->device,1,&fence);
+}
+
+VkSemaphore cvm_vk_create_binary_semaphore(const cvm_vk_device * device)
+{
+    VkSemaphore semaphore;
+    VkResult r;
+
+    VkSemaphoreCreateInfo create_info=(VkSemaphoreCreateInfo)
+    {
+        .sType=VK_STRUCTURE_TYPE_SEMAPHORE_CREATE_INFO,
+        .pNext=NULL,
+        .flags=0
+    };
+
+    r=vkCreateSemaphore(device->device,&create_info,NULL,&semaphore);
+    assert(r==VK_SUCCESS);
+
+    return r==VK_SUCCESS ? semaphore : VK_NULL_HANDLE;
+}
+
+void cvm_vk_destroy_binary_semaphore(const cvm_vk_device * device,VkSemaphore semaphore)
+{
+    vkDestroySemaphore(device->device,semaphore,NULL);
+}
+
 
 
 void cvm_vk_create_render_pass(VkRenderPass * render_pass,VkRenderPassCreateInfo * info)

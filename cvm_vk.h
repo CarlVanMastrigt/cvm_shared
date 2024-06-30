@@ -37,6 +37,9 @@ along with cvm_shared.  If not, see <https://www.gnu.org/licenses/>.
 #endif
 
 
+#define CVM_VK_DEFAULT_TIMEOUT 1000000000
+/// ^ 1 second
+
 
 CVM_STACK(VkBufferMemoryBarrier2,cvm_vk_buffer_barrier,4)
 CVM_STACK(VkBufferCopy,cvm_vk_buffer_copy,4)
@@ -187,7 +190,12 @@ cvm_vk_surface_swapchain * cvm_vk_swapchain_get(void);
 cvm_vk_timeline_semaphore * cvm_vk_graphics_timeline_get(void);
 cvm_vk_timeline_semaphore * cvm_vk_transfer_timeline_get(void);
 
+VkFence cvm_vk_create_fence(const cvm_vk_device * device,bool initially_signalled);
+void cvm_vk_destroy_fence(const cvm_vk_device * device,VkFence fence);
+void cvm_vk_wait_on_fence_and_reset(const cvm_vk_device * device,VkFence fence);
 
+VkSemaphore cvm_vk_create_binary_semaphore(const cvm_vk_device * device);
+void cvm_vk_destroy_binary_semaphore(const cvm_vk_device * device,VkSemaphore semaphore);
 
 void cvm_vk_create_render_pass(VkRenderPass * render_pass,VkRenderPassCreateInfo * info);
 void cvm_vk_destroy_render_pass(VkRenderPass render_pass);
