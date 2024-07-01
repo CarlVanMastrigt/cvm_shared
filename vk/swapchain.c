@@ -388,6 +388,7 @@ const cvm_vk_swapchain_presentable_image * cvm_vk_swapchain_acquire_presentable_
 
         if(swapchain->metering_fence_active)
         {
+            /// this should be the source stalls now
             cvm_vk_wait_on_fence_and_reset(swapchain->device,swapchain->metering_fence);
             swapchain->metering_fence_active=false;
         }
@@ -414,8 +415,8 @@ const cvm_vk_swapchain_presentable_image * cvm_vk_swapchain_acquire_presentable_
 
             if(presentable_image->successfully_acquired)///if it was acquired, cleanup is in order
             {
-                cvm_vk_wait_on_timeline_semaphore(presentable_image->transfer_wait,swapchain->device,1000000000);
-                cvm_vk_wait_on_timeline_semaphore(presentable_image->graphics_wait,swapchain->device,1000000000);
+                cvm_vk_wait_on_timeline_semaphore(presentable_image->transfer_wait,swapchain->device);
+                cvm_vk_wait_on_timeline_semaphore(presentable_image->graphics_wait,swapchain->device);
 
                 #warning remove above (?) still need to wait on last thing that used the image, even if it didnt get presented sucessfully
                 #warning need to review when present happens vs submit, may be cause of earlier issues!?
@@ -427,7 +428,7 @@ const cvm_vk_swapchain_presentable_image * cvm_vk_swapchain_acquire_presentable_
 
                 swapchain->image_acquisition_semaphores[--swapchain->acquired_image_count]=presentable_image->acquire_semaphore;
 
-                cvm_vk_wait_on_timeline_semaphore(presentable_image->present_moment,swapchain->device,1000000000);
+                cvm_vk_wait_on_timeline_semaphore(presentable_image->present_moment,swapchain->device);
             }
 
             if(presentable_image->successfully_submitted)
@@ -466,6 +467,8 @@ const cvm_vk_swapchain_presentable_image * cvm_vk_swapchain_acquire_presentable_
 
 bool cvm_vk_check_for_remaining_frames(cvm_vk_surface_swapchain * swapchain, uint32_t * cleanup_index)
 {
+    #warning a better design might be to do cleanup via a callback, not necessarily associated with any single index but instead just refrencing a particular frame
+    /// ^ unfortunately this will likely require semi-expensive synchronization!
     uint32_t i;
     #warning swapchain should retain/know its device!, after all swapchains need to be created from/for a device!
     cvm_vk_swapchain_presentable_image * presentable_image;
@@ -479,10 +482,10 @@ bool cvm_vk_check_for_remaining_frames(cvm_vk_surface_swapchain * swapchain, uin
             presentable_image = swapchain->presenting_images + i;
             if(presentable_image->successfully_acquired)
             {
-                cvm_vk_wait_on_timeline_semaphore(presentable_image->transfer_wait,swapchain->device,1000000000);
-                cvm_vk_wait_on_timeline_semaphore(presentable_image->graphics_wait,swapchain->device,1000000000);
+                cvm_vk_wait_on_timeline_semaphore(presentable_image->transfer_wait,swapchain->device);
+                cvm_vk_wait_on_timeline_semaphore(presentable_image->graphics_wait,swapchain->device);
                 #warning, this approach is entirely wrong, when data has finished being used it should signal the same semaphore with a higher value to show that it's complete!
-                cvm_vk_wait_on_timeline_semaphore(presentable_image->present_moment,swapchain->device,1000000000);
+                cvm_vk_wait_on_timeline_semaphore(presentable_image->present_moment,swapchain->device);
 
                 presentable_image->successfully_acquired=false;
                 presentable_image->successfully_submitted=false;

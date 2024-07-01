@@ -1030,6 +1030,9 @@ cvm_vk_timeline_semaphore cvm_vk_submit_graphics_work(cvm_vk_module_work_payload
             .pImageIndices=&cvm_vk_surface_swapchain_.acquired_image_index,
             .pResults=NULL
         };
+        #warning present should be synchronised (check this is true)
+
+        #warning separate present out from modules/work, it should operate on the presentable_image
 
         #warning get queue index from somewhere?
         vkGetDeviceQueue(cvm_vk_.device,cvm_vk_.fallback_present_queue_family_index,0,&present_queue);
