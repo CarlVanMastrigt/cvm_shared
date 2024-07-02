@@ -81,7 +81,7 @@ VkSemaphoreSubmitInfo cvm_vk_create_timeline_semaphore_wait_submit_info(cvm_vk_t
     };
 }
 
-void cvm_vk_wait_on_timeline_semaphore(cvm_vk_timeline_semaphore_moment moment, cvm_vk_device * device)
+void cvm_vk_wait_on_timeline_semaphore(cvm_vk_device * device,const cvm_vk_timeline_semaphore_moment * moment)
 {
     VkSemaphoreWaitInfo wait=
     {
@@ -89,8 +89,8 @@ void cvm_vk_wait_on_timeline_semaphore(cvm_vk_timeline_semaphore_moment moment, 
         .pNext=NULL,
         .flags=0,
         .semaphoreCount=1,
-        .pSemaphores=&moment.semaphore,
-        .pValues=&moment.value,
+        .pSemaphores=&moment->semaphore,
+        .pValues=&moment->value,
     };
     CVM_VK_CHECK(vkWaitSemaphores(device->device,&wait,CVM_VK_DEFAULT_TIMEOUT));
 }

@@ -60,6 +60,8 @@ typedef struct cvm_vk_swapchain_presentable_image
     /// the command buffers to recieve the QFOT should be created as necessary
     VkCommandBuffer * present_acquire_command_buffers;
 
+    cvm_vk_timeline_semaphore_moment last_use_moment;///changes throughout the frame
+
     #warning make this the "last used moment" for this image, use it to track work across multiple "libraries" (e.g. game and overlay)
     cvm_vk_timeline_semaphore_moment present_moment;///this is actually the last u
 

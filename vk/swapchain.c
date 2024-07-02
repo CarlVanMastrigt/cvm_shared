@@ -35,7 +35,6 @@ static inline int cvm_vk_swapchain_create(cvm_vk_surface_swapchain * swapchain)
     swapchain->queue_family_support_mask=0;
     for(i=swapchain->device->queue_family_count;i--;)
     {
-        #warning do this on init ans instead assert it is the same!
         CVM_VK_CHECK(vkGetPhysicalDeviceSurfaceSupportKHR(swapchain->device->physical_device,i,swapchain->surface,&surface_supported));
         if(surface_supported)
         {
@@ -50,7 +49,6 @@ static inline int cvm_vk_swapchain_create(cvm_vk_surface_swapchain * swapchain)
     #warning ABOVE IS FOR TESTING
 
     CVM_VK_CHECK(vkGetPhysicalDeviceSurfaceCapabilitiesKHR(swapchain->device->physical_device,swapchain->surface,&swapchain->surface_capabilities));
-    #warning above obviously changes upon resize, but we can just ensure the selected image count is maintained! (falls within capabilities)
 
     if(swapchain->surface_capabilities.supportedUsageFlags&swapchain->usage_flags!=swapchain->usage_flags) return -1;///intened usage not supported
     if((swapchain->surface_capabilities.maxImageCount != 0)&&(swapchain->surface_capabilities.maxImageCount < swapchain->min_image_count)) return -1;///cannot suppirt minimum image count
@@ -219,8 +217,6 @@ int cvm_vk_swapchain_initialse(cvm_vk_surface_swapchain * swapchain, const cvm_v
     swapchain->max_image_count=0;
     swapchain->usage_flags=setup->usage_flags;
 
-    #warning make swapchain size fixed and assert around that value
-
     swapchain->metering_fence=cvm_vk_create_fence(swapchain->device,false);
     swapchain->metering_fence_active=false;
 
@@ -233,8 +229,6 @@ int cvm_vk_swapchain_initialse(cvm_vk_surface_swapchain * swapchain, const cvm_v
     swapchain->presenting_images=NULL;
 
     assert(swapchain->device->queue_family_count<=64);/// cannot hold bitmask
-
-    #warning what amongst these needs to be called AGAIN after the surface gets recreated??
 
     /// select screen image format
     if(setup->preferred_surface_format.format) preferred_surface_format=setup->preferred_surface_format;
@@ -369,8 +363,6 @@ long as it has not entered a state that causes it to return VK_ERROR_OUT_OF_DATE
 /// rely on this func to detect swapchain resize? couldn't hurt to double check based on screen resize
 /// returns newly finished frames image index so that data waiting on it can be cleaned up for threads in upcoming critical section
 
-#warning the following returning don't NECESSARILY mean that we're free to cleanup frames, the fence or the semaphore passed int acquire must be "satisfied" before interacting with any of the frames underlying data!
-
 const cvm_vk_swapchain_presentable_image * cvm_vk_swapchain_acquire_presentable_image(cvm_vk_surface_swapchain * swapchain, bool rendering_resources_invalid, uint32_t * cleanup_index)
 {
     cvm_vk_swapchain_presentable_image * presentable_image;
@@ -415,8 +407,8 @@ const cvm_vk_swapchain_presentable_image * cvm_vk_swapchain_acquire_presentable_
 
             if(presentable_image->successfully_acquired)///if it was acquired, cleanup is in order
             {
-                cvm_vk_wait_on_timeline_semaphore(presentable_image->transfer_wait,swapchain->device);
-                cvm_vk_wait_on_timeline_semaphore(presentable_image->graphics_wait,swapchain->device);
+                cvm_vk_wait_on_timeline_semaphore(swapchain->device,&presentable_image->transfer_wait);
+                cvm_vk_wait_on_timeline_semaphore(swapchain->device,&presentable_image->graphics_wait);
 
                 #warning remove above (?) still need to wait on last thing that used the image, even if it didnt get presented sucessfully
                 #warning need to review when present happens vs submit, may be cause of earlier issues!?
@@ -428,7 +420,7 @@ const cvm_vk_swapchain_presentable_image * cvm_vk_swapchain_acquire_presentable_
 
                 swapchain->image_acquisition_semaphores[--swapchain->acquired_image_count]=presentable_image->acquire_semaphore;
 
-                cvm_vk_wait_on_timeline_semaphore(presentable_image->present_moment,swapchain->device);
+                cvm_vk_wait_on_timeline_semaphore(swapchain->device,&presentable_image->present_moment);
             }
 
             if(presentable_image->successfully_submitted)
@@ -482,10 +474,10 @@ bool cvm_vk_check_for_remaining_frames(cvm_vk_surface_swapchain * swapchain, uin
             presentable_image = swapchain->presenting_images + i;
             if(presentable_image->successfully_acquired)
             {
-                cvm_vk_wait_on_timeline_semaphore(presentable_image->transfer_wait,swapchain->device);
-                cvm_vk_wait_on_timeline_semaphore(presentable_image->graphics_wait,swapchain->device);
+                cvm_vk_wait_on_timeline_semaphore(swapchain->device,&presentable_image->transfer_wait);
+                cvm_vk_wait_on_timeline_semaphore(swapchain->device,&presentable_image->graphics_wait);
                 #warning, this approach is entirely wrong, when data has finished being used it should signal the same semaphore with a higher value to show that it's complete!
-                cvm_vk_wait_on_timeline_semaphore(presentable_image->present_moment,swapchain->device);
+                cvm_vk_wait_on_timeline_semaphore(swapchain->device,&presentable_image->present_moment);
 
                 presentable_image->successfully_acquired=false;
                 presentable_image->successfully_submitted=false;
