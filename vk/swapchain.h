@@ -53,7 +53,7 @@ typedef struct cvm_vk_swapchain_presentable_image
     uint32_t successfully_submitted:1;
     #warning instead is really sucessfully presented!
 
-    VkSemaphore present_semaphore;///needed by VkPresentInfoKHR
+    VkSemaphore present_semaphore;///needed by VkPresentInfoKHR, which doesn not accept timeline semaphores
 
 
 
@@ -63,12 +63,7 @@ typedef struct cvm_vk_swapchain_presentable_image
     cvm_vk_timeline_semaphore_moment last_use_moment;///changes throughout the frame
 
     #warning make this the "last used moment" for this image, use it to track work across multiple "libraries" (e.g. game and overlay)
-    cvm_vk_timeline_semaphore_moment present_moment;///this is actually the last u
-
-    ///semaphore values
-    #warning remove these
-    cvm_vk_timeline_semaphore_moment graphics_wait;
-    cvm_vk_timeline_semaphore_moment transfer_wait;///should move this to the transferchain when that becomes a thing
+//    cvm_vk_timeline_semaphore_moment present_moment;///this is actually the last u
 }
 cvm_vk_swapchain_presentable_image;
 
@@ -110,8 +105,6 @@ typedef struct cvm_vk_surface_swapchain
 
     ///following used to determine number of swapchain images to allocate
     bool rendering_resources_valid;/// starts false, used to determine if rebuilding of resources is required due to swapchain invalidation (e.g. because window was resized)
-
-    cvm_vk_timeline_semaphore present_timeline;
 }
 cvm_vk_surface_swapchain;
 

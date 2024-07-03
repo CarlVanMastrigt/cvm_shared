@@ -68,14 +68,14 @@ VkSemaphoreSubmitInfo cvm_vk_create_timeline_semaphore_signal_submit_info(cvm_vk
     };
 }
 
-VkSemaphoreSubmitInfo cvm_vk_create_timeline_semaphore_wait_submit_info(cvm_vk_timeline_semaphore * ts,VkPipelineStageFlags2 stages)
+VkSemaphoreSubmitInfo cvm_vk_create_timeline_semaphore_wait_submit_info(const cvm_vk_timeline_semaphore_moment * moment,VkPipelineStageFlags2 stages)
 {
     return (VkSemaphoreSubmitInfo)
     {
         .sType=VK_STRUCTURE_TYPE_SEMAPHORE_SUBMIT_INFO,
         .pNext=NULL,
-        .semaphore=ts->semaphore,
-        .value=ts->value,
+        .semaphore=moment->semaphore,
+        .value=moment->value,
         .stageMask=stages,
         .deviceIndex=0
     };

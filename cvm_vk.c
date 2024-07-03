@@ -25,7 +25,7 @@ static cvm_vk_surface_swapchain cvm_vk_surface_swapchain_;
 
 ///could transfer from graphics being separate from compute to semi-unified grouping of work semaphores (and similar concepts)
 static cvm_vk_timeline_semaphore cvm_vk_graphics_timeline;
-static cvm_vk_timeline_semaphore cvm_vk_transfer_timeline;///cycled at the same rate as graphics(?), only incremented when there is work to be done, only to be used for low priority data transfers
+//static cvm_vk_timeline_semaphore cvm_vk_transfer_timeline;///cycled at the same rate as graphics(?), only incremented when there is work to be done, only to be used for low priority data transfers
 
 cvm_vk_device * cvm_vk_device_get(void)
 {
@@ -39,17 +39,6 @@ cvm_vk_surface_swapchain * cvm_vk_swapchain_get(void)
     #warning REMOVE THIS FUNCTION
 }
 
-cvm_vk_timeline_semaphore * cvm_vk_graphics_timeline_get(void)
-{
-    return &cvm_vk_graphics_timeline;
-    #warning REMOVE THIS FUNCTION
-}
-
-cvm_vk_timeline_semaphore * cvm_vk_transfer_timeline_get(void)
-{
-    return &cvm_vk_transfer_timeline;
-    #warning REMOVE THIS FUNCTION
-}
 
 
 
@@ -451,7 +440,7 @@ static VkPhysicalDevice cvm_vk_create_physical_device(VkInstance vk_instance, co
 
 static void cvm_vk_create_logical_device(cvm_vk_device * device, const cvm_vk_device_setup * device_setup)
 {
-    uint32_t i,j,count,enabled_extension_count,available_extension_count;
+    uint32_t i,j,queue_count,enabled_extension_count,available_extension_count;
     bool * enabled_extensions_table;
     VkExtensionProperties * enabled_extensions;
     VkPhysicalDeviceFeatures2 * enabled_features;
@@ -470,13 +459,6 @@ static void cvm_vk_create_logical_device(cvm_vk_device * device, const cvm_vk_de
     vkGetPhysicalDeviceQueueFamilyProperties(device->physical_device, &device->queue_family_count, NULL);
     device->queue_family_properties=malloc(sizeof(VkQueueFamilyProperties)*device->queue_family_count);
     vkGetPhysicalDeviceQueueFamilyProperties(device->physical_device, &device->queue_family_count, (VkQueueFamilyProperties*)device->queue_family_properties);
-
-    device->queue_family_queue_count=malloc(sizeof(uint32_t)*device->queue_family_count);
-    for(i=0;i<device->queue_family_count;i++)
-    {
-        ///default
-        device->queue_family_queue_count[i]=1;
-    }
 
     available_features = cvm_vk_create_device_feature_structure_list(device_setup);
     vkGetPhysicalDeviceFeatures2(device->physical_device,available_features);
@@ -535,6 +517,13 @@ static void cvm_vk_create_logical_device(cvm_vk_device * device, const cvm_vk_de
     device->fallback_present_queue_family_index=CVM_INVALID_U32_INDEX;
     device->async_compute_queue_family_index=CVM_INVALID_U32_INDEX;
 
+    device->queue_families=malloc(sizeof(cvm_vk_device_queue_family)*device->queue_family_count);
+    for(i=0;i<device->queue_family_count;i++)
+    {
+        ///default
+        device->queue_families[i].queue_count=1;
+    }
+
     i=device->queue_family_count;
     while(i--)///assume lowest is best fit for anything in particular
     {
@@ -546,19 +535,19 @@ static void cvm_vk_create_logical_device(cvm_vk_device * device, const cvm_vk_de
         if(graphics)
         {
             device->graphics_queue_family_index=i;
-            device->queue_family_queue_count[i] = CVM_MIN(device->queue_family_properties[i].queueCount,device_setup->desired_graphics_queues);
+            device->queue_families[i].queue_count = CVM_MIN(device->queue_family_properties[i].queueCount,device_setup->desired_graphics_queues);
         }
 
         if(transfer && !graphics && !compute)
         {
             device->transfer_queue_family_index=i;
-            device->queue_family_queue_count[i] = CVM_MIN(device->queue_family_properties[i].queueCount,device_setup->desired_transfer_queues);
+            device->queue_families[i].queue_count = CVM_MIN(device->queue_family_properties[i].queueCount,device_setup->desired_transfer_queues);
         }
 
         if(compute && !graphics)
         {
             device->async_compute_queue_family_index=i;
-            device->queue_family_queue_count[i] = CVM_MIN(device->queue_family_properties[i].queueCount,device_setup->desired_async_compute_queues);
+            device->queue_families[i].queue_count = CVM_MIN(device->queue_family_properties[i].queueCount,device_setup->desired_async_compute_queues);
         }
     }
 
@@ -566,6 +555,8 @@ static void cvm_vk_create_logical_device(cvm_vk_device * device, const cvm_vk_de
     #warning REMOVE THESE
     device->fallback_present_queue_family_index = device->async_compute_queue_family_index;
 //    device->fallback_present_queue_family_index = device->graphics_queue_family_index;
+#warning this is temporary while transfers get back up and running!
+    device->transfer_queue_family_index = device->graphics_queue_family_index;
     if(device->transfer_queue_family_index==CVM_INVALID_U32_INDEX)device->transfer_queue_family_index=device->graphics_queue_family_index;
 
 
@@ -573,12 +564,12 @@ static void cvm_vk_create_logical_device(cvm_vk_device * device, const cvm_vk_de
     device_queue_creation_infos = malloc(sizeof(VkDeviceQueueCreateInfo)*device->queue_family_count);
     for(i=0;i<device->queue_family_count;i++)
     {
-        count=device->queue_family_queue_count[i];
-        priorities=malloc(sizeof(float)*count);
+        queue_count=device->queue_families[i].queue_count;
+        priorities=malloc(sizeof(float)*queue_count);
 
-        for(j=0;j<count;j++)
+        for(j=0;j<queue_count;j++)
         {
-            priorities[j] = 1.0 - (float)j/(float)count;
+            priorities[j] = 1.0;
         }
 
         device_queue_creation_infos[i]=(VkDeviceQueueCreateInfo)
@@ -587,7 +578,7 @@ static void cvm_vk_create_logical_device(cvm_vk_device * device, const cvm_vk_de
             .pNext=NULL,
             .flags=0,
             .queueFamilyIndex=i,
-            .queueCount=count,
+            .queueCount=queue_count,
             .pQueuePriorities=priorities,
         };
     }
@@ -606,9 +597,10 @@ static void cvm_vk_create_logical_device(cvm_vk_device * device, const cvm_vk_de
 
     CVM_VK_CHECK(vkCreateDevice(device->physical_device,&device_creation_info,NULL,&device->device));
 
-    device->internal_command_pools=malloc(sizeof(VkCommandPool)*device->queue_family_count);
     for(i=0;i<device->queue_family_count;i++)
     {
+        queue_count=device->queue_families[i].queue_count;
+
         VkCommandPoolCreateInfo command_pool_create_info=(VkCommandPoolCreateInfo)
         {
             .sType=VK_STRUCTURE_TYPE_COMMAND_POOL_CREATE_INFO,
@@ -617,7 +609,14 @@ static void cvm_vk_create_logical_device(cvm_vk_device * device, const cvm_vk_de
             .queueFamilyIndex=i,
         };
 
-        CVM_VK_CHECK(vkCreateCommandPool(device->device,&command_pool_create_info,NULL,device->internal_command_pools+i));
+        CVM_VK_CHECK(vkCreateCommandPool(device->device,&command_pool_create_info,NULL,&device->queue_families[i].internal_command_pool));
+
+        device->queue_families[i].queues=malloc(sizeof(cvm_vk_device_queue)*queue_count);
+        for(j=0;j<queue_count;j++)
+        {
+            cvm_vk_create_timeline_semaphore(&device->queue_families[i].queues[j].timeline,device);
+            vkGetDeviceQueue(device->device,i,j,&device->queue_families[i].queues[j].queue);
+        }
     }
 
 
@@ -637,12 +636,18 @@ static void cvm_vk_create_logical_device(cvm_vk_device * device, const cvm_vk_de
 
 static void cvm_vk_destroy_logical_device(cvm_vk_device * device)
 {
-    uint32_t i;
+    uint32_t i,j;
     for(i=0;i<device->queue_family_count;i++)
     {
-        vkDestroyCommandPool(device->device,device->internal_command_pools[i],NULL);
+        for(j=0;j<device->queue_families[i].queue_count;j++)
+        {
+            cvm_vk_destroy_timeline_semaphore(&device->queue_families[i].queues[j].timeline,device);
+        }
+        free(device->queue_families[i].queues);
+        vkDestroyCommandPool(device->device,device->queue_families[i].internal_command_pool,NULL);
     }
-    free(device->internal_command_pools);
+    free(device->queue_families);
+    free(device->queue_family_properties);
 
     vkDestroyDevice(device->device,NULL);
     cvm_vk_destroy_device_feature_structure_list((void*)device->features);
@@ -681,13 +686,13 @@ static inline VkSemaphoreSubmitInfo cvm_vk_create_binary_semaphore_submit_info(V
 static void cvm_vk_create_timeline_semaphores(void)
 {
     cvm_vk_create_timeline_semaphore(&cvm_vk_graphics_timeline,&cvm_vk_);
-    cvm_vk_create_timeline_semaphore(&cvm_vk_transfer_timeline,&cvm_vk_);
+    #warning REMOVE
 }
 
 static void cvm_vk_destroy_timeline_semaphores(void)
 {
     cvm_vk_destroy_timeline_semaphore(&cvm_vk_graphics_timeline,&cvm_vk_);
-    cvm_vk_destroy_timeline_semaphore(&cvm_vk_transfer_timeline,&cvm_vk_);
+    #warning REMOVE
 }
 
 VkFormat cvm_vk_get_screen_format(void)
@@ -705,10 +710,6 @@ VkImageView cvm_vk_get_swapchain_image_view(uint32_t index)
     return cvm_vk_surface_swapchain_.presenting_images[index].image_view;
 }
 
-VkImage cvm_vk_get_swapchain_image(uint32_t index)
-{
-    return cvm_vk_surface_swapchain_.presenting_images[index].image;
-}
 
 
 
@@ -799,7 +800,14 @@ cvm_vk_timeline_semaphore cvm_vk_submit_graphics_work(cvm_vk_module_work_payload
     VkSemaphoreSubmitInfo signal_semaphores[2];
     uint32_t signal_count=0;
     VkSubmitInfo2 submit_info;
-    VkQueue present_queue,graphics_queue;
+//    VkQueue present_queue,graphics_queue;
+    cvm_vk_device_queue * present_queue_;
+    cvm_vk_device_queue * graphics_queue_;
+    cvm_vk_timeline_semaphore_moment graphics_last_moment;
+
+    graphics_queue_=cvm_vk_.queue_families[cvm_vk_.graphics_queue_family_index].queues+0;
+    present_queue_=cvm_vk_.queue_families[cvm_vk_.fallback_present_queue_family_index].queues+0;
+    #warning get queue indices from somewhere? (is 0 above) need to make decisions regarding them
 
     uint32_t i;
 
@@ -862,25 +870,27 @@ cvm_vk_timeline_semaphore cvm_vk_submit_graphics_work(cvm_vk_module_work_payload
             };
 
             vkCmdPipelineBarrier2(payload->command_buffer,&graphics_relinquish_dependencies);
+
+            signal_semaphores[signal_count++]=cvm_vk_create_timeline_semaphore_signal_submit_info(&graphics_queue_->timeline,payload->signal_stages | VK_PIPELINE_STAGE_2_COLOR_ATTACHMENT_OUTPUT_BIT,&graphics_last_moment);
         }
         else
         {
             /// presenting_image->present_semaphore triggered either here or below when CVM_VK_PAYLOAD_LAST_SWAPCHAIN_USE, this path being taken when present queue == graphics queue
             signal_semaphores[signal_count++]=cvm_vk_create_binary_semaphore_submit_info(presenting_image->present_semaphore,VK_PIPELINE_STAGE_2_COLOR_ATTACHMENT_OUTPUT_BIT);
-            signal_semaphores[signal_count++]=cvm_vk_create_timeline_semaphore_signal_submit_info(&cvm_vk_surface_swapchain_.present_timeline, VK_PIPELINE_STAGE_BOTTOM_OF_PIPE_BIT, &presenting_image->present_moment);
+            signal_semaphores[signal_count++]=cvm_vk_create_timeline_semaphore_signal_submit_info(&graphics_queue_->timeline, VK_PIPELINE_STAGE_BOTTOM_OF_PIPE_BIT, &presenting_image->last_use_moment);
         }
 
-        signal_semaphores[signal_count++]=cvm_vk_create_timeline_semaphore_signal_submit_info(&cvm_vk_graphics_timeline,payload->signal_stages | VK_PIPELINE_STAGE_2_COLOR_ATTACHMENT_OUTPUT_BIT,&presenting_image->graphics_wait);
+//        signal_semaphores[signal_count++]=cvm_vk_create_timeline_semaphore_signal_submit_info(&cvm_vk_graphics_timeline,payload->signal_stages | VK_PIPELINE_STAGE_2_COLOR_ATTACHMENT_OUTPUT_BIT,&presenting_image->last_use_moment);
     }
-    else
-    {
-        signal_semaphores[signal_count++]=cvm_vk_create_timeline_semaphore_signal_submit_info(&cvm_vk_graphics_timeline,payload->signal_stages,&presenting_image->graphics_wait);
-    }
+//    else
+//    {
+//        signal_semaphores[signal_count++]=cvm_vk_create_timeline_semaphore_signal_submit_info(&cvm_vk_graphics_timeline,payload->signal_stages,&presenting_image->last_use_moment);
+//    }
 
-    for(i=0;i<payload->wait_count;i++)
-    {
-        wait_semaphores[wait_count++]=cvm_vk_create_timeline_semaphore_wait_submit_info(payload->waits+i,payload->wait_stages[i]);
-    }
+//    for(i=0;i<payload->wait_count;i++)
+//    {
+//        wait_semaphores[wait_count++]=cvm_vk_create_timeline_semaphore_wait_submit_info(payload->waits+i,payload->wait_stages[i]);
+//    }
 
     CVM_VK_CHECK(vkEndCommandBuffer(payload->command_buffer));///must be ended here in case QFOT barrier needed to be injected!
 
@@ -906,9 +916,8 @@ cvm_vk_timeline_semaphore cvm_vk_submit_graphics_work(cvm_vk_module_work_payload
     };
 
 
-    #warning get queue index from somewhere?
-    vkGetDeviceQueue(cvm_vk_.device,cvm_vk_.graphics_queue_family_index,0,&graphics_queue);
-    CVM_VK_CHECK(vkQueueSubmit2(graphics_queue,1,&submit_info,VK_NULL_HANDLE));
+
+    CVM_VK_CHECK(vkQueueSubmit2(graphics_queue_->queue,1,&submit_info,VK_NULL_HANDLE));
 
     /// present if last payload that uses the swapchain
     if(flags&CVM_VK_PAYLOAD_LAST_QUEUE_USE)
@@ -927,7 +936,7 @@ cvm_vk_timeline_semaphore cvm_vk_submit_graphics_work(cvm_vk_module_work_payload
                 {
                     .sType=VK_STRUCTURE_TYPE_COMMAND_BUFFER_ALLOCATE_INFO,
                     .pNext=NULL,
-                    .commandPool=cvm_vk_.internal_command_pools[cvm_vk_surface_swapchain_.fallback_present_queue_family],
+                    .commandPool=cvm_vk_.queue_families[cvm_vk_surface_swapchain_.fallback_present_queue_family].internal_command_pool,
                     .level=VK_COMMAND_BUFFER_LEVEL_PRIMARY,
                     .commandBufferCount=1
                 };
@@ -987,11 +996,11 @@ cvm_vk_timeline_semaphore cvm_vk_submit_graphics_work(cvm_vk_module_work_payload
             }
 
             ///fixed count and layout of wait and signal semaphores here
-            wait_semaphores[0]=cvm_vk_create_timeline_semaphore_wait_submit_info(&cvm_vk_graphics_timeline,VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT);
+            wait_semaphores[0]=cvm_vk_create_timeline_semaphore_wait_submit_info(&graphics_last_moment,VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT);
 
             /// presenting_image->present_semaphore triggered either here or above when CVM_VK_PAYLOAD_LAST_SWAPCHAIN_USE, this path being taken when present queue != graphics queue
             signal_semaphores[0]=cvm_vk_create_binary_semaphore_submit_info(presenting_image->present_semaphore,VK_PIPELINE_STAGE_BOTTOM_OF_PIPE_BIT);
-            signal_semaphores[1]=cvm_vk_create_timeline_semaphore_signal_submit_info(&cvm_vk_surface_swapchain_.present_timeline, VK_PIPELINE_STAGE_BOTTOM_OF_PIPE_BIT, &presenting_image->present_moment);
+            signal_semaphores[1]=cvm_vk_create_timeline_semaphore_signal_submit_info(&present_queue_->timeline, VK_PIPELINE_STAGE_BOTTOM_OF_PIPE_BIT, &presenting_image->last_use_moment);
 
             submit_info=(VkSubmitInfo2)
             {
@@ -1014,9 +1023,7 @@ cvm_vk_timeline_semaphore cvm_vk_submit_graphics_work(cvm_vk_module_work_payload
                 .pSignalSemaphoreInfos=signal_semaphores
             };
 
-            #warning get queue index from somewhere?
-            vkGetDeviceQueue(cvm_vk_.device,cvm_vk_.fallback_present_queue_family_index,0,&present_queue);
-            CVM_VK_CHECK(vkQueueSubmit2(present_queue,1,&submit_info,VK_NULL_HANDLE));
+            CVM_VK_CHECK(vkQueueSubmit2(present_queue_->queue,1,&submit_info,VK_NULL_HANDLE));
         }
 
         VkPresentInfoKHR present_info=(VkPresentInfoKHR)
@@ -1034,9 +1041,8 @@ cvm_vk_timeline_semaphore cvm_vk_submit_graphics_work(cvm_vk_module_work_payload
 
         #warning separate present out from modules/work, it should operate on the presentable_image
 
-        #warning get queue index from somewhere?
-        vkGetDeviceQueue(cvm_vk_.device,cvm_vk_.fallback_present_queue_family_index,0,&present_queue);
-        VkResult r=vkQueuePresentKHR(present_queue,&present_info);
+
+        VkResult r=vkQueuePresentKHR(present_queue_->queue,&present_info);
 
         if(r>=VK_SUCCESS)
         {
@@ -1555,6 +1561,7 @@ void cvm_vk_resize_module_graphics_data(cvm_vk_module_data * module_data)
     uint32_t i;
 
     uint32_t new_batch_count=cvm_vk_surface_swapchain_.image_count;
+    #warning above is some bullshit
 
     if(new_batch_count==module_data->batch_count)return;///no resizing necessary
 
@@ -1633,7 +1640,9 @@ cvm_vk_module_batch * cvm_vk_get_module_batch(cvm_vk_module_data * module_data,u
 
         if(cvm_vk_.transfer_queue_family_index!=cvm_vk_.graphics_queue_family_index)
         {
+            puts("a");
             vkResetCommandPool(cvm_vk_.device,batch->transfer_pool,0);
+            puts("b");
         }
 
         ///reset compute pools
@@ -1685,21 +1694,22 @@ void cvm_vk_end_module_batch(cvm_vk_module_batch * batch)
                     .deviceMask=0
                 }
             },
-            .signalSemaphoreInfoCount=1,
+            #warning this needs replacing with new paradigm
+            .signalSemaphoreInfoCount=0,//1
             .pSignalSemaphoreInfos=(VkSemaphoreSubmitInfo[1])
             {
-                cvm_vk_create_timeline_semaphore_signal_submit_info(&cvm_vk_transfer_timeline,VK_PIPELINE_STAGE_2_ALL_TRANSFER_BIT,&cvm_vk_surface_swapchain_.presenting_images[cvm_vk_surface_swapchain_.acquired_image_index].transfer_wait) /// note: also increments this timeline semaphore
+//                cvm_vk_create_timeline_semaphore_signal_submit_info(&cvm_vk_transfer_timeline,VK_PIPELINE_STAGE_2_ALL_TRANSFER_BIT,&cvm_vk_surface_swapchain_.presenting_images[cvm_vk_surface_swapchain_.acquired_image_index].transfer_wait) /// note: also increments this timeline semaphore
             }
         };
 
         ///need to make sure this wait is actually only performed once per QF... (not on EVERY subsequent "frame")
-        for(i=0;i<CVM_VK_MAX_QUEUES;i++)///set copy wait value on appropriate queues
-        {
-            if(batch->transfer_affceted_queues_bitmask & 1<<i)
-            {
-                batch->transfer_data[i].transfer_semaphore_wait_value=cvm_vk_transfer_timeline.value;
-            }
-        }
+//        for(i=0;i<CVM_VK_MAX_QUEUES;i++)///set copy wait value on appropriate queues
+//        {
+//            if(batch->transfer_affceted_queues_bitmask & 1<<i)
+//            {
+//                batch->transfer_data[i].transfer_semaphore_wait_value=cvm_vk_transfer_timeline.value;
+//            }
+//        }
 
         #warning get queue index from somewhere? possibly batch, give batches priorities for both tranfer and execution? could pass in priority at execution time? possibly as override to batch priority?
         vkGetDeviceQueue(cvm_vk_.device,cvm_vk_.transfer_queue_family_index,0,&transfer_queue);
@@ -1811,10 +1821,10 @@ void cvm_vk_setup_new_graphics_payload_from_batch(cvm_vk_module_work_payload * p
 
             ///add transfer waits as appropriate
             #warning make wait addition a function
-            payload->waits[0].value=transfer_data->transfer_semaphore_wait_value;
-            payload->waits[0].semaphore=cvm_vk_transfer_timeline.semaphore;
-            payload->wait_stages[0]=transfer_data->wait_stages;
-            payload->wait_count++;
+//            payload->waits[0].value=transfer_data->transfer_semaphore_wait_value;
+//            payload->waits[0].semaphore=cvm_vk_transfer_timeline.semaphore;
+//            payload->wait_stages[0]=transfer_data->wait_stages;
+//            payload->wait_count++;
 
             ///rest data now that we're done with it
             transfer_data->wait_stages=VK_PIPELINE_STAGE_2_NONE;

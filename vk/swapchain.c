@@ -189,7 +189,7 @@ static inline void cvm_vk_swapchain_destroy(cvm_vk_surface_swapchain * swapchain
         {
             if(presentable_image->present_acquire_command_buffers[j]!=VK_NULL_HANDLE)
             {
-                vkFreeCommandBuffers(swapchain->device->device,swapchain->device->internal_command_pools[swapchain->fallback_present_queue_family],1,presentable_image->present_acquire_command_buffers+j);
+                vkFreeCommandBuffers(swapchain->device->device,swapchain->device->queue_families[swapchain->fallback_present_queue_family].internal_command_pool,1,presentable_image->present_acquire_command_buffers+j);
                 #warning requires synchronization! (uses shared command pool, ergo not thread safe)
 
                 presentable_image->present_acquire_command_buffers[j]=VK_NULL_HANDLE;
@@ -219,8 +219,6 @@ int cvm_vk_swapchain_initialse(cvm_vk_surface_swapchain * swapchain, const cvm_v
 
     swapchain->metering_fence=cvm_vk_create_fence(swapchain->device,false);
     swapchain->metering_fence_active=false;
-
-    cvm_vk_create_timeline_semaphore(&swapchain->present_timeline, swapchain->device);
 
     swapchain->image_acquisition_semaphores=malloc(sizeof(VkSemaphore));
 
@@ -277,8 +275,6 @@ void cvm_vk_swapchain_terminate(cvm_vk_surface_swapchain * swapchain)
 
     cvm_vk_swapchain_destroy(swapchain);
 
-
-    cvm_vk_destroy_timeline_semaphore(&swapchain->present_timeline, swapchain->device);
 
     vkDeviceWaitIdle(swapchain->device->device);
     /// above required b/c presently there is no way to know that the semaphore used by present has actually been used by WSI
@@ -407,12 +403,6 @@ const cvm_vk_swapchain_presentable_image * cvm_vk_swapchain_acquire_presentable_
 
             if(presentable_image->successfully_acquired)///if it was acquired, cleanup is in order
             {
-                cvm_vk_wait_on_timeline_semaphore(swapchain->device,&presentable_image->transfer_wait);
-                cvm_vk_wait_on_timeline_semaphore(swapchain->device,&presentable_image->graphics_wait);
-
-                #warning remove above (?) still need to wait on last thing that used the image, even if it didnt get presented sucessfully
-                #warning need to review when present happens vs submit, may be cause of earlier issues!?
-
                 *cleanup_index=swapchain->acquired_image_index;
                 #warning when does cleanup need to happen!?
 
@@ -420,7 +410,7 @@ const cvm_vk_swapchain_presentable_image * cvm_vk_swapchain_acquire_presentable_
 
                 swapchain->image_acquisition_semaphores[--swapchain->acquired_image_count]=presentable_image->acquire_semaphore;
 
-                cvm_vk_wait_on_timeline_semaphore(swapchain->device,&presentable_image->present_moment);
+                cvm_vk_wait_on_timeline_semaphore(swapchain->device,&presentable_image->last_use_moment);
             }
 
             if(presentable_image->successfully_submitted)
@@ -433,12 +423,6 @@ const cvm_vk_swapchain_presentable_image * cvm_vk_swapchain_acquire_presentable_
             presentable_image->successfully_acquired=true;
             presentable_image->successfully_submitted=false;
             presentable_image->acquire_semaphore=acquire_semaphore;
-
-            presentable_image->graphics_wait.value=cvm_vk_graphics_timeline_get()->value;
-            presentable_image->graphics_wait.semaphore=cvm_vk_graphics_timeline_get()->semaphore;
-            presentable_image->transfer_wait.value=cvm_vk_transfer_timeline_get()->value;
-            presentable_image->transfer_wait.semaphore=cvm_vk_transfer_timeline_get()->semaphore;
-            #warning remove above
         }
         else
         {
@@ -474,10 +458,7 @@ bool cvm_vk_check_for_remaining_frames(cvm_vk_surface_swapchain * swapchain, uin
             presentable_image = swapchain->presenting_images + i;
             if(presentable_image->successfully_acquired)
             {
-                cvm_vk_wait_on_timeline_semaphore(swapchain->device,&presentable_image->transfer_wait);
-                cvm_vk_wait_on_timeline_semaphore(swapchain->device,&presentable_image->graphics_wait);
-                #warning, this approach is entirely wrong, when data has finished being used it should signal the same semaphore with a higher value to show that it's complete!
-                cvm_vk_wait_on_timeline_semaphore(swapchain->device,&presentable_image->present_moment);
+                cvm_vk_wait_on_timeline_semaphore(swapchain->device,&presentable_image->last_use_moment);
 
                 presentable_image->successfully_acquired=false;
                 presentable_image->successfully_submitted=false;

@@ -79,7 +79,11 @@ going to have to rely on acquire op failing to know when to recreate swapchain
 ///this struct contains the data needed to be known upfront when acquiring swapchain image (cvm_vk_swapchain_frame), some data could go in either struct though...
 
 
+typedef struct cvm_vk_device cvm_vk_device;
 
+
+#include "vk/timeline_semaphore.h"
+#include "vk/swapchain.h"
 
 
 
@@ -124,7 +128,24 @@ cvm_vk_device_setup;
 
 #warning separate device and instance?
 
-typedef struct cvm_vk_device
+typedef struct cvm_vk_device_queue
+{
+    cvm_vk_timeline_semaphore timeline;
+    VkQueue queue;
+}
+cvm_vk_device_queue;
+
+typedef struct cvm_vk_device_queue_family
+{
+    cvm_vk_device_queue * queues;
+    uint32_t queue_count;
+//    const VkQueueFamilyProperties properties;
+    VkCommandPool internal_command_pool;
+    ///mutex to lock above?
+}
+cvm_vk_device_queue_family;
+
+struct cvm_vk_device
 {
     /// base shared structures
     VkInstance instance;
@@ -143,6 +164,8 @@ typedef struct cvm_vk_device
     uint32_t extension_count;
 
     const VkQueueFamilyProperties * queue_family_properties;
+
+    cvm_vk_device_queue_family * queue_families;
     uint32_t queue_family_count;
 
 
@@ -153,19 +176,17 @@ typedef struct cvm_vk_device
     uint32_t transfer_queue_family_index;
     uint32_t async_compute_queue_family_index;
 
-    uint32_t * queue_family_queue_count;
+//    uint32_t * queue_family_queue_count;
 
     uint32_t fallback_present_queue_family_index;
     #warning remove present, this should be per swapchain image
 
-    VkCommandPool * internal_command_pools;
+//    VkCommandPool * internal_command_pools;
     /// above used for long lived commands
-}
-cvm_vk_device;
+};
 
 
-#include "vk/timeline_semaphore.h"
-#include "vk/swapchain.h"
+
 
 
 VkInstance cvm_vk_instance_initialise_for_SDL(const char * application_name,uint32_t application_version,bool validation_enabled);
@@ -187,8 +208,6 @@ void cvm_vk_device_terminate(cvm_vk_device * device);
 #warning following are placeholders for interoperability with old approach
 cvm_vk_device * cvm_vk_device_get(void);
 cvm_vk_surface_swapchain * cvm_vk_swapchain_get(void);
-cvm_vk_timeline_semaphore * cvm_vk_graphics_timeline_get(void);
-cvm_vk_timeline_semaphore * cvm_vk_transfer_timeline_get(void);
 
 VkFence cvm_vk_create_fence(const cvm_vk_device * device,bool initially_signalled);
 void cvm_vk_destroy_fence(const cvm_vk_device * device,VkFence fence);
@@ -242,7 +261,58 @@ uint32_t cvm_vk_get_buffer_alignment_requirements(VkBufferUsageFlags usage);
 VkFormat cvm_vk_get_screen_format(void);///can remove?
 uint32_t cvm_vk_get_swapchain_image_count(void);
 VkImageView cvm_vk_get_swapchain_image_view(uint32_t index);
-VkImage cvm_vk_get_swapchain_image(uint32_t index);
+
+
+
+
+
+
+///name really needs work
+typedef struct cvm_vk_command_queue_entry
+{
+    VkCommandPool command_pool;
+    VkCommandBuffer command_buffer;/// this almost certainly wants to be a list/stack and init as necessary
+
+    /// when the last of the work done by the command pool has been completed (may want this to become a stack/list)
+    cvm_vk_timeline_semaphore_moment completion_moment;
+    bool in_flight;
+
+    /// cleanup information? (buffer sections to relinquish &c. framebuffer images that have expired? -- though that probably wants special handling)
+}
+cvm_vk_command_queue_entry;
+
+///name really needs work
+typedef struct cvm_vk_command_queue
+{
+    cvm_vk_device * device;
+
+    uint32_t queue_family_index;
+    ///used to dictate the order of operations done on this queue, both internally and relative to other queues
+    /// (bacause work can theoretically be submitted to multiple device queues, internal synchronization is potentially important)
+
+    /// basically frames/distinct times on the queue
+    cvm_vk_command_queue_entry * entries;
+    uint32_t entry_count;
+
+    #warning handling/registering cleanup of frames here might be good/useful
+}
+cvm_vk_command_queue;
+
+void cvm_vk_command_queue_initialise(cvm_vk_command_queue * queue, cvm_vk_device * device, uint32_t entry_count, uint32_t queue_family_index);
+void cvm_vk_command_queue_terminate(cvm_vk_command_queue * queue);/// stalls on entries?
+
+#warning have debug logging for all the time points that can stall
+cvm_vk_command_queue_entry * cvm_vk_command_queue_get_entry(cvm_vk_command_queue * queue);///can stall while waiting on prior gpu work, will also cleanup any completed work while its at it
+
+
+
+
+
+
+
+
+
+
 
 #define CVM_VK_MAX_QUEUES 16
 
