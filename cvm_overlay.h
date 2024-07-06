@@ -30,15 +30,8 @@ along with cvm_shared.  If not, see <https://www.gnu.org/licenses/>.
 ///having both set could signify something??
 #define CVM_OVERLAY_ELEMENT_OVERLAP_MIN 0x40000000
 #define CVM_OVERLAY_ELEMENT_OVERLAP_MUL 0x80000000
-///#define CVM_OVERLAY_ELEMENT_FADE        0x0800///on by default until i can performance test (could even just check fade dist anyway...), need to alter colour mask if using
-//typedef enum
-//{
-//    CVM_OVERLAY_ELEMENT_FILL,
-//    CVM_OVERLAY_ELEMENT_SHADED,
-//    CVM_OVERLAY_ELEMENT_COLOURED,
-//
-//}
-//cvm_overlay_element_type;
+
+
 
 typedef struct overlay_theme overlay_theme;
 
@@ -92,17 +85,6 @@ typedef struct cvm_overlay_element_render_buffer
     uint32_t count,space;
 }
 cvm_overlay_element_render_buffer;
-
-void initialise_overlay_render_data(void);
-void terminate_overlay_render_data(void);
-
-void initialise_overlay_swapchain_dependencies(void);
-void terminate_overlay_swapchain_dependencies(void);
-
-void overlay_render_frame(int screen_w,int screen_h,widget * menu_widget);
-
-void overlay_frame_cleanup(uint32_t swapchain_image_index);
-#warning make above take `const cvm_vk_swapchain_presentable_image *` as input instead ??
 
 cvm_vk_image_atlas_tile * overlay_create_transparent_image_tile_with_staging(void ** staging,uint32_t w, uint32_t h);
 void overlay_destroy_transparent_image_tile(cvm_vk_image_atlas_tile * tile);
@@ -346,6 +328,31 @@ static inline void cvm_render_fill_fading_overlay_element(cvm_overlay_element_re
 
 #include "themes/cubic.h"
 
+
+
+
+
+
+typedef struct cvm_overlay_renderer
+{
+    cvm_vk_work_queue work_queue;
+    ///put the rest of stuff in here, e.g. managed buffer
+}
+cvm_overlay_renderer;
+
+void cvm_overlay_renderer_initialise(cvm_vk_device * device, cvm_overlay_renderer * renderer, uint32_t renderer_cycle_count);
+void cvm_overlay_renderer_terminate(cvm_vk_device * device, cvm_overlay_renderer * renderer);
+
+void initialise_overlay_render_data(void);
+void terminate_overlay_render_data(void);
+
+void initialise_overlay_swapchain_dependencies(void);
+void terminate_overlay_swapchain_dependencies(void);
+
+void overlay_render_to_image(cvm_vk_device * device, cvm_overlay_renderer * renderer, const cvm_vk_swapchain_presentable_image * presentable_image, int screen_w,int screen_h,widget * menu_widget);
+
+void overlay_frame_cleanup(uint32_t swapchain_image_index);
+#warning make above take `const cvm_vk_swapchain_presentable_image *` as input instead ??
 
 
 #endif

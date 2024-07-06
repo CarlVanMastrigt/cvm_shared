@@ -38,14 +38,17 @@ typedef struct cvm_vk_timeline_semaphore_moment
     uint64_t value;
 }
 cvm_vk_timeline_semaphore_moment;
+#define cvm_vk_timeline_semaphore_moment_null ((cvm_vk_timeline_semaphore_moment){.semaphore=VK_NULL_HANDLE,.value=0})
 
-void cvm_vk_create_timeline_semaphore(cvm_vk_timeline_semaphore * timeline_semaphore, cvm_vk_device * device);
-void cvm_vk_destroy_timeline_semaphore(cvm_vk_timeline_semaphore * timeline_semaphore, cvm_vk_device * device);
+void cvm_vk_timeline_semaphore_initialise(cvm_vk_device * device,cvm_vk_timeline_semaphore * timeline_semaphore);
+void cvm_vk_timeline_semaphore_terminate(cvm_vk_device * device,cvm_vk_timeline_semaphore * timeline_semaphore);
 
-inline VkSemaphoreSubmitInfo cvm_vk_create_timeline_semaphore_signal_submit_info(cvm_vk_timeline_semaphore * ts,VkPipelineStageFlags2 stages, cvm_vk_timeline_semaphore_moment * created_moment);
+inline VkSemaphoreSubmitInfo cvm_vk_timeline_semaphore_signal_submit_info(cvm_vk_timeline_semaphore * ts,VkPipelineStageFlags2 stages, cvm_vk_timeline_semaphore_moment * created_moment);
 
-VkSemaphoreSubmitInfo cvm_vk_create_timeline_semaphore_wait_submit_info(const cvm_vk_timeline_semaphore_moment * moment,VkPipelineStageFlags2 stages);
-void cvm_vk_wait_on_timeline_semaphore(cvm_vk_device * device,const cvm_vk_timeline_semaphore_moment * moment);
+VkSemaphoreSubmitInfo cvm_vk_timeline_semaphore_moment_wait_submit_info(const cvm_vk_timeline_semaphore_moment * moment,VkPipelineStageFlags2 stages);
+
+void cvm_vk_timeline_semaphore_moment_wait(cvm_vk_device * device,const cvm_vk_timeline_semaphore_moment * moment);
+bool cvm_vk_timeline_semaphore_moment_query(cvm_vk_device * device,const cvm_vk_timeline_semaphore_moment * moment);///returns true if this moment has elapsed
 
 #endif
 

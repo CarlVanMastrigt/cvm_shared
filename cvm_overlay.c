@@ -314,15 +314,26 @@ static void create_overlay_render_pass(void)
         .attachmentCount=1,
         .pAttachments=(VkAttachmentDescription[1])
         {
+//            {
+//                .flags=0,
+//                .format=cvm_vk_get_screen_format(),
+//                .samples=VK_SAMPLE_COUNT_1_BIT,///sample_count not relevant for actual render target (swapchain image)
+//                .loadOp=VK_ATTACHMENT_LOAD_OP_LOAD,
+//                .storeOp=VK_ATTACHMENT_STORE_OP_STORE,
+//                .stencilLoadOp=VK_ATTACHMENT_LOAD_OP_DONT_CARE,
+//                .stencilStoreOp=VK_ATTACHMENT_STORE_OP_DONT_CARE,
+//                .initialLayout=VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL,/// is first render pass (ergo the clear above) thus the VK_IMAGE_LAYOUT_UNDEFINED rather than VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL
+//                .finalLayout=VK_IMAGE_LAYOUT_PRESENT_SRC_KHR///is last render pass thus the VK_IMAGE_LAYOUT_PRESENT_SRC_KHR rather than VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL
+//            }
             {
                 .flags=0,
                 .format=cvm_vk_get_screen_format(),
                 .samples=VK_SAMPLE_COUNT_1_BIT,///sample_count not relevant for actual render target (swapchain image)
-                .loadOp=VK_ATTACHMENT_LOAD_OP_LOAD,
+                .loadOp=VK_ATTACHMENT_LOAD_OP_CLEAR,
                 .storeOp=VK_ATTACHMENT_STORE_OP_STORE,
                 .stencilLoadOp=VK_ATTACHMENT_LOAD_OP_DONT_CARE,
                 .stencilStoreOp=VK_ATTACHMENT_STORE_OP_DONT_CARE,
-                .initialLayout=VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL,/// is first render pass (ergo the clear above) thus the VK_IMAGE_LAYOUT_UNDEFINED rather than VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL
+                .initialLayout=VK_IMAGE_LAYOUT_UNDEFINED,/// is first render pass (ergo the clear above) thus the VK_IMAGE_LAYOUT_UNDEFINED rather than VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL
                 .finalLayout=VK_IMAGE_LAYOUT_PRESENT_SRC_KHR///is last render pass thus the VK_IMAGE_LAYOUT_PRESENT_SRC_KHR rather than VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL
             }
         },
@@ -667,8 +678,74 @@ float overlay_colours[OVERLAY_NUM_COLOURS*4]=
     0.4,0.6,0.9,0.8,///OVERLAY_TEXT_COLOUR_0
 };
 
-void overlay_render_frame(int screen_w,int screen_h,widget * menu_widget)
+
+
+
+
+
+typedef struct cvm_overlay_renderer_work_entry
 {
+    cvm_vk_command_pool command_pool;
+    ///descriptor sets?? can descriptor sets not be shared???
+}
+cvm_overlay_renderer_work_entry;
+
+void cvm_overlay_renderer_work_entry_initialise(void * shared_ptr, void * entry_ptr)
+{
+    cvm_vk_device * device=shared_ptr;
+    cvm_overlay_renderer_work_entry * entry=entry_ptr;
+
+    cvm_vk_command_pool_initialise(device,&entry->command_pool,device->graphics_queue_family_index,0);
+}
+
+void cvm_overlay_renderer_work_entry_terminate(void * shared_ptr, void * entry_ptr)
+{
+    cvm_vk_device * device=shared_ptr;
+    cvm_overlay_renderer_work_entry * entry=entry_ptr;
+
+    cvm_vk_command_pool_terminate(device,&entry->command_pool);
+}
+
+void cvm_overlay_renderer_work_entry_reset(void * shared_ptr, void * entry_ptr)
+{
+    cvm_vk_device * device=shared_ptr;
+    cvm_overlay_renderer_work_entry * entry=entry_ptr;
+
+    cvm_vk_command_pool_reset(device,&entry->command_pool);
+}
+
+void cvm_overlay_renderer_initialise(cvm_vk_device * device, cvm_overlay_renderer * renderer, uint32_t renderer_cycle_count)
+{
+    cvm_vk_work_queue_setup work_queue_setup=
+    {
+        .shared_data=device,///may want this to become an allocated struct so more can ve shared
+        .entry_size=sizeof(cvm_overlay_renderer_work_entry),
+        .entry_count=renderer_cycle_count,
+
+        .entry_initialise_func=cvm_overlay_renderer_work_entry_initialise,
+        .entry_terminate_func=cvm_overlay_renderer_work_entry_terminate,
+        .entry_reset_func=cvm_overlay_renderer_work_entry_reset,
+    };
+
+    cvm_vk_work_queue_initialise(&renderer->work_queue,&work_queue_setup);
+}
+
+void cvm_overlay_renderer_terminate(cvm_vk_device * device, cvm_overlay_renderer * renderer)
+{
+    cvm_vk_work_queue_terminate(device,&renderer->work_queue);
+}
+
+
+
+
+
+
+
+
+
+void overlay_render_to_image(cvm_vk_device * device, cvm_overlay_renderer * renderer, const cvm_vk_swapchain_presentable_image * presentable_image, int screen_w,int screen_h,widget * menu_widget)
+{
+    #warning get screen res from presentable image
     cvm_vk_module_batch * batch;
     uint32_t swapchain_image_index;
 
@@ -691,7 +768,7 @@ void overlay_render_frame(int screen_w,int screen_h,widget * menu_widget)
     /// could have a single image atlas and use different aspects of part of it (r,g,b,a via image views) for different alpha/transparent image_atlases
     /// this would be fairly inefficient to retrieve though..., probably better not to.
 
-    if(batch)
+    if(batch && presentable_image)
     {
         cvm_vk_setup_new_graphics_payload_from_batch(&payload,batch);
 
@@ -733,6 +810,7 @@ void overlay_render_frame(int screen_w,int screen_h,widget * menu_widget)
 
         vkCmdBindDescriptorSets(payload.command_buffer,VK_PIPELINE_BIND_POINT_GRAPHICS,overlay_pipeline_layout,1,1,&overlay_consistent_descriptor_set,0,NULL);
 
+
         VkRenderPassBeginInfo render_pass_begin_info=(VkRenderPassBeginInfo)
         {
             .sType=VK_STRUCTURE_TYPE_RENDER_PASS_BEGIN_INFO,
@@ -740,8 +818,9 @@ void overlay_render_frame(int screen_w,int screen_h,widget * menu_widget)
             .renderPass=overlay_render_pass,
             .framebuffer=overlay_framebuffers[swapchain_image_index],
             .renderArea=cvm_vk_get_default_render_area(),
-            .clearValueCount=0,
-            .pClearValues=NULL
+            .clearValueCount=1,
+            #warning overlay shouldnt clear, temporary measure
+            .pClearValues=(VkClearValue[1]){{.color=(VkClearColorValue){.float32={0.0f,0.0f,0.0f,0.0f}}}},
         };
 
         vkCmdBeginRenderPass(payload.command_buffer,&render_pass_begin_info,VK_SUBPASS_CONTENTS_INLINE);///================
@@ -757,7 +836,7 @@ void overlay_render_frame(int screen_w,int screen_h,widget * menu_widget)
         cvm_vk_staging_buffer_end(&overlay_staging_buffer,swapchain_image_index);
         cvm_vk_transient_buffer_end(&overlay_transient_buffer);
 
-        cvm_vk_submit_graphics_work(&payload,CVM_VK_PAYLOAD_LAST_QUEUE_USE);
+        cvm_vk_submit_graphics_work(&payload,CVM_VK_PAYLOAD_LAST_QUEUE_USE|CVM_VK_PAYLOAD_FIRST_QUEUE_USE);
 
 
         cvm_vk_end_module_batch(batch);
@@ -771,6 +850,23 @@ void overlay_frame_cleanup(uint32_t swapchain_image_index)
         cvm_vk_staging_buffer_release_space(&overlay_staging_buffer,swapchain_image_index);
     }
 }
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 
 

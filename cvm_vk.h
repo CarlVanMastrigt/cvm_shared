@@ -40,6 +40,8 @@ along with cvm_shared.  If not, see <https://www.gnu.org/licenses/>.
 #define CVM_VK_DEFAULT_TIMEOUT 1000000000
 /// ^ 1 second
 
+#define CVM_VK_MAX_QUEUE_FAMILY_COUNT 64
+
 
 CVM_STACK(VkBufferMemoryBarrier2,cvm_vk_buffer_barrier,4)
 CVM_STACK(VkBufferCopy,cvm_vk_buffer_copy,4)
@@ -84,6 +86,9 @@ typedef struct cvm_vk_device cvm_vk_device;
 
 #include "vk/timeline_semaphore.h"
 #include "vk/swapchain.h"
+#include "vk/command_pool.h"
+#include "vk/work_queue.h"
+
 
 
 
@@ -173,7 +178,7 @@ struct cvm_vk_device
     /// should have fallbacks...
     /// rename to defaults as thats what they are really...
     uint32_t graphics_queue_family_index;
-    uint32_t transfer_queue_family_index;
+    uint32_t transfer_queue_family_index;///rename to host_device_transfer ??
     uint32_t async_compute_queue_family_index;
 
 //    uint32_t * queue_family_queue_count;
@@ -262,47 +267,12 @@ VkFormat cvm_vk_get_screen_format(void);///can remove?
 uint32_t cvm_vk_get_swapchain_image_count(void);
 VkImageView cvm_vk_get_swapchain_image_view(uint32_t index);
 
+VkSemaphoreSubmitInfo cvm_vk_binary_semaphore_submit_info(VkSemaphore semaphore,VkPipelineStageFlags2 stages);
 
 
 
 
 
-///name really needs work
-typedef struct cvm_vk_command_queue_entry
-{
-    VkCommandPool command_pool;
-    VkCommandBuffer command_buffer;/// this almost certainly wants to be a list/stack and init as necessary
-
-    /// when the last of the work done by the command pool has been completed (may want this to become a stack/list)
-    cvm_vk_timeline_semaphore_moment completion_moment;
-    bool in_flight;
-
-    /// cleanup information? (buffer sections to relinquish &c. framebuffer images that have expired? -- though that probably wants special handling)
-}
-cvm_vk_command_queue_entry;
-
-///name really needs work
-typedef struct cvm_vk_command_queue
-{
-    cvm_vk_device * device;
-
-    uint32_t queue_family_index;
-    ///used to dictate the order of operations done on this queue, both internally and relative to other queues
-    /// (bacause work can theoretically be submitted to multiple device queues, internal synchronization is potentially important)
-
-    /// basically frames/distinct times on the queue
-    cvm_vk_command_queue_entry * entries;
-    uint32_t entry_count;
-
-    #warning handling/registering cleanup of frames here might be good/useful
-}
-cvm_vk_command_queue;
-
-void cvm_vk_command_queue_initialise(cvm_vk_command_queue * queue, cvm_vk_device * device, uint32_t entry_count, uint32_t queue_family_index);
-void cvm_vk_command_queue_terminate(cvm_vk_command_queue * queue);/// stalls on entries?
-
-#warning have debug logging for all the time points that can stall
-cvm_vk_command_queue_entry * cvm_vk_command_queue_get_entry(cvm_vk_command_queue * queue);///can stall while waiting on prior gpu work, will also cleanup any completed work while its at it
 
 
 
@@ -445,7 +415,7 @@ VkCommandBuffer cvm_vk_access_batch_transfer_command_buffer(cvm_vk_module_batch 
 void cvm_vk_work_payload_add_wait(cvm_vk_module_work_payload * payload,cvm_vk_timeline_semaphore semaphore,VkPipelineStageFlags2 stages);
 
 void cvm_vk_setup_new_graphics_payload_from_batch(cvm_vk_module_work_payload * payload,cvm_vk_module_batch * batch);
-cvm_vk_timeline_semaphore cvm_vk_submit_graphics_work(cvm_vk_module_work_payload * payload,cvm_vk_payload_flags flags);
+void cvm_vk_submit_graphics_work(cvm_vk_module_work_payload * payload,cvm_vk_payload_flags flags);
 VkCommandBuffer cvm_vk_obtain_secondary_command_buffer_from_batch(cvm_vk_module_sub_batch * msb,VkFramebuffer framebuffer,VkRenderPass render_pass,uint32_t sub_pass);
 
 ///same as above but for compute (including compute?)

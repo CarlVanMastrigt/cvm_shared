@@ -28,8 +28,6 @@ along with cvm_shared.  If not, see <https://www.gnu.org/licenses/>.
 
 typedef struct cvm_vk_swapchain_setup
 {
-    const cvm_vk_device * device;
-
     VkSurfaceKHR surface;
 
     uint32_t min_image_count;///0=use system minimum
@@ -41,6 +39,8 @@ typedef struct cvm_vk_swapchain_setup
 }
 cvm_vk_swapchain_setup;
 
+typedef struct cvm_vk_surface_swapchain cvm_vk_surface_swapchain;
+
 typedef struct cvm_vk_swapchain_presentable_image
 {
     VkImage image;///theese are provided by the WSI
@@ -48,19 +48,22 @@ typedef struct cvm_vk_swapchain_presentable_image
 
     VkSemaphore acquire_semaphore;///held temporarily by this struct, not owner, not created or destroyed as part of it
 
-    //bool in_flight;///error checking
-    uint32_t successfully_acquired:1;
-    uint32_t successfully_submitted:1;
+    cvm_vk_surface_swapchain * parent_swapchain;
+
     #warning instead is really sucessfully presented!
 
     VkSemaphore present_semaphore;///needed by VkPresentInfoKHR, which doesn not accept timeline semaphores
+    VkSemaphore qfot_semaphore;///required in cases where a QFOT is required, i.e. present_semaphore was signalled but alter work is required to actually present the image
+    bool qfot_required;/// whether the above was used
+    bool presented;
 
-
+    bool acquired;
+    bool submitted;
 
     /// the command buffers to recieve the QFOT should be created as necessary
     VkCommandBuffer * present_acquire_command_buffers;
 
-    cvm_vk_timeline_semaphore_moment last_use_moment;///changes throughout the frame
+    cvm_vk_timeline_semaphore_moment last_use_moment;///changes throughout the frame, not strictly necessary for most applications, can probably be removed
 
     #warning make this the "last used moment" for this image, use it to track work across multiple "libraries" (e.g. game and overlay)
 //    cvm_vk_timeline_semaphore_moment present_moment;///this is actually the last u
@@ -70,8 +73,6 @@ cvm_vk_swapchain_presentable_image;
 /// all the data associated with a window and rendering to a surface(usually a window)
 typedef struct cvm_vk_surface_swapchain
 {
-    const cvm_vk_device * device;/// device that this swapchain belongs to
-
     VkSurfaceKHR surface;/// effectively the window
 
     VkFence metering_fence;///wait till previous fence is acquired before acquiring another
@@ -81,7 +82,7 @@ typedef struct cvm_vk_surface_swapchain
     uint32_t max_image_count;///max count experienced over the lifetime of this swapchain
     VkImageUsageFlagBits usage_flags;
 
-    uint64_t queue_family_support_mask;
+    uint64_t queue_family_presentable_mask;
     ///if we can't present on the current queue family we'll present on the fallback (lowest indexed queue family that supports present)
     uint32_t fallback_present_queue_family;
 
@@ -109,14 +110,14 @@ typedef struct cvm_vk_surface_swapchain
 cvm_vk_surface_swapchain;
 
 
-int cvm_vk_swapchain_initialse(cvm_vk_surface_swapchain * swapchain, const cvm_vk_swapchain_setup * setup);
-void cvm_vk_swapchain_terminate(cvm_vk_surface_swapchain * swapchain);
+int cvm_vk_swapchain_initialse(const cvm_vk_device * device, cvm_vk_surface_swapchain * swapchain, const cvm_vk_swapchain_setup * setup);
+void cvm_vk_swapchain_terminate(const cvm_vk_device * device, cvm_vk_surface_swapchain * swapchain);
 
-int cvm_vk_swapchain_regenerate(cvm_vk_surface_swapchain * swapchain);
+int cvm_vk_swapchain_regenerate(const cvm_vk_device * device, cvm_vk_surface_swapchain * swapchain);
 
 
-const cvm_vk_swapchain_presentable_image * cvm_vk_swapchain_acquire_presentable_image(cvm_vk_surface_swapchain * swapchain, bool rendering_resources_invalid, uint32_t * cleanup_index);
-bool cvm_vk_check_for_remaining_frames(cvm_vk_surface_swapchain * swapchain, uint32_t * cleanup_index);
+const cvm_vk_swapchain_presentable_image * cvm_vk_swapchain_acquire_presentable_image(const cvm_vk_device * device, cvm_vk_surface_swapchain * swapchain, bool rendering_resources_invalid, uint32_t * cleanup_index);
+bool cvm_vk_check_for_remaining_frames(const cvm_vk_device * device, cvm_vk_surface_swapchain * swapchain, uint32_t * cleanup_index);
 
 #endif
 
