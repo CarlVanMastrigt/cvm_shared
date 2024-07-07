@@ -125,9 +125,9 @@ static inline int cvm_vk_swapchain_create(const cvm_vk_device * device, cvm_vk_s
         presentable_image->acquire_semaphore=VK_NULL_HANDLE;///set using one of the available image_acquisition_semaphores
         #warning instead of above assert it is NULL and set to VK_NULL_HANDLE upon init and upon being relinquished! (same for below!)
         presentable_image->acquired=false;
-        presentable_image->submitted=false;
-        presentable_image->qfot_required=false;
         presentable_image->presented=false;
+        presentable_image->qfot_required=false;
+        presentable_image->present_setup=false;
 
         ///image view
         VkImageViewCreateInfo image_view_create_info=(VkImageViewCreateInfo)
@@ -412,18 +412,19 @@ const cvm_vk_swapchain_presentable_image * cvm_vk_swapchain_acquire_presentable_
                 cvm_vk_timeline_semaphore_moment_wait(device,&presentable_image->last_use_moment);
             }
 
-            if(presentable_image->submitted)
+            if(presentable_image->presented)
             {
-                assert(presentable_image->acquired);///SOMEHOW PREPARING/CLEANING UP FRAME THAT WAS SUBMITTED BUT NOT ACQUIRED
+                assert(presentable_image->acquired);///SOMEHOW PREPARING/CLEANING UP FRAME THAT WAS PRESENTED BUT NOT ACQUIRED
             }
 
             #warning are we incrementing timeline semaphores that dont actually get run correctly!
 
             presentable_image->acquired=true;
-            presentable_image->submitted=false;
+            presentable_image->presented=false;
             presentable_image->acquire_semaphore=acquire_semaphore;
             presentable_image->qfot_required=false;
-            presentable_image->presented=false;
+            presentable_image->present_setup=false;
+            presentable_image->last_use_queue_family=CVM_INVALID_U32_INDEX;
         }
         else
         {
@@ -462,12 +463,12 @@ bool cvm_vk_check_for_remaining_frames(const cvm_vk_device * device, cvm_vk_surf
                 cvm_vk_timeline_semaphore_moment_wait(device,&presentable_image->last_use_moment);
 
                 presentable_image->acquired=false;
-                presentable_image->submitted=false;
+                presentable_image->presented=false;
                 swapchain->image_acquisition_semaphores[--swapchain->acquired_image_count]=presentable_image->acquire_semaphore;
                 *cleanup_index=i;
                 return true;
             }
-            else assert(!presentable_image->submitted);///SOMEHOW CLEANING UP FRAME THAT WAS SUBMITTED BUT NOT ACQUIRED
+            else assert(!presentable_image->presented);///SOMEHOW CLEANING UP FRAME THAT WAS PRESENTED BUT NOT ACQUIRED
         }
         assert(false);/// if there were acquired frames remaining they should have been found
         *cleanup_index=CVM_INVALID_U32_INDEX;
@@ -479,3 +480,185 @@ bool cvm_vk_check_for_remaining_frames(const cvm_vk_device * device, cvm_vk_surf
         return false;
     }
 }
+
+
+static VkCommandBuffer cvm_vk_swapchain_create_image_qfot_command_buffer(const cvm_vk_device * device, VkImage image, uint32_t dst_queue_family, uint32_t src_queue_family)
+{
+    VkCommandBuffer command_buffer;
+    #warning mutex lock on device internal command pool (device no longer const?)
+    VkCommandBufferAllocateInfo command_buffer_allocate_info=(VkCommandBufferAllocateInfo)
+    {
+        .sType=VK_STRUCTURE_TYPE_COMMAND_BUFFER_ALLOCATE_INFO,
+        .pNext=NULL,
+        .commandPool=device->queue_families[dst_queue_family].internal_command_pool,
+        .level=VK_COMMAND_BUFFER_LEVEL_PRIMARY,
+        .commandBufferCount=1
+    };
+
+    CVM_VK_CHECK(vkAllocateCommandBuffers(device->device,&command_buffer_allocate_info,&command_buffer));
+
+    VkCommandBufferBeginInfo command_buffer_begin_info=(VkCommandBufferBeginInfo)
+    {
+        .sType=VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO,
+        .pNext=NULL,
+        .flags=0,///not one time use
+        .pInheritanceInfo=NULL
+    };
+
+    VkDependencyInfo present_acquire_dependencies=
+    {
+        .sType=VK_STRUCTURE_TYPE_DEPENDENCY_INFO,
+        .pNext=NULL,
+        .dependencyFlags=VK_DEPENDENCY_BY_REGION_BIT,
+        .memoryBarrierCount=0,
+        .pMemoryBarriers=NULL,
+        .bufferMemoryBarrierCount=0,
+        .pBufferMemoryBarriers=NULL,
+        .imageMemoryBarrierCount=1,
+        .pImageMemoryBarriers=(VkImageMemoryBarrier2[1])
+        {
+            {
+                .sType=VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER_2,
+                .pNext=NULL,
+                .srcStageMask=0,/// from examles: no srcStage/AccessMask or dstStage/AccessMask is needed, waiting for a semaphore does that automatically.
+                .srcAccessMask=0,
+                .dstStageMask=VK_PIPELINE_STAGE_2_TOP_OF_PIPE_BIT,/// ??? what stage even is present? (stage and access can probably be 0, just being overly safe here)
+                .dstAccessMask=VK_ACCESS_2_MEMORY_READ_BIT,
+                .oldLayout=VK_IMAGE_LAYOUT_PRESENT_SRC_KHR,
+                .newLayout=VK_IMAGE_LAYOUT_PRESENT_SRC_KHR,
+                .srcQueueFamilyIndex=src_queue_family,
+                .dstQueueFamilyIndex=dst_queue_family,
+                .image=image,
+                .subresourceRange=(VkImageSubresourceRange)
+                {
+                    .aspectMask=VK_IMAGE_ASPECT_COLOR_BIT,
+                    .baseMipLevel=0,
+                    .levelCount=1,
+                    .baseArrayLayer=0,
+                    .layerCount=1
+                }
+            }
+        }
+    };
+
+
+    CVM_VK_CHECK(vkBeginCommandBuffer(command_buffer,&command_buffer_begin_info));
+
+    vkCmdPipelineBarrier2(command_buffer,&present_acquire_dependencies);
+
+    CVM_VK_CHECK(vkEndCommandBuffer(command_buffer));
+}
+
+void cvm_vk_swapchain_present_image(const cvm_vk_device * device, cvm_vk_surface_swapchain * swapchain, cvm_vk_swapchain_presentable_image * presentable_image)
+{
+    VkSemaphoreSubmitInfo wait_semaphores[1];
+    VkSemaphoreSubmitInfo signal_semaphores[2];
+    cvm_vk_device_queue_family * present_queue_family;
+    cvm_vk_device_queue * present_queue;
+    uint32_t image_index = presentable_image - swapchain->presenting_images;
+
+    assert(presentable_image->last_use_queue_family != CVM_INVALID_U32_INDEX);
+
+    if(presentable_image->qfot_required)
+    {
+        if(presentable_image->present_acquire_command_buffers[presentable_image->last_use_queue_family]==VK_NULL_HANDLE)
+        {
+            #warning could allocate the command buffers upfront and only reset upon swapchain recreation...
+            presentable_image->present_acquire_command_buffers[presentable_image->last_use_queue_family] =
+                cvm_vk_swapchain_create_image_qfot_command_buffer(device, presentable_image->image, swapchain->fallback_present_queue_family, presentable_image->last_use_queue_family);
+        }
+
+
+        present_queue_family = device->queue_families+swapchain->fallback_present_queue_family;
+        present_queue = present_queue_family->queues+0;/// use queue 0
+
+        ///fixed count and layout of wait and signal semaphores here
+        wait_semaphores[0]=cvm_vk_binary_semaphore_submit_info(presentable_image->qfot_semaphore,VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT);
+
+        /// presentable_image->present_semaphore triggered either here or above when CVM_VK_PAYLOAD_LAST_SWAPCHAIN_USE, this path being taken when present queue != graphics queue
+        signal_semaphores[0]=cvm_vk_binary_semaphore_submit_info(presentable_image->present_semaphore,VK_PIPELINE_STAGE_BOTTOM_OF_PIPE_BIT);
+        signal_semaphores[1]=cvm_vk_timeline_semaphore_signal_submit_info(&present_queue->timeline, VK_PIPELINE_STAGE_BOTTOM_OF_PIPE_BIT, &presentable_image->last_use_moment);///REMOVE THIS
+
+        VkSubmitInfo2 submit_info=(VkSubmitInfo2)
+        {
+            .sType=VK_STRUCTURE_TYPE_SUBMIT_INFO_2,
+            .pNext=NULL,
+            .flags=0,
+            .waitSemaphoreInfoCount=1,///fixed number, set above
+            .pWaitSemaphoreInfos=wait_semaphores,
+            .commandBufferInfoCount=1,
+            .pCommandBufferInfos=(VkCommandBufferSubmitInfo[1])
+            {
+                {
+                    .sType=VK_STRUCTURE_TYPE_COMMAND_BUFFER_SUBMIT_INFO,
+                    .pNext=NULL,
+                    .commandBuffer=presentable_image->present_acquire_command_buffers[presentable_image->last_use_queue_family],
+                    .deviceMask=0
+                }
+            },
+            .signalSemaphoreInfoCount=2,///fixed number, set above
+            .pSignalSemaphoreInfos=signal_semaphores
+        };
+
+        CVM_VK_CHECK(vkQueueSubmit2(present_queue->queue,1,&submit_info,VK_NULL_HANDLE));
+    }
+    else
+    {
+        assert(swapchain->queue_family_presentable_mask | (1 << presentable_image->last_use_queue_family));///must be presentable on last used queue family
+        present_queue_family = device->queue_families+presentable_image->last_use_queue_family;
+        present_queue = present_queue_family->queues+0;/// use queue 0
+    }
+
+
+
+    VkPresentInfoKHR present_info=(VkPresentInfoKHR)
+    {
+        .sType=VK_STRUCTURE_TYPE_PRESENT_INFO_KHR,
+        .pNext=NULL,
+        .waitSemaphoreCount=1,
+        .pWaitSemaphores=&presentable_image->present_semaphore,
+        .swapchainCount=1,
+        .pSwapchains=&swapchain->swapchain,
+        .pImageIndices=&image_index,
+        .pResults=NULL
+    };
+    #warning present should be synchronised (check this is true)
+
+    #warning separate present out from modules/work, it should operate on the presentable_image
+
+
+    VkResult r=vkQueuePresentKHR(present_queue->queue,&present_info);
+
+    if(r>=VK_SUCCESS)
+    {
+        if(r==VK_SUBOPTIMAL_KHR)
+        {
+            puts("presented swapchain suboptimal");///common error
+            swapchain->rendering_resources_valid=false;///requires resource rebuild
+        }
+        else if(r!=VK_SUCCESS)fprintf(stderr,"PRESENTATION SUCCEEDED WITH RESULT : %d\n",r);
+        presentable_image->presented=true;
+    }
+    else
+    {
+        if(r==VK_ERROR_OUT_OF_DATE_KHR)puts("couldn't present (out of date)");///common error
+        else fprintf(stderr,"PRESENTATION FAILED WITH ERROR : %d\n",r);
+    }
+}
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+

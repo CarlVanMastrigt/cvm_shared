@@ -1057,7 +1057,7 @@ void cvm_vk_submit_graphics_work(cvm_vk_module_work_payload * payload,cvm_vk_pay
                 cvm_vk_surface_swapchain_.rendering_resources_valid=false;///requires resource rebuild
             }
             else if(r!=VK_SUCCESS)fprintf(stderr,"PRESENTATION SUCCEEDED WITH RESULT : %d\n",r);
-            presenting_image->submitted=true;
+            presenting_image->presented=true;
         }
         else
         {
@@ -1562,7 +1562,7 @@ static void cvm_vk_create_module_batch(cvm_vk_module_batch * mb,uint32_t sub_bat
 static void cvm_vk_destroy_module_batch(cvm_vk_module_batch * mb,uint32_t sub_batch_count)
 {
     uint32_t i;
-    assert(mb->graphics_pcb_space);///module was destroyed without ever being used
+//    assert(mb->graphics_pcb_space);///module was destroyed without ever being used
     if(mb->graphics_pcb_space)
     {
         ///hijack first sub batch's command pool for primary command buffers

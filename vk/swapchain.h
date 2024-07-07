@@ -50,15 +50,15 @@ typedef struct cvm_vk_swapchain_presentable_image
 
     cvm_vk_surface_swapchain * parent_swapchain;
 
-    #warning instead is really sucessfully presented!
-
     VkSemaphore present_semaphore;///needed by VkPresentInfoKHR, which doesn not accept timeline semaphores
     VkSemaphore qfot_semaphore;///required in cases where a QFOT is required, i.e. present_semaphore was signalled but alter work is required to actually present the image
     bool qfot_required;/// whether the above was used
-    bool presented;
+    bool present_setup;/// present semaphore has been set
 
     bool acquired;
-    bool submitted;
+    bool presented;
+
+    uint32_t last_use_queue_family;
 
     /// the command buffers to recieve the QFOT should be created as necessary
     VkCommandBuffer * present_acquire_command_buffers;
@@ -115,9 +115,12 @@ void cvm_vk_swapchain_terminate(const cvm_vk_device * device, cvm_vk_surface_swa
 
 int cvm_vk_swapchain_regenerate(const cvm_vk_device * device, cvm_vk_surface_swapchain * swapchain);
 
-
+#warning remove cleanup index at some point
 const cvm_vk_swapchain_presentable_image * cvm_vk_swapchain_acquire_presentable_image(const cvm_vk_device * device, cvm_vk_surface_swapchain * swapchain, bool rendering_resources_invalid, uint32_t * cleanup_index);
 bool cvm_vk_check_for_remaining_frames(const cvm_vk_device * device, cvm_vk_surface_swapchain * swapchain, uint32_t * cleanup_index);
+
+void cvm_vk_swapchain_present_image(const cvm_vk_device * device, cvm_vk_surface_swapchain * swapchain, cvm_vk_swapchain_presentable_image * presentable_image);
+
 
 #endif
 

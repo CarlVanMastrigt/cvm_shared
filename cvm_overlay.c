@@ -748,14 +748,19 @@ void overlay_render_to_image(cvm_vk_device * device, cvm_overlay_renderer * rend
     #warning get screen res from presentable image
     cvm_vk_module_batch * batch;
     uint32_t swapchain_image_index;
+    cvm_overlay_renderer_work_entry * work_entry;
+    cvm_vk_command_buffer cb;
+    cvm_vk_timeline_semaphore_moment completion_moment;
 
-    cvm_vk_module_work_payload payload;
+//    cvm_vk_module_work_payload payload;
 
     cvm_overlay_element_render_buffer element_render_buffer;
     VkDeviceSize uniform_offset,vertex_offset;
 
     ///perhaps this should return previous image index as well, such that that value can be used in cleanup (e.g. relinquishing ring buffer space)
     batch = cvm_vk_get_module_batch(&overlay_module_data,&swapchain_image_index);
+
+
 
 
 
@@ -770,7 +775,11 @@ void overlay_render_to_image(cvm_vk_device * device, cvm_overlay_renderer * rend
 
     if(batch && presentable_image)
     {
-        cvm_vk_setup_new_graphics_payload_from_batch(&payload,batch);
+        work_entry = cvm_vk_work_queue_acquire_entry(device,&renderer->work_queue);
+        cvm_vk_command_pool_acquire_command_buffer(device,&work_entry->command_pool,&cb);
+        cvm_vk_command_buffer_wait_on_presentable_image_acquisition(&cb,presentable_image);
+
+//        cvm_vk_setup_new_graphics_payload_from_batch(&payload,batch);
 
         cvm_vk_staging_buffer_begin(&overlay_staging_buffer);///build barriers into begin/end paradigm maybe???
         cvm_vk_transient_buffer_begin(&overlay_transient_buffer,swapchain_image_index);
@@ -788,8 +797,10 @@ void overlay_render_to_image(cvm_vk_device * device, cvm_overlay_renderer * rend
 
         /// upload all staged resources needed by this frame
         ///if ever using a dedicated transfer queue (probably don't want tbh) change command buffers in these
-        cvm_vk_image_atlas_submit_all_pending_copy_actions(&overlay_transparent_image_atlas,payload.command_buffer);
-        cvm_vk_image_atlas_submit_all_pending_copy_actions(&overlay_colour_image_atlas,payload.command_buffer);
+//        cvm_vk_image_atlas_submit_all_pending_copy_actions(&overlay_transparent_image_atlas,payload.command_buffer);
+//        cvm_vk_image_atlas_submit_all_pending_copy_actions(&overlay_colour_image_atlas,payload.command_buffer);
+        cvm_vk_image_atlas_submit_all_pending_copy_actions(&overlay_transparent_image_atlas,cb.command_buffer);
+        cvm_vk_image_atlas_submit_all_pending_copy_actions(&overlay_colour_image_atlas,cb.command_buffer);
 
         ///end of transfer
 
@@ -804,11 +815,11 @@ void overlay_render_to_image(cvm_vk_device * device, cvm_overlay_renderer * rend
 
         float screen_dimensions[4]={2.0/((float)screen_w),2.0/((float)screen_h),(float)screen_w,(float)screen_h};
 
-        vkCmdPushConstants(payload.command_buffer,overlay_pipeline_layout,VK_SHADER_STAGE_VERTEX_BIT|VK_SHADER_STAGE_FRAGMENT_BIT,0,4*sizeof(float),screen_dimensions);
+        vkCmdPushConstants(cb.command_buffer,overlay_pipeline_layout,VK_SHADER_STAGE_VERTEX_BIT|VK_SHADER_STAGE_FRAGMENT_BIT,0,4*sizeof(float),screen_dimensions);
 
-        vkCmdBindDescriptorSets(payload.command_buffer,VK_PIPELINE_BIND_POINT_GRAPHICS,overlay_pipeline_layout,0,1,overlay_descriptor_sets+swapchain_image_index,0,NULL);
+        vkCmdBindDescriptorSets(cb.command_buffer,VK_PIPELINE_BIND_POINT_GRAPHICS,overlay_pipeline_layout,0,1,overlay_descriptor_sets+swapchain_image_index,0,NULL);
 
-        vkCmdBindDescriptorSets(payload.command_buffer,VK_PIPELINE_BIND_POINT_GRAPHICS,overlay_pipeline_layout,1,1,&overlay_consistent_descriptor_set,0,NULL);
+        vkCmdBindDescriptorSets(cb.command_buffer,VK_PIPELINE_BIND_POINT_GRAPHICS,overlay_pipeline_layout,1,1,&overlay_consistent_descriptor_set,0,NULL);
 
 
         VkRenderPassBeginInfo render_pass_begin_info=(VkRenderPassBeginInfo)
@@ -823,21 +834,23 @@ void overlay_render_to_image(cvm_vk_device * device, cvm_overlay_renderer * rend
             .pClearValues=(VkClearValue[1]){{.color=(VkClearColorValue){.float32={0.0f,0.0f,0.0f,0.0f}}}},
         };
 
-        vkCmdBeginRenderPass(payload.command_buffer,&render_pass_begin_info,VK_SUBPASS_CONTENTS_INLINE);///================
+        vkCmdBeginRenderPass(cb.command_buffer,&render_pass_begin_info,VK_SUBPASS_CONTENTS_INLINE);///================
 
-        vkCmdBindPipeline(payload.command_buffer,VK_PIPELINE_BIND_POINT_GRAPHICS,overlay_pipeline);
+        vkCmdBindPipeline(cb.command_buffer,VK_PIPELINE_BIND_POINT_GRAPHICS,overlay_pipeline);
 
-        cvm_vk_transient_buffer_bind_as_vertex(payload.command_buffer,&overlay_transient_buffer,0,vertex_offset);
+        cvm_vk_transient_buffer_bind_as_vertex(cb.command_buffer,&overlay_transient_buffer,0,vertex_offset);
 
-        vkCmdDraw(payload.command_buffer,4,element_render_buffer.count,0,0);
+        vkCmdDraw(cb.command_buffer,4,element_render_buffer.count,0,0);
 
-        vkCmdEndRenderPass(payload.command_buffer);///================
+        vkCmdEndRenderPass(cb.command_buffer);///================
 
         cvm_vk_staging_buffer_end(&overlay_staging_buffer,swapchain_image_index);
         cvm_vk_transient_buffer_end(&overlay_transient_buffer);
 
-        cvm_vk_submit_graphics_work(&payload,CVM_VK_PAYLOAD_LAST_QUEUE_USE|CVM_VK_PAYLOAD_FIRST_QUEUE_USE);
-
+//        cvm_vk_submit_graphics_work(&payload,CVM_VK_PAYLOAD_LAST_QUEUE_USE|CVM_VK_PAYLOAD_FIRST_QUEUE_USE);
+        cvm_vk_command_buffer_signal_presenting_image_complete(&cb,presentable_image);
+        cvm_vk_command_buffer_submit(device,&work_entry->command_pool,&cb,VK_PIPELINE_STAGE_2_COLOR_ATTACHMENT_OUTPUT_BIT,&completion_moment);
+        cvm_vk_work_queue_release_entry(&renderer->work_queue,work_entry,&completion_moment);
 
         cvm_vk_end_module_batch(batch);
     }
