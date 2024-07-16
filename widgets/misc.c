@@ -120,7 +120,7 @@ void toggle_widget_button_func(widget * w)
 
 
 
-static void empty_widget_render(overlay_theme * theme,widget * w,int16_t x_off,int16_t y_off,cvm_overlay_element_render_buffer * erb,rectangle bounds)
+static void empty_widget_render(overlay_theme * theme,widget * w,int16_t x_off,int16_t y_off,cvm_overlay_render_data_stack * restrict render_stack,rectangle bounds)
 {
 
 }

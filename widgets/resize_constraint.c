@@ -156,9 +156,9 @@ static widget_behaviour_function_set resize_constraint_behaviour_functions=
 };
 
 
-static void resize_constraint_widget_render(overlay_theme * theme,widget * w,int16_t x_off,int16_t y_off,cvm_overlay_element_render_buffer * erb,rectangle bounds)
+static void resize_constraint_widget_render(overlay_theme * theme,widget * w,int16_t x_off,int16_t y_off,cvm_overlay_render_data_stack * restrict render_stack,rectangle bounds)
 {
-    if(w->resize_constraint.constrained) render_widget(w->resize_constraint.constrained,x_off+w->base.r.x1,y_off+w->base.r.y1,erb,bounds);
+    if(w->resize_constraint.constrained) render_widget(w->resize_constraint.constrained,x_off+w->base.r.x1,y_off+w->base.r.y1,render_stack,bounds);
 }
 
 static widget * resize_constraint_widget_select(overlay_theme * theme,widget * w,int16_t x_in,int16_t y_in)

@@ -60,11 +60,11 @@ static widget_behaviour_function_set panel_behaviour_functions=
 
 
 
-static void panel_widget_render(overlay_theme * theme,widget * w,int16_t x_off,int16_t y_off,cvm_overlay_element_render_buffer * erb,rectangle bounds)
+static void panel_widget_render(overlay_theme * theme,widget * w,int16_t x_off,int16_t y_off,cvm_overlay_render_data_stack * restrict render_stack,rectangle bounds)
 {
-    theme->panel_render(erb,theme,bounds,rectangle_add_offset(w->base.r,x_off,y_off),w->base.status,OVERLAY_BACKGROUND_COLOUR);
+    theme->panel_render(render_stack,theme,bounds,rectangle_add_offset(w->base.r,x_off,y_off),w->base.status,OVERLAY_BACKGROUND_COLOUR);
 
-    render_widget(w->panel.contents,x_off+w->base.r.x1,y_off+w->base.r.y1,erb,bounds);
+    render_widget(w->panel.contents,x_off+w->base.r.x1,y_off+w->base.r.y1,render_stack,bounds);
 }
 
 static widget * panel_widget_select(overlay_theme * theme,widget * w,int16_t x_in,int16_t y_in)

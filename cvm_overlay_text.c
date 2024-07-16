@@ -343,7 +343,7 @@ static inline int cvm_overlay_get_glyph_advance(cvm_overlay_font * font,cvm_over
 
 
 #define SINGLE_LINE_RENDER_IMPLEMENTATION(NAME,SS,SC,SR,FS,GR)\
-static void NAME(cvm_overlay_element_render_buffer * restrict erb,overlay_theme * restrict theme,const overlay_text_single_line_render_data * restrict data)\
+static void NAME(cvm_overlay_render_data_stack * restrict render_stack,overlay_theme * restrict theme,const overlay_text_single_line_render_data * restrict data)\
 {\
     uint32_t gi,prev_gi=0,incr;\
     int16_t x=data->x;\
@@ -386,15 +386,15 @@ static void NAME(cvm_overlay_element_render_buffer * restrict erb,overlay_theme 
 #define FADING_SETUP rectangle fade_r=(rectangle){.x1=theme->h_text_fade_range*(data->text_area.x1>x),.y1=0,.x2=theme->h_text_fade_range*(data->text_area.x2<x+data->text_length),.y2=0};
 
 
-#define GLYPH_RENDER cvm_render_shaded_overlay_element(erb,data->bounds,rectangle_add_offset(g->pos,x,data->y),data->colour,g->tile->x_pos<<2,g->tile->y_pos<<2);
-#define GLYPH_RENDER_FADING cvm_render_shaded_fading_overlay_element(erb,data->bounds,rectangle_add_offset(g->pos,x,data->y),data->colour,g->tile->x_pos<<2,g->tile->y_pos<<2,data->text_area,fade_r);
-#define GLYPH_RENDER_BOX_CONSTRAINED theme->shaded_box_constrained_render(erb,theme,data->bounds,rectangle_add_offset(g->pos,x,data->y),data->colour,g->tile->x_pos<<2,g->tile->y_pos<<2,data->box_r,data->box_status);
-#define GLYPH_RENDER_FADING_BOX_CONSTRAINED theme->shaded_fading_box_constrained_render(erb,theme,data->bounds,rectangle_add_offset(g->pos,x,data->y),data->colour,g->tile->x_pos<<2,g->tile->y_pos<<2,data->text_area,fade_r,data->box_r,data->box_status);
+#define GLYPH_RENDER cvm_render_shaded_overlay_element(render_stack,data->bounds,rectangle_add_offset(g->pos,x,data->y),data->colour,g->tile->x_pos<<2,g->tile->y_pos<<2);
+#define GLYPH_RENDER_FADING cvm_render_shaded_fading_overlay_element(render_stack,data->bounds,rectangle_add_offset(g->pos,x,data->y),data->colour,g->tile->x_pos<<2,g->tile->y_pos<<2,data->text_area,fade_r);
+#define GLYPH_RENDER_BOX_CONSTRAINED theme->shaded_box_constrained_render(render_stack,theme,data->bounds,rectangle_add_offset(g->pos,x,data->y),data->colour,g->tile->x_pos<<2,g->tile->y_pos<<2,data->box_r,data->box_status);
+#define GLYPH_RENDER_FADING_BOX_CONSTRAINED theme->shaded_fading_box_constrained_render(render_stack,theme,data->bounds,rectangle_add_offset(g->pos,x,data->y),data->colour,g->tile->x_pos<<2,g->tile->y_pos<<2,data->text_area,fade_r,data->box_r,data->box_status);
 
-#define SELECTION_RENDER cvm_render_fill_overlay_element(erb,data->bounds,((rectangle){.x1=sb,.y1=data->y,.x2=se+(data->selection_end==data->selection_begin),.y2=data->y+theme->font.glyph_size}),OVERLAY_TEXT_HIGHLIGHT_COLOUR);
-#define SELECTION_RENDER_FADING cvm_render_fill_fading_overlay_element(erb,data->bounds,((rectangle){.x1=sb,.y1=data->y,.x2=se+(data->selection_end==data->selection_begin),.y2=data->y+theme->font.glyph_size}),OVERLAY_TEXT_HIGHLIGHT_COLOUR,data->text_area,fade_r);
-#define SELECTION_RENDER_BOX_CONSTRAINED theme->fill_box_constrained_render(erb,theme,data->bounds,((rectangle){.x1=sb,.y1=data->y,.x2=se+(data->selection_end==data->selection_begin),.y2=data->y+theme->font.glyph_size}),OVERLAY_TEXT_HIGHLIGHT_COLOUR,data->box_r,data->box_status);
-#define SELECTION_RENDER_FADING_BOX_CONSTRAINED theme->fill_fading_box_constrained_render(erb,theme,data->bounds,((rectangle){.x1=sb,.y1=data->y,.x2=se+(data->selection_end==data->selection_begin),.y2=data->y+theme->font.glyph_size}),OVERLAY_TEXT_HIGHLIGHT_COLOUR,data->text_area,fade_r,data->box_r,data->box_status);
+#define SELECTION_RENDER cvm_render_fill_overlay_element(render_stack,data->bounds,((rectangle){.x1=sb,.y1=data->y,.x2=se+(data->selection_end==data->selection_begin),.y2=data->y+theme->font.glyph_size}),OVERLAY_TEXT_HIGHLIGHT_COLOUR);
+#define SELECTION_RENDER_FADING cvm_render_fill_fading_overlay_element(render_stack,data->bounds,((rectangle){.x1=sb,.y1=data->y,.x2=se+(data->selection_end==data->selection_begin),.y2=data->y+theme->font.glyph_size}),OVERLAY_TEXT_HIGHLIGHT_COLOUR,data->text_area,fade_r);
+#define SELECTION_RENDER_BOX_CONSTRAINED theme->fill_box_constrained_render(render_stack,theme,data->bounds,((rectangle){.x1=sb,.y1=data->y,.x2=se+(data->selection_end==data->selection_begin),.y2=data->y+theme->font.glyph_size}),OVERLAY_TEXT_HIGHLIGHT_COLOUR,data->box_r,data->box_status);
+#define SELECTION_RENDER_FADING_BOX_CONSTRAINED theme->fill_fading_box_constrained_render(render_stack,theme,data->bounds,((rectangle){.x1=sb,.y1=data->y,.x2=se+(data->selection_end==data->selection_begin),.y2=data->y+theme->font.glyph_size}),OVERLAY_TEXT_HIGHLIGHT_COLOUR,data->text_area,fade_r,data->box_r,data->box_status);
 
 SINGLE_LINE_RENDER_IMPLEMENTATION(overlay_text_single_line_render____,,,,,GLYPH_RENDER)
 SINGLE_LINE_RENDER_IMPLEMENTATION(overlay_text_single_line_render_s__,SELECTION_SETUP,SELECTION_CHECK,SELECTION_RENDER,,GLYPH_RENDER)
@@ -425,7 +425,7 @@ SINGLE_LINE_RENDER_IMPLEMENTATION(overlay_text_single_line_render_sfc,SELECTION_
 #define OVERLAY_TEXT_RENDER_BOX_CONSTRAINED 0x0004
 */
 
-void (*overlay_text_single_line_render_ptrs[8])(cvm_overlay_element_render_buffer * restrict,overlay_theme * restrict,const overlay_text_single_line_render_data * restrict)=
+void (*overlay_text_single_line_render_ptrs[8])(cvm_overlay_render_data_stack * restrict,overlay_theme * restrict,const overlay_text_single_line_render_data * restrict)=
 {
     overlay_text_single_line_render____,
     overlay_text_single_line_render_s__,
@@ -437,9 +437,9 @@ void (*overlay_text_single_line_render_ptrs[8])(cvm_overlay_element_render_buffe
     overlay_text_single_line_render_sfc,
 };
 
-void overlay_text_single_line_render(cvm_overlay_element_render_buffer * restrict erb,overlay_theme * restrict theme,const overlay_text_single_line_render_data * restrict data)
+void overlay_text_single_line_render(cvm_overlay_render_data_stack * restrict render_stack,overlay_theme * restrict theme,const overlay_text_single_line_render_data * restrict data)
 {
-    overlay_text_single_line_render_ptrs[data->flags](erb,theme,data);
+    overlay_text_single_line_render_ptrs[data->flags](render_stack,theme,data);
 }
 
 int16_t overlay_text_single_line_get_pixel_length(cvm_overlay_font * font,const char * text)
@@ -610,7 +610,7 @@ void overlay_text_multiline_processing(cvm_overlay_font * font,cvm_overlay_text_
     block->lines[block->line_count++].finish=text;
 }
 
-void overlay_text_multiline_render(cvm_overlay_element_render_buffer * erb,cvm_overlay_font * font,rectangle bounds,cvm_overlay_text_block * block,int x,int y,overlay_colour colour)
+void overlay_text_multiline_render(cvm_overlay_render_data_stack * restrict render_stack,cvm_overlay_font * font,rectangle bounds,cvm_overlay_text_block * block,int x,int y,overlay_colour colour)
 {
     uint32_t i,gi,prev_gi,incr;
     FT_Vector kern;
@@ -649,7 +649,7 @@ void overlay_text_multiline_render(cvm_overlay_element_render_buffer * erb,cvm_o
 
             prev_gi=gi;
 
-            if(g->tile)cvm_render_shaded_overlay_element(erb,bounds,rectangle_add_offset(g->pos,x,y),colour,g->tile->x_pos<<2,g->tile->y_pos<<2);
+            if(g->tile)cvm_render_shaded_overlay_element(render_stack,bounds,rectangle_add_offset(g->pos,x,y),colour,g->tile->x_pos<<2,g->tile->y_pos<<2);
 
             x+=cvm_overlay_get_glyph_advance(font,g);
         }
@@ -659,7 +659,7 @@ void overlay_text_multiline_render(cvm_overlay_element_render_buffer * erb,cvm_o
     }
 }
 
-void overlay_text_multiline_selection_render(cvm_overlay_element_render_buffer * erb,cvm_overlay_font * font,rectangle bounds,cvm_overlay_text_block * block,int x,int y,overlay_colour colour,char * selection_start,char * selection_end)
+void overlay_text_multiline_selection_render(cvm_overlay_render_data_stack * restrict render_stack,cvm_overlay_font * font,rectangle bounds,cvm_overlay_text_block * block,int x,int y,overlay_colour colour,char * selection_start,char * selection_end)
 {
     uint32_t i,gi,prev_gi,incr;
     FT_Vector kern;
@@ -709,7 +709,7 @@ void overlay_text_multiline_selection_render(cvm_overlay_element_render_buffer *
 
             prev_gi=gi;
 
-            if(g->tile)cvm_render_shaded_overlay_element(erb,bounds,rectangle_add_offset(g->pos,x,y),colour,g->tile->x_pos<<2,g->tile->y_pos<<2);
+            if(g->tile)cvm_render_shaded_overlay_element(render_stack,bounds,rectangle_add_offset(g->pos,x,y),colour,g->tile->x_pos<<2,g->tile->y_pos<<2);
 
             x+=cvm_overlay_get_glyph_advance(font,g);
         }
@@ -718,7 +718,7 @@ void overlay_text_multiline_selection_render(cvm_overlay_element_render_buffer *
 
         if(ss!=se)
         {
-            cvm_render_fill_overlay_element(erb,bounds,((rectangle){.x1=ss,.y1=y,.x2=se,.y2=y+font->glyph_size}),OVERLAY_TEXT_HIGHLIGHT_COLOUR);
+            cvm_render_fill_overlay_element(render_stack,bounds,((rectangle){.x1=ss,.y1=y,.x2=se,.y2=y+font->glyph_size}),OVERLAY_TEXT_HIGHLIGHT_COLOUR);
             ss=se=x_start;
         }
 
@@ -800,7 +800,7 @@ cvm_overlay_glyph * overlay_get_glyph(cvm_overlay_font * font,const char * text)
     return g;
 }
 
-void overlay_text_centred_glyph_render(cvm_overlay_element_render_buffer * erb,cvm_overlay_font * font,rectangle bounds,rectangle r,const char * icon_glyph,overlay_colour colour)
+void overlay_text_centred_glyph_render(cvm_overlay_render_data_stack * restrict render_stack,cvm_overlay_font * font,rectangle bounds,rectangle r,const char * icon_glyph,overlay_colour colour)
 {
     cvm_overlay_glyph * g;
 
@@ -813,10 +813,10 @@ void overlay_text_centred_glyph_render(cvm_overlay_element_render_buffer * erb,c
     r.x1=((r.x1+r.x2)>>1) - ((g->pos.x2-g->pos.x1+1)>>1);
     r.x2=r.x1+g->pos.x2-g->pos.x1;
 
-    cvm_render_shaded_overlay_element(erb,bounds,r,colour,g->tile->x_pos<<2,g->tile->y_pos<<2);
+    cvm_render_shaded_overlay_element(render_stack,bounds,r,colour,g->tile->x_pos<<2,g->tile->y_pos<<2);
 }
 
-void overlay_text_centred_glyph_box_constrained_render(cvm_overlay_element_render_buffer * erb,overlay_theme * theme,rectangle bounds,rectangle r,const char * icon_glyph,overlay_colour colour,rectangle box_r,uint32_t box_status)
+void overlay_text_centred_glyph_box_constrained_render(cvm_overlay_render_data_stack * restrict render_stack,overlay_theme * theme,rectangle bounds,rectangle r,const char * icon_glyph,overlay_colour colour,rectangle box_r,uint32_t box_status)
 {
     cvm_overlay_glyph * g;
 
@@ -829,7 +829,7 @@ void overlay_text_centred_glyph_box_constrained_render(cvm_overlay_element_rende
     r.x1=((r.x1+r.x2)>>1) - ((g->pos.x2-g->pos.x1+1)>>1);
     r.x2=r.x1+g->pos.x2-g->pos.x1;
 
-    theme->shaded_box_constrained_render(erb,theme,bounds,r,colour,g->tile->x_pos<<2,g->tile->y_pos<<2,box_r,box_status);
+    theme->shaded_box_constrained_render(render_stack,theme,bounds,r,colour,g->tile->x_pos<<2,g->tile->y_pos<<2,box_r,box_status);
 }
 
 

@@ -65,23 +65,23 @@ static widget_behaviour_function_set contiguous_box_behaviour_functions=
 
 
 
-static void all_visible_contiguous_box_widget_render(overlay_theme * theme,widget * w,int16_t x_off,int16_t y_off,cvm_overlay_element_render_buffer * erb,rectangle bounds)
+static void all_visible_contiguous_box_widget_render(overlay_theme * theme,widget * w,int16_t x_off,int16_t y_off,cvm_overlay_render_data_stack * restrict render_stack,rectangle bounds)
 {
     rectangle r=rectangle_add_offset(w->base.r,x_off,y_off);
     //r.y1+=7+(int)(11.0*sin(SDL_GetTicks()*0.004));
     //r.x1+=65+(int)(11.0*sin(SDL_GetTicks()*0.001-1));
-    theme->box_render(erb,theme,bounds,r,w->base.status,OVERLAY_MAIN_COLOUR);
-    //theme->box_render(rectangle_add_offset(w->base.r,x_off,y_off),w->base.status,theme,erb,bounds,OVERLAY_MAIN_COLOUR);
+    theme->box_render(render_stack,theme,bounds,r,w->base.status,OVERLAY_MAIN_COLOUR);
+    //theme->box_render(rectangle_add_offset(w->base.r,x_off,y_off),w->base.status,theme,render_stack,bounds,OVERLAY_MAIN_COLOUR);
 
     x_off+=w->base.r.x1;
     y_off+=w->base.r.y1;
 
-    render_widget(w->contiguous_box.contained_box,x_off,y_off,erb,bounds);
+    render_widget(w->contiguous_box.contained_box,x_off,y_off,render_stack,bounds);
 }
 
-static void some_visible_contiguous_box_widget_render(overlay_theme * theme,widget * w,int16_t x_off,int16_t y_off,cvm_overlay_element_render_buffer * erb,rectangle bounds)
+static void some_visible_contiguous_box_widget_render(overlay_theme * theme,widget * w,int16_t x_off,int16_t y_off,cvm_overlay_render_data_stack * restrict render_stack,rectangle bounds)
 {
-//    theme->box_render(rectangle_add_offset(w->base.r,x_off,y_off),w->base.status,theme,erb,bounds,OVERLAY_MAIN_COLOUR);
+//    theme->box_render(rectangle_add_offset(w->base.r,x_off,y_off),w->base.status,theme,render_stack,bounds,OVERLAY_MAIN_COLOUR);
 //
 //    x_off+=w->base.r.x1;
 //    y_off+=w->base.r.y1;
@@ -96,7 +96,7 @@ static void some_visible_contiguous_box_widget_render(overlay_theme * theme,widg
 //        .y2=y_off+w->base.r.y2-w->base.r.y1-theme->contiguous_some_box_y_offset
 //    });
 //
-//    if(rectangle_has_positive_area(bounds))render_widget(w->contiguous_box.contained_box,x_off,y_off,erb,bounds);
+//    if(rectangle_has_positive_area(bounds))render_widget(w->contiguous_box.contained_box,x_off,y_off,render_stack,bounds);
 }
 
 static widget * contiguous_box_widget_select(overlay_theme * theme,widget * w,int16_t x_in,int16_t y_in)

@@ -39,6 +39,17 @@ static VkFramebuffer * overlay_framebuffers;
 static cvm_vk_transient_buffer overlay_transient_buffer;
 static uint32_t max_overlay_elements=4096;/// this needs to be bigger... potentially even dynamically set
 
+
+
+
+
+
+
+
+
+
+
+
 void test_timing(bool start,char * name)
 {
     static struct timespec tso,tsn;
@@ -699,7 +710,8 @@ void cvm_overlay_renderer_initialise(cvm_overlay_renderer * renderer, cvm_vk_dev
     renderer->cycle_count=renderer_cycle_count;
     renderer->staging_buffer_ = staging_buffer;
 
-    cvm_vk_staging_shunt_buffer_initialise(&renderer->transient_shunt_buffer, staging_buffer->alignment);
+    cvm_vk_staging_shunt_buffer_initialise(&renderer->shunt_buffer, staging_buffer->alignment);
+    cvm_overlay_render_data_stack_ini(&renderer->element_render_stack);
 
     cvm_vk_work_queue_setup work_queue_setup=
     {
@@ -718,7 +730,8 @@ void cvm_overlay_renderer_initialise(cvm_overlay_renderer * renderer, cvm_vk_dev
 void cvm_overlay_renderer_terminate(cvm_overlay_renderer * renderer, cvm_vk_device * device)
 {
     cvm_vk_work_queue_terminate(device,&renderer->work_queue);
-    cvm_vk_staging_shunt_buffer_terminate(&renderer->transient_shunt_buffer);
+    cvm_vk_staging_shunt_buffer_terminate(&renderer->shunt_buffer);
+    cvm_overlay_render_data_stack_del(&renderer->element_render_stack);
 }
 
 
@@ -740,9 +753,11 @@ void overlay_render_to_image(cvm_vk_device * device, cvm_overlay_renderer * rend
     VkDeviceSize staging_space_required;
     VkDeviceSize instance_offset,uniform_offset,upload_offset;
 
+     cvm_overlay_render_data_stack * element_render_stack = &renderer->element_render_stack;
+     cvm_overlay_render_data_stack_clr(element_render_stack);
+
 //    cvm_vk_module_work_payload payload;
 
-    cvm_overlay_element_render_buffer element_render_buffer;
     VkDeviceSize vertex_offset;//replace with instance_offset
 
 
@@ -778,12 +793,10 @@ void overlay_render_to_image(cvm_vk_device * device, cvm_overlay_renderer * rend
         ///cvm_vk_staging_buffer_allocation_align_offset
 
 
-        element_render_buffer.buffer=staging_buffer_allocation.mapping;
-//        element_render_buffer.buffer=cvm_vk_transient_buffer_get_allocation(&overlay_transient_buffer,max_overlay_elements*sizeof(cvm_overlay_render_data),0,&vertex_offset);
-        element_render_buffer.space=max_overlay_elements;
-        element_render_buffer.count=0;
+        render_widget_overlay(element_render_stack,menu_widget);
 
-        render_widget_overlay(&element_render_buffer,menu_widget);
+        #warning make copy and size functions on a stack!
+        memcpy(staging_buffer_allocation.mapping,element_render_stack->stack,sizeof(cvm_overlay_render_data)*element_render_stack->count);
 
         /// upload all staged resources needed by this frame
         ///if ever using a dedicated transfer queue (probably don't want tbh) change command buffers in these
@@ -830,7 +843,7 @@ void overlay_render_to_image(cvm_vk_device * device, cvm_overlay_renderer * rend
 //        cvm_vk_transient_buffer_bind_as_vertex(cb.buffer,&overlay_transient_buffer,0,vertex_offset);
         vkCmdBindVertexBuffers(cb.buffer,0,1,&renderer->staging_buffer_->buffer,&staging_buffer_allocation.acquired_offset);
 
-        vkCmdDraw(cb.buffer,4,element_render_buffer.count,0,0);
+        vkCmdDraw(cb.buffer,4,renderer->element_render_stack.count,0,0);
 
         vkCmdEndRenderPass(cb.buffer);///================
 

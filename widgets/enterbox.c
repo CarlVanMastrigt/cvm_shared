@@ -393,11 +393,11 @@ static widget_behaviour_function_set enterbox_behaviour_functions=
     .wid_delete     =   enterbox_widget_delete
 };
 
-static void enterbox_widget_render(overlay_theme * theme,widget * w,int16_t x_off,int16_t y_off,cvm_overlay_element_render_buffer * erb,rectangle bounds)
+static void enterbox_widget_render(overlay_theme * theme,widget * w,int16_t x_off,int16_t y_off,cvm_overlay_render_data_stack * restrict render_stack,rectangle bounds)
 {
     rectangle r=rectangle_add_offset(w->base.r,x_off,y_off);
 
-	theme->h_bar_render(erb,theme,bounds,r,w->base.status,OVERLAY_MAIN_COLOUR);
+	theme->h_bar_render(render_stack,theme,bounds,r,w->base.status,OVERLAY_MAIN_COLOUR);
 
 	if(w->enterbox.update_contents_func && !is_currently_active_widget(w))w->enterbox.update_contents_func(w);
 
@@ -436,7 +436,7 @@ static void enterbox_widget_render(overlay_theme * theme,widget * w,int16_t x_of
     text_render_data.flags|=(w->enterbox.min_glyphs_visible<w->enterbox.max_glyphs)*OVERLAY_TEXT_RENDER_FADING;
     text_render_data.flags|=is_currently_active_widget(w)*OVERLAY_TEXT_RENDER_SELECTION;
 
-    overlay_text_single_line_render(erb,theme,&text_render_data);
+    overlay_text_single_line_render(render_stack,theme,&text_render_data);
 }
 
 static widget * enterbox_widget_select(overlay_theme * theme,widget * w,int16_t x_in,int16_t y_in)

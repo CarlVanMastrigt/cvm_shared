@@ -38,7 +38,7 @@ widget_container;
 widget * create_container(size_t size);
 
 
-void container_widget_render(overlay_theme * theme,widget * w,int16_t x_off,int16_t y_off,cvm_overlay_element_render_buffer * erb,rectangle bounds);
+void container_widget_render(overlay_theme * theme,widget * w,int16_t x_off,int16_t y_off,cvm_overlay_render_data_stack * restrict render_stack,rectangle bounds);
 widget * container_widget_select(overlay_theme * theme,widget * w,int16_t x_in,int16_t y_in);
 
 

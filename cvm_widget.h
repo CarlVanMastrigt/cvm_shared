@@ -54,7 +54,7 @@ typedef void(*widget_function)(widget*);
 
 typedef struct widget_appearence_function_set
 {
-    void    (*const render) (overlay_theme*,widget*,int16_t,int16_t,cvm_overlay_element_render_buffer*,rectangle);
+    void    (*const render) (overlay_theme*,widget*,int16_t,int16_t,cvm_overlay_render_data_stack*,rectangle);
     widget* (*const select) (overlay_theme*,widget*,int16_t,int16_t);
     void    (*const min_w)  (overlay_theme*,widget*);
     void    (*const min_h)  (overlay_theme*,widget*);
@@ -199,7 +199,7 @@ void get_widgets_global_coordinates(widget * w,int * x,int * y);
 
 
 
-void render_widget(widget * w,int x_off,int y_off,cvm_overlay_element_render_buffer * erb,rectangle bounds);
+void render_widget(widget * w,int x_off,int y_off,cvm_overlay_render_data_stack * restrict render_stack,rectangle bounds);
 widget * select_widget(widget * w,int x_in,int y_in);
 int16_t set_widget_minimum_width(widget * w,uint32_t pos_flags);
 int16_t set_widget_minimum_height(widget * w,uint32_t pos_flags);
@@ -208,7 +208,7 @@ int16_t organise_widget_vertically(widget * w,int16_t y_pos,int16_t height);
 
 
 
-void        blank_widget_render         (overlay_theme * theme,widget * w,int16_t x_off,int16_t y_off,cvm_overlay_element_render_buffer * erb,rectangle bounds);
+void        blank_widget_render         (overlay_theme * theme,widget * w,int16_t x_off,int16_t y_off,cvm_overlay_render_data_stack * restrict render_stack,rectangle bounds);
 widget *    blank_widget_select         (overlay_theme * theme,widget * w,int16_t x_in,int16_t y_in);
 void        blank_widget_min_w          (overlay_theme * theme,widget * w);
 void        blank_widget_min_h          (overlay_theme * theme,widget * w);
@@ -248,7 +248,7 @@ void        blank_widget_delete         (widget * w);
 //
 //void switch_currently_active_menu(menu_header * mh,int new_current_menu);
 
-void render_widget_overlay(cvm_overlay_element_render_buffer * erb,widget * menu_widget);
+void render_widget_overlay(cvm_overlay_render_data_stack * restrict render_stack,widget * menu_widget);
 
 bool handle_widget_overlay_left_click(widget * menu_widget,int x_in,int y_in);
 bool handle_widget_overlay_left_release(widget * menu_widget,int x_in,int y_in);

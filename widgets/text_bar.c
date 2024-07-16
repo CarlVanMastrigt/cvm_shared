@@ -267,13 +267,13 @@ static widget_behaviour_function_set text_bar_behaviour_functions=
 
 
 
-static void text_bar_widget_render(overlay_theme * theme,widget * w,int16_t x_off,int16_t y_off,cvm_overlay_element_render_buffer * erb,rectangle bounds)
+static void text_bar_widget_render(overlay_theme * theme,widget * w,int16_t x_off,int16_t y_off,cvm_overlay_render_data_stack * restrict render_stack,rectangle bounds)
 {
     rectangle r=rectangle_add_offset(w->base.r,x_off,y_off);
 
     text_bar_recalculate_text_size_and_offset(theme,w);
 
-	theme->h_bar_render(erb,theme,bounds,r,w->base.status,OVERLAY_MAIN_COLOUR);
+	theme->h_bar_render(render_stack,theme,bounds,r,w->base.status,OVERLAY_MAIN_COLOUR);
 
     overlay_text_single_line_render_data text_render_data=
 	{
@@ -295,7 +295,7 @@ static void text_bar_widget_render(overlay_theme * theme,widget * w,int16_t x_of
     text_render_data.flags|=(w->text_bar.min_glyph_render_count||w->text_bar.max_glyph_render_count)*OVERLAY_TEXT_RENDER_FADING;
     text_render_data.flags|=is_currently_active_widget(w)*OVERLAY_TEXT_RENDER_SELECTION;
 
-    overlay_text_single_line_render(erb,theme,&text_render_data);
+    overlay_text_single_line_render(render_stack,theme,&text_render_data);
 }
 
 static widget * text_bar_widget_select(overlay_theme * theme,widget * w,int16_t x_in,int16_t y_in)

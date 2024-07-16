@@ -25,9 +25,9 @@ static widget * new_auto_close_popup=NULL;
 
 
 
-static void popup_widget_render(overlay_theme * theme,widget * w,int16_t x_off,int16_t y_off,cvm_overlay_element_render_buffer * erb,rectangle bounds)
+static void popup_widget_render(overlay_theme * theme,widget * w,int16_t x_off,int16_t y_off,cvm_overlay_render_data_stack * restrict render_stack,rectangle bounds)
 {
-	render_widget(w->popup.contents,x_off+w->base.r.x1,y_off+w->base.r.y1,erb,bounds);
+	render_widget(w->popup.contents,x_off+w->base.r.x1,y_off+w->base.r.y1,render_stack,bounds);
 }
 
 static widget * popup_widget_select(overlay_theme * theme,widget * w,int16_t x_in,int16_t y_in)

@@ -78,13 +78,8 @@ typedef struct cvm_overlay_render_data
 }
 cvm_overlay_render_data;
 
-typedef struct cvm_overlay_element_render_buffer
-{
-    ///could fill buffer in reverse to make render order match input order, but not sure how that would affect write combining of data so will avoid for now;
-    cvm_overlay_render_data * buffer;
-    uint32_t count,space;
-}
-cvm_overlay_element_render_buffer;
+CVM_STACK(cvm_overlay_render_data,cvm_overlay_render_data,16);
+/// make starting size bigger
 
 
 #include "cvm_overlay_text.h"
@@ -145,25 +140,24 @@ struct overlay_theme
 
     void * other_data;
 
-    void    (*square_render)            (cvm_overlay_element_render_buffer * erb,overlay_theme * theme,rectangle bounds,rectangle r,uint32_t status,overlay_colour colour);
-    void    (*h_bar_render)             (cvm_overlay_element_render_buffer * erb,overlay_theme * theme,rectangle bounds,rectangle r,uint32_t status,overlay_colour colour);
-    void    (*h_bar_slider_render)      (cvm_overlay_element_render_buffer * erb,overlay_theme * theme,rectangle bounds,rectangle r,uint32_t status,overlay_colour colour,int32_t before,int32_t bar,int32_t after);
-    void    (*h_adjactent_slider_render)(cvm_overlay_element_render_buffer * erb,overlay_theme * theme,rectangle bounds,rectangle r,uint32_t status,overlay_colour colour,int32_t before,int32_t bar,int32_t after);///usually/always tacked onto box
-    void    (*v_adjactent_slider_render)(cvm_overlay_element_render_buffer * erb,overlay_theme * theme,rectangle bounds,rectangle r,uint32_t status,overlay_colour colour,int32_t before,int32_t bar,int32_t after);///usually/always tacked onto box
-    void    (*box_render)               (cvm_overlay_element_render_buffer * erb,overlay_theme * theme,rectangle bounds,rectangle r,uint32_t status,overlay_colour colour);
-    void    (*panel_render)             (cvm_overlay_element_render_buffer * erb,overlay_theme * theme,rectangle bounds,rectangle r,uint32_t status,overlay_colour colour);
-    ///                                 (cvm_overlay_element_render_buffer * erb,overlay_theme * theme,rectangle bounds,rectangle r,uint32_t status,overlay_colour colour)
+    void    (*square_render)            (cvm_overlay_render_data_stack * restrict render_stack,overlay_theme * theme,rectangle bounds,rectangle r,uint32_t status,overlay_colour colour);
+    void    (*h_bar_render)             (cvm_overlay_render_data_stack * restrict render_stack,overlay_theme * theme,rectangle bounds,rectangle r,uint32_t status,overlay_colour colour);
+    void    (*h_bar_slider_render)      (cvm_overlay_render_data_stack * restrict render_stack,overlay_theme * theme,rectangle bounds,rectangle r,uint32_t status,overlay_colour colour,int32_t before,int32_t bar,int32_t after);
+    void    (*h_adjactent_slider_render)(cvm_overlay_render_data_stack * restrict render_stack,overlay_theme * theme,rectangle bounds,rectangle r,uint32_t status,overlay_colour colour,int32_t before,int32_t bar,int32_t after);///usually/always tacked onto box
+    void    (*v_adjactent_slider_render)(cvm_overlay_render_data_stack * restrict render_stack,overlay_theme * theme,rectangle bounds,rectangle r,uint32_t status,overlay_colour colour,int32_t before,int32_t bar,int32_t after);///usually/always tacked onto box
+    void    (*box_render)               (cvm_overlay_render_data_stack * restrict render_stack,overlay_theme * theme,rectangle bounds,rectangle r,uint32_t status,overlay_colour colour);
+    void    (*panel_render)             (cvm_overlay_render_data_stack * restrict render_stack,overlay_theme * theme,rectangle bounds,rectangle r,uint32_t status,overlay_colour colour);
+    ///                                 (cvm_overlay_render_data_stack * restrict render_stack,overlay_theme * theme,rectangle bounds,rectangle r,uint32_t status,overlay_colour colour)
 
-    void    (*square_box_constrained_render)(cvm_overlay_element_render_buffer * erb,overlay_theme * theme,rectangle bounds,rectangle r,uint32_t status,overlay_colour colour,rectangle box_r,uint32_t box_status);
-    void    (*h_bar_box_constrained_render) (cvm_overlay_element_render_buffer * erb,overlay_theme * theme,rectangle bounds,rectangle r,uint32_t status,overlay_colour colour,rectangle box_r,uint32_t box_status);
-    void    (*box_box_constrained_render)   (cvm_overlay_element_render_buffer * erb,overlay_theme * theme,rectangle bounds,rectangle r,uint32_t status,overlay_colour colour,rectangle box_r,uint32_t box_status);
+    void    (*square_box_constrained_render)(cvm_overlay_render_data_stack * restrict render_stack,overlay_theme * theme,rectangle bounds,rectangle r,uint32_t status,overlay_colour colour,rectangle box_r,uint32_t box_status);
+    void    (*h_bar_box_constrained_render) (cvm_overlay_render_data_stack * restrict render_stack,overlay_theme * theme,rectangle bounds,rectangle r,uint32_t status,overlay_colour colour,rectangle box_r,uint32_t box_status);
+    void    (*box_box_constrained_render)   (cvm_overlay_render_data_stack * restrict render_stack,overlay_theme * theme,rectangle bounds,rectangle r,uint32_t status,overlay_colour colour,rectangle box_r,uint32_t box_status);
     /// need h_bar_slider_over_box_render as well
 
-    void    (*fill_box_constrained_render)          (cvm_overlay_element_render_buffer * erb,overlay_theme * theme,rectangle bounds,rectangle r,overlay_colour colour,rectangle box_r,uint32_t box_status);
-    void    (*fill_fading_box_constrained_render)   (cvm_overlay_element_render_buffer * erb,overlay_theme * theme,rectangle bounds,rectangle r,overlay_colour colour,
-                                                 rectangle fade_bound,rectangle fade_range,rectangle box_r,uint32_t box_status);
-    void    (*shaded_box_constrained_render)        (cvm_overlay_element_render_buffer * erb,overlay_theme * theme,rectangle bounds,rectangle r,overlay_colour colour,int16_t x_off,int16_t y_off,rectangle box_r,uint32_t box_status);
-    void    (*shaded_fading_box_constrained_render) (cvm_overlay_element_render_buffer * erb,overlay_theme * theme,rectangle bounds,rectangle r,overlay_colour colour,int16_t x_off,int16_t y_off,rectangle fade_bound,rectangle fade_range,rectangle box_r,uint32_t box_status);
+    void    (*fill_box_constrained_render)          (cvm_overlay_render_data_stack * restrict render_stack,overlay_theme * theme,rectangle bounds,rectangle r,overlay_colour colour,rectangle box_r,uint32_t box_status);
+    void    (*fill_fading_box_constrained_render)   (cvm_overlay_render_data_stack * restrict render_stack,overlay_theme * theme,rectangle bounds,rectangle r,overlay_colour colour,rectangle fade_bound,rectangle fade_range,rectangle box_r,uint32_t box_status);
+    void    (*shaded_box_constrained_render)        (cvm_overlay_render_data_stack * restrict render_stack,overlay_theme * theme,rectangle bounds,rectangle r,overlay_colour colour,int16_t x_off,int16_t y_off,rectangle box_r,uint32_t box_status);
+    void    (*shaded_fading_box_constrained_render) (cvm_overlay_render_data_stack * restrict render_stack,overlay_theme * theme,rectangle bounds,rectangle r,overlay_colour colour,int16_t x_off,int16_t y_off,rectangle fade_bound,rectangle fade_range,rectangle box_r,uint32_t box_status);
 
     bool    (*square_select)            (overlay_theme * theme,rectangle r,uint32_t status);
     bool    (*h_bar_select)             (overlay_theme * theme,rectangle r,uint32_t status);
@@ -171,23 +165,26 @@ struct overlay_theme
     bool    (*panel_select)             (overlay_theme * theme,rectangle r,uint32_t status);
 
     rectangle   (*get_sliderbar_offsets)(overlay_theme * theme,uint32_t status);///returns offsets from each respective side
+    #warning re-assess above!
 };
 
 /// x/y_off are the texture space coordinates to read data from at position r, i.e. at r the texture coordinates looked up would be x_off,y_off
-static inline void cvm_render_shaded_overlay_element(cvm_overlay_element_render_buffer * erb,rectangle b,rectangle r,overlay_colour colour,int16_t x_off,int16_t y_off)
+static inline void cvm_render_shaded_overlay_element(cvm_overlay_render_data_stack * restrict render_stack,rectangle b,rectangle r,overlay_colour colour,int16_t x_off,int16_t y_off)
 {
     b=get_rectangle_overlap(r,b);
 
-    if(erb->count != erb->space && rectangle_has_positive_area(b))
-        erb->buffer[erb->count++]=(cvm_overlay_render_data)
+    if(rectangle_has_positive_area(b))
+    {
+        *cvm_overlay_render_data_stack_new(render_stack)=(cvm_overlay_render_data)
         {
             {b.x1,b.y1,b.x2,b.y2},
             {CVM_OVERLAY_ELEMENT_SHADED,colour<<24},
             {b.x1-r.x1+x_off,b.y1-r.y1+y_off,0,0}
         };
+    }
 }
 
-static inline void cvm_render_shaded_fading_overlay_element(cvm_overlay_element_render_buffer * erb,rectangle b,rectangle r,overlay_colour colour,int x_off,int y_off,rectangle fade_bound,rectangle fade_range)
+static inline void cvm_render_shaded_fading_overlay_element(cvm_overlay_render_data_stack * restrict render_stack,rectangle b,rectangle r,overlay_colour colour,int x_off,int y_off,rectangle fade_bound,rectangle fade_range)
 {
     if(r.x1<fade_bound.x1)///beyond this opacity is 0 (completely transparent)
     {
@@ -217,30 +214,34 @@ static inline void cvm_render_shaded_fading_overlay_element(cvm_overlay_element_
 
     b=get_rectangle_overlap(r,b);
 
-    if(erb->count != erb->space && rectangle_has_positive_area(b))
-        erb->buffer[erb->count++]=(cvm_overlay_render_data)
+    if(rectangle_has_positive_area(b))
+    {
+        *cvm_overlay_render_data_stack_new(render_stack)=(cvm_overlay_render_data)
         {
             {b.x1,b.y1,b.x2,b.y2},
             {CVM_OVERLAY_ELEMENT_SHADED | fade_bound.x1<<18 | fade_bound.y1<<12 | fade_bound.x2<<6 | fade_bound.y2 , colour<<24 | fade_range.x1<<18 | fade_range.y1<<12 | fade_range.x2<<6 | fade_range.y2},
             {b.x1-r.x1+x_off,b.y1-r.y1+y_off,0,0}
         };
+    }
 }
 
 /// x/y_over_b equates to combination of, screen space coordinates of base of "overlap" element (negative) with texture coordinates of the tile the "overlap" element uses
-static inline void cvm_render_shaded_overlap_min_overlay_element(cvm_overlay_element_render_buffer * erb,rectangle b,rectangle r,overlay_colour colour,int x_off,int y_off,int x_over_b,int y_over_b)
+static inline void cvm_render_shaded_overlap_min_overlay_element(cvm_overlay_render_data_stack * restrict render_stack,rectangle b,rectangle r,overlay_colour colour,int x_off,int y_off,int x_over_b,int y_over_b)
 {
     b=get_rectangle_overlap(r,b);
 
-    if(erb->count != erb->space && rectangle_has_positive_area(b))
-        erb->buffer[erb->count++]=(cvm_overlay_render_data)
+    if(rectangle_has_positive_area(b))
+    {
+        *cvm_overlay_render_data_stack_new(render_stack)=(cvm_overlay_render_data)
         {
             {b.x1,b.y1,b.x2,b.y2},
             {CVM_OVERLAY_ELEMENT_SHADED|CVM_OVERLAY_ELEMENT_OVERLAP_MIN,colour<<24},
             {b.x1-r.x1+x_off,b.y1-r.y1+y_off , b.x1+x_over_b,b.y1+y_over_b}
         };
+    }
 }
 
-static inline void cvm_render_shaded_fading_overlap_min_overlay_element(cvm_overlay_element_render_buffer * erb,rectangle b,rectangle r,overlay_colour colour,int x_off,int y_off,
+static inline void cvm_render_shaded_fading_overlap_min_overlay_element(cvm_overlay_render_data_stack * restrict render_stack,rectangle b,rectangle r,overlay_colour colour,int x_off,int y_off,
                                                                         rectangle fade_bound,rectangle fade_range,int x_over_b,int y_over_b)
 {
     if(r.x1<fade_bound.x1)///beyond this opacity is 0 (completely transparent)
@@ -271,29 +272,33 @@ static inline void cvm_render_shaded_fading_overlap_min_overlay_element(cvm_over
 
     b=get_rectangle_overlap(r,b);
 
-    if(erb->count != erb->space && rectangle_has_positive_area(b))
-        erb->buffer[erb->count++]=(cvm_overlay_render_data)
+    if(rectangle_has_positive_area(b))
+    {
+        *cvm_overlay_render_data_stack_new(render_stack)=(cvm_overlay_render_data)
         {
             {b.x1,b.y1,b.x2,b.y2},
             {CVM_OVERLAY_ELEMENT_SHADED|CVM_OVERLAY_ELEMENT_OVERLAP_MIN | fade_bound.x1<<18 | fade_bound.y1<<12 | fade_bound.x2<<6 | fade_bound.y2 , colour<<24 | fade_range.x1<<18 | fade_range.y1<<12 | fade_range.x2<<6 | fade_range.y2},
             {b.x1-r.x1+x_off,b.y1-r.y1+y_off , b.x1+x_over_b,b.y1+y_over_b}
         };
+    }
 }
 
-static inline void cvm_render_fill_overlay_element(cvm_overlay_element_render_buffer * erb,rectangle b,rectangle r,overlay_colour colour)
+static inline void cvm_render_fill_overlay_element(cvm_overlay_render_data_stack * restrict render_stack,rectangle b,rectangle r,overlay_colour colour)
 {
     b=get_rectangle_overlap(r,b);
 
-    if(erb->count != erb->space && rectangle_has_positive_area(b))
-        erb->buffer[erb->count++]=(cvm_overlay_render_data)
+    if(rectangle_has_positive_area(b))
+    {
+        *cvm_overlay_render_data_stack_new(render_stack)=(cvm_overlay_render_data)
         {
             {b.x1,b.y1,b.x2,b.y2},
             {CVM_OVERLAY_ELEMENT_FILL,colour<<24},
             {0,0,0,0}
         };
+    }
 }
 
-static inline void cvm_render_fill_fading_overlay_element(cvm_overlay_element_render_buffer * erb,rectangle b,rectangle r,overlay_colour colour,rectangle fade_bound,rectangle fade_range)
+static inline void cvm_render_fill_fading_overlay_element(cvm_overlay_render_data_stack * restrict render_stack,rectangle b,rectangle r,overlay_colour colour,rectangle fade_bound,rectangle fade_range)
 {
     if(r.x1<fade_bound.x1)r.x1=fade_bound.x1;///beyond this opacity is 0 (completely transparent)
     fade_bound.x1=r.x1-fade_bound.x1;///convert bound to distance from side
@@ -315,13 +320,15 @@ static inline void cvm_render_fill_fading_overlay_element(cvm_overlay_element_re
 
     b=get_rectangle_overlap(r,b);
 
-    if(erb->count != erb->space && rectangle_has_positive_area(b))
-        erb->buffer[erb->count++]=(cvm_overlay_render_data)
+    if(rectangle_has_positive_area(b))
+    {
+        *cvm_overlay_render_data_stack_new(render_stack)=(cvm_overlay_render_data)
         {
             {b.x1,b.y1,b.x2,b.y2},
             {CVM_OVERLAY_ELEMENT_FILL | fade_bound.x1<<18 | fade_bound.y1<<12 | fade_bound.x2<<6 | fade_bound.y2 , colour<<24 | fade_range.x1<<18 | fade_range.y1<<12 | fade_range.x2<<6 | fade_range.y2},
             {0,0,0,0}
         };
+    }
 }
 
 #include "themes/cubic.h"
@@ -342,8 +349,8 @@ typedef struct cvm_overlay_renderer
     cvm_vk_staging_buffer_ * staging_buffer_;
 
     /// are separate shunt buffers even the best way to do this??
-    cvm_vk_staging_shunt_buffer transient_shunt_buffer;/// instances and uniforms
-    cvm_vk_staging_shunt_buffer upload_shunt_buffer;
+    cvm_overlay_render_data_stack element_render_stack;
+    cvm_vk_staging_shunt_buffer shunt_buffer;
 
     ///should replace below ASAP
     cvm_vk_staging_buffer staging_buffer;
