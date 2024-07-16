@@ -86,18 +86,16 @@ typedef struct cvm_overlay_element_render_buffer
 }
 cvm_overlay_element_render_buffer;
 
-cvm_vk_image_atlas_tile * overlay_create_transparent_image_tile_with_staging(void ** staging,uint32_t w, uint32_t h);
-void overlay_destroy_transparent_image_tile(cvm_vk_image_atlas_tile * tile);
 
-cvm_vk_image_atlas_tile * overlay_create_colour_image_tile_with_staging(void ** staging,uint32_t w, uint32_t h);
-void overlay_destroy_colour_image_tile(cvm_vk_image_atlas_tile * tile);
-
-//bool check_click_on_interactable_element(cvm_overlay_interactable_element * element,int x,int y);
 #include "cvm_overlay_text.h"
 
 
 struct overlay_theme
 {
+    cvm_vk_image_atlas * backing_image_atlas;
+    /// maybe wants to have the transparent one as well and have this be init specifically via an overlay renderer??
+    /// perhaps split the actual rendering part of the renderer away from the backing part (images and the font library) (`FT_Library overlay_freetype_library`)
+
     cvm_overlay_font font;
 
     int base_unit_w;
@@ -335,21 +333,48 @@ static inline void cvm_render_fill_fading_overlay_element(cvm_overlay_element_re
 
 typedef struct cvm_overlay_renderer
 {
+    cvm_vk_device * device;///is there a better place to put this? probably...
+
+    uint32_t cycle_count;/// needs better name
     cvm_vk_work_queue work_queue;
-    ///put the rest of stuff in here, e.g. managed buffer
+
+    /// for uploading to images
+    cvm_vk_staging_buffer_ * staging_buffer_;
+
+    /// are separate shunt buffers even the best way to do this??
+    cvm_vk_staging_shunt_buffer transient_shunt_buffer;/// instances and uniforms
+    cvm_vk_staging_shunt_buffer upload_shunt_buffer;
+
+    ///should replace below ASAP
+    cvm_vk_staging_buffer staging_buffer;
+
+    /// image info
+    VkDeviceMemory image_memory;
+
+    VkImage transparent_image;
+    VkImageView transparent_image_view;///views of single array slice from image
+    cvm_vk_image_atlas transparent_image_atlas;
+
+    VkImage colour_image;
+    VkImageView colour_image_view;///views of single array slice from image
+    cvm_vk_image_atlas colour_image_atlas;
+
+    VkDescriptorSetLayout image_descriptor_set_layout;
+    VkDescriptorPool image_descriptor_pool;
+    VkDescriptorSet image_descriptor_set;
 }
 cvm_overlay_renderer;
 
-void cvm_overlay_renderer_initialise(cvm_vk_device * device, cvm_overlay_renderer * renderer, uint32_t renderer_cycle_count);
-void cvm_overlay_renderer_terminate(cvm_vk_device * device, cvm_overlay_renderer * renderer);
+void cvm_overlay_renderer_initialise(cvm_overlay_renderer * renderer, cvm_vk_device * device, cvm_vk_staging_buffer_ * staging_buffer, uint32_t renderer_cycle_count);
+void cvm_overlay_renderer_terminate(cvm_overlay_renderer * renderer, cvm_vk_device * device);
 
-void initialise_overlay_render_data(void);
-void terminate_overlay_render_data(void);
+void initialise_overlay_render_data(cvm_overlay_renderer * renderer);
+void terminate_overlay_render_data(cvm_overlay_renderer * renderer);
 
 void initialise_overlay_swapchain_dependencies(void);
 void terminate_overlay_swapchain_dependencies(void);
 
-void overlay_render_to_image(cvm_vk_device * device, cvm_overlay_renderer * renderer, const cvm_vk_swapchain_presentable_image * presentable_image, int screen_w,int screen_h,widget * menu_widget);
+void overlay_render_to_image(cvm_vk_device * device, cvm_overlay_renderer * renderer, cvm_vk_swapchain_presentable_image * presentable_image, int screen_w,int screen_h,widget * menu_widget);
 
 void overlay_frame_cleanup(uint32_t swapchain_image_index);
 #warning make above take `const cvm_vk_swapchain_presentable_image *` as input instead ??

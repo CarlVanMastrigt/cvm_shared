@@ -21,6 +21,8 @@ along with cvm_shared.  If not, see <https://www.gnu.org/licenses/>.
 
 static FT_Library overlay_freetype_library;
 
+
+#warning make the following more genericized and sharable??
 void cvm_overlay_open_freetype(void)
 {
     int r=FT_Init_FreeType(&overlay_freetype_library);
@@ -33,7 +35,7 @@ void cvm_overlay_close_freetype(void)
     assert(!r);///COULD NOT DESTROY FREETYPE LIBRARY
 }
 
-void cvm_overlay_create_font(cvm_overlay_font * font,char * filename,int pixel_size)
+void cvm_overlay_create_font(cvm_overlay_font * font, cvm_vk_image_atlas * backing_image_atlas, char * filename, int pixel_size)
 {
     int r;
 
@@ -43,6 +45,7 @@ void cvm_overlay_create_font(cvm_overlay_font * font,char * filename,int pixel_s
     r=FT_Set_Pixel_Sizes(font->face,0,pixel_size);
     assert(!r || !fprintf(stderr,"COULD NOT SET FONT FACE SIZE %s %d\n",filename,pixel_size));
 
+    font->backing_image_atlas=backing_image_atlas;
     font->glyph_size=pixel_size;
 
     font->space_character_index=FT_Get_Char_Index(font->face,' ');
@@ -67,7 +70,7 @@ void cvm_overlay_destroy_font(cvm_overlay_font * font)
 
     for(i=0;i<font->glyph_count;i++)
     {
-        overlay_destroy_transparent_image_tile(font->glyphs[i].tile);
+        cvm_vk_relinquish_image_atlas_tile(font->backing_image_atlas, font->glyphs[i].tile);
     }
 
     free(font->glyphs);
@@ -303,7 +306,7 @@ static inline void cvm_overlay_prepare_glyph_render_data(cvm_overlay_font * font
             w=gs->bitmap.width;
             h=gs->bitmap.rows;
 
-            g->tile=overlay_create_transparent_image_tile_with_staging(&staging,w,h);
+            g->tile=cvm_vk_acquire_image_atlas_tile_with_staging(font->backing_image_atlas,w,h,&staging);
 
             if(g->tile)
             {
@@ -416,6 +419,11 @@ SINGLE_LINE_RENDER_IMPLEMENTATION(overlay_text_single_line_render_sfc,SELECTION_
 #undef SELECTION_SETUP
 #undef SINGLE_LINE_RENDER_IMPLEMENTATION
 
+/**
+#define OVERLAY_TEXT_RENDER_SELECTION       0x0001
+#define OVERLAY_TEXT_RENDER_FADING          0x0002
+#define OVERLAY_TEXT_RENDER_BOX_CONSTRAINED 0x0004
+*/
 
 void (*overlay_text_single_line_render_ptrs[8])(cvm_overlay_element_render_buffer * restrict,overlay_theme * restrict,const overlay_text_single_line_render_data * restrict)=
 {

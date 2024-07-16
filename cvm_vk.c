@@ -1348,6 +1348,7 @@ void cvm_vk_free_memory(VkDeviceMemory memory)
 ///unlike other functions, this one takes abstract/resultant data rather than just generic creation info
 void cvm_vk_create_buffer(VkBuffer * buffer,VkDeviceMemory * memory,VkBufferUsageFlags usage,VkDeviceSize size,void ** mapping,bool * mapping_coherent,VkMemoryPropertyFlags required_properties,VkMemoryPropertyFlags desired_properties)
 {
+    #warning remove
     uint32_t memory_type_index,supported_type_bits;
     bool type_found;
 
@@ -1421,6 +1422,7 @@ void cvm_vk_flush_buffer_memory_range(VkMappedMemoryRange * flush_range)
 
 uint32_t cvm_vk_get_buffer_alignment_requirements(VkBufferUsageFlags usage)
 {
+    #warning remove
     uint32_t alignment=1;
 
     /// need specialised functions for vertex buffers and index buffers (or leave it up to user)
@@ -1443,8 +1445,152 @@ uint32_t cvm_vk_get_buffer_alignment_requirements(VkBufferUsageFlags usage)
     if(alignment<cvm_vk_.properties.limits.nonCoherentAtomSize)
         alignment=cvm_vk_.properties.limits.nonCoherentAtomSize;
 
+    assert((alignment & (alignment-1))==0);///alignments must all be a power of 2 according to the vulkan spec
+
+//    printf("ALIGNMENT %u\n",alignment);
+
     return alignment;
 }
+
+VkDeviceSize cvm_vk_buffer_alignment_requirements(const cvm_vk_device * device, VkBufferUsageFlags usage)
+{
+    VkDeviceSize alignment=device->properties.limits.nonCoherentAtomSize;
+
+    if(usage & (VK_BUFFER_USAGE_TRANSFER_SRC_BIT|VK_BUFFER_USAGE_TRANSFER_DST_BIT))
+    {
+        alignment = CVM_MAX(alignment,device->properties.limits.optimalBufferCopyOffsetAlignment);
+    }
+
+    if(usage & (VK_BUFFER_USAGE_UNIFORM_TEXEL_BUFFER_BIT|VK_BUFFER_USAGE_STORAGE_TEXEL_BUFFER_BIT))
+    {
+        alignment = CVM_MAX(alignment,device->properties.limits.minTexelBufferOffsetAlignment);
+    }
+
+    if(usage & VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT)
+    {
+        alignment = CVM_MAX(alignment,device->properties.limits.minUniformBufferOffsetAlignment);
+    }
+
+    if(usage & VK_BUFFER_USAGE_STORAGE_BUFFER_BIT)
+    {
+        alignment = CVM_MAX(alignment,device->properties.limits.minStorageBufferOffsetAlignment);
+    }
+
+    assert((alignment & (alignment-1))==0);///alignments must all be a power of 2 according to the vulkan spec
+
+    return alignment;
+}
+
+static uint32_t cvm_vk_find_appropriate_memory_type_(const cvm_vk_device * device, uint32_t supported_type_bits, VkMemoryPropertyFlags required_properties)
+{
+    uint32_t i;
+    for(i=0;i<device->memory_properties.memoryTypeCount;i++)
+    {
+        if(( supported_type_bits & 1<<i ) && ((device->memory_properties.memoryTypes[i].propertyFlags & required_properties) == required_properties))
+        {
+            return i;
+        }
+    }
+    return CVM_INVALID_U32_INDEX;
+}
+
+void cvm_vk_buffer_memory_pair_create(const cvm_vk_device * device, cvm_vk_buffer_memory_pair_setup * setup)
+{
+    VkMemoryRequirements memory_requirements;
+    uint32_t memory_type_index;
+
+    VkBufferCreateInfo buffer_create_info=(VkBufferCreateInfo)
+    {
+        .sType=VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO,
+        .pNext=NULL,
+        .flags=0,
+        .size=setup->buffer_size,
+        .usage=setup->usage,
+        .sharingMode=VK_SHARING_MODE_EXCLUSIVE,
+        .queueFamilyIndexCount=0,
+        .pQueueFamilyIndices=NULL
+    };
+
+    if(vkCreateBuffer(device->device,&buffer_create_info,NULL,&setup->buffer)!=VK_SUCCESS)
+    {
+        setup->buffer=VK_NULL_HANDLE;
+        setup->memory=VK_NULL_HANDLE;
+        return;
+    }
+
+
+    vkGetBufferMemoryRequirements(device->device,setup->buffer,&memory_requirements);
+
+    memory_type_index = cvm_vk_find_appropriate_memory_type_(device, memory_requirements.memoryTypeBits, setup->desired_properties|setup->required_properties);
+    if(memory_type_index==CVM_INVALID_U32_INDEX)
+    {
+        ///try again without desired properties
+        memory_type_index = cvm_vk_find_appropriate_memory_type(device, memory_requirements.memoryTypeBits, setup->required_properties);
+        if(memory_type_index==CVM_INVALID_U32_INDEX)
+        {
+            vkDestroyBuffer(device->device,setup->buffer,NULL);
+            setup->buffer=VK_NULL_HANDLE;
+            setup->memory=VK_NULL_HANDLE;
+            return;
+        }
+    }
+
+
+    VkMemoryAllocateInfo memory_allocate_info=(VkMemoryAllocateInfo)
+    {
+        .sType=VK_STRUCTURE_TYPE_MEMORY_ALLOCATE_INFO,
+        .pNext=NULL,
+        .allocationSize=memory_requirements.size,
+        .memoryTypeIndex=memory_type_index
+    };
+
+    if(vkAllocateMemory(device->device,&memory_allocate_info,NULL,&setup->memory) != VK_SUCCESS)
+    {
+        vkDestroyBuffer(device->device,setup->buffer,NULL);
+        setup->buffer=VK_NULL_HANDLE;
+        setup->memory=VK_NULL_HANDLE;
+        return;
+    }
+
+    if(vkBindBufferMemory(device->device,setup->buffer,setup->memory,0) != VK_SUCCESS)
+    {
+        vkDestroyBuffer(device->device,setup->buffer,NULL);
+        vkFreeMemory(device->device,setup->memory,NULL);
+        setup->buffer=VK_NULL_HANDLE;
+        setup->memory=VK_NULL_HANDLE;
+        return;
+    }
+
+    /// set mapping fallback values
+    setup->mapping=NULL;
+    setup->mapping_coherent=false;
+
+    if(setup->map_memory && (device->memory_properties.memoryTypes[memory_type_index].propertyFlags&VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT))
+    {
+        if(vkMapMemory(device->device, setup->memory, 0, VK_WHOLE_SIZE, 0, &setup->mapping)==VK_SUCCESS)
+        {
+            setup->mapping_coherent = cvm_vk_.memory_properties.memoryTypes[memory_type_index].propertyFlags&VK_MEMORY_PROPERTY_HOST_COHERENT_BIT;
+//            printf("MAPPING COHERENT? : %d\n",setup->mapping_coherent);
+        }
+        else
+        {
+            fprintf(stderr,"CVM VK ERROR - unable to map buffer that should be mappable\n");
+        }
+    }
+}
+
+void cvm_vk_buffer_memory_pair_destroy(const cvm_vk_device * device, VkBuffer buffer, VkDeviceMemory memory, bool memory_was_mapped)
+{
+    if(memory_was_mapped)
+    {
+        vkUnmapMemory(device->device,memory);
+    }
+
+    vkDestroyBuffer(device->device,buffer,NULL);
+    vkFreeMemory(device->device,memory,NULL);
+}
+
+
 
 bool cvm_vk_format_check_optimal_feature_support(VkFormat format,VkFormatFeatureFlags flags)
 {

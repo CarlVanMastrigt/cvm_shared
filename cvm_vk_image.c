@@ -905,6 +905,102 @@ void cvm_vk_image_atlas_submit_all_pending_copy_actions(cvm_vk_image_atlas * ia,
     if(ia->multithreaded) atomic_store(&ia->copy_spinlock,0);
 }
 
+void cvm_vk_image_atlas_submit_all_pending_copy_actions_(cvm_vk_image_atlas * ia,VkCommandBuffer transfer_cb, VkDeviceSize copy_source_offset)
+{
+    uint_fast32_t lock;
+    uint32_t i;
+
+    if(ia->multithreaded)do lock=atomic_load(&ia->copy_spinlock);
+    while(lock!=0 || !atomic_compare_exchange_weak(&ia->copy_spinlock,&lock,1));
+
+    #warning might be worth looking into making this support different queues... (probably not possible if copies need to be handled promptly)
+    if(ia->pending_copy_count || !ia->initialised)
+    {
+        VkDependencyInfo copy_acquire_dependencies=
+        {
+            .sType=VK_STRUCTURE_TYPE_DEPENDENCY_INFO,
+            .pNext=NULL,
+            .dependencyFlags=0,
+            .memoryBarrierCount=0,
+            .pMemoryBarriers=NULL,
+            .bufferMemoryBarrierCount=0,
+            .pBufferMemoryBarriers=NULL,
+            .imageMemoryBarrierCount=1,
+            .pImageMemoryBarriers=(VkImageMemoryBarrier2[1])
+            {
+                {
+                    .sType=VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER_2,
+                    .pNext=NULL,
+                    .srcStageMask=ia->initialised?VK_PIPELINE_STAGE_2_FRAGMENT_SHADER_BIT:VK_PIPELINE_STAGE_2_TOP_OF_PIPE_BIT,
+                    .srcAccessMask=ia->initialised?VK_ACCESS_2_SHADER_READ_BIT:0,
+                    .dstStageMask=VK_PIPELINE_STAGE_2_TRANSFER_BIT,
+                    .dstAccessMask=VK_ACCESS_2_TRANSFER_WRITE_BIT,
+                    .oldLayout=ia->initialised?VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL:VK_IMAGE_LAYOUT_UNDEFINED,
+                    .newLayout=VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
+                    .srcQueueFamilyIndex=VK_QUEUE_FAMILY_IGNORED,
+                    .dstQueueFamilyIndex=VK_QUEUE_FAMILY_IGNORED,
+                    .image=ia->image,
+                    .subresourceRange=(VkImageSubresourceRange)
+                    {
+                        .aspectMask=VK_IMAGE_ASPECT_COLOR_BIT,
+                        .baseMipLevel=0,
+                        .levelCount=1,
+                        .baseArrayLayer=0,
+                        .layerCount=1
+                    }
+                }
+            }
+        };
+
+        vkCmdPipelineBarrier2(transfer_cb,&copy_acquire_dependencies);
+
+        ///actually execute the copies!
+        ///unfortunately need another test here in case initialised path is being taken
+        if(ia->pending_copy_count)vkCmdCopyBufferToImage(transfer_cb,ia->staging_buffer->buffer,ia->image,VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,ia->pending_copy_count,ia->pending_copy_actions);
+        ia->pending_copy_count=0;
+        ia->initialised=true;
+
+        VkDependencyInfo copy_release_dependencies=
+        {
+            .sType=VK_STRUCTURE_TYPE_DEPENDENCY_INFO,
+            .pNext=NULL,
+            .dependencyFlags=0,
+            .memoryBarrierCount=0,
+            .pMemoryBarriers=NULL,
+            .bufferMemoryBarrierCount=0,
+            .pBufferMemoryBarriers=NULL,
+            .imageMemoryBarrierCount=1,
+            .pImageMemoryBarriers=(VkImageMemoryBarrier2[1])
+            {
+                {
+                    .sType=VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER_2,
+                    .pNext=NULL,
+                    .srcStageMask=VK_PIPELINE_STAGE_2_TRANSFER_BIT,
+                    .srcAccessMask=VK_ACCESS_2_TRANSFER_WRITE_BIT,
+                    .dstStageMask=VK_PIPELINE_STAGE_2_FRAGMENT_SHADER_BIT,
+                    .dstAccessMask=VK_ACCESS_2_SHADER_READ_BIT,
+                    .oldLayout=VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
+                    .newLayout=VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL,
+                    .srcQueueFamilyIndex=VK_QUEUE_FAMILY_IGNORED,
+                    .dstQueueFamilyIndex=VK_QUEUE_FAMILY_IGNORED,
+                    .image=ia->image,
+                    .subresourceRange=(VkImageSubresourceRange)
+                    {
+                        .aspectMask=VK_IMAGE_ASPECT_COLOR_BIT,
+                        .baseMipLevel=0,
+                        .levelCount=1,
+                        .baseArrayLayer=0,
+                        .layerCount=1
+                    }
+                }
+            }
+        };
+
+        vkCmdPipelineBarrier2(transfer_cb,&copy_release_dependencies);
+    }
+
+    if(ia->multithreaded) atomic_store(&ia->copy_spinlock,0);
+}
 
 
 

@@ -45,10 +45,8 @@ typedef struct cubic_theme_data
 }
 cubic_theme_data;
 
-overlay_theme * create_cubic_theme(void);
+overlay_theme * create_cubic_theme(cvm_vk_image_atlas * backing_image_atlas);
 void destroy_cubic_theme(overlay_theme * theme);
-
-void cubic_contiguous_element_render(rectangle r,uint32_t status,overlay_theme * theme,cvm_overlay_element_render_buffer * erb,rectangle bounds,overlay_colour colour,rectangle contiguous_bounds);///test
 
 #endif
 

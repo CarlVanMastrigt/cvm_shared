@@ -53,7 +53,9 @@ void cvm_gate_signal(cvm_gate * gate)
             /// if more than one thread sees this value that implies we have 2 threads running trying to signal the last dependency, which is "guarded" against by the above assert
             if(!locked)
             {
-                mtx_lock(&gate->mutex);/// must lock before going from waiting to "complete" (status==0)
+                assert(gate->mutex);
+                assert(gate->condition);
+                mtx_lock(gate->mutex);/// must lock before going from waiting to "complete" (status==0)
                 locked = true;/// don't relock if compare exchange fails
             }
             replacement_status=0;/// this indicates the waiting thread may proceed when it is woken up
@@ -70,20 +72,31 @@ void cvm_gate_signal(cvm_gate * gate)
 
     if(current_status==CVM_GATE_SIGNAL_STATUS)
     {
-        cnd_signal(&gate->condition);
-        mtx_unlock(&gate->mutex);
+        cnd_signal(gate->condition);
+        mtx_unlock(gate->mutex);
     }
 }
 
 void cvm_gate_wait_and_relinquish(cvm_gate * gate)
 {
+    mtx_t mutex;
+    cnd_t condition;
     uint_fast32_t current_status, replacement_status;
 
     current_status=atomic_load_explicit(&gate->status, memory_order_acquire);
 
     if(current_status)/// has dependencies remaining
     {
-        mtx_lock(&gate->mutex);///must lock before making assertions regarding status being 0
+        mtx_init(&mutex,mtx_plain);
+        cnd_init(&condition);
+
+        assert(gate->mutex==NULL);
+        assert(gate->condition==NULL);
+
+        gate->mutex=&mutex;
+        gate->condition=&condition;
+
+        mtx_lock(&mutex);///must lock before making assertions regarding status being 0
 
         do
         {
@@ -97,11 +110,17 @@ void cvm_gate_wait_and_relinquish(cvm_gate * gate)
 
         while(current_status)///if we did flag the status as waiting
         {
-            cnd_wait(&gate->condition, &gate->mutex);
+            cnd_wait(&condition, &mutex);
             current_status=atomic_load_explicit(&gate->status, memory_order_acquire);/// load to double check signal actually happened in case of spurrious wake up
         }
 
-        mtx_unlock(&gate->mutex);
+        gate->mutex=NULL;
+        gate->condition=NULL;
+
+        mtx_unlock(&mutex);
+
+        mtx_destroy(&mutex);
+        cnd_destroy(&condition);
     }
 
     /// at this point anything else that would use (signal) this gate must have completed, so we're safe to recycle
@@ -129,16 +148,16 @@ static void cvm_gate_initialise(void * elem, void * data)
     gate->signal_function = &cvm_gate_signal_func;
     gate->pool = pool;
 
-    cnd_init(&gate->condition);
-    mtx_init(&gate->mutex, mtx_plain);
+    gate->condition=NULL;
+    gate->mutex=NULL;
     atomic_init(&gate->status, 0);
 }
 
 static void cvm_gate_terminate(void * elem, void * data)
 {
     cvm_gate * gate = elem;
-    cnd_destroy(&gate->condition);
-    mtx_destroy(&gate->mutex);
+    assert(gate->mutex==NULL);
+    assert(gate->condition==NULL);
 }
 
 

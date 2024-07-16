@@ -83,6 +83,11 @@ going to have to rely on acquire op failing to know when to recreate swapchain
 
 typedef struct cvm_vk_device cvm_vk_device;
 
+static inline VkDeviceSize cvm_vk_align(VkDeviceSize size, VkDeviceSize alignment)
+{
+    return (size+alignment-1) & ~(alignment-1);
+}
+
 
 #include "vk/timeline_semaphore.h"
 #include "vk/swapchain.h"
@@ -263,6 +268,28 @@ void cvm_vk_destroy_buffer(VkBuffer buffer,VkDeviceMemory memory,void * mapping)
 void cvm_vk_flush_buffer_memory_range(VkMappedMemoryRange * flush_range);
 uint32_t cvm_vk_get_buffer_alignment_requirements(VkBufferUsageFlags usage);
 
+
+VkDeviceSize cvm_vk_buffer_alignment_requirements(const cvm_vk_device * device, VkBufferUsageFlags usage);
+
+typedef struct cvm_vk_buffer_memory_pair_setup
+{
+    /// in
+    VkDeviceSize buffer_size;
+    VkBufferUsageFlags usage;
+    VkMemoryPropertyFlags required_properties;
+    VkMemoryPropertyFlags desired_properties;
+    bool map_memory;
+    /// out
+    VkBuffer buffer;
+    VkDeviceMemory memory;
+    void * mapping;
+    bool mapping_coherent;
+}
+cvm_vk_buffer_memory_pair_setup;
+
+void cvm_vk_buffer_memory_pair_create(const cvm_vk_device * device, cvm_vk_buffer_memory_pair_setup * setup);
+void cvm_vk_buffer_memory_pair_destroy(const cvm_vk_device * device, VkBuffer buffer, VkDeviceMemory memory, bool memory_was_mapped);
+
 VkFormat cvm_vk_get_screen_format(void);///can remove?
 uint32_t cvm_vk_get_swapchain_image_count(void);
 VkImageView cvm_vk_get_swapchain_image_view(uint32_t index);
@@ -424,8 +451,8 @@ uint32_t cvm_vk_get_transfer_queue_family(void);
 uint32_t cvm_vk_get_graphics_queue_family(void);
 uint32_t cvm_vk_get_asynchronous_compute_queue_family(void);
 
-
-#include "cvm_vk_memory.h"
+#warning move these to the top of this file when possible!
+#include "vk/memory.h"
 #include "cvm_vk_image.h"
 #include "cvm_vk_defaults.h"
 

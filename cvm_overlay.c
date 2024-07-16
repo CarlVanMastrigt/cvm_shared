@@ -21,11 +21,6 @@ along with cvm_shared.  If not, see <https://www.gnu.org/licenses/>.
 
 
 
-
-
-
-static cvm_vk_module_data overlay_module_data;
-
 static VkRenderPass overlay_render_pass;
 
 ///if uniform paradigm is based on max per frame being respected then the descrptor sets can be pre baked with offsets per swapchain image
@@ -34,10 +29,6 @@ static VkDescriptorSetLayout overlay_descriptor_set_layout;///rename this set to
 static VkDescriptorPool overlay_descriptor_pool;///make separate pool for swapchain dependent and swapchain independent resources
 static VkDescriptorSet * overlay_descriptor_sets;
 
-static VkDescriptorPool overlay_consistent_descriptor_pool;
-static VkDescriptorSetLayout overlay_consistent_descriptor_set_layout;///rename this set to image
-static VkDescriptorSet overlay_consistent_descriptor_set;
-
 static VkPipelineLayout overlay_pipeline_layout;///relevant descriptors, share as much as possible
 static VkPipeline overlay_pipeline;
 static VkPipelineShaderStageCreateInfo overlay_vertex_stage;
@@ -45,19 +36,8 @@ static VkPipelineShaderStageCreateInfo overlay_fragment_stage;
 
 static VkFramebuffer * overlay_framebuffers;
 
-static VkDeviceMemory overlay_image_memory;
-
-static VkImage overlay_transparent_image;
-static VkImageView overlay_transparent_image_view;///views of single array slice from image
-static cvm_vk_image_atlas overlay_transparent_image_atlas;
-
-static VkImage overlay_colour_image;
-static VkImageView overlay_colour_image_view;///views of single array slice from image
-static cvm_vk_image_atlas overlay_colour_image_atlas;
-
 static cvm_vk_transient_buffer overlay_transient_buffer;
-static cvm_vk_staging_buffer overlay_staging_buffer;
-static uint32_t max_overlay_elements=4096;
+static uint32_t max_overlay_elements=4096;/// this needs to be bigger... potentially even dynamically set
 
 void test_timing(bool start,char * name)
 {
@@ -74,11 +54,7 @@ void test_timing(bool start,char * name)
 }
 
 
-
-///temporary test stuff
-//static cvm_overlay_font overlay_test_font;
-
-static void create_overlay_descriptor_set_layouts(void)
+static void create_overlay_descriptor_set_layouts(cvm_overlay_renderer * renderer)
 {
     VkSampler fetch_sampler=cvm_vk_get_fetch_sampler();
 
@@ -128,10 +104,10 @@ static void create_overlay_descriptor_set_layouts(void)
         }
     };
 
-    cvm_vk_create_descriptor_set_layout(&overlay_consistent_descriptor_set_layout,&layout_create_info);
+    cvm_vk_create_descriptor_set_layout(&renderer->image_descriptor_set_layout,&layout_create_info);
 }
 
-static void create_overlay_consistent_descriptors(void)
+static void create_overlay_image_descriptors(cvm_overlay_renderer * renderer)
 {
     VkDescriptorPoolCreateInfo pool_create_info=
     {
@@ -149,25 +125,25 @@ static void create_overlay_consistent_descriptors(void)
         }
     };
 
-    cvm_vk_create_descriptor_pool(&overlay_consistent_descriptor_pool,&pool_create_info);
+    cvm_vk_create_descriptor_pool(&renderer->image_descriptor_pool,&pool_create_info);
 
     VkDescriptorSetAllocateInfo descriptor_set_allocate_info=
     {
         .sType=VK_STRUCTURE_TYPE_DESCRIPTOR_SET_ALLOCATE_INFO,
         .pNext=NULL,
-        .descriptorPool=overlay_consistent_descriptor_pool,
+        .descriptorPool=renderer->image_descriptor_pool,
         .descriptorSetCount=1,
-        .pSetLayouts=&overlay_consistent_descriptor_set_layout
+        .pSetLayouts=&renderer->image_descriptor_set_layout
     };
 
-    cvm_vk_allocate_descriptor_sets(&overlay_consistent_descriptor_set,&descriptor_set_allocate_info);
+    cvm_vk_allocate_descriptor_sets(&renderer->image_descriptor_set,&descriptor_set_allocate_info);
 
     VkWriteDescriptorSet writes[2]=
     {
         {
             .sType=VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET,
             .pNext=NULL,
-            .dstSet=overlay_consistent_descriptor_set,
+            .dstSet=renderer->image_descriptor_set,
             .dstBinding=0,
             .dstArrayElement=0,
             .descriptorCount=1,
@@ -176,7 +152,7 @@ static void create_overlay_consistent_descriptors(void)
             {
                 {
                     .sampler=VK_NULL_HANDLE,///using immutable sampler (for now)
-                    .imageView=overlay_transparent_image_view,
+                    .imageView=renderer->transparent_image_view,
                     .imageLayout=VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL
                 }
             },
@@ -186,7 +162,7 @@ static void create_overlay_consistent_descriptors(void)
         {
             .sType=VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET,
             .pNext=NULL,
-            .dstSet=overlay_consistent_descriptor_set,
+            .dstSet=renderer->image_descriptor_set,
             .dstBinding=1,
             .dstArrayElement=0,
             .descriptorCount=1,
@@ -195,7 +171,7 @@ static void create_overlay_consistent_descriptors(void)
             {
                 {
                     .sampler=VK_NULL_HANDLE,///using immutable sampler (for now)
-                    .imageView=overlay_colour_image_view,
+                    .imageView=renderer->colour_image_view,
                     .imageLayout=VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL
                 }
             },
@@ -277,7 +253,7 @@ static void update_overlay_uniforms(uint32_t swapchain_image,VkDeviceSize offset
     cvm_vk_write_descriptor_sets(writes,1);
 }
 
-static void create_overlay_pipeline_layouts(void)
+static void create_overlay_pipeline_layouts(cvm_overlay_renderer * renderer)
 {
     VkPipelineLayoutCreateInfo pipeline_create_info=
     {
@@ -288,7 +264,7 @@ static void create_overlay_pipeline_layouts(void)
         .pSetLayouts=(VkDescriptorSetLayout[2])
         {
             overlay_descriptor_set_layout,
-            overlay_consistent_descriptor_set_layout
+            renderer->image_descriptor_set_layout
         },
         .pushConstantRangeCount=1,
         .pPushConstantRanges=(VkPushConstantRange[1])
@@ -480,7 +456,7 @@ static void create_overlay_framebuffers(uint32_t swapchain_image_count)
     }
 }
 
-static void create_overlay_images(uint32_t t_w,uint32_t t_h,uint32_t c_w,uint32_t c_h)
+static void create_overlay_images(cvm_overlay_renderer * renderer,uint32_t t_w,uint32_t t_h,uint32_t c_w,uint32_t c_h)
 {
     VkImageCreateInfo image_creation_info=
     {
@@ -511,16 +487,16 @@ static void create_overlay_images(uint32_t t_w,uint32_t t_h,uint32_t c_w,uint32_
     image_creation_info.usage=VK_IMAGE_USAGE_SAMPLED_BIT | VK_IMAGE_USAGE_TRANSFER_DST_BIT;
     image_creation_info.extent.width=t_w;
     image_creation_info.extent.height=t_h;
-    cvm_vk_create_image(&overlay_transparent_image,&image_creation_info);
+    cvm_vk_create_image(&renderer->transparent_image,&image_creation_info);
 
     image_creation_info.format=VK_FORMAT_R8G8B8A8_UNORM;
     image_creation_info.usage=VK_IMAGE_USAGE_SAMPLED_BIT | VK_IMAGE_USAGE_TRANSFER_DST_BIT;///conditionally VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT ???
     image_creation_info.extent.width=c_w;
     image_creation_info.extent.height=c_h;
-    cvm_vk_create_image(&overlay_colour_image,&image_creation_info);
+    cvm_vk_create_image(&renderer->colour_image,&image_creation_info);
 
-    VkImage images[2]={overlay_transparent_image,overlay_colour_image};
-    cvm_vk_create_and_bind_memory_for_images(&overlay_image_memory,images,2,0,VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT);
+    VkImage images[2]={renderer->transparent_image,renderer->colour_image};
+    cvm_vk_create_and_bind_memory_for_images(&renderer->image_memory,images,2,0,VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT);
 
 
 
@@ -550,62 +526,67 @@ static void create_overlay_images(uint32_t t_w,uint32_t t_h,uint32_t c_w,uint32_
     };
 
     view_creation_info.format=VK_FORMAT_R8_UNORM;
-    view_creation_info.image=overlay_transparent_image;
-    cvm_vk_create_image_view(&overlay_transparent_image_view,&view_creation_info);
+    view_creation_info.image=renderer->transparent_image;
+    cvm_vk_create_image_view(&renderer->transparent_image_view,&view_creation_info);
 
     view_creation_info.format=VK_FORMAT_R8G8B8A8_UNORM;
-    view_creation_info.image=overlay_colour_image;
-    cvm_vk_create_image_view(&overlay_colour_image_view,&view_creation_info);
+    view_creation_info.image=renderer->colour_image;
+    cvm_vk_create_image_view(&renderer->colour_image_view,&view_creation_info);
 
 
-    cvm_vk_create_image_atlas(&overlay_transparent_image_atlas,overlay_transparent_image,overlay_transparent_image_view,sizeof(uint8_t),t_w,t_h,true);
-    cvm_vk_create_image_atlas(&overlay_colour_image_atlas,overlay_colour_image,overlay_colour_image_view,sizeof(uint8_t)*4,c_w,c_h,false);
+    cvm_vk_create_image_atlas(&renderer->transparent_image_atlas,renderer->transparent_image,renderer->transparent_image_view,sizeof(uint8_t),t_w,t_h,true);
+    cvm_vk_create_image_atlas(&renderer->colour_image_atlas,renderer->colour_image,renderer->colour_image_view,sizeof(uint8_t)*4,c_w,c_h,false);
 
-    overlay_transparent_image_atlas.staging_buffer=&overlay_staging_buffer;
-    overlay_colour_image_atlas.staging_buffer=&overlay_staging_buffer;
+    renderer->transparent_image_atlas.staging_buffer=&renderer->staging_buffer;
+    renderer->colour_image_atlas.staging_buffer=&renderer->staging_buffer;
 
-    #warning as images ALWAYS need staging (even on uma) could make staging a creation parameter??
+    #warning as images ALWAYS need staging (even on uma) could make staging a creation parameter?? -- YES
     ///perhaps not as it limits the ability to use it for a more generalised purpose...
     ///could move general section out and use a meta structure encompassing the generalised image atlas?
 }
 
-void initialise_overlay_render_data(void)
+void initialise_overlay_render_data(cvm_overlay_renderer * renderer)
 {
     create_overlay_render_pass();
 
-    create_overlay_descriptor_set_layouts();
+    create_overlay_descriptor_set_layouts(renderer);
 
-    create_overlay_pipeline_layouts();
+    create_overlay_pipeline_layouts(renderer);
 
     cvm_vk_create_shader_stage_info(&overlay_vertex_stage,"cvm_shared/shaders/overlay.vert.spv",VK_SHADER_STAGE_VERTEX_BIT);
     cvm_vk_create_shader_stage_info(&overlay_fragment_stage,"cvm_shared/shaders/overlay.frag.spv",VK_SHADER_STAGE_FRAGMENT_BIT);
 
-    cvm_vk_create_module_data(&overlay_module_data,1);
-
     cvm_vk_transient_buffer_create(&overlay_transient_buffer,VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT | VK_BUFFER_USAGE_VERTEX_BUFFER_BIT);
-    cvm_vk_staging_buffer_create(&overlay_staging_buffer,VK_BUFFER_USAGE_TRANSFER_SRC_BIT);
+    cvm_vk_staging_buffer_create(&renderer->staging_buffer,VK_BUFFER_USAGE_TRANSFER_SRC_BIT);
 
-    create_overlay_images(1024,1024,1024,1024);
+    #warning make this fixed!
+    uint32_t staging_size=65536;///arbitrary
+    cvm_vk_staging_buffer_update(&renderer->staging_buffer,staging_size,renderer->cycle_count);
+//    printf("AAA %u\n",renderer->staging_buffer.total_space);
 
-    create_overlay_consistent_descriptors();
+    create_overlay_images(renderer,1024,1024,1024,1024);
+
+    create_overlay_image_descriptors(renderer);
 
     cvm_overlay_open_freetype();
 }
 
-void terminate_overlay_render_data(void)
+void terminate_overlay_render_data(cvm_overlay_renderer * renderer)
 {
     cvm_overlay_close_freetype();
 
-    cvm_vk_destroy_image_view(overlay_transparent_image_view);
-    cvm_vk_destroy_image_view(overlay_colour_image_view);
+    cvm_vk_destroy_image_atlas(&renderer->transparent_image_atlas);
+    cvm_vk_destroy_image_atlas(&renderer->colour_image_atlas);
 
-    cvm_vk_destroy_image(overlay_transparent_image);
-    cvm_vk_destroy_image(overlay_colour_image);
+    cvm_vk_destroy_image_view(renderer->transparent_image_view);
+    cvm_vk_destroy_image_view(renderer->colour_image_view);
 
-    cvm_vk_free_memory(overlay_image_memory);
+    cvm_vk_destroy_image(renderer->transparent_image);
+    cvm_vk_destroy_image(renderer->colour_image);
 
-    cvm_vk_destroy_image_atlas(&overlay_transparent_image_atlas);
-    cvm_vk_destroy_image_atlas(&overlay_colour_image_atlas);
+    cvm_vk_free_memory(renderer->image_memory);
+
+
 
 
     cvm_vk_destroy_render_pass(overlay_render_pass);
@@ -615,15 +596,13 @@ void terminate_overlay_render_data(void)
 
     cvm_vk_destroy_pipeline_layout(overlay_pipeline_layout);
 
-    cvm_vk_destroy_descriptor_pool(overlay_consistent_descriptor_pool);
+    cvm_vk_destroy_descriptor_pool(renderer->image_descriptor_pool);
 
     cvm_vk_destroy_descriptor_set_layout(overlay_descriptor_set_layout);
-    cvm_vk_destroy_descriptor_set_layout(overlay_consistent_descriptor_set_layout);
-
-    cvm_vk_destroy_module_data(&overlay_module_data);
+    cvm_vk_destroy_descriptor_set_layout(renderer->image_descriptor_set_layout);
 
     cvm_vk_transient_buffer_destroy(&overlay_transient_buffer);
-    cvm_vk_staging_buffer_destroy(&overlay_staging_buffer);
+    cvm_vk_staging_buffer_destroy(&renderer->staging_buffer);
 }
 
 
@@ -637,15 +616,10 @@ void initialise_overlay_swapchain_dependencies(void)
 
     create_overlay_descriptor_sets(swapchain_image_count);
 
-    cvm_vk_resize_module_graphics_data(&overlay_module_data);
-
     uint32_t uniform_size=0;
     uniform_size+=cvm_vk_transient_buffer_get_rounded_allocation_size(&overlay_transient_buffer,sizeof(float)*4*OVERLAY_NUM_COLOURS,0);
     uniform_size+=cvm_vk_transient_buffer_get_rounded_allocation_size(&overlay_transient_buffer,max_overlay_elements*sizeof(cvm_overlay_render_data),0);
     cvm_vk_transient_buffer_update(&overlay_transient_buffer,uniform_size,swapchain_image_count);
-
-    uint32_t staging_size=65536;///arbitrary
-    cvm_vk_staging_buffer_update(&overlay_staging_buffer,staging_size,swapchain_image_count);
 }
 
 void terminate_overlay_swapchain_dependencies(void)
@@ -687,38 +661,49 @@ typedef struct cvm_overlay_renderer_work_entry
 {
     cvm_vk_command_pool command_pool;
     ///descriptor sets?? can descriptor sets not be shared???
+    int staging_index;///remove this!
 }
 cvm_overlay_renderer_work_entry;
 
 void cvm_overlay_renderer_work_entry_initialise(void * shared_ptr, void * entry_ptr)
 {
-    cvm_vk_device * device=shared_ptr;
+    cvm_overlay_renderer * renderer=shared_ptr;
     cvm_overlay_renderer_work_entry * entry=entry_ptr;
 
-    cvm_vk_command_pool_initialise(device,&entry->command_pool,device->graphics_queue_family_index,0);
+    cvm_vk_command_pool_initialise(renderer->device,&entry->command_pool,renderer->device->graphics_queue_family_index,0);
+    static index=0;
+    entry->staging_index=index++;
 }
 
 void cvm_overlay_renderer_work_entry_terminate(void * shared_ptr, void * entry_ptr)
 {
-    cvm_vk_device * device=shared_ptr;
+    cvm_overlay_renderer * renderer=shared_ptr;
     cvm_overlay_renderer_work_entry * entry=entry_ptr;
 
-    cvm_vk_command_pool_terminate(device,&entry->command_pool);
+    cvm_vk_command_pool_terminate(renderer->device,&entry->command_pool);
 }
 
 void cvm_overlay_renderer_work_entry_reset(void * shared_ptr, void * entry_ptr)
 {
-    cvm_vk_device * device=shared_ptr;
+    cvm_overlay_renderer * renderer=shared_ptr;
     cvm_overlay_renderer_work_entry * entry=entry_ptr;
 
-    cvm_vk_command_pool_reset(device,&entry->command_pool);
+    cvm_vk_command_pool_reset(renderer->device,&entry->command_pool);
+
+    cvm_vk_staging_buffer_release_space(&renderer->staging_buffer,entry->staging_index);
 }
 
-void cvm_overlay_renderer_initialise(cvm_vk_device * device, cvm_overlay_renderer * renderer, uint32_t renderer_cycle_count)
+void cvm_overlay_renderer_initialise(cvm_overlay_renderer * renderer, cvm_vk_device * device, cvm_vk_staging_buffer_ * staging_buffer, uint32_t renderer_cycle_count)
 {
+    renderer->device=device;
+    renderer->cycle_count=renderer_cycle_count;
+    renderer->staging_buffer_ = staging_buffer;
+
+    cvm_vk_staging_shunt_buffer_initialise(&renderer->transient_shunt_buffer, staging_buffer->alignment);
+
     cvm_vk_work_queue_setup work_queue_setup=
     {
-        .shared_data=device,///may want this to become an allocated struct so more can ve shared
+        .shared_data=renderer,///may want this to become an allocated struct so more can ve shared
         .entry_size=sizeof(cvm_overlay_renderer_work_entry),
         .entry_count=renderer_cycle_count,
 
@@ -730,9 +715,10 @@ void cvm_overlay_renderer_initialise(cvm_vk_device * device, cvm_overlay_rendere
     cvm_vk_work_queue_initialise(&renderer->work_queue,&work_queue_setup);
 }
 
-void cvm_overlay_renderer_terminate(cvm_vk_device * device, cvm_overlay_renderer * renderer)
+void cvm_overlay_renderer_terminate(cvm_overlay_renderer * renderer, cvm_vk_device * device)
 {
     cvm_vk_work_queue_terminate(device,&renderer->work_queue);
+    cvm_vk_staging_shunt_buffer_terminate(&renderer->transient_shunt_buffer);
 }
 
 
@@ -743,25 +729,21 @@ void cvm_overlay_renderer_terminate(cvm_vk_device * device, cvm_overlay_renderer
 
 
 
-void overlay_render_to_image(cvm_vk_device * device, cvm_overlay_renderer * renderer, const cvm_vk_swapchain_presentable_image * presentable_image, int screen_w,int screen_h,widget * menu_widget)
+void overlay_render_to_image(cvm_vk_device * device, cvm_overlay_renderer * renderer, cvm_vk_swapchain_presentable_image * presentable_image, int screen_w,int screen_h,widget * menu_widget)
 {
     #warning get screen res from presentable image
-    cvm_vk_module_batch * batch;
     uint32_t swapchain_image_index;
     cvm_overlay_renderer_work_entry * work_entry;
     cvm_vk_command_buffer cb;
     cvm_vk_timeline_semaphore_moment completion_moment;
+    cvm_vk_staging_buffer_allocation staging_buffer_allocation;
+    VkDeviceSize staging_space_required;
+    VkDeviceSize instance_offset,uniform_offset,upload_offset;
 
 //    cvm_vk_module_work_payload payload;
 
     cvm_overlay_element_render_buffer element_render_buffer;
-    VkDeviceSize uniform_offset,vertex_offset;
-
-    ///perhaps this should return previous image index as well, such that that value can be used in cleanup (e.g. relinquishing ring buffer space)
-    batch = cvm_vk_get_module_batch(&overlay_module_data,&swapchain_image_index);
-
-
-
+    VkDeviceSize vertex_offset;//replace with instance_offset
 
 
     /// definitely want to clean up targets &c.
@@ -773,15 +755,16 @@ void overlay_render_to_image(cvm_vk_device * device, cvm_overlay_renderer * rend
     /// could have a single image atlas and use different aspects of part of it (r,g,b,a via image views) for different alpha/transparent image_atlases
     /// this would be fairly inefficient to retrieve though..., probably better not to.
 
-    if(batch && presentable_image)
+    if(presentable_image)
     {
+        #warning temporary hack!
+        swapchain_image_index=presentable_image - presentable_image->parent_swapchain->presenting_images;
+
         work_entry = cvm_vk_work_queue_acquire_entry(device,&renderer->work_queue);
         cvm_vk_command_pool_acquire_command_buffer(device,&work_entry->command_pool,&cb);
         cvm_vk_command_buffer_wait_on_presentable_image_acquisition(&cb,presentable_image);
 
-//        cvm_vk_setup_new_graphics_payload_from_batch(&payload,batch);
-
-        cvm_vk_staging_buffer_begin(&overlay_staging_buffer);///build barriers into begin/end paradigm maybe???
+        cvm_vk_staging_buffer_begin(&renderer->staging_buffer);///build barriers into begin/end paradigm maybe???
         cvm_vk_transient_buffer_begin(&overlay_transient_buffer,swapchain_image_index);
         #warning need to use the appropriate queue for all following transfer ops
         ///     ^ possibly detect when they're different and use gfx directly to avoid double submission?
@@ -789,7 +772,14 @@ void overlay_render_to_image(cvm_vk_device * device, cvm_overlay_renderer * rend
         ///             ^could have meta level function that inserts both barriers to appropriate queues simultaneously as necessary??? (VK_NULL_HANDLE when unit-transfer?)
         ///   module handles semaphore when necessary, perhaps it can also handle some aspect(s) of barriers?
 
-        element_render_buffer.buffer=cvm_vk_transient_buffer_get_allocation(&overlay_transient_buffer,max_overlay_elements*sizeof(cvm_overlay_render_data),0,&vertex_offset);
+        staging_space_required = max_overlay_elements*sizeof(cvm_overlay_render_data);
+        staging_buffer_allocation=cvm_vk_staging_buffer_reserve_allocation(renderer->staging_buffer_,device,staging_space_required,true);
+
+        ///cvm_vk_staging_buffer_allocation_align_offset
+
+
+        element_render_buffer.buffer=staging_buffer_allocation.mapping;
+//        element_render_buffer.buffer=cvm_vk_transient_buffer_get_allocation(&overlay_transient_buffer,max_overlay_elements*sizeof(cvm_overlay_render_data),0,&vertex_offset);
         element_render_buffer.space=max_overlay_elements;
         element_render_buffer.count=0;
 
@@ -797,29 +787,28 @@ void overlay_render_to_image(cvm_vk_device * device, cvm_overlay_renderer * rend
 
         /// upload all staged resources needed by this frame
         ///if ever using a dedicated transfer queue (probably don't want tbh) change command buffers in these
-//        cvm_vk_image_atlas_submit_all_pending_copy_actions(&overlay_transparent_image_atlas,payload.command_buffer);
-//        cvm_vk_image_atlas_submit_all_pending_copy_actions(&overlay_colour_image_atlas,payload.command_buffer);
-        cvm_vk_image_atlas_submit_all_pending_copy_actions(&overlay_transparent_image_atlas,cb.command_buffer);
-        cvm_vk_image_atlas_submit_all_pending_copy_actions(&overlay_colour_image_atlas,cb.command_buffer);
+        cvm_vk_image_atlas_submit_all_pending_copy_actions(&renderer->transparent_image_atlas,cb.buffer);
+        cvm_vk_image_atlas_submit_all_pending_copy_actions(&renderer->colour_image_atlas,cb.buffer);
 
         ///end of transfer
 
         ///start of graphics
 
         float * colours = cvm_vk_transient_buffer_get_allocation(&overlay_transient_buffer,sizeof(float)*4*OVERLAY_NUM_COLOURS,0,&uniform_offset);
-
         memcpy(colours,overlay_colours,sizeof(float)*4*OVERLAY_NUM_COLOURS);
 
         update_overlay_uniforms(swapchain_image_index,uniform_offset);///should really build buffer acquisition into update uniforms function
 
 
+        cvm_vk_staging_buffer_flush_allocation(renderer->staging_buffer_,device,&staging_buffer_allocation,0,staging_space_required);
+
         float screen_dimensions[4]={2.0/((float)screen_w),2.0/((float)screen_h),(float)screen_w,(float)screen_h};
 
-        vkCmdPushConstants(cb.command_buffer,overlay_pipeline_layout,VK_SHADER_STAGE_VERTEX_BIT|VK_SHADER_STAGE_FRAGMENT_BIT,0,4*sizeof(float),screen_dimensions);
+        vkCmdPushConstants(cb.buffer,overlay_pipeline_layout,VK_SHADER_STAGE_VERTEX_BIT|VK_SHADER_STAGE_FRAGMENT_BIT,0,4*sizeof(float),screen_dimensions);
 
-        vkCmdBindDescriptorSets(cb.command_buffer,VK_PIPELINE_BIND_POINT_GRAPHICS,overlay_pipeline_layout,0,1,overlay_descriptor_sets+swapchain_image_index,0,NULL);
+        vkCmdBindDescriptorSets(cb.buffer,VK_PIPELINE_BIND_POINT_GRAPHICS,overlay_pipeline_layout,0,1,overlay_descriptor_sets+swapchain_image_index,0,NULL);
 
-        vkCmdBindDescriptorSets(cb.command_buffer,VK_PIPELINE_BIND_POINT_GRAPHICS,overlay_pipeline_layout,1,1,&overlay_consistent_descriptor_set,0,NULL);
+        vkCmdBindDescriptorSets(cb.buffer,VK_PIPELINE_BIND_POINT_GRAPHICS,overlay_pipeline_layout,1,1,&renderer->image_descriptor_set,0,NULL);
 
 
         VkRenderPassBeginInfo render_pass_begin_info=(VkRenderPassBeginInfo)
@@ -834,80 +823,32 @@ void overlay_render_to_image(cvm_vk_device * device, cvm_overlay_renderer * rend
             .pClearValues=(VkClearValue[1]){{.color=(VkClearColorValue){.float32={0.0f,0.0f,0.0f,0.0f}}}},
         };
 
-        vkCmdBeginRenderPass(cb.command_buffer,&render_pass_begin_info,VK_SUBPASS_CONTENTS_INLINE);///================
+        vkCmdBeginRenderPass(cb.buffer,&render_pass_begin_info,VK_SUBPASS_CONTENTS_INLINE);///================
 
-        vkCmdBindPipeline(cb.command_buffer,VK_PIPELINE_BIND_POINT_GRAPHICS,overlay_pipeline);
+        vkCmdBindPipeline(cb.buffer,VK_PIPELINE_BIND_POINT_GRAPHICS,overlay_pipeline);
 
-        cvm_vk_transient_buffer_bind_as_vertex(cb.command_buffer,&overlay_transient_buffer,0,vertex_offset);
+//        cvm_vk_transient_buffer_bind_as_vertex(cb.buffer,&overlay_transient_buffer,0,vertex_offset);
+        vkCmdBindVertexBuffers(cb.buffer,0,1,&renderer->staging_buffer_->buffer,&staging_buffer_allocation.acquired_offset);
 
-        vkCmdDraw(cb.command_buffer,4,element_render_buffer.count,0,0);
+        vkCmdDraw(cb.buffer,4,element_render_buffer.count,0,0);
 
-        vkCmdEndRenderPass(cb.command_buffer);///================
+        vkCmdEndRenderPass(cb.buffer);///================
 
-        cvm_vk_staging_buffer_end(&overlay_staging_buffer,swapchain_image_index);
+        cvm_vk_staging_buffer_end(&renderer->staging_buffer,work_entry->staging_index);
         cvm_vk_transient_buffer_end(&overlay_transient_buffer);
 
-//        cvm_vk_submit_graphics_work(&payload,CVM_VK_PAYLOAD_LAST_QUEUE_USE|CVM_VK_PAYLOAD_FIRST_QUEUE_USE);
         cvm_vk_command_buffer_signal_presenting_image_complete(&cb,presentable_image);
         cvm_vk_command_buffer_submit(device,&work_entry->command_pool,&cb,VK_PIPELINE_STAGE_2_COLOR_ATTACHMENT_OUTPUT_BIT,&completion_moment);
-        cvm_vk_work_queue_release_entry(&renderer->work_queue,work_entry,&completion_moment);
 
-        cvm_vk_end_module_batch(batch);
+        cvm_vk_staging_buffer_complete_allocation(renderer->staging_buffer_,staging_buffer_allocation.segment_index,completion_moment);
+
+        cvm_vk_work_queue_release_entry(&renderer->work_queue,work_entry,&completion_moment);
     }
 }
 
 void overlay_frame_cleanup(uint32_t swapchain_image_index)
 {
-    if(swapchain_image_index!=CVM_INVALID_U32_INDEX)
-    {
-        cvm_vk_staging_buffer_release_space(&overlay_staging_buffer,swapchain_image_index);
-    }
 }
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-cvm_vk_image_atlas_tile * overlay_create_transparent_image_tile_with_staging(void ** staging,uint32_t w, uint32_t h)
-{
-    return cvm_vk_acquire_image_atlas_tile_with_staging(&overlay_transparent_image_atlas,w,h,staging);
-}
-
-void overlay_destroy_transparent_image_tile(cvm_vk_image_atlas_tile * tile)
-{
-    cvm_vk_relinquish_image_atlas_tile(&overlay_transparent_image_atlas,tile);
-}
-
-cvm_vk_image_atlas_tile * overlay_create_colour_image_tile_with_staging(void ** staging,uint32_t w, uint32_t h)
-{
-    return cvm_vk_acquire_image_atlas_tile_with_staging(&overlay_colour_image_atlas,w,h,staging);
-}
-
-void overlay_destroy_colour_image_tile(cvm_vk_image_atlas_tile * tile)
-{
-    cvm_vk_relinquish_image_atlas_tile(&overlay_colour_image_atlas,tile);
-}
-
-
-
-
-
-
 
 
 

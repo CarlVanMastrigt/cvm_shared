@@ -930,7 +930,7 @@ void cvm_vk_staging_buffer_end(cvm_vk_staging_buffer * sb,uint32_t frame_index)
     offset=atomic_load(&sb->active_offset);
     start=sb->active_region.start;
 
-    if(offset < start && sb->mapping_coherent)///if the buffer wrapped between begin and end
+    if(offset < start && !sb->mapping_coherent)///if the buffer wrapped between begin and end
     {
         VkMappedMemoryRange flush_range=(VkMappedMemoryRange)
         {
@@ -945,7 +945,7 @@ void cvm_vk_staging_buffer_end(cvm_vk_staging_buffer * sb,uint32_t frame_index)
         start=0;
     }
 
-    if(start<offset && sb->mapping_coherent)///if anything was written that wasn't handled by the previous branch (i.e. we've looped around to the start o the staging buffer this frame)
+    if(start<offset && !sb->mapping_coherent)///if anything was written that wasn't handled by the previous branch (i.e. we've looped around to the start o the staging buffer this frame)
     {
         VkMappedMemoryRange flush_range=(VkMappedMemoryRange)
         {

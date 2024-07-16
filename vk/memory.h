@@ -25,6 +25,12 @@ along with cvm_shared.  If not, see <https://www.gnu.org/licenses/>.
 #ifndef CVM_VK_MEMORY_H
 #define CVM_VK_MEMORY_H
 
+
+
+#include "memory/staging_buffer.h"
+
+
+
 typedef struct cvm_vk_staging_buffer_region
 {
     uint32_t start;
@@ -60,6 +66,7 @@ void cvm_vk_staging_buffer_destroy(cvm_vk_staging_buffer * sb);
 
 uint32_t cvm_vk_staging_buffer_get_rounded_allocation_size(cvm_vk_staging_buffer * sb,uint32_t allocation_size);
 
+///these are not thread safe, if its desirable to make staging thread safe a decent amount of work is necessary, perhaps involving pre-staging data, with copy instructions updated as necessary, which isnt the worst idea... especially if the total buffer size bigger than the pre-staging region...
 void cvm_vk_staging_buffer_begin(cvm_vk_staging_buffer * sb);
 void cvm_vk_staging_buffer_end(cvm_vk_staging_buffer * sb,uint32_t frame_index);
 

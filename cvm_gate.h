@@ -38,8 +38,8 @@ typedef struct cvm_gate
 
     atomic_uint_fast32_t status;
 
-    cnd_t condition;
-    mtx_t mutex;
+    mtx_t * mutex;
+    cnd_t * condition;
 }
 cvm_gate;
 
