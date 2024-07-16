@@ -80,8 +80,10 @@ cvm_vk_available_atlas_tile_heap;
 
 typedef struct cvm_vk_image_atlas
 {
-    atomic_uint_fast32_t acquire_spinlock;///put at top in order to get padding between spinlocks (other being copy_spinlock)
+    mtx_t structure_mutex;///put at top in order to get padding between spinlocks (other being copy_spinlock)
     bool multithreaded;
+    ///whether the images initial state has been set...
+    bool initialised;
 
     ///creation/allocation of actual vk resources must be handled externally
     VkImage image;
@@ -103,16 +105,15 @@ typedef struct cvm_vk_image_atlas
     uint16_t available_tiles_bitmasks[16];///h based
 
 /// following required even on UMA systems (in contrast to equivalent section in managed buffer) in order to handle buffer(raw data)->image transition
-
+    mtx_t copy_action_mutex;
     cvm_vk_staging_buffer * staging_buffer;
+    /// used to orchistrate uploads, should be filled out
+    cvm_vk_staging_shunt_buffer * shunt_buffer;
+    #warning the shunt buffer not being inherrently multithreaded is kinda problematic
 
     VkBufferImageCopy * pending_copy_actions;
     uint32_t pending_copy_space;
     uint32_t pending_copy_count;
-
-    bool initialised;
-
-    atomic_uint_fast32_t copy_spinlock;///put at bottom in order to get padding between spinlocks (other being acquire_spinlock)
 }
 cvm_vk_image_atlas;
 ///probably just going to use simple 2d version of PO2 allocator used in memory...
@@ -134,7 +135,7 @@ cvm_vk_image_atlas_tile * cvm_vk_acquire_image_atlas_tile_with_staging(cvm_vk_im
 void * cvm_vk_acquire_staging_for_image_atlas_tile(cvm_vk_image_atlas * ia,cvm_vk_image_atlas_tile * t,uint32_t width,uint32_t height);
 
 void cvm_vk_image_atlas_submit_all_pending_copy_actions(cvm_vk_image_atlas * ia,VkCommandBuffer transfer_cb);
-void cvm_vk_image_atlas_submit_all_pending_copy_actions_(cvm_vk_image_atlas * ia,VkCommandBuffer transfer_cb, VkDeviceSize copy_source_offset);
+void cvm_vk_image_atlas_submit_all_pending_copy_actions_(cvm_vk_image_atlas * ia,VkCommandBuffer transfer_cb, VkBuffer staging_buffer, VkDeviceSize shunt_buffer_offset);
 /// transfer_cb MUST be submitted to queue from same queue family to where the graphics commands that will use the image atlas will be used, assuming usage paradigm is correct this can even be the graphics queue itself
 
 #endif

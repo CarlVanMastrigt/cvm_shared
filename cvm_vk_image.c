@@ -25,6 +25,10 @@ void cvm_vk_create_image_atlas(cvm_vk_image_atlas * ia,VkImage image,VkImageView
 
     assert(width > 1<<CVM_VK_BASE_TILE_SIZE_FACTOR && height > 1<<CVM_VK_BASE_TILE_SIZE_FACTOR);///IMAGE ATLAS TOO SMALL
 
+    mtx_init(&ia->structure_mutex,mtx_plain);
+    mtx_init(&ia->copy_action_mutex,mtx_plain);
+    ia->multithreaded=multithreaded;
+    ia->initialised=false;
     ia->image=image;
     ia->image_view=image_view;
     ia->bytes_per_pixel=bytes_per_pixel;
@@ -35,8 +39,7 @@ void cvm_vk_create_image_atlas(cvm_vk_image_atlas * ia,VkImage image,VkImageView
     ia->num_tile_sizes_h=cvm_lbs_32(width)+1-CVM_VK_BASE_TILE_SIZE_FACTOR;
     ia->num_tile_sizes_v=cvm_lbs_32(height)+1-CVM_VK_BASE_TILE_SIZE_FACTOR;
 
-    ia->multithreaded=multithreaded;
-    atomic_init(&ia->acquire_spinlock,0);
+
 
     cvm_vk_image_atlas_tile * tiles=malloc(CVM_VK_RESERVED_IMAGE_ATLAS_TILE_COUNT*sizeof(cvm_vk_image_atlas_tile));
 
@@ -94,13 +97,12 @@ void cvm_vk_create_image_atlas(cvm_vk_image_atlas * ia,VkImage image,VkImageView
 
     ia->available_tiles_bitmasks[t->size_factor_h]=1<<t->size_factor_v;
 
-    atomic_init(&ia->copy_spinlock,0);
     ia->staging_buffer=NULL;
     ia->pending_copy_actions=malloc(sizeof(VkBufferImageCopy)*16);
     ia->pending_copy_space=16;
     ia->pending_copy_count=0;
 
-    ia->initialised=false;
+
 }
 
 void cvm_vk_destroy_image_atlas(cvm_vk_image_atlas * ia)
@@ -147,6 +149,9 @@ void cvm_vk_destroy_image_atlas(cvm_vk_image_atlas * ia)
     }
 
     free(ia->pending_copy_actions);
+
+    mtx_destroy(&ia->structure_mutex);
+    mtx_destroy(&ia->copy_action_mutex);
 }
 
 ///probably worth having this as function, allows calling from branches
@@ -157,7 +162,6 @@ cvm_vk_image_atlas_tile * cvm_vk_acquire_image_atlas_tile(cvm_vk_image_atlas * i
 {
     uint32_t i,desired_size_factor_h,desired_size_factor_v,size_factor_h,size_factor_v,current,up,down,offset,offset_mid,offset_end;
     cvm_vk_image_atlas_tile *base,*partner,*adjacent;
-    uint_fast32_t lock;
     cvm_vk_image_atlas_tile ** heap;
 
 
@@ -168,8 +172,7 @@ cvm_vk_image_atlas_tile * cvm_vk_acquire_image_atlas_tile(cvm_vk_image_atlas * i
 
     if(ia->multithreaded)
     {
-        do lock=atomic_load(&ia->acquire_spinlock);
-        while(lock!=0 || !atomic_compare_exchange_weak(&ia->acquire_spinlock,&lock,1));
+        mtx_lock(&ia->structure_mutex);
     }
 
     if(ia->unused_tile_count < ia->num_tile_sizes_h+ ia->num_tile_sizes_v)
@@ -208,7 +211,10 @@ cvm_vk_image_atlas_tile * cvm_vk_acquire_image_atlas_tile(cvm_vk_image_atlas * i
 
     if(!base)///a tile to split was not found!
     {
-        if(ia->multithreaded) atomic_store(&ia->acquire_spinlock,0);
+        if(ia->multithreaded)
+        {
+            mtx_unlock(&ia->structure_mutex);
+        }
         return NULL;///no tile large enough exists
     }
 
@@ -374,7 +380,10 @@ cvm_vk_image_atlas_tile * cvm_vk_acquire_image_atlas_tile(cvm_vk_image_atlas * i
 
     base->available=false;
 
-    if(ia->multithreaded) atomic_store(&ia->acquire_spinlock,0);
+    if(ia->multithreaded)
+    {
+        mtx_unlock(&ia->structure_mutex);
+    }
 
     return base;
 }
@@ -431,8 +440,7 @@ void cvm_vk_relinquish_image_atlas_tile(cvm_vk_image_atlas * ia,cvm_vk_image_atl
 
     if(ia->multithreaded)
     {
-        do lock=atomic_load(&ia->acquire_spinlock);
-        while(lock!=0 || !atomic_compare_exchange_weak(&ia->acquire_spinlock,&lock,1));
+        mtx_lock(&ia->structure_mutex);
     }
 
     finished_h=finished_v=false;
@@ -698,7 +706,10 @@ void cvm_vk_relinquish_image_atlas_tile(cvm_vk_image_atlas * ia,cvm_vk_image_atl
 
     ia->available_tiles_bitmasks[base->size_factor_h]|=1<<base->size_factor_v;///partner was last available tile of this size
 
-    if(ia->multithreaded) atomic_store(&ia->acquire_spinlock,0);
+    if(ia->multithreaded)
+    {
+        mtx_unlock(&ia->structure_mutex);
+    }
 }
 
 cvm_vk_image_atlas_tile * cvm_vk_acquire_image_atlas_tile_with_staging(cvm_vk_image_atlas * ia,uint32_t width,uint32_t height,void ** staging)
@@ -718,8 +729,10 @@ cvm_vk_image_atlas_tile * cvm_vk_acquire_image_atlas_tile_with_staging(cvm_vk_im
 
     assert(tile);///NO SPACE LEFT IN IMAGE ATLAS
 
-    if(ia->multithreaded)do lock=atomic_load(&ia->copy_spinlock);
-    while(lock!=0 || !atomic_compare_exchange_weak(&ia->copy_spinlock,&lock,1));
+    if(ia->multithreaded)
+    {
+        mtx_lock(&ia->copy_action_mutex);
+    }
 
     if(ia->pending_copy_count==ia->pending_copy_space)
     {
@@ -752,7 +765,10 @@ cvm_vk_image_atlas_tile * cvm_vk_acquire_image_atlas_tile_with_staging(cvm_vk_im
         }
     };
 
-    if(ia->multithreaded) atomic_store(&ia->copy_spinlock,0);
+    if(ia->multithreaded)
+    {
+        mtx_unlock(&ia->copy_action_mutex);
+    }
 
     return tile;
 }
@@ -770,8 +786,10 @@ void * cvm_vk_acquire_staging_for_image_atlas_tile(cvm_vk_image_atlas * ia,cvm_v
 
     if(!staging) return NULL;
 
-    if(ia->multithreaded)do lock=atomic_load(&ia->copy_spinlock);
-    while(lock!=0 || !atomic_compare_exchange_weak(&ia->copy_spinlock,&lock,1));
+    if(ia->multithreaded)
+    {
+        mtx_lock(&ia->copy_action_mutex);
+    }
 
     if(ia->pending_copy_count==ia->pending_copy_space)
     {
@@ -804,7 +822,10 @@ void * cvm_vk_acquire_staging_for_image_atlas_tile(cvm_vk_image_atlas * ia,cvm_v
         }
     };
 
-    if(ia->multithreaded) atomic_store(&ia->copy_spinlock,0);
+    if(ia->multithreaded)
+    {
+        mtx_unlock(&ia->copy_action_mutex);
+    }
 
     return staging;
 }
@@ -813,8 +834,10 @@ void cvm_vk_image_atlas_submit_all_pending_copy_actions(cvm_vk_image_atlas * ia,
 {
     uint_fast32_t lock;
 
-    if(ia->multithreaded)do lock=atomic_load(&ia->copy_spinlock);
-    while(lock!=0 || !atomic_compare_exchange_weak(&ia->copy_spinlock,&lock,1));
+    if(ia->multithreaded)
+    {
+        mtx_lock(&ia->copy_action_mutex);
+    }
 
     #warning might be worth looking into making this support different queues... (probably not possible if copies need to be handled promptly)
     if(ia->pending_copy_count || !ia->initialised)
@@ -902,16 +925,21 @@ void cvm_vk_image_atlas_submit_all_pending_copy_actions(cvm_vk_image_atlas * ia,
         vkCmdPipelineBarrier2(transfer_cb,&copy_release_dependencies);
     }
 
-    if(ia->multithreaded) atomic_store(&ia->copy_spinlock,0);
+    if(ia->multithreaded)
+    {
+        mtx_unlock(&ia->copy_action_mutex);
+    }
 }
 
-void cvm_vk_image_atlas_submit_all_pending_copy_actions_(cvm_vk_image_atlas * ia,VkCommandBuffer transfer_cb, VkDeviceSize copy_source_offset)
+void cvm_vk_image_atlas_submit_all_pending_copy_actions_(cvm_vk_image_atlas * ia,VkCommandBuffer transfer_cb, VkBuffer staging_buffer, VkDeviceSize shunt_buffer_offset)
 {
     uint_fast32_t lock;
     uint32_t i;
 
-    if(ia->multithreaded)do lock=atomic_load(&ia->copy_spinlock);
-    while(lock!=0 || !atomic_compare_exchange_weak(&ia->copy_spinlock,&lock,1));
+    if(ia->multithreaded)
+    {
+        mtx_lock(&ia->copy_action_mutex);
+    }
 
     #warning might be worth looking into making this support different queues... (probably not possible if copies need to be handled promptly)
     if(ia->pending_copy_count || !ia->initialised)
@@ -999,7 +1027,10 @@ void cvm_vk_image_atlas_submit_all_pending_copy_actions_(cvm_vk_image_atlas * ia
         vkCmdPipelineBarrier2(transfer_cb,&copy_release_dependencies);
     }
 
-    if(ia->multithreaded) atomic_store(&ia->copy_spinlock,0);
+    if(ia->multithreaded)
+    {
+        mtx_unlock(&ia->copy_action_mutex);
+    }
 }
 
 

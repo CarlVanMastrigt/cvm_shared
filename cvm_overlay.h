@@ -341,12 +341,11 @@ static inline void cvm_render_fill_fading_overlay_element(cvm_overlay_render_dat
 typedef struct cvm_overlay_renderer
 {
     cvm_vk_device * device;///is there a better place to put this? probably...
+    /// for uploading to images, is NOT locally owned
+    cvm_vk_staging_buffer_ * staging_buffer_;
 
     uint32_t cycle_count;/// needs better name
     cvm_vk_work_queue work_queue;
-
-    /// for uploading to images
-    cvm_vk_staging_buffer_ * staging_buffer_;
 
     /// are separate shunt buffers even the best way to do this??
     cvm_overlay_render_data_stack element_render_stack;
