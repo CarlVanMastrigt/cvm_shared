@@ -321,6 +321,7 @@ void cvm_vk_staging_shunt_buffer_reset(cvm_vk_staging_shunt_buffer * buffer)
 
 void * cvm_vk_staging_shunt_buffer_add_bytes(cvm_vk_staging_shunt_buffer * buffer, VkDeviceSize byte_count)
 {
+    #warning have max viable size and assert that we are under it!
     void * ptr;
 
     if(buffer->offset+byte_count > buffer->size)
@@ -329,6 +330,8 @@ void * cvm_vk_staging_shunt_buffer_add_bytes(cvm_vk_staging_shunt_buffer * buffe
     }
     ptr=buffer->backing+buffer->offset;
     buffer->offset+=byte_count;
+
+    return ptr;
 }
 
 VkDeviceSize cvm_vk_staging_shunt_buffer_new_segment(cvm_vk_staging_shunt_buffer * buffer)

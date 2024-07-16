@@ -118,7 +118,7 @@ static void cubic_create_shape(overlay_theme * theme, cvm_vk_image_atlas_tile **
 
     assert(r<=40);///CUBIC OVERLAY ELEMENTS OF THIS SIZE NOT SUPPORTED
 
-    *tile=cvm_vk_acquire_image_atlas_tile_with_staging(theme->backing_image_atlas,r*2,r*2,(&data));
+    *tile=cvm_vk_acquire_image_atlas_tile_with_staging(theme->backing_image_atlas,r*2,r*2,&data);
 
     if(*tile)
     {

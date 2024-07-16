@@ -19,7 +19,7 @@ along with cvm_shared.  If not, see <https://www.gnu.org/licenses/>.
 
 #include "cvm_shared.h"
 
-void cvm_vk_create_image_atlas(cvm_vk_image_atlas * ia,VkImage image,VkImageView image_view,size_t bytes_per_pixel,uint32_t width,uint32_t height,bool multithreaded)
+void cvm_vk_create_image_atlas(cvm_vk_image_atlas * ia,VkImage image,VkImageView image_view,size_t bytes_per_pixel,uint32_t width,uint32_t height,bool multithreaded,cvm_vk_staging_shunt_buffer * shunt_buffer)
 {
     uint32_t i,j;
 
@@ -97,12 +97,10 @@ void cvm_vk_create_image_atlas(cvm_vk_image_atlas * ia,VkImage image,VkImageView
 
     ia->available_tiles_bitmasks[t->size_factor_h]=1<<t->size_factor_v;
 
-    ia->staging_buffer=NULL;
+    ia->shunt_buffer=shunt_buffer;
     ia->pending_copy_actions=malloc(sizeof(VkBufferImageCopy)*16);
     ia->pending_copy_space=16;
     ia->pending_copy_count=0;
-
-
 }
 
 void cvm_vk_destroy_image_atlas(cvm_vk_image_atlas * ia)
@@ -430,7 +428,6 @@ void cvm_vk_relinquish_image_atlas_tile(cvm_vk_image_atlas * ia,cvm_vk_image_atl
 {
     uint32_t up,down,offset,offset_end;
     cvm_vk_image_atlas_tile *partner,*adjacent;
-    uint_fast32_t lock;
     cvm_vk_image_atlas_tile ** heap;
     bool finished_h,finished_v;
 
@@ -715,18 +712,18 @@ void cvm_vk_relinquish_image_atlas_tile(cvm_vk_image_atlas * ia,cvm_vk_image_atl
 cvm_vk_image_atlas_tile * cvm_vk_acquire_image_atlas_tile_with_staging(cvm_vk_image_atlas * ia,uint32_t width,uint32_t height,void ** staging)
 {
     VkDeviceSize upload_offset;
-    uint_fast32_t lock;
     cvm_vk_image_atlas_tile * tile;
 
-    assert(ia->staging_buffer);///IMAGE ATLAS STAGING BUFFER NOT SET
-    assert(ia->bytes_per_pixel*width*height <= ia->staging_buffer->total_space);///ATTEMPTED TO ACQUIRE STAGING SPACE FOR IMAGE GREATER THAN STAGING BUFFER TOTAL
+    #warning shunt buffer needs multithreaded handling! also needs max size handling
+    upload_offset=cvm_vk_staging_shunt_buffer_new_segment(ia->shunt_buffer);
+    *staging = cvm_vk_staging_shunt_buffer_add_bytes(ia->shunt_buffer,ia->bytes_per_pixel*width*height);
 
-    *staging = cvm_vk_staging_buffer_acquire_space(ia->staging_buffer,ia->bytes_per_pixel*width*height,&upload_offset);
-
-    if(!*staging) return NULL;
+    if(!*staging)
+    {
+        return NULL;
+    }
 
     tile=cvm_vk_acquire_image_atlas_tile(ia,width,height);
-
     assert(tile);///NO SPACE LEFT IN IMAGE ATLAS
 
     if(ia->multithreaded)
@@ -776,15 +773,16 @@ cvm_vk_image_atlas_tile * cvm_vk_acquire_image_atlas_tile_with_staging(cvm_vk_im
 void * cvm_vk_acquire_staging_for_image_atlas_tile(cvm_vk_image_atlas * ia,cvm_vk_image_atlas_tile * t,uint32_t width,uint32_t height)
 {
     VkDeviceSize upload_offset;
-    uint_fast32_t lock;
     void * staging;
 
-    assert(ia->staging_buffer);///IMAGE ATLAS STAGING BUFFER NOT SET
-    assert(ia->bytes_per_pixel*width*height <= ia->staging_buffer->total_space);///ATTEMPTED TO ACQUIRE STAGING SPACE FOR IMAGE GREATER THAN STAGING BUFFER TOTAL
+    #warning shunt buffer needs multithreaded handling! also needs max size handling
+    upload_offset=cvm_vk_staging_shunt_buffer_new_segment(ia->shunt_buffer);
+    staging = cvm_vk_staging_shunt_buffer_add_bytes(ia->shunt_buffer,ia->bytes_per_pixel*width*height);
 
-    staging = cvm_vk_staging_buffer_acquire_space(ia->staging_buffer,ia->bytes_per_pixel*width*height,&upload_offset);
-
-    if(!staging) return NULL;
+    if(!staging)
+    {
+        return NULL;
+    }
 
     if(ia->multithreaded)
     {
@@ -830,110 +828,9 @@ void * cvm_vk_acquire_staging_for_image_atlas_tile(cvm_vk_image_atlas * ia,cvm_v
     return staging;
 }
 
-void cvm_vk_image_atlas_submit_all_pending_copy_actions(cvm_vk_image_atlas * ia,VkCommandBuffer transfer_cb)
+
+void cvm_vk_image_atlas_submit_all_pending_copy_actions(cvm_vk_image_atlas * ia,VkCommandBuffer transfer_cb, VkBuffer staging_buffer, VkDeviceSize shunt_buffer_base_offset)
 {
-    uint_fast32_t lock;
-
-    if(ia->multithreaded)
-    {
-        mtx_lock(&ia->copy_action_mutex);
-    }
-
-    #warning might be worth looking into making this support different queues... (probably not possible if copies need to be handled promptly)
-    if(ia->pending_copy_count || !ia->initialised)
-    {
-        VkDependencyInfo copy_acquire_dependencies=
-        {
-            .sType=VK_STRUCTURE_TYPE_DEPENDENCY_INFO,
-            .pNext=NULL,
-            .dependencyFlags=0,
-            .memoryBarrierCount=0,
-            .pMemoryBarriers=NULL,
-            .bufferMemoryBarrierCount=0,
-            .pBufferMemoryBarriers=NULL,
-            .imageMemoryBarrierCount=1,
-            .pImageMemoryBarriers=(VkImageMemoryBarrier2[1])
-            {
-                {
-                    .sType=VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER_2,
-                    .pNext=NULL,
-                    .srcStageMask=ia->initialised?VK_PIPELINE_STAGE_2_FRAGMENT_SHADER_BIT:VK_PIPELINE_STAGE_2_TOP_OF_PIPE_BIT,
-                    .srcAccessMask=ia->initialised?VK_ACCESS_2_SHADER_READ_BIT:0,
-                    .dstStageMask=VK_PIPELINE_STAGE_2_TRANSFER_BIT,
-                    .dstAccessMask=VK_ACCESS_2_TRANSFER_WRITE_BIT,
-                    .oldLayout=ia->initialised?VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL:VK_IMAGE_LAYOUT_UNDEFINED,
-                    .newLayout=VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
-                    .srcQueueFamilyIndex=VK_QUEUE_FAMILY_IGNORED,
-                    .dstQueueFamilyIndex=VK_QUEUE_FAMILY_IGNORED,
-                    .image=ia->image,
-                    .subresourceRange=(VkImageSubresourceRange)
-                    {
-                        .aspectMask=VK_IMAGE_ASPECT_COLOR_BIT,
-                        .baseMipLevel=0,
-                        .levelCount=1,
-                        .baseArrayLayer=0,
-                        .layerCount=1
-                    }
-                }
-            }
-        };
-
-        vkCmdPipelineBarrier2(transfer_cb,&copy_acquire_dependencies);
-
-        ///actually execute the copies!
-        ///unfortunately need another test here in case initialised path is being taken
-        if(ia->pending_copy_count)vkCmdCopyBufferToImage(transfer_cb,ia->staging_buffer->buffer,ia->image,VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,ia->pending_copy_count,ia->pending_copy_actions);
-        ia->pending_copy_count=0;
-        ia->initialised=true;
-
-        VkDependencyInfo copy_release_dependencies=
-        {
-            .sType=VK_STRUCTURE_TYPE_DEPENDENCY_INFO,
-            .pNext=NULL,
-            .dependencyFlags=0,
-            .memoryBarrierCount=0,
-            .pMemoryBarriers=NULL,
-            .bufferMemoryBarrierCount=0,
-            .pBufferMemoryBarriers=NULL,
-            .imageMemoryBarrierCount=1,
-            .pImageMemoryBarriers=(VkImageMemoryBarrier2[1])
-            {
-                {
-                    .sType=VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER_2,
-                    .pNext=NULL,
-                    .srcStageMask=VK_PIPELINE_STAGE_2_TRANSFER_BIT,
-                    .srcAccessMask=VK_ACCESS_2_TRANSFER_WRITE_BIT,
-                    .dstStageMask=VK_PIPELINE_STAGE_2_FRAGMENT_SHADER_BIT,
-                    .dstAccessMask=VK_ACCESS_2_SHADER_READ_BIT,
-                    .oldLayout=VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
-                    .newLayout=VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL,
-                    .srcQueueFamilyIndex=VK_QUEUE_FAMILY_IGNORED,
-                    .dstQueueFamilyIndex=VK_QUEUE_FAMILY_IGNORED,
-                    .image=ia->image,
-                    .subresourceRange=(VkImageSubresourceRange)
-                    {
-                        .aspectMask=VK_IMAGE_ASPECT_COLOR_BIT,
-                        .baseMipLevel=0,
-                        .levelCount=1,
-                        .baseArrayLayer=0,
-                        .layerCount=1
-                    }
-                }
-            }
-        };
-
-        vkCmdPipelineBarrier2(transfer_cb,&copy_release_dependencies);
-    }
-
-    if(ia->multithreaded)
-    {
-        mtx_unlock(&ia->copy_action_mutex);
-    }
-}
-
-void cvm_vk_image_atlas_submit_all_pending_copy_actions_(cvm_vk_image_atlas * ia,VkCommandBuffer transfer_cb, VkBuffer staging_buffer, VkDeviceSize shunt_buffer_offset)
-{
-    uint_fast32_t lock;
     uint32_t i;
 
     if(ia->multithreaded)
@@ -941,7 +838,6 @@ void cvm_vk_image_atlas_submit_all_pending_copy_actions_(cvm_vk_image_atlas * ia
         mtx_lock(&ia->copy_action_mutex);
     }
 
-    #warning might be worth looking into making this support different queues... (probably not possible if copies need to be handled promptly)
     if(ia->pending_copy_count || !ia->initialised)
     {
         VkDependencyInfo copy_acquire_dependencies=
@@ -984,7 +880,14 @@ void cvm_vk_image_atlas_submit_all_pending_copy_actions_(cvm_vk_image_atlas * ia
 
         ///actually execute the copies!
         ///unfortunately need another test here in case initialised path is being taken
-        if(ia->pending_copy_count)vkCmdCopyBufferToImage(transfer_cb,ia->staging_buffer->buffer,ia->image,VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,ia->pending_copy_count,ia->pending_copy_actions);
+        if(ia->pending_copy_count)
+        {
+            for(i=0;i<ia->pending_copy_count;i++)
+            {
+                ia->pending_copy_actions[i].bufferOffset+=shunt_buffer_base_offset;
+            }
+            vkCmdCopyBufferToImage(transfer_cb,staging_buffer,ia->image,VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,ia->pending_copy_count,ia->pending_copy_actions);
+        }
         ia->pending_copy_count=0;
         ia->initialised=true;
 

@@ -545,11 +545,8 @@ static void create_overlay_images(cvm_overlay_renderer * renderer,uint32_t t_w,u
     cvm_vk_create_image_view(&renderer->colour_image_view,&view_creation_info);
 
 
-    cvm_vk_create_image_atlas(&renderer->transparent_image_atlas,renderer->transparent_image,renderer->transparent_image_view,sizeof(uint8_t),t_w,t_h,true);
-    cvm_vk_create_image_atlas(&renderer->colour_image_atlas,renderer->colour_image,renderer->colour_image_view,sizeof(uint8_t)*4,c_w,c_h,false);
-
-    renderer->transparent_image_atlas.staging_buffer=&renderer->staging_buffer;
-    renderer->colour_image_atlas.staging_buffer=&renderer->staging_buffer;
+    cvm_vk_create_image_atlas(&renderer->transparent_image_atlas,renderer->transparent_image,renderer->transparent_image_view,sizeof(uint8_t),t_w,t_h,true,&renderer->shunt_buffer);
+    cvm_vk_create_image_atlas(&renderer->colour_image_atlas,renderer->colour_image,renderer->colour_image_view,sizeof(uint8_t)*4,c_w,c_h,false,&renderer->shunt_buffer);
 
     #warning as images ALWAYS need staging (even on uma) could make staging a creation parameter?? -- YES
     ///perhaps not as it limits the ability to use it for a more generalised purpose...
@@ -752,9 +749,10 @@ void overlay_render_to_image(cvm_vk_device * device, cvm_overlay_renderer * rend
     cvm_vk_staging_buffer_allocation staging_buffer_allocation;
     VkDeviceSize staging_space_required;
     VkDeviceSize instance_offset,uniform_offset,upload_offset;
+    cvm_overlay_render_data_stack * element_render_stack;
+    cvm_vk_staging_shunt_buffer * shunt_buffer;
 
-     cvm_overlay_render_data_stack * element_render_stack = &renderer->element_render_stack;
-     cvm_overlay_render_data_stack_clr(element_render_stack);
+
 
 //    cvm_vk_module_work_payload payload;
 
@@ -772,6 +770,14 @@ void overlay_render_to_image(cvm_vk_device * device, cvm_overlay_renderer * rend
 
     if(presentable_image)
     {
+        element_render_stack = &renderer->element_render_stack;
+        cvm_overlay_render_data_stack_clr(element_render_stack);
+
+        shunt_buffer = &renderer->shunt_buffer;
+        cvm_vk_staging_shunt_buffer_reset(shunt_buffer);
+
+        upload_offset=cvm_vk_staging_shunt_buffer_new_segment(shunt_buffer);///always zero??
+
         #warning temporary hack!
         swapchain_image_index=presentable_image - presentable_image->parent_swapchain->presenting_images;
 
@@ -792,17 +798,26 @@ void overlay_render_to_image(cvm_vk_device * device, cvm_overlay_renderer * rend
 
         ///cvm_vk_staging_buffer_allocation_align_offset
 
-
+        #warning this uses the shunt buffer!
         render_widget_overlay(element_render_stack,menu_widget);
 
         #warning make copy and size functions on a stack!
-        memcpy(staging_buffer_allocation.mapping,element_render_stack->stack,sizeof(cvm_overlay_render_data)*element_render_stack->count);
+
 
         /// upload all staged resources needed by this frame
         ///if ever using a dedicated transfer queue (probably don't want tbh) change command buffers in these
-        cvm_vk_image_atlas_submit_all_pending_copy_actions(&renderer->transparent_image_atlas,cb.buffer);
-        cvm_vk_image_atlas_submit_all_pending_copy_actions(&renderer->colour_image_atlas,cb.buffer);
 
+
+        assert(upload_offset==0);
+        #warning shunt buffer needs its own mutex!
+        cvm_vk_image_atlas_submit_all_pending_copy_actions(&renderer->transparent_image_atlas,cb.buffer,renderer->staging_buffer_->buffer, staging_buffer_allocation.acquired_offset);
+        cvm_vk_image_atlas_submit_all_pending_copy_actions(&renderer->colour_image_atlas,cb.buffer,renderer->staging_buffer_->buffer, staging_buffer_allocation.acquired_offset);
+
+        memcpy(staging_buffer_allocation.mapping+upload_offset,shunt_buffer->backing+upload_offset,shunt_buffer->size);
+
+        instance_offset=cvm_vk_staging_shunt_buffer_new_segment(shunt_buffer);///just to get present offset
+        assert(instance_offset+sizeof(cvm_overlay_render_data)*element_render_stack->count < staging_space_required);
+        memcpy(staging_buffer_allocation.mapping+instance_offset,element_render_stack->stack,sizeof(cvm_overlay_render_data)*element_render_stack->count);
         ///end of transfer
 
         ///start of graphics
@@ -841,7 +856,8 @@ void overlay_render_to_image(cvm_vk_device * device, cvm_overlay_renderer * rend
         vkCmdBindPipeline(cb.buffer,VK_PIPELINE_BIND_POINT_GRAPHICS,overlay_pipeline);
 
 //        cvm_vk_transient_buffer_bind_as_vertex(cb.buffer,&overlay_transient_buffer,0,vertex_offset);
-        vkCmdBindVertexBuffers(cb.buffer,0,1,&renderer->staging_buffer_->buffer,&staging_buffer_allocation.acquired_offset);
+        instance_offset+=staging_buffer_allocation.acquired_offset;
+        vkCmdBindVertexBuffers(cb.buffer,0,1,&renderer->staging_buffer_->buffer,&instance_offset);
 
         vkCmdDraw(cb.buffer,4,renderer->element_render_stack.count,0,0);
 
