@@ -25,6 +25,8 @@ along with cvm_shared.  If not, see <https://www.gnu.org/licenses/>.
 #define CVM_DATA_STRUCTURES_H
 
 
+///add->push get->pull
+
 #ifndef CVM_STACK
 #define CVM_STACK(type,name,start_size)                                         \
                                                                                 \
@@ -37,7 +39,7 @@ typedef struct name##_stack                                                     
 name##_stack;                                                                   \
                                                                                 \
                                                                                 \
-static inline void name##_stack_ini( name##_stack * s )                         \
+static inline void name##_stack_initialise( name##_stack * s )                  \
 {                                                                               \
     assert(start_size>3 && !(start_size & (start_size-1)));                     \
     s->stack=malloc( sizeof( type ) * start_size );                             \
@@ -63,12 +65,12 @@ static inline int name##_stack_get( name##_stack * s , type * value )           
     return 1;                                                                   \
 }                                                                               \
                                                                                 \
-static inline void name##_stack_del( name##_stack * s )                         \
+static inline void name##_stack_terminate( name##_stack * s )                   \
 {                                                                               \
     free(s->stack);                                                             \
 }                                                                               \
                                                                                 \
-static inline void name##_stack_clr( name##_stack * s )                         \
+static inline void name##_stack_reset( name##_stack * s )                       \
 {                                                                               \
     s->count=0;                                                                 \
 }                                                                               \
@@ -85,7 +87,7 @@ static inline type * name##_stack_new( name##_stack * s )                       
 }                                                                               \
                                                                                 \
 static inline void name##_stack_add_multiple                                    \
-( name##_stack * s , type * values , uint_fast32_t count)                       \
+( name##_stack * s , const type * values , uint_fast32_t count)                 \
 {                                                                               \
     uint_fast32_t n;                                                            \
     while((s->count+count) > s->space)                                          \
@@ -96,7 +98,17 @@ static inline void name##_stack_add_multiple                                    
     memcpy(s->stack+s->count,values,sizeof( type )*count);                      \
     s->count+=count;                                                            \
 }                                                                               \
-///add a reset function??
+                                                                                \
+static inline size_t name##_stack_size( name##_stack * s )                      \
+{                                                                               \
+    return sizeof( type ) * s->count;                                           \
+}                                                                               \
+                                                                                \
+static inline void name##_stack_copy( name##_stack * s , void * dst )           \
+{                                                                               \
+    memcpy( dst , s->stack , sizeof( type ) * s->count );                       \
+}                                                                               \
+
 #endif
 
 CVM_STACK(uint32_t,u32,16)
@@ -104,29 +116,31 @@ CVM_STACK(uint32_t,u32,16)
 
 
 
-#ifndef CVM_LIST
-#define CVM_LIST(type,name,start_size)                                          \
+
+
+#ifndef CVM_ARRAY
+#define CVM_ARRAY(type,name,start_size)                                         \
                                                                                 \
-typedef struct name##_list                                                      \
+typedef struct name##_array                                                     \
 {                                                                               \
     u32_stack available_indices;                                                \
-    type * list;                                                                \
+    type * array;                                                               \
     uint_fast32_t space;                                                        \
     uint_fast32_t count;                                                        \
 }                                                                               \
-name##_list;                                                                    \
+name##_array;                                                                   \
                                                                                 \
                                                                                 \
-static inline void name##_list_ini( name##_list * l )                           \
+static inline void name##_array_initialise( name##_array * l )                  \
 {                                                                               \
     assert(start_size>3 && !(start_size & (start_size-1)));                     \
-    u32_stack_ini(&l->available_indices);                                       \
-    l->list=malloc( sizeof( type ) * start_size );                              \
+    u32_stack_initialise(&l->available_indices);                                \
+    l->array=malloc( sizeof( type ) * start_size );                             \
     l->space=start_size;                                                        \
     l->count=0;                                                                 \
 }                                                                               \
                                                                                 \
-static inline uint32_t name##_list_add( name##_list * l , type value )          \
+static inline uint32_t name##_array_add( name##_array * l , type value )        \
 {                                                                               \
     uint_fast32_t n;                                                            \
     uint32_t i;                                                                 \
@@ -135,15 +149,16 @@ static inline uint32_t name##_list_add( name##_list * l , type value )          
         if(l->count==l->space)                                                  \
         {                                                                       \
             n=cvm_allocation_increase_step(l->space);                           \
-            l->list=realloc(l->list,sizeof( type )*(l->space+=n));              \
+            l->array=realloc(l->array,sizeof( type )*(l->space+=n));            \
         }                                                                       \
         i=l->count++;                                                           \
     }                                                                           \
-    l->list[i]=value;                                                           \
+    l->array[i]=value;                                                          \
     return i;                                                                   \
 }                                                                               \
                                                                                 \
-static inline uint32_t name##_list_add_ptr( name##_list * l , type * value )    \
+static inline uint32_t name##_array_add_ptr                                     \
+( name##_array * l , const type * value )                                       \
 {                                                                               \
     uint_fast32_t n;                                                            \
     uint32_t i;                                                                 \
@@ -152,38 +167,43 @@ static inline uint32_t name##_list_add_ptr( name##_list * l , type * value )    
         if(l->count==l->space)                                                  \
         {                                                                       \
             n=cvm_allocation_increase_step(l->space);                           \
-            l->list=realloc(l->list,sizeof( type )*(l->space+=n));              \
+            l->array=realloc(l->array,sizeof( type )*(l->space+=n));            \
         }                                                                       \
         i=l->count++;                                                           \
     }                                                                           \
-    l->list[i]=*value;                                                          \
+    l->array[i]=*value;                                                         \
     return i;                                                                   \
 }                                                                               \
                                                                                 \
-static inline void name##_list_get                                              \
-( name##_list * l , type * value , uint32_t i )                                 \
+static inline type name##_array_get( name##_array * l , uint32_t i )            \
 {                                                                               \
-    assert(i < l->count);                                                       \
-    *value=l->list[i];                                                          \
     u32_stack_add(&l->available_indices,i);                                     \
+    return l->array[i];                                                         \
 }                                                                               \
                                                                                 \
-static inline void name##_list_del( name##_list * l )                           \
+/** returned pointer cannot be used after any other operation has occurred*/    \
+static inline const type * name##_array_get_ptr( name##_array * l , uint32_t i )\
 {                                                                               \
-    u32_stack_del(&l->available_indices);                                       \
-    free(l->list);                                                              \
+    u32_stack_add(&l->available_indices,i);                                     \
+    return l->array+i;                                                          \
 }                                                                               \
                                                                                 \
-static inline void name##_list_clr( name##_list * l )                           \
+static inline void name##_array_terminate( name##_array * l )                   \
 {                                                                               \
-    u32_stack_clr(&l->available_indices);                                       \
+    u32_stack_terminate(&l->available_indices);                                 \
+    free(l->array);                                                             \
+}                                                                               \
+                                                                                \
+static inline void name##_array_reset( name##_array * l )                       \
+{                                                                               \
+    u32_stack_reset(&l->available_indices);                                     \
     l->count=0;                                                                 \
 }                                                                               \
 
 #endif
 
 
-CVM_LIST(uint32_t,u32,16)
+CVM_ARRAY(uint32_t,u32,16)
 
 
 /**
@@ -275,10 +295,7 @@ static inline void name##_bin_heap_del( name##_bin_heap * h )                   
 
 
 
-
-
-
-
+///legacy, should probably be removed/reconsidered at some point
 typedef uint8_t cvm_atomic_pad[256-sizeof(atomic_uint_fast32_t)];
 
 typedef struct cvm_thread_safe_expanding_queue
@@ -313,83 +330,9 @@ void cvm_thread_safe_expanding_queue_del( cvm_thread_safe_expanding_queue * list
 
 
 
-typedef struct cvm_thread_safe_queue
-{
-    size_t type_size;
-    uint_fast32_t max_entry_count;
-    char * data;
-    cvm_atomic_pad start_pad;
-    atomic_uint_fast32_t in;
-    cvm_atomic_pad in_pad;
-    atomic_uint_fast32_t out;
-    cvm_atomic_pad out_pad;
-    atomic_uint_fast32_t in_fence;
-    cvm_atomic_pad in_fence_pad;
-    atomic_uint_fast32_t out_fence;
-    cvm_atomic_pad out_fence_pad;
-}
-cvm_thread_safe_queue;
-
-void cvm_thread_safe_queue_ini( cvm_thread_safe_queue * list , uint_fast32_t max_entry_count , size_t type_size );///not coherent
-bool cvm_thread_safe_queue_add( cvm_thread_safe_queue * list , void * value );
-bool cvm_thread_safe_queue_get( cvm_thread_safe_queue * list , void * value );
-void cvm_thread_safe_queue_del( cvm_thread_safe_queue * list );///not coherent
 
 
 
-
-
-
-typedef struct cvm_lock_free_stack_head
-{
-    uint_fast64_t change_count;
-    char * first;
-}
-cvm_lock_free_stack_head;
-
-typedef struct cvm_lock_free_stack
-{
-    void * unit_allocation;
-    size_t type_size;
-    cvm_atomic_pad start_pad;
-    _Atomic cvm_lock_free_stack_head allocated;
-    cvm_atomic_pad allocated_pad;
-    _Atomic cvm_lock_free_stack_head available;
-    cvm_atomic_pad available_pad;
-}
-cvm_lock_free_stack;
-
-void cvm_lock_free_stack_ini( cvm_lock_free_stack * stack , uint32_t num_units , size_t type_size );///not lockfree
-bool cvm_lock_free_stack_add( cvm_lock_free_stack * stack , void * value );
-bool cvm_lock_free_stack_get( cvm_lock_free_stack * stack , void * value );
-void cvm_lock_free_stack_del( cvm_lock_free_stack * stack );///not lockfree
-
-
-
-
-///    is faster than the general type under all usage patterns.
-///    thread safe unless total stored entries exceed max_entry_count (not thread-safe because of this).
-
-typedef struct cvm_coherent_limted_queue
-{
-    size_t type_size;
-    uint_fast32_t max_entry_count;
-
-    uint8_t * data;
-    cvm_atomic_pad start_pad;
-    atomic_uint_fast32_t fence;
-    cvm_atomic_pad fence_pad;
-    atomic_uint_fast32_t in;
-    cvm_atomic_pad in_pad;
-    atomic_uint_fast32_t out;
-    cvm_atomic_pad out_pad;
-}
-cvm_coherent_limted_queue;
-
-void cvm_coherent_limted_queue_ini( cvm_coherent_limted_queue * list , uint_fast32_t max_entry_count , size_t type_size );
-void cvm_coherent_limted_queue_add( cvm_coherent_limted_queue * list , void * value );
-bool cvm_coherent_limted_queue_get( cvm_coherent_limted_queue * list , void * value );
-void cvm_coherent_limted_queue_del( cvm_coherent_limted_queue * list );
 
 
 

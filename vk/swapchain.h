@@ -46,6 +46,9 @@ typedef struct cvm_vk_swapchain_presentable_image
     VkImage image;///theese are provided by the WSI
     VkImageView image_view;
 
+    /// "unique" identifier used to differentiate images after swapchain recreation
+    uint16_t unique_image_identifier;
+
     VkSemaphore acquire_semaphore;///held temporarily by this struct, not owner, not created or destroyed as part of it
 
     cvm_vk_surface_swapchain * parent_swapchain;
@@ -103,6 +106,9 @@ typedef struct cvm_vk_surface_swapchain
 
     ///both frames in flight and frames acquired by rendereer
     uint32_t acquired_image_count;/// init as 0
+
+    uint16_t unique_image_counter;
+    uint16_t generation;
 
     ///following used to determine number of swapchain images to allocate
     bool rendering_resources_valid;/// starts false, used to determine if rebuilding of resources is required due to swapchain invalidation (e.g. because window was resized)

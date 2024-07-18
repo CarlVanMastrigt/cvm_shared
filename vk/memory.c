@@ -84,8 +84,8 @@ void cvm_vk_managed_buffer_create(cvm_vk_managed_buffer * mb,uint32_t buffer_siz
     #warning should have a runtime method to check if following is necessary, will be a decent help in setting up module buffer sizes
     mb->staging_buffer=NULL;
 
-    cvm_vk_buffer_copy_stack_ini(&mb->pending_copies);
-    cvm_vk_buffer_barrier_stack_ini(&mb->copy_release_barriers);
+    cvm_vk_buffer_copy_stack_initialise(&mb->pending_copies);
+    cvm_vk_buffer_barrier_stack_initialise(&mb->copy_release_barriers);
 
     mb->copy_update_counter=0;
     mb->copy_queue_bitmask=0;
@@ -106,8 +106,8 @@ void cvm_vk_managed_buffer_destroy(cvm_vk_managed_buffer * mb)
 
     free(mb->temporary_allocation_data);
 
-    cvm_vk_buffer_copy_stack_del(&mb->pending_copies);
-    cvm_vk_buffer_barrier_stack_del(&mb->copy_release_barriers);
+    cvm_vk_buffer_copy_stack_terminate(&mb->pending_copies);
+    cvm_vk_buffer_barrier_stack_terminate(&mb->copy_release_barriers);
 }
 
 bool cvm_vk_managed_buffer_acquire_temporary_allocation(cvm_vk_managed_buffer * mb,uint64_t size,uint32_t * allocation_index,uint64_t * allocation_offset)
@@ -673,7 +673,7 @@ void cvm_vk_managed_buffer_submit_all_batch_copy_actions(cvm_vk_managed_buffer *
 
             vkCmdCopyBuffer(transfer_cb,mb->staging_buffer->buffer,mb->buffer,mb->pending_copies.count,mb->pending_copies.stack);
 
-            cvm_vk_buffer_copy_stack_clr(&mb->pending_copies);
+            cvm_vk_buffer_copy_stack_reset(&mb->pending_copies);
 
             VkDependencyInfo copy_release_dependencies=
             {
@@ -689,7 +689,7 @@ void cvm_vk_managed_buffer_submit_all_batch_copy_actions(cvm_vk_managed_buffer *
             };
             vkCmdPipelineBarrier2(transfer_cb,&copy_release_dependencies);
 
-            cvm_vk_buffer_barrier_stack_clr(&mb->copy_release_barriers);
+            cvm_vk_buffer_barrier_stack_reset(&mb->copy_release_barriers);
         }
 
 
@@ -735,14 +735,14 @@ void cvm_vk_managed_buffer_dismissal_list_update(cvm_vk_managed_buffer_dismissal
     for(i=frame_count;i<dismissal_list->frame_count;i++)
     {
         assert(dismissal_list->allocation_indices[i].count==0);
-        u32_stack_del(dismissal_list->allocation_indices+i);
+        u32_stack_terminate(dismissal_list->allocation_indices+i);
     }
 
     dismissal_list->allocation_indices=realloc(dismissal_list->allocation_indices,sizeof(u32_stack)*frame_count);
 
     for(i=dismissal_list->frame_count;i<frame_count;i++)
     {
-        u32_stack_ini(dismissal_list->allocation_indices+i);
+        u32_stack_initialise(dismissal_list->allocation_indices+i);
     }
 
     dismissal_list->frame_count=frame_count;
@@ -757,7 +757,7 @@ void cvm_vk_managed_buffer_dismissal_list_destroy(cvm_vk_managed_buffer_dismissa
     for(i=0;i<dismissal_list->frame_count;i++)
     {
         assert(dismissal_list->allocation_indices[i].count==0);
-        u32_stack_del(dismissal_list->allocation_indices+i);
+        u32_stack_terminate(dismissal_list->allocation_indices+i);
     }
 
     free(dismissal_list->allocation_indices);

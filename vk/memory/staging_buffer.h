@@ -105,9 +105,7 @@ void cvm_vk_staging_buffer_flush_allocation(const cvm_vk_staging_buffer_ * stagi
 /// allocation index is the index param of struct reurned by `cvm_vk_staging_buffer_reserve_allocation`
 void cvm_vk_staging_buffer_complete_allocation(cvm_vk_staging_buffer_ * staging_buffer, uint32_t reserved_allocation_segment_index, cvm_vk_timeline_semaphore_moment moment_of_last_use);
 
-
-
-//VkDeviceSize cvm_vk_staging_buffer_allocation_align_offset(cvm_vk_staging_buffer_ * staging_buffer, VkDeviceSize relative_offset);
+VkDeviceSize cvm_vk_staging_buffer_allocation_align_offset(cvm_vk_staging_buffer_ * staging_buffer, VkDeviceSize offset);
 
 typedef struct cvm_vk_staging_shunt_buffer
 {
@@ -115,6 +113,7 @@ typedef struct cvm_vk_staging_shunt_buffer
     VkDeviceSize alignment;
     VkDeviceSize size;
     VkDeviceSize offset;
+    /// add check to make sure nothing added after buffer gets copied?
 }
 cvm_vk_staging_shunt_buffer;
 
@@ -126,6 +125,8 @@ void cvm_vk_staging_shunt_buffer_reset(cvm_vk_staging_shunt_buffer * buffer);
 /// returns pointer to location which can be written, this pointer is only valid until next use
 void * cvm_vk_staging_shunt_buffer_add_bytes(cvm_vk_staging_shunt_buffer * buffer, VkDeviceSize byte_count);
 VkDeviceSize cvm_vk_staging_shunt_buffer_new_segment(cvm_vk_staging_shunt_buffer * buffer);
+
+void cvm_vk_staging_shunt_buffer_copy(cvm_vk_staging_shunt_buffer * buffer, void * dst);
 
 #endif
 

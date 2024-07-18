@@ -29,7 +29,7 @@ static inline int cvm_vk_swapchain_create(const cvm_vk_device * device, cvm_vk_s
     cvm_vk_swapchain_presentable_image * presentable_image;
 
 
-
+    assert(swapchain->acquired_image_count==0);
     swapchain->acquired_image_index=CVM_INVALID_U32_INDEX;///no longer have a valid swapchain image (might be better place to put this?)
 
     swapchain->queue_family_presentable_mask=0;
@@ -79,6 +79,11 @@ static inline int cvm_vk_swapchain_create(const cvm_vk_device * device, cvm_vk_s
         .oldSwapchain=old_swapchain,
     };
 
+    swapchain->generation++;
+    if(swapchain->generation==CVM_INVALID_U16_INDEX)
+    {
+        swapchain->generation=0;
+    }
     CVM_VK_CHECK(vkCreateSwapchainKHR(device->device,&swapchain_create_info,NULL,&swapchain->swapchain));
 
     if(old_swapchain!=VK_NULL_HANDLE)
@@ -121,7 +126,13 @@ static inline int cvm_vk_swapchain_create(const cvm_vk_device * device, cvm_vk_s
         presentable_image=swapchain->presenting_images+i;
 
         presentable_image->image=swapchain_images[i];
-            ///.image_view,//set later
+
+        presentable_image->unique_image_identifier=swapchain->unique_image_counter++;
+        if(swapchain->unique_image_counter==CVM_INVALID_U16_INDEX)
+        {
+            swapchain->unique_image_counter=0;
+        }
+
         presentable_image->acquire_semaphore=VK_NULL_HANDLE;///set using one of the available image_acquisition_semaphores
         #warning instead of above assert it is NULL and set to VK_NULL_HANDLE upon init and upon being relinquished! (same for below!)
         presentable_image->acquired=false;
@@ -223,6 +234,11 @@ int cvm_vk_swapchain_initialse(const cvm_vk_device * device, cvm_vk_surface_swap
     swapchain->image_acquisition_semaphores[0]=cvm_vk_create_binary_semaphore(device);
 
     swapchain->presenting_images=NULL;
+
+    swapchain->acquired_image_count=0;
+
+    swapchain->generation=0;
+    swapchain->unique_image_counter=0;
 
     assert(device->queue_family_count<=64);/// cannot hold bitmask
 
@@ -397,7 +413,6 @@ const cvm_vk_swapchain_presentable_image * cvm_vk_swapchain_acquire_presentable_
             }
 
             presentable_image = swapchain->presenting_images + swapchain->acquired_image_index;
-
             /// cleanup prior use of this frame index
 
             if(presentable_image->acquired)///if it was acquired, cleanup is in order

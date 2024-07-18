@@ -290,10 +290,10 @@ void cvm_vk_staging_buffer_complete_allocation(cvm_vk_staging_buffer_ * staging_
     mtx_unlock(&staging_buffer->access_mutex);
 }
 
-VkDeviceSize cvm_vk_staging_buffer_allocation_align_offset(cvm_vk_staging_buffer_ * staging_buffer, VkDeviceSize relative_offset)
+VkDeviceSize cvm_vk_staging_buffer_allocation_align_offset(cvm_vk_staging_buffer_ * staging_buffer, VkDeviceSize offset)
 {
     #warning have base VK variant that takes usage as input
-    return cvm_vk_align(relative_offset, staging_buffer->alignment);
+    return cvm_vk_align(offset, staging_buffer->alignment);
 }
 
 
@@ -340,7 +340,10 @@ VkDeviceSize cvm_vk_staging_shunt_buffer_new_segment(cvm_vk_staging_shunt_buffer
     return buffer->offset;
 }
 
-
+void cvm_vk_staging_shunt_buffer_copy(cvm_vk_staging_shunt_buffer * buffer, void * dst)
+{
+    memcpy(dst,buffer->backing,buffer->offset);
+}
 
 
 

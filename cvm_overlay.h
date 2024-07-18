@@ -70,6 +70,8 @@ typedef enum
 overlay_colour;
 
 
+
+
 typedef struct cvm_overlay_render_data
 {
     uint16_t data0[4];///position
@@ -334,15 +336,39 @@ static inline void cvm_render_fill_fading_overlay_element(cvm_overlay_render_dat
 #include "themes/cubic.h"
 
 
+/// need a concept of swapchain dependent data (e.g. render pass, descriptor set?) that can be destroyed when no longer referenced...
+
+/// move this to swapchain dependent data?? is a nice simple solution tbh
+typedef struct cvm_overlay_framebuffer
+{
+    VkFramebuffer framebuffer;
+    bool in_flight;
+
+    uint16_t unique_swapchain_image_identifier;
+    uint16_t swapchain_generation;
+}
+cvm_overlay_framebuffer;
+
+CVM_STACK(cvm_overlay_framebuffer,cvm_overlay_framebuffer,4)
 
 
 
+typedef struct cvm_overlay_varying_rendering_resources
+{
+    /// identifier for a change to rendering resources
+    uint16_t swapchain_generation;
+
+    cvm_overlay_framebuffer_stack framebuffers;
+    VkRenderPass render_pass;
+    uint16_t in_flight_count;
+}
+cvm_overlay_varying_rendering_resources;
 
 typedef struct cvm_overlay_renderer
 {
     cvm_vk_device * device;///is there a better place to put this? probably...
     /// for uploading to images, is NOT locally owned
-    cvm_vk_staging_buffer_ * staging_buffer_;
+    cvm_vk_staging_buffer_ * staging_buffer;
 
     uint32_t cycle_count;/// needs better name
     cvm_vk_work_queue work_queue;
@@ -350,9 +376,6 @@ typedef struct cvm_overlay_renderer
     /// are separate shunt buffers even the best way to do this??
     cvm_overlay_render_data_stack element_render_stack;
     cvm_vk_staging_shunt_buffer shunt_buffer;
-
-    ///should replace below ASAP
-    cvm_vk_staging_buffer staging_buffer;
 
     /// image info
     VkDeviceMemory image_memory;
@@ -365,9 +388,15 @@ typedef struct cvm_overlay_renderer
     VkImageView colour_image_view;///views of single array slice from image
     cvm_vk_image_atlas colour_image_atlas;
 
+    ///these descriptors don't change
     VkDescriptorSetLayout image_descriptor_set_layout;
     VkDescriptorPool image_descriptor_pool;
     VkDescriptorSet image_descriptor_set;
+
+    VkPipelineShaderStageCreateInfo vertex_stage;
+    VkPipelineShaderStageCreateInfo fragment_stage;
+
+    cvm_overlay_framebuffer_stack framebuffers;
 }
 cvm_overlay_renderer;
 
@@ -377,13 +406,10 @@ void cvm_overlay_renderer_terminate(cvm_overlay_renderer * renderer, cvm_vk_devi
 void initialise_overlay_render_data(cvm_overlay_renderer * renderer);
 void terminate_overlay_render_data(cvm_overlay_renderer * renderer);
 
-void initialise_overlay_swapchain_dependencies(void);
+void initialise_overlay_swapchain_dependencies(cvm_overlay_renderer * renderer);
 void terminate_overlay_swapchain_dependencies(void);
 
 void overlay_render_to_image(cvm_vk_device * device, cvm_overlay_renderer * renderer, cvm_vk_swapchain_presentable_image * presentable_image, int screen_w,int screen_h,widget * menu_widget);
-
-void overlay_frame_cleanup(uint32_t swapchain_image_index);
-#warning make above take `const cvm_vk_swapchain_presentable_image *` as input instead ??
 
 
 #endif
