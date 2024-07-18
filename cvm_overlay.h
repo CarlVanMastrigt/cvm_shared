@@ -341,28 +341,33 @@ static inline void cvm_render_fill_fading_overlay_element(cvm_overlay_render_dat
 /// move this to swapchain dependent data?? is a nice simple solution tbh
 typedef struct cvm_overlay_framebuffer
 {
-    VkFramebuffer framebuffer;
-    bool in_flight;
-
+    /// identifier for changes to rendering
     uint16_t unique_swapchain_image_identifier;
-    uint16_t swapchain_generation;
+
+    VkFramebuffer framebuffer;
 }
 cvm_overlay_framebuffer;
 
 CVM_STACK(cvm_overlay_framebuffer,cvm_overlay_framebuffer,4)
 
 
-
-typedef struct cvm_overlay_varying_rendering_resources
+/// resources dependent upon the render configuration (swapchain &c.)
+typedef struct cvm_overlay_swapchain_resources
 {
     /// identifier for a change to rendering resources
-    uint16_t swapchain_generation;
+    uint16_t swapchain_generation;/// this could instead be a resolution and colour space?
 
+    uint16_t in_flight_count;/// use count, used to determine if resources can be freed/cleared
+
+    /// could require that the framebuffer must get passed into this function, and that it's ref counted!
     cvm_overlay_framebuffer_stack framebuffers;
     VkRenderPass render_pass;
-    uint16_t in_flight_count;
+    VkPipeline pipeline;
 }
-cvm_overlay_varying_rendering_resources;
+cvm_overlay_swapchain_resources;
+
+CVM_STACK(cvm_overlay_swapchain_resources,cvm_overlay_swapchain_resources,4)
+
 
 typedef struct cvm_overlay_renderer
 {
@@ -396,7 +401,8 @@ typedef struct cvm_overlay_renderer
     VkPipelineShaderStageCreateInfo vertex_stage;
     VkPipelineShaderStageCreateInfo fragment_stage;
 
-    cvm_overlay_framebuffer_stack framebuffers;
+    /// collection of resources dependent upon the render target (swapchain)
+    cvm_overlay_swapchain_resources_stack swapchain_dependent_resources;
 }
 cvm_overlay_renderer;
 

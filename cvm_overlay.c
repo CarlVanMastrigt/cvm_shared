@@ -20,9 +20,6 @@ along with cvm_shared.  If not, see <https://www.gnu.org/licenses/>.
 #include "cvm_shared.h"
 
 
-
-static VkRenderPass overlay_render_pass;
-
 ///if uniform paradigm is based on max per frame being respected then the descrptor sets can be pre baked with offsets per swapchain image
 /// separate uniform buffer for fixed data (colour, screen size &c.) ?
 static VkDescriptorSetLayout overlay_descriptor_set_layout;///rename this set to uniform
@@ -31,7 +28,7 @@ static VkDescriptorSet * overlay_descriptor_sets;
 
 /// swapchain generation probably useful, needs a way to clean up last used swapchain generation
 static VkPipelineLayout overlay_pipeline_layout;///relevant descriptors, share as much as possible
-static VkPipeline overlay_pipeline;
+
 
 
 
@@ -282,8 +279,11 @@ static void create_overlay_pipeline_layouts(cvm_overlay_renderer * renderer)
     cvm_vk_create_pipeline_layout(&overlay_pipeline_layout,&pipeline_create_info);
 }
 
-static void create_overlay_render_pass(void)
+static VkRenderPass cvm_overlay_render_pass_create(cvm_vk_device * device)
 {
+    VkRenderPass render_pass;
+    VkResult created;
+
     VkRenderPassCreateInfo create_info=
     {
         .sType=VK_STRUCTURE_TYPE_RENDER_PASS_CREATE_INFO,
@@ -345,11 +345,20 @@ static void create_overlay_render_pass(void)
         }
     };
 
-    cvm_vk_create_render_pass(&overlay_render_pass,&create_info);
+    created=vkCreateRenderPass(device->device,&create_info,NULL,&render_pass);
+    if(created!=VK_SUCCESS)
+    {
+        return VK_NULL_HANDLE;
+    }
+
+    return render_pass;
 }
 
-static void create_overlay_pipelines(cvm_overlay_renderer * renderer)
+static VkPipeline cvm_overlay_pipeline_create(cvm_vk_device * device, cvm_overlay_renderer * renderer, VkRenderPass render_pass)
 {
+    VkResult created;
+    VkPipeline pipeline;
+
     VkGraphicsPipelineCreateInfo create_info=
     {
         .sType=VK_STRUCTURE_TYPE_GRAPHICS_PIPELINE_CREATE_INFO,
@@ -433,14 +442,20 @@ static void create_overlay_pipelines(cvm_overlay_renderer * renderer)
         },
         .pDynamicState=NULL,
         .layout=overlay_pipeline_layout,
-        .renderPass=overlay_render_pass,
+        .renderPass=render_pass,
         .subpass=0,
         .basePipelineHandle=VK_NULL_HANDLE,
         .basePipelineIndex=-1
     };
 
     ///can pass above into multiple functions as parameter
-    cvm_vk_create_graphics_pipeline(&overlay_pipeline,&create_info);
+    created=vkCreateGraphicsPipelines(device->device,VK_NULL_HANDLE,1,&create_info,NULL,&pipeline);
+    if(created!=VK_SUCCESS)
+    {
+        pipeline=VK_NULL_HANDLE;
+    }
+
+    return pipeline;
 }
 
 static void create_overlay_images(cvm_overlay_renderer * renderer,uint32_t t_w,uint32_t t_h,uint32_t c_w,uint32_t c_h)
@@ -531,8 +546,6 @@ static void create_overlay_images(cvm_overlay_renderer * renderer,uint32_t t_w,u
 
 void initialise_overlay_render_data(cvm_overlay_renderer * renderer)
 {
-    create_overlay_render_pass();
-
     create_overlay_descriptor_set_layouts(renderer);
 
     create_overlay_pipeline_layouts(renderer);
@@ -563,10 +576,6 @@ void terminate_overlay_render_data(cvm_overlay_renderer * renderer)
     cvm_vk_free_memory(renderer->image_memory);
 
 
-
-
-    cvm_vk_destroy_render_pass(overlay_render_pass);
-
     cvm_vk_destroy_shader_stage_info(&renderer->vertex_stage);
     cvm_vk_destroy_shader_stage_info(&renderer->fragment_stage);
 
@@ -584,8 +593,6 @@ void initialise_overlay_swapchain_dependencies(cvm_overlay_renderer * renderer)
     #warning REMOVE
     uint32_t swapchain_image_count=cvm_vk_get_swapchain_image_count();
 
-    create_overlay_pipelines(renderer);
-
     create_overlay_descriptor_sets(swapchain_image_count);
 }
 
@@ -594,8 +601,6 @@ void terminate_overlay_swapchain_dependencies(void)
     #warning REMOVE
     uint32_t swapchain_image_count=cvm_vk_get_swapchain_image_count();
     uint32_t i;
-
-    cvm_vk_destroy_pipeline(overlay_pipeline);
 
     cvm_vk_destroy_descriptor_pool(overlay_descriptor_pool);
 
@@ -617,92 +622,139 @@ float overlay_colours[OVERLAY_NUM_COLOURS*4]=
 
 
 
-
-
-static inline VkFramebuffer cvm_overlay_renderer_framebuffer_acquire(cvm_overlay_renderer * renderer, cvm_vk_device * device, cvm_vk_swapchain_presentable_image * presentable_image)
+typedef struct cvm_overlay_frame_resource_set
 {
-    uint32_t i;
-    VkResult created;
-    cvm_overlay_framebuffer * framebuffer;
-    bool removed;
-
-    ///first, prune unused framebuffers
-    for(i=0;i<renderer->framebuffers.count;  )
-    {
-        framebuffer=renderer->framebuffers.stack+i;
-        if(framebuffer->swapchain_generation!=presentable_image->parent_swapchain->generation && !framebuffer->in_flight)
-        {
-            /// this framebuffer is out of date and no longer in use, delete it!
-            vkDestroyFramebuffer(device->device, framebuffer->framebuffer, NULL);
-            ///following is a hacky trick to remove `framebuffer` from the stack (overwrite it with the last entry)
-            removed=cvm_overlay_framebuffer_stack_get(&renderer->framebuffers,framebuffer);
-            assert(removed);
-            puts("overlay framebuffer deleted");
-        }
-        else
-        {
-            i++;
-        }
-    }
+    VkFramebuffer framebuffer;
+    VkPipeline pipeline;
+    VkRenderPass render_pass;
+}
+cvm_overlay_frame_resource_set;
 
 
 
-    for(i=0;i<renderer->framebuffers.count;i++)
-    {
-        framebuffer = renderer->framebuffers.stack+i;
-        if(presentable_image->unique_image_identifier == framebuffer->unique_swapchain_image_identifier)
-        {
-            assert(framebuffer->swapchain_generation == presentable_image->parent_swapchain->generation);
-            assert( ! framebuffer->in_flight);
-            framebuffer->in_flight=true;
-            return framebuffer->framebuffer;
-        }
-    }
 
-    framebuffer=cvm_overlay_framebuffer_stack_new(&renderer->framebuffers);
-
-    VkFramebufferCreateInfo framebuffer_creation_info=
-    {
-        .sType=VK_STRUCTURE_TYPE_FRAMEBUFFER_CREATE_INFO,
-        .pNext=NULL,
-        .flags=0,
-        .renderPass=overlay_render_pass,
-        #warning move above into renderer
-        .attachmentCount=1,
-        .pAttachments=&presentable_image->image_view,
-        .width=presentable_image->parent_swapchain->surface_capabilities.currentExtent.width,
-        .height=presentable_image->parent_swapchain->surface_capabilities.currentExtent.height,
-        #warning not sure above is best way to get image size
-        .layers=1
-    };
-
-    created=vkCreateFramebuffer(device->device, &framebuffer_creation_info, NULL, &framebuffer->framebuffer);
-    assert(created==VK_SUCCESS);///don't have a good way to handle
-
-    framebuffer->in_flight=true;
-    framebuffer->swapchain_generation=presentable_image->parent_swapchain->generation;
-    framebuffer->unique_swapchain_image_identifier=presentable_image->unique_image_identifier;
-
-    return framebuffer->framebuffer;
+static inline cvm_overlay_swapchain_resources_initialise(cvm_overlay_renderer * renderer)
+{
+    cvm_overlay_swapchain_resources_stack_initialise(&renderer->swapchain_dependent_resources);
 }
 
-static inline void cvm_overlay_renderer_framebuffers_initialise(cvm_overlay_renderer * renderer)
-{
-    cvm_overlay_framebuffer_stack_initialise(&renderer->framebuffers);
-}
-
-static inline void cvm_overlay_renderer_framebuffers_terminate(cvm_overlay_renderer * renderer, cvm_vk_device * device)
+static inline cvm_overlay_swapchain_resources_terminate_entry(cvm_overlay_swapchain_resources * resources, cvm_vk_device * device)
 {
     cvm_overlay_framebuffer framebuffer;
 
-    while(cvm_overlay_framebuffer_stack_get(&renderer->framebuffers,&framebuffer))
+    assert(resources->in_flight_count==0);
+
+    while(cvm_overlay_framebuffer_stack_get(&resources->framebuffers,&framebuffer))
     {
-        assert( ! framebuffer.in_flight);
         vkDestroyFramebuffer(device->device, framebuffer.framebuffer, NULL);
     }
-    cvm_overlay_framebuffer_stack_terminate(&renderer->framebuffers);
+    cvm_overlay_framebuffer_stack_terminate(&resources->framebuffers);
+
+    vkDestroyRenderPass(device->device, resources->render_pass, NULL);
+    vkDestroyPipeline(device->device, resources->pipeline, NULL);
 }
 
+static inline void cvm_overlay_swapchain_resources_terminate(cvm_overlay_renderer * renderer, cvm_vk_device * device)
+{
+    cvm_overlay_swapchain_resources resources;
+
+    while(cvm_overlay_swapchain_resources_stack_get(&renderer->swapchain_dependent_resources,&resources))
+    {
+        cvm_overlay_swapchain_resources_terminate_entry(&resources, device);
+    }
+    cvm_overlay_swapchain_resources_stack_terminate(&renderer->swapchain_dependent_resources);
+}
+
+static inline cvm_overlay_frame_resource_set cvm_overlay_swapchain_resources_acquire(cvm_overlay_renderer * renderer, cvm_vk_device * device, cvm_vk_swapchain_presentable_image * presentable_image)
+{
+    cvm_overlay_swapchain_resources * swapchain_resources;
+    cvm_overlay_framebuffer * framebuffer;
+    uint32_t i;
+    VkResult created;
+    bool removed;
+
+    ///first, prune unused resources
+    for(i=0;i<renderer->swapchain_dependent_resources.count;i++)
+    {
+        swapchain_resources=renderer->swapchain_dependent_resources.stack+i;
+        if(swapchain_resources->swapchain_generation != presentable_image->parent_swapchain->generation && swapchain_resources->in_flight_count==0)
+        {
+            /// these resources are out of date and no longer in use, delete them!
+            cvm_overlay_swapchain_resources_terminate_entry(swapchain_resources, device);
+            ///following is a hacky trick to remove `swapchain_resources` from the stack (overwrite it with the last entry)
+            removed=cvm_overlay_framebuffer_stack_get(&renderer->swapchain_dependent_resources, swapchain_resources);
+            assert(removed);
+            puts("overlay swapchain resources deleted");
+            i--;/// decrement to step back, such that we can assess the entry that replaces the deleted one
+        }
+    }
+
+    for(i=0;i<renderer->swapchain_dependent_resources.count;i++)
+    {
+        swapchain_resources = renderer->swapchain_dependent_resources.stack+i;
+        if(presentable_image->parent_swapchain->generation == swapchain_resources->swapchain_generation)
+        {
+            /// appropriate swapchain resources found
+            swapchain_resources->in_flight_count++;
+            break;
+        }
+    }
+    if(i==renderer->swapchain_dependent_resources.count)///didnt find a swapchain
+    {
+        swapchain_resources=cvm_overlay_swapchain_resources_stack_new(&renderer->swapchain_dependent_resources);
+
+        swapchain_resources->swapchain_generation=presentable_image->parent_swapchain->generation;
+        swapchain_resources->in_flight_count=1;///will be used this frame
+        cvm_overlay_framebuffer_stack_initialise(&swapchain_resources->framebuffers);
+        swapchain_resources->render_pass=cvm_overlay_render_pass_create(device);
+        swapchain_resources->pipeline=cvm_overlay_pipeline_create(device,renderer,swapchain_resources->render_pass);
+    }
+
+
+    for(i=0;i<swapchain_resources->framebuffers.count;i++)
+    {
+        framebuffer=swapchain_resources->framebuffers.stack+i;
+        if(presentable_image->unique_image_identifier==framebuffer->unique_swapchain_image_identifier)
+        {
+            /// appropriate framebuffer found
+            break;
+        }
+    }
+    if(i==swapchain_resources->framebuffers.count)///didnt find a framebuffer
+    {
+        framebuffer=cvm_overlay_framebuffer_stack_new(&swapchain_resources->framebuffers);
+
+        #warning move this to a function?
+        VkFramebufferCreateInfo framebuffer_creation_info=
+        {
+            .sType=VK_STRUCTURE_TYPE_FRAMEBUFFER_CREATE_INFO,
+            .pNext=NULL,
+            .flags=0,
+            .renderPass=swapchain_resources->render_pass,
+            .attachmentCount=1,
+            .pAttachments=&presentable_image->image_view,
+            .width=presentable_image->parent_swapchain->surface_capabilities.currentExtent.width,
+            .height=presentable_image->parent_swapchain->surface_capabilities.currentExtent.height,
+            #warning not sure above is best way to get image size
+            .layers=1
+        };
+
+        created=vkCreateFramebuffer(device->device, &framebuffer_creation_info, NULL, &framebuffer->framebuffer);
+        if(created!=VK_SUCCESS)
+        {
+            framebuffer->framebuffer=VK_NULL_HANDLE;
+        }
+
+        framebuffer->unique_swapchain_image_identifier=presentable_image->unique_image_identifier;
+    }
+
+    return (cvm_overlay_frame_resource_set)
+    {
+        .render_pass=swapchain_resources->render_pass,
+        .pipeline=swapchain_resources->pipeline,
+        .framebuffer=framebuffer->framebuffer,
+    };
+}
 
 
 
@@ -715,8 +767,8 @@ typedef struct cvm_overlay_renderer_work_entry
 
     ///descriptor sets?? can descriptor sets not be shared???
 
-    ///used to identify images
-    uint16_t unique_swapchain_image_identifier;
+    ///used to identify swapchain_dependent_resources in use
+    uint16_t swapchain_generation;
 }
 cvm_overlay_renderer_work_entry;
 
@@ -741,21 +793,21 @@ void cvm_overlay_renderer_work_entry_reset(void * shared_ptr, void * entry_ptr)
     uint32_t i;
     cvm_overlay_renderer * renderer=shared_ptr;
     cvm_overlay_renderer_work_entry * entry=entry_ptr;
-    cvm_overlay_framebuffer * framebuffer;
+    cvm_overlay_swapchain_resources * swapchain_dependent_resources;
 
     cvm_vk_command_pool_reset(renderer->device,&entry->command_pool);
 
-    for(i=0;i<renderer->framebuffers.count;i++)
+    for(i=0;i<renderer->swapchain_dependent_resources.count;i++)
     {
-        framebuffer=renderer->framebuffers.stack+i;
-        if(entry->unique_swapchain_image_identifier == framebuffer->unique_swapchain_image_identifier)
+        swapchain_dependent_resources=renderer->swapchain_dependent_resources.stack+i;
+        if(entry->swapchain_generation == swapchain_dependent_resources->swapchain_generation)
         {
-            assert(framebuffer->in_flight);
-            framebuffer->in_flight=false;
+            assert(swapchain_dependent_resources->in_flight_count > 0);
+            swapchain_dependent_resources->in_flight_count--;
             break;
         }
     }
-    assert(i<renderer->framebuffers.count);///NOT FOUND!
+    assert(i < renderer->swapchain_dependent_resources.count);///TARGET RESOURCES IN USE NOT FOUND!
 }
 
 void cvm_overlay_renderer_initialise(cvm_overlay_renderer * renderer, cvm_vk_device * device, cvm_vk_staging_buffer_ * staging_buffer, uint32_t renderer_cycle_count)
@@ -777,10 +829,9 @@ void cvm_overlay_renderer_initialise(cvm_overlay_renderer * renderer, cvm_vk_dev
         .entry_terminate_func=cvm_overlay_renderer_work_entry_terminate,
         .entry_reset_func=cvm_overlay_renderer_work_entry_reset,
     };
-
     cvm_vk_work_queue_initialise(&renderer->work_queue,&work_queue_setup);
 
-    cvm_overlay_renderer_framebuffers_initialise(renderer);
+    cvm_overlay_swapchain_resources_initialise(renderer);
 }
 
 void cvm_overlay_renderer_terminate(cvm_overlay_renderer * renderer, cvm_vk_device * device)
@@ -788,7 +839,7 @@ void cvm_overlay_renderer_terminate(cvm_overlay_renderer * renderer, cvm_vk_devi
     cvm_vk_work_queue_terminate(device,&renderer->work_queue);
     cvm_vk_staging_shunt_buffer_terminate(&renderer->shunt_buffer);
     cvm_overlay_render_data_stack_terminate(&renderer->element_render_stack);
-    cvm_overlay_renderer_framebuffers_terminate(renderer, device);
+    cvm_overlay_swapchain_resources_terminate(renderer, device);
 }
 
 
@@ -809,7 +860,7 @@ void overlay_render_to_image(cvm_vk_device * device, cvm_overlay_renderer * rend
     cvm_overlay_render_data_stack * element_render_stack;
     cvm_vk_staging_shunt_buffer * shunt_buffer;
     cvm_vk_staging_buffer_ * staging_buffer;
-    VkFramebuffer framebuffer;
+    cvm_overlay_frame_resource_set frame_resources;
 
     VkDeviceSize vertex_offset;//replace with instance_offset
 
@@ -840,9 +891,9 @@ void overlay_render_to_image(cvm_vk_device * device, cvm_overlay_renderer * rend
         cvm_vk_command_pool_acquire_command_buffer(device,&work_entry->command_pool,&cb);
         cvm_vk_command_buffer_wait_on_presentable_image_acquisition(&cb,presentable_image);
 
-        work_entry->unique_swapchain_image_identifier = presentable_image->unique_image_identifier;
+        work_entry->swapchain_generation = presentable_image->parent_swapchain->generation;
 
-        framebuffer=cvm_overlay_renderer_framebuffer_acquire(renderer,device,presentable_image);
+        frame_resources=cvm_overlay_swapchain_resources_acquire(renderer, device, presentable_image);
 
 
         ///cvm_vk_staging_buffer_allocation_align_offset
@@ -897,8 +948,8 @@ void overlay_render_to_image(cvm_vk_device * device, cvm_overlay_renderer * rend
         {
             .sType=VK_STRUCTURE_TYPE_RENDER_PASS_BEGIN_INFO,
             .pNext=NULL,
-            .renderPass=overlay_render_pass,
-            .framebuffer=framebuffer,
+            .renderPass=frame_resources.render_pass,
+            .framebuffer=frame_resources.framebuffer,
             .renderArea=cvm_vk_get_default_render_area(),
             .clearValueCount=1,
             #warning overlay shouldnt clear, temporary measure
@@ -907,7 +958,7 @@ void overlay_render_to_image(cvm_vk_device * device, cvm_overlay_renderer * rend
 
         vkCmdBeginRenderPass(cb.buffer,&render_pass_begin_info,VK_SUBPASS_CONTENTS_INLINE);///================
 
-        vkCmdBindPipeline(cb.buffer,VK_PIPELINE_BIND_POINT_GRAPHICS,overlay_pipeline);
+        vkCmdBindPipeline(cb.buffer,VK_PIPELINE_BIND_POINT_GRAPHICS,frame_resources.pipeline);
 
         instance_offset+=staging_buffer_allocation.acquired_offset;
         vkCmdBindVertexBuffers(cb.buffer,0,1,&renderer->staging_buffer->buffer,&instance_offset);
