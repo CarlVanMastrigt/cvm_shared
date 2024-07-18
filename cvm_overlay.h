@@ -393,13 +393,20 @@ typedef struct cvm_overlay_renderer
     VkImageView colour_image_view;///views of single array slice from image
     cvm_vk_image_atlas colour_image_atlas;
 
-    ///these descriptors don't change
+    ///these descriptors don't change (only need 1 set, always has the same bindings)
     VkDescriptorSetLayout image_descriptor_set_layout;
     VkDescriptorPool image_descriptor_pool;
     VkDescriptorSet image_descriptor_set;
 
+    ///these descriptors will have a different binding per frame
+    VkDescriptorSetLayout frame_descriptor_set_layout;
+    VkDescriptorPool frame_descriptor_pool;
+    /// the actual descriptor sets per frame will exist on the work entry
+
+    /// for creating pipelines
     VkPipelineShaderStageCreateInfo vertex_stage;
     VkPipelineShaderStageCreateInfo fragment_stage;
+    VkPipelineLayout pipeline_layout;
 
     /// collection of resources dependent upon the render target (swapchain)
     cvm_overlay_swapchain_resources_stack swapchain_dependent_resources;
@@ -408,12 +415,6 @@ cvm_overlay_renderer;
 
 void cvm_overlay_renderer_initialise(cvm_overlay_renderer * renderer, cvm_vk_device * device, cvm_vk_staging_buffer_ * staging_buffer, uint32_t renderer_cycle_count);
 void cvm_overlay_renderer_terminate(cvm_overlay_renderer * renderer, cvm_vk_device * device);
-
-void initialise_overlay_render_data(cvm_overlay_renderer * renderer);
-void terminate_overlay_render_data(cvm_overlay_renderer * renderer);
-
-void initialise_overlay_swapchain_dependencies(cvm_overlay_renderer * renderer);
-void terminate_overlay_swapchain_dependencies(void);
 
 void overlay_render_to_image(cvm_vk_device * device, cvm_overlay_renderer * renderer, cvm_vk_swapchain_presentable_image * presentable_image, int screen_w,int screen_h,widget * menu_widget);
 

@@ -127,6 +127,7 @@ static void cvm_vk_create_default_samplers(void)
     };
 
     cvm_vk_create_sampler(&cvm_vk_fetch_sampler,&fetch_sampler_creation_info);
+    #warning put this on the device!
 }
 
 static void cvm_vk_destroy_default_samplers(void)
