@@ -166,7 +166,7 @@ static void cubic_create_shape(overlay_theme * theme, cvm_vk_image_atlas_tile **
     }
 }
 
-static void cubic_shaded_element_box_constrained_render(cvm_overlay_render_data_stack * restrict render_stack,overlay_theme * theme,rectangle bounds,rectangle r,overlay_colour colour,int16_t x_off,int16_t y_off,rectangle box_r,uint32_t box_status)
+static void cubic_shaded_element_box_constrained_render(cvm_overlay_element_render_data_stack * restrict render_stack,overlay_theme * theme,rectangle bounds,rectangle r,overlay_colour colour,int16_t x_off,int16_t y_off,rectangle box_r,uint32_t box_status)
 {
     cubic_theme_data * cubic;
 
@@ -286,7 +286,7 @@ static void cubic_shaded_element_box_constrained_render(cvm_overlay_render_data_
     }
 }
 
-static void cubic_shaded_element_fading_box_constrained_render(cvm_overlay_render_data_stack * restrict render_stack,overlay_theme * theme,rectangle bounds,rectangle r,overlay_colour colour,int16_t x_off,int16_t y_off,
+static void cubic_shaded_element_fading_box_constrained_render(cvm_overlay_element_render_data_stack * restrict render_stack,overlay_theme * theme,rectangle bounds,rectangle r,overlay_colour colour,int16_t x_off,int16_t y_off,
                                                         rectangle fade_bound,rectangle fade_range,rectangle box_r,uint32_t box_status)
 {
     cubic_theme_data * cubic;
@@ -407,7 +407,7 @@ static void cubic_shaded_element_fading_box_constrained_render(cvm_overlay_rende
     }
 }
 
-static void cubic_fill_element_box_constrained_render(cvm_overlay_render_data_stack * restrict render_stack,overlay_theme * theme,rectangle bounds,rectangle r,overlay_colour colour,rectangle box_r,uint32_t box_status)
+static void cubic_fill_element_box_constrained_render(cvm_overlay_element_render_data_stack * restrict render_stack,overlay_theme * theme,rectangle bounds,rectangle r,overlay_colour colour,rectangle box_r,uint32_t box_status)
 {
     cubic_theme_data * cubic;
 
@@ -506,7 +506,7 @@ static void cubic_fill_element_box_constrained_render(cvm_overlay_render_data_st
     }
 }
 
-static void cubic_fill_element_fading_box_constrained_render(cvm_overlay_render_data_stack * restrict render_stack,overlay_theme * theme,rectangle bounds,rectangle r,overlay_colour colour,
+static void cubic_fill_element_fading_box_constrained_render(cvm_overlay_element_render_data_stack * restrict render_stack,overlay_theme * theme,rectangle bounds,rectangle r,overlay_colour colour,
                                                       rectangle fade_bound,rectangle fade_range,rectangle box_r,uint32_t box_status)
 {
     cubic_theme_data * cubic;
@@ -859,7 +859,7 @@ static bool cubic_panel_select(overlay_theme * theme,rectangle r,uint32_t status
     return rectangle_surrounds_origin(r);
 }
 
-static void cubic_square_render(cvm_overlay_render_data_stack * restrict render_stack,overlay_theme * theme,rectangle bounds,rectangle r,uint32_t status,overlay_colour colour)
+static void cubic_square_render(cvm_overlay_element_render_data_stack * restrict render_stack,overlay_theme * theme,rectangle bounds,rectangle r,uint32_t status,overlay_colour colour)
 {
     cubic_theme_data * cubic=theme->other_data;
 
@@ -890,7 +890,7 @@ static void cubic_square_render(cvm_overlay_render_data_stack * restrict render_
     cvm_render_fill_overlay_element(render_stack,bounds,r,colour);
 }
 
-static void cubic_h_bar_render(cvm_overlay_render_data_stack * restrict render_stack,overlay_theme * theme,rectangle bounds,rectangle r,uint32_t status,overlay_colour colour)
+static void cubic_h_bar_render(cvm_overlay_element_render_data_stack * restrict render_stack,overlay_theme * theme,rectangle bounds,rectangle r,uint32_t status,overlay_colour colour)
 {
     cubic_theme_data * cubic=theme->other_data;
 
@@ -936,7 +936,7 @@ static rectangle cubic_get_sliderbar_offsets(overlay_theme * theme,uint32_t stat
     };
 }
 
-static void cubic_h_bar_slider_render(cvm_overlay_render_data_stack * restrict render_stack,overlay_theme * theme,rectangle bounds,rectangle r,uint32_t status,overlay_colour colour,int32_t before,int32_t bar,int32_t after)
+static void cubic_h_bar_slider_render(cvm_overlay_element_render_data_stack * restrict render_stack,overlay_theme * theme,rectangle bounds,rectangle r,uint32_t status,overlay_colour colour,int32_t before,int32_t bar,int32_t after)
 {
     cubic_theme_data * cubic;
 
@@ -975,7 +975,7 @@ static void cubic_h_bar_slider_render(cvm_overlay_render_data_stack * restrict r
     cvm_render_fill_overlay_element(render_stack,bounds,r,colour);
 }
 
-static void cubic_box_render(cvm_overlay_render_data_stack * restrict render_stack,overlay_theme * theme,rectangle bounds,rectangle r,uint32_t status,overlay_colour colour)
+static void cubic_box_render(cvm_overlay_element_render_data_stack * restrict render_stack,overlay_theme * theme,rectangle bounds,rectangle r,uint32_t status,overlay_colour colour)
 {
     cubic_theme_data * cubic;
 
@@ -1027,7 +1027,7 @@ static void cubic_box_render(cvm_overlay_render_data_stack * restrict render_sta
     cvm_render_fill_overlay_element(render_stack,bounds,r,colour);
 }
 
-static void cubic_panel_render(cvm_overlay_render_data_stack * restrict render_stack,overlay_theme * theme,rectangle bounds,rectangle r,uint32_t status,overlay_colour colour)
+static void cubic_panel_render(cvm_overlay_element_render_data_stack * restrict render_stack,overlay_theme * theme,rectangle bounds,rectangle r,uint32_t status,overlay_colour colour)
 {
     cubic_theme_data * cubic;
 
@@ -1090,7 +1090,7 @@ static void cubic_panel_render(cvm_overlay_render_data_stack * restrict render_s
     cvm_render_fill_overlay_element(render_stack,bounds,r,colour);
 }
 
-static void cubic_square_box_constrained_render(cvm_overlay_render_data_stack * restrict render_stack,overlay_theme * theme,rectangle bounds,rectangle r,uint32_t status,overlay_colour colour,rectangle box_r,uint32_t box_status)
+static void cubic_square_box_constrained_render(cvm_overlay_element_render_data_stack * restrict render_stack,overlay_theme * theme,rectangle bounds,rectangle r,uint32_t status,overlay_colour colour,rectangle box_r,uint32_t box_status)
 {
     cubic_theme_data * cubic=theme->other_data;
 
@@ -1122,7 +1122,7 @@ static void cubic_square_box_constrained_render(cvm_overlay_render_data_stack * 
     cvm_render_fill_overlay_element(render_stack,bounds,r,colour);
 }
 
-static void cubic_h_bar_box_constrained_render(cvm_overlay_render_data_stack * restrict render_stack,overlay_theme * theme,rectangle bounds,rectangle r,uint32_t status,overlay_colour colour,rectangle box_r,uint32_t box_status)
+static void cubic_h_bar_box_constrained_render(cvm_overlay_element_render_data_stack * restrict render_stack,overlay_theme * theme,rectangle bounds,rectangle r,uint32_t status,overlay_colour colour,rectangle box_r,uint32_t box_status)
 {
     cubic_theme_data * cubic=theme->other_data;
 
@@ -1154,7 +1154,7 @@ static void cubic_h_bar_box_constrained_render(cvm_overlay_render_data_stack * r
     cubic_fill_element_box_constrained_render(render_stack,theme,bounds,r,colour,box_r,box_status);
 }
 
-static void cubic_box_box_constrained_render(cvm_overlay_render_data_stack * restrict render_stack,overlay_theme * theme,rectangle bounds,rectangle r,uint32_t status,overlay_colour colour,rectangle box_r,uint32_t box_status)
+static void cubic_box_box_constrained_render(cvm_overlay_element_render_data_stack * restrict render_stack,overlay_theme * theme,rectangle bounds,rectangle r,uint32_t status,overlay_colour colour,rectangle box_r,uint32_t box_status)
 {
     cubic_theme_data * cubic;
 

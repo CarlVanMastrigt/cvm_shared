@@ -393,7 +393,7 @@ static VkPipeline cvm_overlay_pipeline_create(const cvm_vk_device * device, cons
                 {
                     {
                         .binding=0,
-                        .stride=sizeof(cvm_overlay_render_data),
+                        .stride=sizeof(cvm_overlay_element_render_data),
                         .inputRate=VK_VERTEX_INPUT_RATE_INSTANCE
                     }
                 },
@@ -404,19 +404,19 @@ static VkPipeline cvm_overlay_pipeline_create(const cvm_vk_device * device, cons
                         .location=0,
                         .binding=0,
                         .format=VK_FORMAT_R16G16B16A16_UINT,
-                        .offset=offsetof(cvm_overlay_render_data,data0)
+                        .offset=offsetof(cvm_overlay_element_render_data,data0)
                     },
                     {
                         .location=1,
                         .binding=0,
                         .format=VK_FORMAT_R32G32_UINT,
-                        .offset=offsetof(cvm_overlay_render_data,data1)
+                        .offset=offsetof(cvm_overlay_element_render_data,data1)
                     },
                     {
                         .location=2,
                         .binding=0,
                         .format=VK_FORMAT_R16G16B16A16_UINT,
-                        .offset=offsetof(cvm_overlay_render_data,data2)
+                        .offset=offsetof(cvm_overlay_element_render_data,data2)
                     }
                 }
             }
@@ -796,7 +796,7 @@ void cvm_overlay_renderer_initialise(cvm_overlay_renderer * renderer, cvm_vk_dev
 
 
     cvm_vk_staging_shunt_buffer_initialise(&renderer->shunt_buffer, staging_buffer->alignment);
-    cvm_overlay_render_data_stack_initialise(&renderer->element_render_stack);
+    cvm_overlay_element_render_data_stack_initialise(&renderer->element_render_stack);
 
     cvm_overlay_swapchain_resources_initialise(renderer);
 
@@ -838,7 +838,7 @@ void cvm_overlay_renderer_terminate(cvm_overlay_renderer * renderer, cvm_vk_devi
 
     cvm_vk_staging_shunt_buffer_terminate(&renderer->shunt_buffer);
 
-    cvm_overlay_render_data_stack_terminate(&renderer->element_render_stack);
+    cvm_overlay_element_render_data_stack_terminate(&renderer->element_render_stack);
 
     cvm_overlay_swapchain_resources_terminate(renderer, device);
 
@@ -860,7 +860,7 @@ void overlay_render_to_image(cvm_vk_device * device, cvm_overlay_renderer * rend
     cvm_vk_timeline_semaphore_moment completion_moment;
     cvm_vk_staging_buffer_allocation staging_buffer_allocation;
     VkDeviceSize upload_offset,instance_offset,uniform_offset,staging_space;
-    cvm_overlay_render_data_stack * element_render_stack;
+    cvm_overlay_element_render_data_stack * element_render_stack;
     cvm_vk_staging_shunt_buffer * shunt_buffer;
     cvm_vk_staging_buffer_ * staging_buffer;
     cvm_overlay_frame_resource_set frame_resources;
@@ -882,7 +882,7 @@ void overlay_render_to_image(cvm_vk_device * device, cvm_overlay_renderer * rend
     if(presentable_image)
     {
         element_render_stack = &renderer->element_render_stack;
-        cvm_overlay_render_data_stack_reset(element_render_stack);
+        cvm_overlay_element_render_data_stack_reset(element_render_stack);
 
         shunt_buffer = &renderer->shunt_buffer;
         cvm_vk_staging_shunt_buffer_reset(shunt_buffer);
@@ -915,7 +915,7 @@ void overlay_render_to_image(cvm_vk_device * device, cvm_overlay_renderer * rend
         uniform_offset  = 0;
         upload_offset   = cvm_vk_staging_buffer_allocation_align_offset(staging_buffer, uniform_offset + sizeof(float)*4*OVERLAY_NUM_COLOURS);
         instance_offset = cvm_vk_staging_buffer_allocation_align_offset(staging_buffer, upload_offset  + shunt_buffer->offset);
-        staging_space   = cvm_vk_staging_buffer_allocation_align_offset(staging_buffer, instance_offset + cvm_overlay_render_data_stack_size(element_render_stack));
+        staging_space   = cvm_vk_staging_buffer_allocation_align_offset(staging_buffer, instance_offset + cvm_overlay_element_render_data_stack_size(element_render_stack));
 
         staging_buffer_allocation=cvm_vk_staging_buffer_reserve_allocation(staging_buffer, device, staging_space, true);
         staging_offset = staging_buffer_allocation.acquired_offset;
@@ -929,7 +929,7 @@ void overlay_render_to_image(cvm_vk_device * device, cvm_overlay_renderer * rend
         cvm_vk_image_atlas_submit_all_pending_copy_actions(&renderer->images.colour_atlas, cb.buffer, staging_buffer->buffer, staging_offset+upload_offset);
         #warning move these memcpy to functions! image update func
 
-        cvm_overlay_render_data_stack_copy(element_render_stack, staging_mapping+instance_offset);
+        cvm_overlay_element_render_data_stack_copy(element_render_stack, staging_mapping+instance_offset);
         ///end of transfer
 
 

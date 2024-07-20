@@ -704,7 +704,7 @@ static widget_behaviour_function_set enterbox_behaviour_functions=
 };
 
 
-static void file_list_widget_render(overlay_theme * theme,widget * w,int16_t x_off,int16_t y_off,cvm_overlay_render_data_stack * restrict render_stack,rectangle bounds)
+static void file_list_widget_render(overlay_theme * theme,widget * w,int16_t x_off,int16_t y_off,cvm_overlay_element_render_data_stack * restrict render_stack,rectangle bounds)
 {
     file_list_entry * fle;
     rectangle icon_r,r;

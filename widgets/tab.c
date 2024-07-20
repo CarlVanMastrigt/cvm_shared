@@ -31,7 +31,7 @@ static void tab_button_func(widget * button)
 }
 
 ///the only if page is active paradigm is great for automatically enabling/disabling tabs based on availability
-static void tab_button_widget_render(overlay_theme * theme,widget * w,int16_t x_off,int16_t y_off,cvm_overlay_render_data_stack * restrict render_stack,rectangle bounds)
+static void tab_button_widget_render(overlay_theme * theme,widget * w,int16_t x_off,int16_t y_off,cvm_overlay_element_render_data_stack * restrict render_stack,rectangle bounds)
 {
     rectangle r=rectangle_add_offset(w->base.r,x_off,y_off);
 
@@ -215,7 +215,7 @@ static widget_behaviour_function_set tab_folder_behaviour_functions=
 
 
 
-static void tab_folder_widget_render(overlay_theme * theme,widget * w,int16_t x_off,int16_t y_off,cvm_overlay_render_data_stack * restrict render_stack,rectangle bounds)
+static void tab_folder_widget_render(overlay_theme * theme,widget * w,int16_t x_off,int16_t y_off,cvm_overlay_element_render_data_stack * restrict render_stack,rectangle bounds)
 {
     if(w->tab_folder.current_tab_page)render_widget(w->tab_folder.current_tab_page,x_off+w->base.r.x1,y_off+w->base.r.y1,render_stack,bounds);
 }

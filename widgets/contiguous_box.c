@@ -65,7 +65,7 @@ static widget_behaviour_function_set contiguous_box_behaviour_functions=
 
 
 
-static void all_visible_contiguous_box_widget_render(overlay_theme * theme,widget * w,int16_t x_off,int16_t y_off,cvm_overlay_render_data_stack * restrict render_stack,rectangle bounds)
+static void all_visible_contiguous_box_widget_render(overlay_theme * theme,widget * w,int16_t x_off,int16_t y_off,cvm_overlay_element_render_data_stack * restrict render_stack,rectangle bounds)
 {
     rectangle r=rectangle_add_offset(w->base.r,x_off,y_off);
     //r.y1+=7+(int)(11.0*sin(SDL_GetTicks()*0.004));
@@ -79,7 +79,7 @@ static void all_visible_contiguous_box_widget_render(overlay_theme * theme,widge
     render_widget(w->contiguous_box.contained_box,x_off,y_off,render_stack,bounds);
 }
 
-static void some_visible_contiguous_box_widget_render(overlay_theme * theme,widget * w,int16_t x_off,int16_t y_off,cvm_overlay_render_data_stack * restrict render_stack,rectangle bounds)
+static void some_visible_contiguous_box_widget_render(overlay_theme * theme,widget * w,int16_t x_off,int16_t y_off,cvm_overlay_element_render_data_stack * restrict render_stack,rectangle bounds)
 {
 //    theme->box_render(rectangle_add_offset(w->base.r,x_off,y_off),w->base.status,theme,render_stack,bounds,OVERLAY_MAIN_COLOUR);
 //
