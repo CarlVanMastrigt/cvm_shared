@@ -45,7 +45,7 @@ typedef struct cubic_theme_data
 }
 cubic_theme_data;
 
-overlay_theme * create_cubic_theme(cvm_vk_image_atlas * backing_image_atlas);
+overlay_theme * create_cubic_theme(cvm_vk_image_atlas * backing_image_atlas, const FT_Library * freetype_library);
 void destroy_cubic_theme(overlay_theme * theme);
 
 #endif

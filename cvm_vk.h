@@ -25,7 +25,6 @@ along with cvm_shared.  If not, see <https://www.gnu.org/licenses/>.
 #ifndef CVM_VK_H
 #define CVM_VK_H
 
-#warning make this a function that returns false upon failure AND ACTUALLY HANDLE FAILURE
 #ifndef CVM_VK_CHECK
 #define CVM_VK_CHECK(f)                                                         \
 {                                                                               \

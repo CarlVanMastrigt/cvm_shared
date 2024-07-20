@@ -1206,7 +1206,7 @@ static void cubic_box_box_constrained_render(cvm_overlay_element_render_data_sta
     cubic_fill_element_box_constrained_render(render_stack,theme,bounds,r,colour,box_r,box_status);
 }
 
-overlay_theme * create_cubic_theme(cvm_vk_image_atlas * backing_image_atlas)
+overlay_theme * create_cubic_theme(cvm_vk_image_atlas * backing_image_atlas, const FT_Library * freetype_library)
 {
     overlay_theme * theme;
     cubic_theme_data * cubic;
@@ -1304,7 +1304,7 @@ overlay_theme * create_cubic_theme(cvm_vk_image_atlas * backing_image_atlas)
     cubic->internal_r=8;
     cubic->internal_d=16;
 
-    cvm_overlay_create_font(&theme->font,backing_image_atlas,"cvm_shared/resources/cvm_font_1.ttf",16);
+    cvm_overlay_create_font(&theme->font, freetype_library, backing_image_atlas,"cvm_shared/resources/cvm_font_1.ttf",16);
 
     return theme;
 

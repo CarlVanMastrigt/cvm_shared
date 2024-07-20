@@ -485,7 +485,7 @@ static VkPipeline cvm_overlay_pipeline_create(const cvm_vk_device * device, cons
     return pipeline;
 }
 
-static void cvm_overlay_images_initialise(const cvm_vk_device * device, cvm_overlay_images * images,
+static void cvm_overlay_images_initialise(cvm_overlay_images * images, const cvm_vk_device * device,
                                           uint32_t alpha_image_width, uint32_t alpha_image_height,
                                           uint32_t colour_image_width, uint32_t colour_image_height,
                                           cvm_vk_staging_shunt_buffer * shunt_buffer)
@@ -592,21 +592,6 @@ static void cvm_overlay_images_terminate(const cvm_vk_device * device, cvm_overl
 
 
 
-float overlay_colours[OVERLAY_NUM_COLOURS*4]=
-{
-    1.0,0.1,0.1,1.0,///OVERLAY_NO_COLOUR (error)
-    0.24,0.24,0.6,0.9,///OVERLAY_BACKGROUND_COLOUR
-    0.12,0.12,0.36,0.85,///OVERLAY_MAIN_COLOUR
-    0.12,0.12,0.48,0.85,///OVERLAY_MAIN_ALTERNATE_COLOUR
-    0.3,0.3,1.0,0.2,///OVERLAY_HIGHLIGHTING_COLOUR
-    0.4,0.6,0.9,0.3,///OVERLAY_TEXT_HIGHLIGHT_COLOUR
-    0.2,0.3,1.0,0.8,///OVERLAY_TEXT_COMPOSITION_COLOUR_0
-    0.4,0.6,0.9,0.8,///OVERLAY_TEXT_COLOUR_0
-};
-
-
-
-
 typedef struct cvm_overlay_frame_resource_set
 {
     VkFramebuffer framebuffer;
@@ -617,13 +602,7 @@ cvm_overlay_frame_resource_set;
 
 
 
-
-static inline void cvm_overlay_swapchain_resources_initialise(cvm_overlay_renderer * renderer)
-{
-    cvm_overlay_swapchain_resources_stack_initialise(&renderer->swapchain_dependent_resources);
-}
-
-static inline void cvm_overlay_swapchain_resources_terminate_entry(cvm_overlay_swapchain_resources * resources, const cvm_vk_device * device)
+static inline void cvm_overlay_swapchain_resources_terminate(cvm_overlay_swapchain_resources * resources, const cvm_vk_device * device)
 {
     cvm_overlay_frame_resources frame_resources;
 
@@ -639,54 +618,45 @@ static inline void cvm_overlay_swapchain_resources_terminate_entry(cvm_overlay_s
     vkDestroyPipeline(device->device, resources->pipeline, NULL);
 }
 
-static inline void cvm_overlay_swapchain_resources_terminate(cvm_overlay_renderer * renderer, cvm_vk_device * device)
-{
-    cvm_overlay_swapchain_resources resources;
-
-    while(cvm_overlay_swapchain_resources_stack_pull(&renderer->swapchain_dependent_resources,&resources))
-    {
-        cvm_overlay_swapchain_resources_terminate_entry(&resources, device);
-    }
-    cvm_overlay_swapchain_resources_stack_terminate(&renderer->swapchain_dependent_resources);
-}
-
-static inline cvm_overlay_frame_resource_set cvm_overlay_swapchain_resources_acquire(cvm_overlay_renderer * renderer, cvm_vk_device * device, cvm_vk_swapchain_presentable_image * presentable_image)
+static inline cvm_overlay_frame_resource_set cvm_overlay_renderer_frame_resource_set_acquire(cvm_overlay_renderer * renderer, const cvm_vk_device * device, const cvm_vk_swapchain_presentable_image * presentable_image)
 {
     cvm_overlay_swapchain_resources * swapchain_resources;
     cvm_overlay_frame_resources * frame_resources;
     uint32_t i;
-    bool removed;
+    bool swapchain_resources_found,frame_resources_found;
+
 
     ///first, prune unused resources
-    for(i=0;i<renderer->swapchain_dependent_resources.count;i++)
+    for(i=0;i<renderer->swapchain_dependent_resources.count;)
     {
-        swapchain_resources=renderer->swapchain_dependent_resources.stack+i;
-        if(swapchain_resources->swapchain_generation != presentable_image->parent_swapchain->generation && swapchain_resources->in_flight_frame_count==0)
+        swapchain_resources = cvm_overlay_swapchain_resources_stack_get_ptr(&renderer->swapchain_dependent_resources, i);
+        if((swapchain_resources->swapchain_generation != presentable_image->parent_swapchain->generation) && (swapchain_resources->in_flight_frame_count == 0))
         {
             /// these resources are out of date and no longer in use, delete them!
-            cvm_overlay_swapchain_resources_terminate_entry(swapchain_resources, device);
-            ///following is a hacky trick to remove `swapchain_resources` from the stack (overwrite it with the last entry)
-            removed=cvm_overlay_swapchain_resources_stack_pull(&renderer->swapchain_dependent_resources, swapchain_resources);
-            assert(removed);
-            puts("overlay swapchain resources deleted");
-            i--;/// decrement to step back, such that we can assess the entry that replaces the deleted one
+            cvm_overlay_swapchain_resources_terminate(swapchain_resources, device);
+            cvm_overlay_swapchain_resources_stack_remove(&renderer->swapchain_dependent_resources, i);
+        }
+        else
+        {
+            i++;
         }
     }
 
 
-    for(i=0;i<renderer->swapchain_dependent_resources.count;i++)
+    /// get or create appropriate swapchain resources
+    for(i=0,swapchain_resources_found=false;i<renderer->swapchain_dependent_resources.count;i++)
     {
         swapchain_resources = renderer->swapchain_dependent_resources.stack+i;
-        if(presentable_image->parent_swapchain->generation == swapchain_resources->swapchain_generation)
+        if(swapchain_resources->swapchain_generation == presentable_image->parent_swapchain->generation)
         {
-            /// appropriate swapchain resources found
+            swapchain_resources_found=true;
             swapchain_resources->in_flight_frame_count++;
             break;
         }
     }
-    if(i==renderer->swapchain_dependent_resources.count)///didnt find a swapchain
+    if( ! swapchain_resources_found)
     {
-        swapchain_resources=cvm_overlay_swapchain_resources_stack_new(&renderer->swapchain_dependent_resources);
+        swapchain_resources = cvm_overlay_swapchain_resources_stack_new(&renderer->swapchain_dependent_resources);
 
         swapchain_resources->swapchain_generation=presentable_image->parent_swapchain->generation;
         swapchain_resources->in_flight_frame_count=1;///will be used this frame
@@ -696,22 +666,24 @@ static inline cvm_overlay_frame_resource_set cvm_overlay_swapchain_resources_acq
     }
 
 
-    for(i=0;i<swapchain_resources->frame_resources.count;i++)
+    /// get or create appropriate frame resources
+    for(i=0,frame_resources_found=false;i<swapchain_resources->frame_resources.count;i++)
     {
-        frame_resources=swapchain_resources->frame_resources.stack+i;
-        if(presentable_image->unique_image_identifier == frame_resources->unique_swapchain_image_identifier)
+        frame_resources = cvm_overlay_frame_resources_stack_get_ptr(&swapchain_resources->frame_resources, i);
+        if(frame_resources->unique_swapchain_image_identifier == presentable_image->unique_image_identifier)
         {
-            /// appropriate framebuffer found
+            frame_resources_found=true;
             break;
         }
     }
-    if(i==swapchain_resources->frame_resources.count)///didnt find a framebuffer
+    if( ! frame_resources_found)
     {
         frame_resources=cvm_overlay_frame_resources_stack_new(&swapchain_resources->frame_resources);
 
         frame_resources->framebuffer = cvm_overlay_framebuffer_create(device,presentable_image->parent_swapchain->surface_capabilities.currentExtent,swapchain_resources->render_pass,presentable_image->image_view);
         frame_resources->unique_swapchain_image_identifier=presentable_image->unique_image_identifier;
     }
+
 
     return (cvm_overlay_frame_resource_set)
     {
@@ -780,9 +752,6 @@ void cvm_overlay_renderer_work_entry_reset(void * shared_ptr, void * entry_ptr)
 
 void cvm_overlay_renderer_initialise(cvm_overlay_renderer * renderer, cvm_vk_device * device, cvm_vk_staging_buffer_ * staging_buffer, uint32_t renderer_cycle_count)
 {
-    cvm_overlay_open_freetype();
-
-
     renderer->device=device;
     renderer->cycle_count=renderer_cycle_count;
     renderer->staging_buffer = staging_buffer;
@@ -799,12 +768,8 @@ void cvm_overlay_renderer_initialise(cvm_overlay_renderer * renderer, cvm_vk_dev
 
     cvm_vk_staging_shunt_buffer_initialise(&renderer->shunt_buffer, staging_buffer->alignment);
     cvm_overlay_element_render_data_stack_initialise(&renderer->element_render_stack);
-
-    cvm_overlay_swapchain_resources_initialise(renderer);
-
-
-
-    cvm_overlay_images_initialise(device, &renderer->images, 1024, 1024, 1024, 1024, &renderer->shunt_buffer);
+    cvm_overlay_swapchain_resources_stack_initialise(&renderer->swapchain_dependent_resources);
+    cvm_overlay_images_initialise(&renderer->images, device, 1024, 1024, 1024, 1024, &renderer->shunt_buffer);
 
     renderer->image_descriptor_set = cvm_overlay_image_descriptor_set_allocate(device, renderer->descriptor_pool, renderer->image_descriptor_set_layout); /// no matching free necessary
     cvm_overlay_image_descriptor_set_write(device, renderer->image_descriptor_set, renderer->images.views);
@@ -824,6 +789,9 @@ void cvm_overlay_renderer_initialise(cvm_overlay_renderer * renderer, cvm_vk_dev
 
 void cvm_overlay_renderer_terminate(cvm_overlay_renderer * renderer, cvm_vk_device * device)
 {
+    cvm_overlay_swapchain_resources resources;
+
+
     cvm_vk_work_queue_terminate(device,&renderer->work_queue);
 
     cvm_overlay_images_terminate(device, &renderer->images);
@@ -837,14 +805,15 @@ void cvm_overlay_renderer_terminate(cvm_overlay_renderer * renderer, cvm_vk_devi
     vkDestroyDescriptorSetLayout(device->device, renderer->frame_descriptor_set_layout, NULL);
     vkDestroyDescriptorSetLayout(device->device, renderer->image_descriptor_set_layout, NULL);
 
-
     cvm_vk_staging_shunt_buffer_terminate(&renderer->shunt_buffer);
 
     cvm_overlay_element_render_data_stack_terminate(&renderer->element_render_stack);
 
-    cvm_overlay_swapchain_resources_terminate(renderer, device);
-
-    cvm_overlay_close_freetype();
+    while(cvm_overlay_swapchain_resources_stack_pull(&renderer->swapchain_dependent_resources,&resources))
+    {
+        cvm_overlay_swapchain_resources_terminate(&resources, device);
+    }
+    cvm_overlay_swapchain_resources_stack_terminate(&renderer->swapchain_dependent_resources);
 }
 
 
@@ -873,6 +842,18 @@ void overlay_render_to_image(const cvm_vk_device * device, cvm_overlay_renderer 
     shunt_buffer = &renderer->shunt_buffer;
     staging_buffer = renderer->staging_buffer;
 
+    const float overlay_colours[OVERLAY_NUM_COLOURS*4]=
+    {
+        1.0,0.1,0.1,1.0,///OVERLAY_NO_COLOUR (error)
+        0.24,0.24,0.6,0.9,///OVERLAY_BACKGROUND_COLOUR
+        0.12,0.12,0.36,0.85,///OVERLAY_MAIN_COLOUR
+        0.12,0.12,0.48,0.85,///OVERLAY_MAIN_ALTERNATE_COLOUR
+        0.3,0.3,1.0,0.2,///OVERLAY_HIGHLIGHTING_COLOUR
+        0.4,0.6,0.9,0.3,///OVERLAY_TEXT_HIGHLIGHT_COLOUR
+        0.2,0.3,1.0,0.8,///OVERLAY_TEXT_COMPOSITION_COLOUR_0
+        0.4,0.6,0.9,0.8,///OVERLAY_TEXT_COLOUR_0
+    };
+
 
     if(presentable_image)
     {
@@ -886,7 +867,7 @@ void overlay_render_to_image(const cvm_vk_device * device, cvm_overlay_renderer 
 
         work_entry->swapchain_generation = presentable_image->parent_swapchain->generation;
 
-        frame_resources=cvm_overlay_swapchain_resources_acquire(renderer, device, presentable_image);
+        frame_resources=cvm_overlay_renderer_frame_resource_set_acquire(renderer, device, presentable_image);
 
         ///this uses the shunt buffer!
         render_widget_overlay(element_render_stack,menu_widget);

@@ -67,9 +67,6 @@ typedef struct cvm_vk_swapchain_presentable_image
     VkCommandBuffer * present_acquire_command_buffers;
 
     cvm_vk_timeline_semaphore_moment last_use_moment;///changes throughout the frame, not strictly necessary for most applications, can probably be removed
-
-    #warning make this the "last used moment" for this image, use it to track work across multiple "libraries" (e.g. game and overlay)
-//    cvm_vk_timeline_semaphore_moment present_moment;///this is actually the last u
 }
 cvm_vk_swapchain_presentable_image;
 

@@ -81,7 +81,7 @@ cvm_overlay_text_block;
 void cvm_overlay_open_freetype(void);
 void cvm_overlay_close_freetype(void);
 
-void cvm_overlay_create_font(cvm_overlay_font * font, cvm_vk_image_atlas * backing_image_atlas, char * filename, int pixel_size);
+void cvm_overlay_create_font(cvm_overlay_font * font, const FT_Library * freetype_library, cvm_vk_image_atlas * backing_image_atlas, char * filename, int pixel_size);
 void cvm_overlay_destroy_font(cvm_overlay_font * font);
 
 

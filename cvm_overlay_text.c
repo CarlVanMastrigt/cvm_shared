@@ -19,27 +19,12 @@ along with cvm_shared.  If not, see <https://www.gnu.org/licenses/>.
 
 #include "cvm_shared.h"
 
-static FT_Library overlay_freetype_library;
 
-
-#warning make the following more genericized and sharable??
-void cvm_overlay_open_freetype(void)
-{
-    int r=FT_Init_FreeType(&overlay_freetype_library);
-    assert(!r);///COULD NOT INITIALISE FREETYPE LIBRARY
-}
-
-void cvm_overlay_close_freetype(void)
-{
-    int r=FT_Done_FreeType(overlay_freetype_library);
-    assert(!r);///COULD NOT DESTROY FREETYPE LIBRARY
-}
-
-void cvm_overlay_create_font(cvm_overlay_font * font, cvm_vk_image_atlas * backing_image_atlas, char * filename, int pixel_size)
+void cvm_overlay_create_font(cvm_overlay_font * font, const FT_Library * freetype_library, cvm_vk_image_atlas * backing_image_atlas, char * filename, int pixel_size)
 {
     int r;
 
-    r=FT_New_Face(overlay_freetype_library,filename,0,&font->face);
+    r=FT_New_Face(*freetype_library ,filename, 0, &font->face);
     assert(!r || !fprintf(stderr,"COULD NOT LOAD FONT FACE FILE %s\n",filename));
 
     r=FT_Set_Pixel_Sizes(font->face,0,pixel_size);

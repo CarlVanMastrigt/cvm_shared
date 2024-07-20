@@ -201,6 +201,7 @@ static inline void cvm_vk_swapchain_destroy(const cvm_vk_device * device, cvm_vk
             {
                 vkFreeCommandBuffers(device->device,device->queue_families[swapchain->fallback_present_queue_family].internal_command_pool,1,presentable_image->present_acquire_command_buffers+j);
                 #warning requires synchronization! (uses shared command pool, ergo not thread safe)
+                #warning should (?) really be using a shared command pool that is just reset
 
                 presentable_image->present_acquire_command_buffers[j]=VK_NULL_HANDLE;
             }

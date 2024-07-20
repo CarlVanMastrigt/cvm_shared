@@ -108,6 +108,16 @@ static inline void name##_stack_copy( name##_stack * s , void * dst )           
 {                                                                               \
     memcpy( dst , s->stack , sizeof( type ) * s->count );                       \
 }                                                                               \
+                                                                                \
+static inline type * name##_stack_get_ptr( name##_stack * s , uint_fast32_t i ) \
+{                                                                               \
+    return s->stack + i;                                                        \
+}                                                                               \
+                                                                                \
+static inline void name##_stack_remove( name##_stack * s , uint_fast32_t i )    \
+{                                                                               \
+    memmove( s->stack + i, s->stack + i + 1, sizeof(type) * ( --s->count-i));   \
+}                                                                               \
 
 #endif
 
