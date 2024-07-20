@@ -92,7 +92,7 @@ typedef struct cvm_vk_surface_swapchain
     VkSurfaceCapabilitiesKHR surface_capabilities;
 
 
-    VkSwapchainKHR swapchain;//VK_NULL_HANDLE
+    VkSwapchainKHR swapchain;
     VkSurfaceFormatKHR surface_format;
     VkPresentModeKHR present_mode;
 

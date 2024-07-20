@@ -339,16 +339,16 @@ static inline void cvm_render_fill_fading_overlay_element(cvm_overlay_element_re
 /// need a concept of swapchain dependent data (e.g. render pass, descriptor set?) that can be destroyed when no longer referenced...
 
 /// move this to swapchain dependent data?? is a nice simple solution tbh
-typedef struct cvm_overlay_framebuffer
+typedef struct cvm_overlay_frame_resources
 {
     /// identifier for changes to rendering
     uint16_t unique_swapchain_image_identifier;
 
     VkFramebuffer framebuffer;
 }
-cvm_overlay_framebuffer;
+cvm_overlay_frame_resources;
 
-CVM_STACK(cvm_overlay_framebuffer,cvm_overlay_framebuffer,4)
+CVM_STACK(cvm_overlay_frame_resources,cvm_overlay_frame_resources,4)
 
 
 /// resources dependent upon the render configuration (swapchain &c.)
@@ -357,10 +357,10 @@ typedef struct cvm_overlay_swapchain_resources
     /// identifier for a change to rendering resources
     uint16_t swapchain_generation;/// this could instead be a resolution and colour space?
 
-    uint16_t in_flight_count;/// use count, used to determine if resources can be freed/cleared
+    uint16_t in_flight_frame_count;/// use count, used to determine if resources can be freed/cleared
 
     /// could require that the framebuffer must get passed into this function, and that it's ref counted!
-    cvm_overlay_framebuffer_stack framebuffers;
+    cvm_overlay_frame_resources_stack frame_resources;
     VkRenderPass render_pass;
     VkPipeline pipeline;
 }
@@ -420,7 +420,7 @@ cvm_overlay_renderer;
 void cvm_overlay_renderer_initialise(cvm_overlay_renderer * renderer, cvm_vk_device * device, cvm_vk_staging_buffer_ * staging_buffer, uint32_t renderer_cycle_count);
 void cvm_overlay_renderer_terminate(cvm_overlay_renderer * renderer, cvm_vk_device * device);
 
-void overlay_render_to_image(cvm_vk_device * device, cvm_overlay_renderer * renderer, cvm_vk_swapchain_presentable_image * presentable_image, int screen_w,int screen_h,widget * menu_widget);
+void overlay_render_to_image(const cvm_vk_device * device, cvm_overlay_renderer * renderer, cvm_vk_swapchain_presentable_image * presentable_image, widget * menu_widget);
 
 
 #endif

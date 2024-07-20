@@ -69,7 +69,7 @@ void cvm_vk_work_queue_terminate(cvm_vk_device * device, cvm_vk_work_queue * que
 }
 
 #warning have debug logging for all the time points that can stall
-void * cvm_vk_work_queue_acquire_entry(cvm_vk_device * device, cvm_vk_work_queue * queue)
+void * cvm_vk_work_queue_entry_acquire(cvm_vk_work_queue * queue, const cvm_vk_device * device)
 {
     uint32_t i;
 
@@ -109,7 +109,7 @@ void * cvm_vk_work_queue_acquire_entry(cvm_vk_device * device, cvm_vk_work_queue
     return queue->entry_data+i*queue->entry_size;
 }
 
-void cvm_vk_work_queue_release_entry(cvm_vk_work_queue * queue, void * entry, const cvm_vk_timeline_semaphore_moment * completion_moment)
+void cvm_vk_work_queue_entry_release(cvm_vk_work_queue * queue, void * entry, const cvm_vk_timeline_semaphore_moment * completion_moment)
 {
     assert((((char*)entry-queue->entry_data)%queue->entry_size)==0);///entry was not an acquired value
     assert((((char*)entry-queue->entry_data)/queue->entry_size)==queue->available_index);///should be releasing the get index

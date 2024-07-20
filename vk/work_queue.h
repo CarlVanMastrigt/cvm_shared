@@ -62,8 +62,8 @@ cvm_vk_work_queue;
 void cvm_vk_work_queue_initialise(cvm_vk_work_queue * queue, const cvm_vk_work_queue_setup * setup);
 void cvm_vk_work_queue_terminate(cvm_vk_device * device, cvm_vk_work_queue * queue);/// stalls on entries?
 
-void * cvm_vk_work_queue_acquire_entry(cvm_vk_device * device, cvm_vk_work_queue * queue);///can stall while waiting on prior gpu work, will also cleanup any completed work while its at it
-void cvm_vk_work_queue_release_entry(cvm_vk_work_queue * queue, void * entry, const cvm_vk_timeline_semaphore_moment * completion_moment);
+void * cvm_vk_work_queue_entry_acquire(cvm_vk_work_queue * queue, const cvm_vk_device * device);///can stall while waiting on prior gpu work, will also cleanup any completed work while its at it
+void   cvm_vk_work_queue_entry_release(cvm_vk_work_queue * queue, void * entry, const cvm_vk_timeline_semaphore_moment * completion_moment);
 
 #endif
 
