@@ -33,7 +33,7 @@ void cvm_lockfree_stack_terminate(cvm_lockfree_stack * stack)
     assert((atomic_load_explicit(&stack->head, memory_order_relaxed) & CVM_LOCKFREE_STACK_ENTRY_MASK) == CVM_LOCKFREE_STACK_INVALID_ENTRY);/// stack should be empty upon termination
 }
 
-void cvm_lockfree_stack_add(cvm_lockfree_stack * stack, void * entry)
+void cvm_lockfree_stack_push(cvm_lockfree_stack * stack, void * entry)
 {
     uint_fast64_t entry_index,current_head,replacement_head;
     size_t entry_offset;
@@ -54,7 +54,7 @@ void cvm_lockfree_stack_add(cvm_lockfree_stack * stack, void * entry)
     while(!atomic_compare_exchange_weak_explicit(&stack->head, &current_head, replacement_head, memory_order_release, memory_order_relaxed));
 }
 
-void * cvm_lockfree_stack_get(cvm_lockfree_stack * stack)
+void * cvm_lockfree_stack_pull(cvm_lockfree_stack * stack)
 {
     uint_fast64_t entry_index,current_head,replacement_head;
 

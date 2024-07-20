@@ -46,7 +46,7 @@ cvm_lockfree_stack;
 void cvm_lockfree_stack_initialise(cvm_lockfree_stack * stack, cvm_lockfree_pool * pool);
 void cvm_lockfree_stack_terminate(cvm_lockfree_stack * stack);
 
-void cvm_lockfree_stack_add(cvm_lockfree_stack * stack, void * entry);
-void * cvm_lockfree_stack_get(cvm_lockfree_stack * stack);
+void cvm_lockfree_stack_push(cvm_lockfree_stack * stack, void * entry);
+void * cvm_lockfree_stack_pull(cvm_lockfree_stack * stack);
 
 #endif

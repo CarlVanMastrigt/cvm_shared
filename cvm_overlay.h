@@ -369,6 +369,19 @@ cvm_overlay_swapchain_resources;
 CVM_STACK(cvm_overlay_swapchain_resources,cvm_overlay_swapchain_resources,4)
 
 
+typedef struct cvm_overlay_images
+{
+    VkDeviceMemory memory;
+
+    /// alpha - colour
+    VkImage images[2];
+    VkImageView views[2];
+
+    cvm_vk_image_atlas alpha_atlas;
+    cvm_vk_image_atlas colour_atlas;
+}
+cvm_overlay_images;
+
 typedef struct cvm_overlay_renderer
 {
     cvm_vk_device * device;///is there a better place to put this? probably...
@@ -383,30 +396,21 @@ typedef struct cvm_overlay_renderer
     cvm_vk_staging_shunt_buffer shunt_buffer;
 
     /// image info
-    VkDeviceMemory image_memory;
+    cvm_overlay_images images;
 
-    VkImage transparent_image;
-    VkImageView transparent_image_view;///views of single array slice from image
-    cvm_vk_image_atlas transparent_image_atlas;
-
-    VkImage colour_image;
-    VkImageView colour_image_view;///views of single array slice from image
-    cvm_vk_image_atlas colour_image_atlas;
+    VkDescriptorPool descriptor_pool;
 
     ///these descriptors don't change (only need 1 set, always has the same bindings)
     VkDescriptorSetLayout image_descriptor_set_layout;
-    VkDescriptorPool image_descriptor_pool;
     VkDescriptorSet image_descriptor_set;
 
     ///these descriptors will have a different binding per frame
     VkDescriptorSetLayout frame_descriptor_set_layout;
-    VkDescriptorPool frame_descriptor_pool;
-    /// the actual descriptor sets per frame will exist on the work entry
+    /// the actual descriptor sets will exist on the work entry (per frame)
 
     /// for creating pipelines
-    VkPipelineShaderStageCreateInfo vertex_stage;
-    VkPipelineShaderStageCreateInfo fragment_stage;
     VkPipelineLayout pipeline_layout;
+    VkPipelineShaderStageCreateInfo pipeline_stages[2];//vertex,fragment
 
     /// collection of resources dependent upon the render target (swapchain)
     cvm_overlay_swapchain_resources_stack swapchain_dependent_resources;

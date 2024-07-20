@@ -481,7 +481,7 @@ static inline void stage_copy_action(cvm_vk_managed_buffer * mb,queue_transfer_s
 {
     cvm_atomic_lock_acquire(&mb->copy_spinlock);
 
-    cvm_vk_buffer_copy_stack_add(&mb->pending_copies,(VkBufferCopy)
+    cvm_vk_buffer_copy_stack_push(&mb->pending_copies,(VkBufferCopy)
     {
         .srcOffset=staging_offset,
         .dstOffset=dst_offset,
@@ -494,7 +494,7 @@ static inline void stage_copy_action(cvm_vk_managed_buffer * mb,queue_transfer_s
 
     if(cvm_vk_get_transfer_queue_family()==transfer_data->associated_queue_family_index)
     {
-        cvm_vk_buffer_barrier_stack_add(&mb->copy_release_barriers,(VkBufferMemoryBarrier2)
+        cvm_vk_buffer_barrier_stack_push(&mb->copy_release_barriers,(VkBufferMemoryBarrier2)
         {
             .sType=VK_STRUCTURE_TYPE_BUFFER_MEMORY_BARRIER_2,
             .pNext=NULL,
@@ -513,7 +513,7 @@ static inline void stage_copy_action(cvm_vk_managed_buffer * mb,queue_transfer_s
     }
     else
     {
-        cvm_vk_buffer_barrier_stack_add(&mb->copy_release_barriers,(VkBufferMemoryBarrier2)
+        cvm_vk_buffer_barrier_stack_push(&mb->copy_release_barriers,(VkBufferMemoryBarrier2)
         {
             .sType=VK_STRUCTURE_TYPE_BUFFER_MEMORY_BARRIER_2,
             .pNext=NULL,
@@ -536,7 +536,7 @@ static inline void stage_copy_action(cvm_vk_managed_buffer * mb,queue_transfer_s
 
         cvm_atomic_lock_acquire(&transfer_data->spinlock);
 
-        cvm_vk_buffer_barrier_stack_add(&transfer_data->acquire_barriers,(VkBufferMemoryBarrier2)
+        cvm_vk_buffer_barrier_stack_push(&transfer_data->acquire_barriers,(VkBufferMemoryBarrier2)
         {
             .sType=VK_STRUCTURE_TYPE_BUFFER_MEMORY_BARRIER_2,
             .pNext=NULL,
@@ -782,7 +782,7 @@ void cvm_vk_managed_buffer_dismissal_list_enqueue_allocation(cvm_vk_managed_buff
 
     assert(dismissal_list->frame_index < dismissal_list->frame_count);
 
-    u32_stack_add(dismissal_list->allocation_indices + dismissal_list->frame_index,allocation_index);
+    u32_stack_push(dismissal_list->allocation_indices + dismissal_list->frame_index,allocation_index);
 
     cvm_atomic_lock_release(&dismissal_list->spinlock);
 }
@@ -799,7 +799,7 @@ void cvm_vk_managed_buffer_dismissal_list_release_frame(cvm_vk_managed_buffer_di
 
     stack=dismissal_list->allocation_indices+frame_index;
 
-    while(u32_stack_get(stack,&allocation_index))
+    while(u32_stack_pull(stack,&allocation_index))
     {
         cvm_vk_managed_buffer_release_temporary_allocation(managed_buffer,allocation_index);
     }

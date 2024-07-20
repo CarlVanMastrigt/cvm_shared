@@ -28,6 +28,7 @@ along with cvm_shared.  If not, see <https://www.gnu.org/licenses/>.
 
 
 #include "memory/staging_buffer.h"
+#include "memory/shunt_buffer.h"
 
 
 

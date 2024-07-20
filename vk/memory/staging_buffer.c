@@ -19,7 +19,13 @@ along with cvm_shared.  If not, see <https://www.gnu.org/licenses/>.
 
 #include "cvm_shared.h"
 
-
+struct cvm_vk_staging_buffer_segment
+{
+    ///fuck, what happens if multiple queues require this moment!? (worry about it later)
+    cvm_vk_timeline_semaphore_moment moment_of_last_use;/// when this region is finished being used
+    VkDeviceSize offset;
+    VkDeviceSize size;/// must be greater than or equal to start (can be greater than buffer_size)
+};
 
 void cvm_vk_staging_buffer_initialise(cvm_vk_staging_buffer_ * staging_buffer, cvm_vk_device * device, VkBufferUsageFlags usage, VkDeviceSize buffer_size, VkDeviceSize reserved_high_priority_space)
 {
@@ -294,55 +300,6 @@ VkDeviceSize cvm_vk_staging_buffer_allocation_align_offset(cvm_vk_staging_buffer
 {
     #warning have base VK variant that takes usage as input
     return cvm_vk_align(offset, staging_buffer->alignment);
-}
-
-
-
-
-
-void cvm_vk_staging_shunt_buffer_initialise(cvm_vk_staging_shunt_buffer * buffer, VkDeviceSize alignment)
-{
-    buffer->size=CVM_MAX(4096, alignment);
-    buffer->backing=malloc(buffer->size);
-    buffer->alignment=alignment;
-    buffer->offset=0;
-}
-
-void cvm_vk_staging_shunt_buffer_terminate(cvm_vk_staging_shunt_buffer * buffer)
-{
-    free(buffer->backing);
-}
-
-
-void cvm_vk_staging_shunt_buffer_reset(cvm_vk_staging_shunt_buffer * buffer)
-{
-    buffer->offset=0;
-}
-
-void * cvm_vk_staging_shunt_buffer_add_bytes(cvm_vk_staging_shunt_buffer * buffer, VkDeviceSize byte_count)
-{
-    #warning have max viable size and assert that we are under it!
-    void * ptr;
-
-    if(buffer->offset+byte_count > buffer->size)
-    {
-        buffer->backing = realloc(buffer->backing, (buffer->size*=2));
-    }
-    ptr=buffer->backing+buffer->offset;
-    buffer->offset+=byte_count;
-
-    return ptr;
-}
-
-VkDeviceSize cvm_vk_staging_shunt_buffer_new_segment(cvm_vk_staging_shunt_buffer * buffer)
-{
-    buffer->offset = cvm_vk_align(buffer->offset, buffer->alignment);
-    return buffer->offset;
-}
-
-void cvm_vk_staging_shunt_buffer_copy(cvm_vk_staging_shunt_buffer * buffer, void * dst)
-{
-    memcpy(dst,buffer->backing,buffer->offset);
 }
 
 

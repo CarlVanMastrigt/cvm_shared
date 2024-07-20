@@ -39,7 +39,7 @@ void cvm_task_signal_dependencies(cvm_task * task, uint16_t count)
     if(old_count==count)/// this is the last dependency this task was waiting on, put it on list of available tasks and make sure there's a worker thread to satisfy it
     {
         /// acquire stall count here?
-        unstall_worker=cvm_coherent_queue_with_counter_add_and_decrement(&task_system->pending_tasks, task);
+        unstall_worker=cvm_coherent_queue_with_counter_push_and_decrement(&task_system->pending_tasks, task);
 
         if(unstall_worker)
         {
@@ -126,7 +126,7 @@ static inline cvm_task * cvm_task_worker_thread_get_task(cvm_task_system * task_
 
     while(true)
     {
-        task=cvm_coherent_queue_with_counter_get(&task_system->pending_tasks);
+        task=cvm_coherent_queue_with_counter_pull(&task_system->pending_tasks);
         if(task)
         {
             return task;
@@ -138,7 +138,7 @@ static inline cvm_task * cvm_task_worker_thread_get_task(cvm_task_system * task_
         /// this will increment local stall counter if it fails (which note: is inside the mutex lock)
         /// needs to be inside mutex lock such that when we add a task we KNOW there is a worker thread (at least this one) that has already stalled by the time that queue addition tries to wake a worker
         ///     ^ (queue addition wakes workers inside this mutex)
-        task=cvm_coherent_queue_with_counter_get_or_increment(&task_system->pending_tasks);
+        task=cvm_coherent_queue_with_counter_pull_or_increment(&task_system->pending_tasks);
         if(task)
         {
             mtx_unlock(&task_system->worker_thread_mutex);
@@ -314,7 +314,7 @@ void cvm_task_add_successor(cvm_task * task, cvm_sync_primitive * successor)
 
         *successor_ptr = successor;
 
-        if(!cvm_lockfree_hopper_add(&task->successor_hopper, successor_pool, successor_ptr))
+        if(!cvm_lockfree_hopper_push(&task->successor_hopper, successor_pool, successor_ptr))
         {
             /// if we failed to add the successor then the task has already been completed, relinquish the storage and signal the successor
             cvm_lockfree_pool_relinquish_entry(successor_pool, successor_ptr);

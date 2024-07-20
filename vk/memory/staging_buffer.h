@@ -25,7 +25,6 @@ along with cvm_shared.  If not, see <https://www.gnu.org/licenses/>.
 #ifndef CVM_VK_STAGING_BUFFER_H
 #define CVM_VK_STAGING_BUFFER_H
 
-/// rename? shared memory?
 
 /// for when its desirable to support a simple staging buffer or a more complex staging manager backing
 typedef struct cvm_vk_staging_buffer_allocation
@@ -36,27 +35,8 @@ typedef struct cvm_vk_staging_buffer_allocation
 }
 cvm_vk_staging_buffer_allocation;
 
+typedef struct cvm_vk_staging_buffer_segment cvm_vk_staging_buffer_segment;
 
-////
-typedef struct cvm_vk_staging_buffer_segment
-{
-    ///fuck, what happens if multiple queues require this moment!? (worry about it later)
-    cvm_vk_timeline_semaphore_moment moment_of_last_use;/// when this region is finished being used
-    VkDeviceSize offset;
-    VkDeviceSize size;/// must be greater than or equal to start (can be greater than buffer_size)
-}
-cvm_vk_staging_buffer_segment;
-
-
-
-///intended for single threaded/single purpose use (direct upload)
-
-///actually do this as a ring buffer
-/// small high priority segment set aside, accesses to that segment may circumvent ordering and delays and/or be put on higher priority queue, should this be using gates to control/delay work!?
-/// could allow re-ordering and skipping of particular segments?
-
-/// maybe because things are so short lived: just fuck it, allow fragmentation, also stalling, just ensure high priority segments go to one end?
-/// ring buffer but limit low priority requests when becoming starved? <-- i REALLY like this actually
 typedef struct cvm_vk_staging_buffer_
 {
     VkBuffer buffer;
@@ -106,27 +86,6 @@ void cvm_vk_staging_buffer_flush_allocation(const cvm_vk_staging_buffer_ * stagi
 void cvm_vk_staging_buffer_complete_allocation(cvm_vk_staging_buffer_ * staging_buffer, uint32_t reserved_allocation_segment_index, cvm_vk_timeline_semaphore_moment moment_of_last_use);
 
 VkDeviceSize cvm_vk_staging_buffer_allocation_align_offset(cvm_vk_staging_buffer_ * staging_buffer, VkDeviceSize offset);
-
-typedef struct cvm_vk_staging_shunt_buffer
-{
-    char * backing;
-    VkDeviceSize alignment;
-    VkDeviceSize size;
-    VkDeviceSize offset;
-    /// add check to make sure nothing added after buffer gets copied?
-}
-cvm_vk_staging_shunt_buffer;
-
-void cvm_vk_staging_shunt_buffer_initialise(cvm_vk_staging_shunt_buffer * buffer, VkDeviceSize alignment);
-void cvm_vk_staging_shunt_buffer_terminate(cvm_vk_staging_shunt_buffer * buffer);
-
-
-void cvm_vk_staging_shunt_buffer_reset(cvm_vk_staging_shunt_buffer * buffer);
-/// returns pointer to location which can be written, this pointer is only valid until next use
-void * cvm_vk_staging_shunt_buffer_add_bytes(cvm_vk_staging_shunt_buffer * buffer, VkDeviceSize byte_count);
-VkDeviceSize cvm_vk_staging_shunt_buffer_new_segment(cvm_vk_staging_shunt_buffer * buffer);
-
-void cvm_vk_staging_shunt_buffer_copy(cvm_vk_staging_shunt_buffer * buffer, void * dst);
 
 #endif
 

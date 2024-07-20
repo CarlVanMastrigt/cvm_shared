@@ -716,7 +716,7 @@ cvm_vk_image_atlas_tile * cvm_vk_acquire_image_atlas_tile_with_staging(cvm_vk_im
 
     #warning shunt buffer needs multithreaded handling! also needs max size handling
     upload_offset=cvm_vk_staging_shunt_buffer_new_segment(ia->shunt_buffer);
-    *staging = cvm_vk_staging_shunt_buffer_add_bytes(ia->shunt_buffer,ia->bytes_per_pixel*width*height);
+    *staging = cvm_vk_staging_shunt_buffer_reserve_bytes(ia->shunt_buffer,ia->bytes_per_pixel*width*height);
 
     if(!*staging)
     {
@@ -776,8 +776,10 @@ void * cvm_vk_acquire_staging_for_image_atlas_tile(cvm_vk_image_atlas * ia,cvm_v
     void * staging;
 
     #warning shunt buffer needs multithreaded handling! also needs max size handling
+    #warning this means we can't actually return staging! need MT and non MT variants...
+    /// possibly fix shunt buffer size?
     upload_offset=cvm_vk_staging_shunt_buffer_new_segment(ia->shunt_buffer);
-    staging = cvm_vk_staging_shunt_buffer_add_bytes(ia->shunt_buffer,ia->bytes_per_pixel*width*height);
+    staging = cvm_vk_staging_shunt_buffer_reserve_bytes(ia->shunt_buffer,ia->bytes_per_pixel*width*height);
 
     if(!staging)
     {

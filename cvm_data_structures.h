@@ -47,7 +47,7 @@ static inline void name##_stack_initialise( name##_stack * s )                  
     s->count=0;                                                                 \
 }                                                                               \
                                                                                 \
-static inline void name##_stack_add( name##_stack * s , type value )            \
+static inline void name##_stack_push( name##_stack * s , type value )           \
 {                                                                               \
     uint_fast32_t n;                                                            \
     if(s->count==s->space)                                                      \
@@ -58,7 +58,7 @@ static inline void name##_stack_add( name##_stack * s , type value )            
     s->stack[s->count++]=value;                                                 \
 }                                                                               \
                                                                                 \
-static inline int name##_stack_get( name##_stack * s , type * value )           \
+static inline int name##_stack_pull( name##_stack * s , type * value )          \
 {                                                                               \
     if(s->count==0)return 0;                                                    \
     *value=s->stack[--s->count];                                                \
@@ -86,7 +86,7 @@ static inline type * name##_stack_new( name##_stack * s )                       
     return s->stack+s->count++;                                                 \
 }                                                                               \
                                                                                 \
-static inline void name##_stack_add_multiple                                    \
+static inline void name##_stack_push_multiple                                   \
 ( name##_stack * s , const type * values , uint_fast32_t count)                 \
 {                                                                               \
     uint_fast32_t n;                                                            \
@@ -144,7 +144,7 @@ static inline uint32_t name##_array_add( name##_array * l , type value )        
 {                                                                               \
     uint_fast32_t n;                                                            \
     uint32_t i;                                                                 \
-    if(!u32_stack_get(&l->available_indices,&i))                                \
+    if(!u32_stack_pull(&l->available_indices,&i))                               \
     {                                                                           \
         if(l->count==l->space)                                                  \
         {                                                                       \
@@ -162,7 +162,7 @@ static inline uint32_t name##_array_add_ptr                                     
 {                                                                               \
     uint_fast32_t n;                                                            \
     uint32_t i;                                                                 \
-    if(!u32_stack_get(&l->available_indices,&i))                                \
+    if(!u32_stack_pull(&l->available_indices,&i))                               \
     {                                                                           \
         if(l->count==l->space)                                                  \
         {                                                                       \
@@ -177,14 +177,14 @@ static inline uint32_t name##_array_add_ptr                                     
                                                                                 \
 static inline type name##_array_get( name##_array * l , uint32_t i )            \
 {                                                                               \
-    u32_stack_add(&l->available_indices,i);                                     \
+    u32_stack_push(&l->available_indices,i);                                    \
     return l->array[i];                                                         \
 }                                                                               \
                                                                                 \
 /** returned pointer cannot be used after any other operation has occurred*/    \
 static inline const type * name##_array_get_ptr( name##_array * l , uint32_t i )\
 {                                                                               \
-    u32_stack_add(&l->available_indices,i);                                     \
+    u32_stack_push(&l->available_indices,i);                                    \
     return l->array+i;                                                          \
 }                                                                               \
                                                                                 \

@@ -51,12 +51,12 @@ void cvm_lockfree_pool_terminate(cvm_lockfree_pool * pool)
 
 void * cvm_lockfree_pool_acquire_entry(cvm_lockfree_pool * pool)
 {
-    return cvm_lockfree_stack_get(&pool->available_entries);
+    return cvm_lockfree_stack_pull(&pool->available_entries);
 }
 
 void cvm_lockfree_pool_relinquish_entry(cvm_lockfree_pool * pool, void * entry)
 {
-    cvm_lockfree_stack_add(&pool->available_entries,entry);
+    cvm_lockfree_stack_push(&pool->available_entries,entry);
 }
 
 

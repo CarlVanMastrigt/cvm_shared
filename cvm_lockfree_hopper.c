@@ -47,7 +47,7 @@ void cvm_lockfree_hopper_reset(cvm_lockfree_hopper * hopper)
     atomic_store_explicit(&hopper->head, CVM_LOCKFREE_HOPPER_INVALID_ENTRY, memory_order_relaxed);
 }
 
-bool cvm_lockfree_hopper_add(cvm_lockfree_hopper * hopper, cvm_lockfree_pool * pool, void * entry)
+bool cvm_lockfree_hopper_push(cvm_lockfree_hopper * hopper, cvm_lockfree_pool * pool, void * entry)
 {
     uint_fast64_t entry_index,current_head,replacement_head;
     size_t entry_offset;
@@ -104,29 +104,6 @@ void * cvm_lockfree_hopper_lock_and_get_first(cvm_lockfree_hopper * hopper, cvm_
     return pool->available_entries.entry_data + entry_index*pool->available_entries.entry_size;
 }
 
-void * cvm_lockfree_hopper_get_next(cvm_lockfree_pool * pool, void * previous_entry)
-{
-    uint_fast64_t previous_entry_index;
-    size_t previous_entry_offset;
-
-    assert(previous_entry!=NULL);
-    assert((char*)previous_entry >= pool->available_entries.entry_data);
-
-    previous_entry_offset = (char*)previous_entry - pool->available_entries.entry_data;
-    previous_entry_index = (uint_fast64_t) (previous_entry_offset / pool->available_entries.entry_size);
-
-    assert(previous_entry_index < ((uint_fast64_t)1 << pool->available_entries.capacity_exponent));
-
-    if(previous_entry_index == CVM_LOCKFREE_HOPPER_INVALID_ENTRY)
-    {
-        return NULL;
-    }
-    else
-    {
-        return pool->available_entries.entry_data + pool->available_entries.next_buffer[previous_entry_index]*pool->available_entries.entry_size;
-    }
-}
-
 void * cvm_lockfree_hopper_relinquish_and_get_next(cvm_lockfree_pool * pool, void * current_entry)
 {
     uint_fast64_t current_entry_index,next_entry_index;
@@ -153,6 +130,65 @@ void * cvm_lockfree_hopper_relinquish_and_get_next(cvm_lockfree_pool * pool, voi
     }
 
     cvm_lockfree_pool_relinquish_entry(pool, current_entry);
+    #warning should have a push entry index to avoid extra work
 
     return next_entry;
 }
+
+void * cvm_lockfree_hopper_get_next(cvm_lockfree_pool * pool, void * previous_entry)
+{
+    uint_fast64_t previous_entry_index;
+    size_t previous_entry_offset;
+
+    #warning genericise getting indexx in pool!
+    assert(previous_entry!=NULL);
+    assert((char*)previous_entry >= pool->available_entries.entry_data);
+
+    previous_entry_offset = (char*)previous_entry - pool->available_entries.entry_data;
+    previous_entry_index = (uint_fast64_t) (previous_entry_offset / pool->available_entries.entry_size);
+
+    assert(previous_entry_index < ((uint_fast64_t)1 << pool->available_entries.capacity_exponent));
+
+    if(previous_entry_index == CVM_LOCKFREE_HOPPER_INVALID_ENTRY)
+    {
+        return NULL;
+    }
+    else
+    {
+        return pool->available_entries.entry_data + pool->available_entries.next_buffer[previous_entry_index]*pool->available_entries.entry_size;
+    }
+}
+
+#warning
+//void * cvm_lockfree_hopper_relinquish_all(cvm_lockfree_pool * pool, void * first_entry, void * last_entry)
+//{
+//    uint_fast64_t first_entry_index,last_entry_index;
+//    size_t first_entry_offset,last_entry_offset;
+//
+//    assert(first_entry!=NULL);
+//    assert((char*)first_entry >= pool->available_entries.entry_data);
+//    first_entry_offset = (char*)first_entry - pool->available_entries.entry_data;
+//    first_entry_index = (uint_fast64_t) (first_entry_offset / pool->available_entries.entry_size);
+//    assert(first_entry_index < ((uint_fast64_t)1 << pool->available_entries.capacity_exponent));
+//
+//    assert(last_entry!=NULL);
+//    assert((char*)last_entry >= pool->available_entries.entry_data);
+//    last_entry_offset = (char*)last_entry - pool->available_entries.entry_data;
+//    last_entry_index = (uint_fast64_t) (last_entry_offset / pool->available_entries.entry_size);
+//    assert(last_entry_index < ((uint_fast64_t)1 << pool->available_entries.capacity_exponent));
+//
+//    next_entry_index = pool->available_entries.next_buffer[current_entry_index];
+//
+//    if(next_entry_index == CVM_LOCKFREE_HOPPER_INVALID_ENTRY)
+//    {
+//        next_entry = NULL;
+//    }
+//    else
+//    {
+//        next_entry = pool->available_entries.entry_data + next_entry_index*pool->available_entries.entry_size;
+//    }
+//
+//    cvm_lockfree_pool_relinquish_entry(pool, current_entry);
+//
+//    return next_entry;
+//}

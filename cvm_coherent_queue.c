@@ -40,7 +40,7 @@ void cvm_coherent_queue_terminate(cvm_coherent_queue * queue)
     free(queue->entry_indices);
 }
 
-void cvm_coherent_queue_add(cvm_coherent_queue * queue, void * entry)
+void cvm_coherent_queue_push(cvm_coherent_queue * queue, void * entry)
 {
     uint_fast64_t queue_index,expected_queue_index,entry_index;
     size_t entry_offset;
@@ -61,7 +61,7 @@ void cvm_coherent_queue_add(cvm_coherent_queue * queue, void * entry)
     while(!atomic_compare_exchange_weak_explicit(&queue->add_fence,&expected_queue_index,queue_index+1,memory_order_release,memory_order_relaxed));
 }
 
-void * cvm_coherent_queue_get(cvm_coherent_queue * queue)
+void * cvm_coherent_queue_pull(cvm_coherent_queue * queue)
 {
     uint_fast64_t queue_index,entry_index,current_fence_value;
 
@@ -109,7 +109,7 @@ void cvm_coherent_queue_with_counter_terminate(cvm_coherent_queue_with_counter *
     free(queue->entry_indices);
 }
 
-void cvm_coherent_queue_with_counter_add(cvm_coherent_queue_with_counter * queue, void * entry)
+void cvm_coherent_queue_with_counter_push(cvm_coherent_queue_with_counter * queue, void * entry)
 {
     uint_fast64_t queue_index,expected_fence_value,replacement_fence_value,entry_index,counter;
     size_t entry_offset;
@@ -139,7 +139,7 @@ void cvm_coherent_queue_with_counter_add(cvm_coherent_queue_with_counter * queue
     }
 }
 
-void * cvm_coherent_queue_with_counter_get(cvm_coherent_queue_with_counter * queue)
+void * cvm_coherent_queue_with_counter_pull(cvm_coherent_queue_with_counter * queue)
 {
     uint_fast64_t queue_index,entry_index,current_fence_value;
 
@@ -159,7 +159,7 @@ void * cvm_coherent_queue_with_counter_get(cvm_coherent_queue_with_counter * que
     return queue->entry_data + entry_index*queue->entry_size;
 }
 
-bool cvm_coherent_queue_with_counter_add_and_decrement(cvm_coherent_queue_with_counter * queue, void * entry)
+bool cvm_coherent_queue_with_counter_push_and_decrement(cvm_coherent_queue_with_counter * queue, void * entry)
 {
     uint_fast64_t queue_index,expected_fence_value,replacement_fence_value,entry_index,counter;
     size_t entry_offset;
@@ -195,7 +195,7 @@ bool cvm_coherent_queue_with_counter_add_and_decrement(cvm_coherent_queue_with_c
     return nonzero_count;
 }
 
-void * cvm_coherent_queue_with_counter_get_or_increment(cvm_coherent_queue_with_counter * queue)
+void * cvm_coherent_queue_with_counter_pull_or_increment(cvm_coherent_queue_with_counter * queue)
 {
     uint_fast64_t queue_index,entry_index,current_fence_value,replacement_fence_value;
 

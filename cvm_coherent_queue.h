@@ -40,8 +40,8 @@ cvm_coherent_queue;
 void cvm_coherent_queue_initialise(cvm_coherent_queue * queue,cvm_lockfree_pool * pool);
 void cvm_coherent_queue_terminate(cvm_coherent_queue * queue);
 
-void cvm_coherent_queue_add(cvm_coherent_queue * queue, void * entry);
-void * cvm_coherent_queue_get(cvm_coherent_queue * queue);///returns NULL on failure (b/c no elements remain)
+void   cvm_coherent_queue_push(cvm_coherent_queue * queue, void * entry);
+void * cvm_coherent_queue_pull(cvm_coherent_queue * queue);///returns NULL on failure (b/c no elements remain)
 
 
 
@@ -64,12 +64,12 @@ void cvm_coherent_queue_with_counter_initialise(cvm_coherent_queue_with_counter 
 void cvm_coherent_queue_with_counter_terminate(cvm_coherent_queue_with_counter * queue);
 
 /// these have no effect on the fail counter
-void   cvm_coherent_queue_with_counter_add(cvm_coherent_queue_with_counter * queue, void * entry);
-void * cvm_coherent_queue_with_counter_get(cvm_coherent_queue_with_counter * queue);///returns NULL on failure (b/c no elements remain)
+void   cvm_coherent_queue_with_counter_push(cvm_coherent_queue_with_counter * queue, void * entry);
+void * cvm_coherent_queue_with_counter_pull(cvm_coherent_queue_with_counter * queue);///returns NULL on failure (b/c no elements remain)
 
 /// these will attempt to add/get and increment/decrement a counter which tracks getters that have been stalled waiting on new elements
-bool   cvm_coherent_queue_with_counter_add_and_decrement(cvm_coherent_queue_with_counter * queue, void * entry);///returns true if counter was nonzero, also decrements in this case
-void * cvm_coherent_queue_with_counter_get_or_increment(cvm_coherent_queue_with_counter * queue);///returns NULL if no elements remain and increments counter, otherwise returns acquired element
+bool   cvm_coherent_queue_with_counter_push_and_decrement(cvm_coherent_queue_with_counter * queue, void * entry);///returns true if counter was nonzero, also decrements in this case
+void * cvm_coherent_queue_with_counter_pull_or_increment(cvm_coherent_queue_with_counter * queue);///returns NULL if no elements remain and increments counter, otherwise returns acquired element
 
 /// can use similar to cvm_thread_safe_queue but with managed pool
 
