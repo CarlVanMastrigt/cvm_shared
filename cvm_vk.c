@@ -1090,7 +1090,7 @@ void cvm_vk_destroy_fence(const cvm_vk_device * device,VkFence fence)
     vkDestroyFence(device->device,fence,NULL);
 }
 
-void cvm_vk_wait_on_fence_and_reset(const cvm_vk_device * device,VkFence fence)
+void cvm_vk_wait_on_fence_and_reset(const cvm_vk_device * device, VkFence fence)
 {
     CVM_VK_CHECK(vkWaitForFences(device->device,1,&fence,VK_TRUE,CVM_VK_DEFAULT_TIMEOUT));
     vkResetFences(device->device,1,&fence);
@@ -1985,7 +1985,7 @@ void cvm_vk_setup_new_graphics_payload_from_batch(cvm_vk_module_work_payload * p
                 .memoryBarrierCount=0,
                 .pMemoryBarriers=NULL,
                 .bufferMemoryBarrierCount=transfer_data->acquire_barriers.count,
-                .pBufferMemoryBarriers=transfer_data->acquire_barriers.stack,
+                .pBufferMemoryBarriers=transfer_data->acquire_barriers.data,
                 .imageMemoryBarrierCount=0,
                 .pImageMemoryBarriers=NULL
             };

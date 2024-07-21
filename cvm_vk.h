@@ -220,7 +220,7 @@ cvm_vk_surface_swapchain * cvm_vk_swapchain_get(void);
 
 VkFence cvm_vk_create_fence(const cvm_vk_device * device,bool initially_signalled);
 void cvm_vk_destroy_fence(const cvm_vk_device * device,VkFence fence);
-void cvm_vk_wait_on_fence_and_reset(const cvm_vk_device * device,VkFence fence);
+void cvm_vk_wait_on_fence_and_reset(const cvm_vk_device * device, VkFence fence);
 
 VkSemaphore cvm_vk_create_binary_semaphore(const cvm_vk_device * device);
 void cvm_vk_destroy_binary_semaphore(const cvm_vk_device * device,VkSemaphore semaphore);

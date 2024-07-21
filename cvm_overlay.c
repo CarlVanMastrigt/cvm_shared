@@ -623,54 +623,47 @@ static inline cvm_overlay_frame_resource_set cvm_overlay_renderer_frame_resource
     cvm_overlay_swapchain_resources * swapchain_resources;
     cvm_overlay_frame_resources * frame_resources;
     uint32_t i;
-    bool swapchain_resources_found,frame_resources_found;
+    bool frame_resources_found;
 
 
-    ///first, prune unused resources
-    for(i=0;i<renderer->swapchain_dependent_resources.count;)
+    #warning rather than stack use a queue ?? need a queue implementation...?
+    ///first, prune unused resources, assuming the oldest will end first
+    while((swapchain_resources = cvm_overlay_swapchain_resources_queue_get_front_ptr(&renderer->swapchain_resources)))
     {
-        swapchain_resources = cvm_overlay_swapchain_resources_stack_get_ptr(&renderer->swapchain_dependent_resources, i);
         if((swapchain_resources->swapchain_generation != presentable_image->parent_swapchain->generation) && (swapchain_resources->in_flight_frame_count == 0))
         {
             /// these resources are out of date and no longer in use, delete them!
             cvm_overlay_swapchain_resources_terminate(swapchain_resources, device);
-            cvm_overlay_swapchain_resources_stack_remove(&renderer->swapchain_dependent_resources, i);
+            cvm_overlay_swapchain_resources_queue_dequeue(&renderer->swapchain_resources, NULL);///remove from the queue
         }
         else
         {
-            i++;
-        }
-    }
-
-
-    /// get or create appropriate swapchain resources
-    for(i=0,swapchain_resources_found=false;i<renderer->swapchain_dependent_resources.count;i++)
-    {
-        swapchain_resources = renderer->swapchain_dependent_resources.stack+i;
-        if(swapchain_resources->swapchain_generation == presentable_image->parent_swapchain->generation)
-        {
-            swapchain_resources_found=true;
-            swapchain_resources->in_flight_frame_count++;
             break;
         }
     }
-    if( ! swapchain_resources_found)
-    {
-        swapchain_resources = cvm_overlay_swapchain_resources_stack_new(&renderer->swapchain_dependent_resources);
 
+    swapchain_resources = cvm_overlay_swapchain_resources_queue_get_back_ptr(&renderer->swapchain_resources);
+
+    if( swapchain_resources==NULL || swapchain_resources->swapchain_generation != presentable_image->parent_swapchain->generation)
+    {
+        swapchain_resources = cvm_overlay_swapchain_resources_queue_new(&renderer->swapchain_resources);
+        puts("new overlay swapchain");
         swapchain_resources->swapchain_generation=presentable_image->parent_swapchain->generation;
-        swapchain_resources->in_flight_frame_count=1;///will be used this frame
+        swapchain_resources->in_flight_frame_count=0;///will be used this frame
         swapchain_resources->render_pass = cvm_overlay_render_pass_create(device,presentable_image->parent_swapchain->surface_format.format);
         swapchain_resources->pipeline = cvm_overlay_pipeline_create(device, renderer->pipeline_stages, renderer->pipeline_layout, swapchain_resources->render_pass);
         cvm_overlay_frame_resources_stack_initialise(&swapchain_resources->frame_resources);
     }
+
+    /// note that we're using this swapchain
+    swapchain_resources->in_flight_frame_count++;
 
 
     /// get or create appropriate frame resources
     for(i=0,frame_resources_found=false;i<swapchain_resources->frame_resources.count;i++)
     {
         frame_resources = cvm_overlay_frame_resources_stack_get_ptr(&swapchain_resources->frame_resources, i);
-        if(frame_resources->unique_swapchain_image_identifier == presentable_image->unique_image_identifier)
+        if(frame_resources->swapchain_image_index == presentable_image->index)
         {
             frame_resources_found=true;
             break;
@@ -681,7 +674,7 @@ static inline cvm_overlay_frame_resource_set cvm_overlay_renderer_frame_resource
         frame_resources=cvm_overlay_frame_resources_stack_new(&swapchain_resources->frame_resources);
 
         frame_resources->framebuffer = cvm_overlay_framebuffer_create(device,presentable_image->parent_swapchain->surface_capabilities.currentExtent,swapchain_resources->render_pass,presentable_image->image_view);
-        frame_resources->unique_swapchain_image_identifier=presentable_image->unique_image_identifier;
+        frame_resources->swapchain_image_index=presentable_image->index;
     }
 
 
@@ -737,9 +730,10 @@ void cvm_overlay_renderer_work_entry_reset(void * shared_ptr, void * entry_ptr)
 
     cvm_vk_command_pool_reset(renderer->device,&entry->command_pool);
 
-    for(i=0;i<renderer->swapchain_dependent_resources.count;i++)
+    for(i=0;i<renderer->swapchain_resources.count;i++)
     {
-        swapchain_dependent_resources=renderer->swapchain_dependent_resources.stack+i;
+        #warning record swapchain index!
+        swapchain_dependent_resources=cvm_overlay_swapchain_resources_queue_get_ptr(&renderer->swapchain_resources, renderer->swapchain_resources.front+i);
         if(entry->swapchain_generation == swapchain_dependent_resources->swapchain_generation)
         {
             assert(swapchain_dependent_resources->in_flight_frame_count > 0);
@@ -747,7 +741,7 @@ void cvm_overlay_renderer_work_entry_reset(void * shared_ptr, void * entry_ptr)
             break;
         }
     }
-    assert(i < renderer->swapchain_dependent_resources.count);///TARGET RESOURCES IN USE NOT FOUND!
+    assert(i < renderer->swapchain_resources.count);///TARGET RESOURCES IN USE NOT FOUND!
 }
 
 void cvm_overlay_renderer_initialise(cvm_overlay_renderer * renderer, cvm_vk_device * device, cvm_vk_staging_buffer_ * staging_buffer, uint32_t renderer_cycle_count)
@@ -768,7 +762,7 @@ void cvm_overlay_renderer_initialise(cvm_overlay_renderer * renderer, cvm_vk_dev
 
     cvm_vk_staging_shunt_buffer_initialise(&renderer->shunt_buffer, staging_buffer->alignment);
     cvm_overlay_element_render_data_stack_initialise(&renderer->element_render_stack);
-    cvm_overlay_swapchain_resources_stack_initialise(&renderer->swapchain_dependent_resources);
+    cvm_overlay_swapchain_resources_queue_initialise(&renderer->swapchain_resources);
     cvm_overlay_images_initialise(&renderer->images, device, 1024, 1024, 1024, 1024, &renderer->shunt_buffer);
 
     renderer->image_descriptor_set = cvm_overlay_image_descriptor_set_allocate(device, renderer->descriptor_pool, renderer->image_descriptor_set_layout); /// no matching free necessary
@@ -789,7 +783,7 @@ void cvm_overlay_renderer_initialise(cvm_overlay_renderer * renderer, cvm_vk_dev
 
 void cvm_overlay_renderer_terminate(cvm_overlay_renderer * renderer, cvm_vk_device * device)
 {
-    cvm_overlay_swapchain_resources resources;
+    cvm_overlay_swapchain_resources * resources;
 
 
     cvm_vk_work_queue_terminate(device,&renderer->work_queue);
@@ -809,11 +803,11 @@ void cvm_overlay_renderer_terminate(cvm_overlay_renderer * renderer, cvm_vk_devi
 
     cvm_overlay_element_render_data_stack_terminate(&renderer->element_render_stack);
 
-    while(cvm_overlay_swapchain_resources_stack_pull(&renderer->swapchain_dependent_resources,&resources))
+    while((resources = cvm_overlay_swapchain_resources_queue_dequeue_ptr(&renderer->swapchain_resources)))
     {
-        cvm_overlay_swapchain_resources_terminate(&resources, device);
+        cvm_overlay_swapchain_resources_terminate(resources, device);
     }
-    cvm_overlay_swapchain_resources_stack_terminate(&renderer->swapchain_dependent_resources);
+    cvm_overlay_swapchain_resources_queue_terminate(&renderer->swapchain_resources);
 }
 
 

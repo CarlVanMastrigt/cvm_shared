@@ -32,7 +32,7 @@ along with cvm_shared.  If not, see <https://www.gnu.org/licenses/>.
                                                                                 \
 typedef struct name##_stack                                                     \
 {                                                                               \
-    type * stack;                                                               \
+    type * data;                                                                \
     uint_fast32_t space;                                                        \
     uint_fast32_t count;                                                        \
 }                                                                               \
@@ -42,36 +42,8 @@ name##_stack;                                                                   
 static inline void name##_stack_initialise( name##_stack * s )                  \
 {                                                                               \
     assert(start_size>3 && !(start_size & (start_size-1)));                     \
-    s->stack=malloc( sizeof( type ) * start_size );                             \
+    s->data=malloc( sizeof( type ) * start_size );                              \
     s->space=start_size;                                                        \
-    s->count=0;                                                                 \
-}                                                                               \
-                                                                                \
-static inline void name##_stack_push( name##_stack * s , type value )           \
-{                                                                               \
-    uint_fast32_t n;                                                            \
-    if(s->count==s->space)                                                      \
-    {                                                                           \
-        n=cvm_allocation_increase_step(s->space);                               \
-        s->stack=realloc(s->stack,sizeof( type )*(s->space+=n));                \
-    }                                                                           \
-    s->stack[s->count++]=value;                                                 \
-}                                                                               \
-                                                                                \
-static inline int name##_stack_pull( name##_stack * s , type * value )          \
-{                                                                               \
-    if(s->count==0)return 0;                                                    \
-    *value=s->stack[--s->count];                                                \
-    return 1;                                                                   \
-}                                                                               \
-                                                                                \
-static inline void name##_stack_terminate( name##_stack * s )                   \
-{                                                                               \
-    free(s->stack);                                                             \
-}                                                                               \
-                                                                                \
-static inline void name##_stack_reset( name##_stack * s )                       \
-{                                                                               \
     s->count=0;                                                                 \
 }                                                                               \
                                                                                 \
@@ -81,9 +53,31 @@ static inline type * name##_stack_new( name##_stack * s )                       
     if(s->count==s->space)                                                      \
     {                                                                           \
         n=cvm_allocation_increase_step(s->space);                               \
-        s->stack=realloc(s->stack,sizeof( type )*(s->space+=n));                \
+        s->data=realloc(s->data,sizeof( type )*(s->space+=n));                  \
     }                                                                           \
-    return s->stack+s->count++;                                                 \
+    return s->data+s->count++;                                                  \
+}                                                                               \
+                                                                                \
+static inline void name##_stack_push( name##_stack * s , type value )           \
+{                                                                               \
+    *( name##_stack_new( s ) ) = value;                                         \
+}                                                                               \
+                                                                                \
+static inline bool name##_stack_pull( name##_stack * s , type * value )         \
+{                                                                               \
+    if(s->count==0)return false;                                                \
+    *value=s->data[--s->count];                                                 \
+    return true;                                                                \
+}                                                                               \
+                                                                                \
+static inline void name##_stack_terminate( name##_stack * s )                   \
+{                                                                               \
+    free(s->data);                                                              \
+}                                                                               \
+                                                                                \
+static inline void name##_stack_reset( name##_stack * s )                       \
+{                                                                               \
+    s->count=0;                                                                 \
 }                                                                               \
                                                                                 \
 static inline void name##_stack_push_multiple                                   \
@@ -93,9 +87,9 @@ static inline void name##_stack_push_multiple                                   
     while((s->count+count) > s->space)                                          \
     {                                                                           \
         n=cvm_allocation_increase_step(s->space);                               \
-        s->stack=realloc(s->stack,sizeof( type )*(s->space+=n));                \
+        s->data=realloc(s->data,sizeof( type )*(s->space+=n));                  \
     }                                                                           \
-    memcpy(s->stack+s->count,values,sizeof( type )*count);                      \
+    memcpy(s->data+s->count,values,sizeof( type )*count);                       \
     s->count+=count;                                                            \
 }                                                                               \
                                                                                 \
@@ -106,17 +100,17 @@ static inline size_t name##_stack_size( name##_stack * s )                      
                                                                                 \
 static inline void name##_stack_copy( name##_stack * s , void * dst )           \
 {                                                                               \
-    memcpy( dst , s->stack , sizeof( type ) * s->count );                       \
+    memcpy( dst , s->data , sizeof( type ) * s->count );                        \
 }                                                                               \
                                                                                 \
 static inline type * name##_stack_get_ptr( name##_stack * s , uint_fast32_t i ) \
 {                                                                               \
-    return s->stack + i;                                                        \
+    return s->data + i;                                                         \
 }                                                                               \
                                                                                 \
 static inline void name##_stack_remove( name##_stack * s , uint_fast32_t i )    \
 {                                                                               \
-    memmove( s->stack + i, s->stack + i + 1, sizeof(type) * ( --s->count-i));   \
+    memmove( s->data + i, s->data + i + 1, sizeof(type) * ( --s->count-i));     \
 }                                                                               \
 
 #endif
@@ -300,6 +294,125 @@ static inline void name##_bin_heap_del( name##_bin_heap * h )                   
 
 
 
+
+#ifndef CVM_QUEUE
+#define CVM_QUEUE(type,name,start_size)                                         \
+                                                                                \
+typedef struct name##_queue                                                     \
+{                                                                               \
+    type * data;                                                                \
+    uint_fast32_t space;                                                        \
+    uint_fast32_t count;                                                        \
+    uint_fast32_t front;                                                        \
+}                                                                               \
+name##_queue;                                                                   \
+                                                                                \
+                                                                                \
+static inline void name##_queue_initialise( name##_queue * s )                  \
+{                                                                               \
+    assert(( (start_size) & ( (start_size) - 1 )) == 0);                        \
+    s->data=malloc( sizeof( type ) * start_size );                              \
+    s->space=start_size;                                                        \
+    s->count=0;                                                                 \
+    s->front=0;                                                                 \
+}                                                                               \
+                                                                                \
+static inline uint32_t name##_queue_new_index( name##_queue * q )               \
+{                                                                               \
+    uint_fast32_t front_offset, move_count;                                     \
+    type * src;                                                                 \
+    if(q->count==q->space)                                                      \
+    {                                                                           \
+        q->data = realloc(q->data, sizeof(type) * q->count * 2);                \
+        front_offset = q->front & (q->space - 1);                               \
+        if(q->front & q->space)                                                 \
+        {                                                                       \
+            src = q->data + front_offset;                                       \
+            move_count = q->space - front_offset;                               \
+        }                                                                       \
+        else                                                                    \
+        {                                                                       \
+            src = q->data;                                                      \
+            move_count = front_offset;                                          \
+        }                                                                       \
+        memcpy(src + q->space, src, sizeof(type) * move_count);                 \
+        q->space *= 2;                                                          \
+    }                                                                           \
+    return q->front + q->count++;                                               \
+}                                                                               \
+                                                                                \
+static inline type * name##_queue_get_ptr( name##_queue * q , uint32_t index )  \
+{                                                                               \
+    return q->data + (index & (q->space - 1));                                  \
+}                                                                               \
+                                                                                \
+static inline type * name##_queue_new( name##_queue * q )                       \
+{                                                                               \
+    return q->data + ( name##_queue_new_index(q) & (q->space - 1));             \
+}                                                                               \
+                                                                                \
+static inline uint32_t name##_queue_enqueue( name##_queue * q , type value )    \
+{                                                                               \
+    uint_fast32_t i;                                                            \
+    i = name##_queue_new_index(q);                                              \
+    q->data[i & (q->space - 1)] = value;                                        \
+    return i;                                                                   \
+}                                                                               \
+                                                                                \
+static inline bool name##_queue_dequeue( name##_queue * q , type * value )      \
+{                                                                               \
+    if(q->count==0) return false;                                               \
+    if(value) *value=q->data[ q->front & (q->space - 1) ];                      \
+    q->front++;                                                                 \
+    q->count--;                                                                 \
+    return true;                                                                \
+}                                                                               \
+                                                                                \
+static inline type * name##_queue_dequeue_ptr( name##_queue * q )               \
+{                                                                               \
+    type * ptr;                                                                 \
+    if(q->count==0) return NULL;                                                \
+    ptr=q->data + (q->front & (q->space - 1));                                  \
+    q->front++;                                                                 \
+    q->count--;                                                                 \
+    return ptr;                                                                 \
+}                                                                               \
+                                                                                \
+static inline void name##_queue_terminate( name##_queue * q )                   \
+{                                                                               \
+    free(q->data);                                                              \
+}                                                                               \
+                                                                                \
+static inline type * name##_queue_get_front_ptr( name##_queue * q )             \
+{                                                                               \
+    if(q->count==0)return NULL;                                                 \
+    return q->data + (q->front & (q->space - 1));                               \
+}                                                                               \
+                                                                                \
+static inline type * name##_queue_get_back_ptr( name##_queue * q )              \
+{                                                                               \
+    if(q->count==0)return NULL;                                                 \
+    return q->data + ((q->front + q->count - 1) & (q->space - 1));              \
+}                                                                               \
+
+#endif
+
+/**
+brief on queue resizing:
+need to move the correct part of the buffer to maintain (modulo) indices after resizing:
+|+++o+++|
+|---o+++++++----|
+vs
+        |+++o+++|
+|+++--------o+++|
+^ realloced segment array with alignment of relative (intended) indices/offsets
+
+
+iterating a queue
+for(i=0;i<q->count;i++) queue_get_ptr(q, q->front + i)
+*/
+
+CVM_QUEUE(uint32_t,u32,16)
 
 
 

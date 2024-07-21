@@ -127,11 +127,7 @@ static inline int cvm_vk_swapchain_create(const cvm_vk_device * device, cvm_vk_s
 
         presentable_image->image=swapchain_images[i];
 
-        presentable_image->unique_image_identifier=swapchain->unique_image_counter++;
-        if(swapchain->unique_image_counter==CVM_INVALID_U16_INDEX)
-        {
-            swapchain->unique_image_counter=0;
-        }
+        presentable_image->index=i;
 
         presentable_image->acquire_semaphore=VK_NULL_HANDLE;///set using one of the available image_acquisition_semaphores
         #warning instead of above assert it is NULL and set to VK_NULL_HANDLE upon init and upon being relinquished! (same for below!)
@@ -239,7 +235,6 @@ int cvm_vk_swapchain_initialse(const cvm_vk_device * device, cvm_vk_surface_swap
     swapchain->acquired_image_count=0;
 
     swapchain->generation=0;
-    swapchain->unique_image_counter=0;
 
     assert(device->queue_family_count<=64);/// cannot hold bitmask
 
@@ -288,11 +283,15 @@ void cvm_vk_swapchain_terminate(const cvm_vk_device * device, cvm_vk_surface_swa
     uint32_t i;
     cvm_vk_swapchain_presentable_image * presentable_image;
 
-    cvm_vk_swapchain_destroy(device, swapchain);
+
 
 
     vkDeviceWaitIdle(device->device);
     /// above required b/c presently there is no way to know that the semaphore used by present has actually been used by WSI
+
+    cvm_vk_swapchain_destroy(device, swapchain);
+
+    #warning probably want to wait on all swapchain instances to "complete"
 
     if(swapchain->metering_fence_active)
     {
@@ -375,16 +374,16 @@ long as it has not entered a state that causes it to return VK_ERROR_OUT_OF_DATE
 /// rely on this func to detect swapchain resize? couldn't hurt to double check based on screen resize
 /// returns newly finished frames image index so that data waiting on it can be cleaned up for threads in upcoming critical section
 
-const cvm_vk_swapchain_presentable_image * cvm_vk_swapchain_acquire_presentable_image(const cvm_vk_device * device, cvm_vk_surface_swapchain * swapchain, bool rendering_resources_invalid, uint32_t * cleanup_index)
+const cvm_vk_swapchain_presentable_image * cvm_vk_swapchain_acquire_presentable_image(const cvm_vk_device * device, cvm_vk_surface_swapchain * swapchain, uint32_t * cleanup_index)
 {
     cvm_vk_swapchain_presentable_image * presentable_image;
     VkSemaphore acquire_semaphore;
     VkResult acquire_result;
 
-    if(rendering_resources_invalid) swapchain->rendering_resources_valid=false;
-
     presentable_image=NULL;
     *cleanup_index=CVM_INVALID_U32_INDEX;
+
+    #warning can/will instead ALWAYS return a valid image, if failure occurrs then rebuild swapchain immediately, no extra function call
 
     if(swapchain->rendering_resources_valid)
     {
@@ -397,7 +396,7 @@ const cvm_vk_swapchain_presentable_image * cvm_vk_swapchain_acquire_presentable_
             swapchain->metering_fence_active=false;
         }
 
-        VkResult acquire_result=vkAcquireNextImageKHR(device->device,swapchain->swapchain,CVM_VK_DEFAULT_TIMEOUT,acquire_semaphore,swapchain->metering_fence,&swapchain->acquired_image_index);
+        VkResult acquire_result=vkAcquireNextImageKHR(device->device, swapchain->swapchain, CVM_VK_DEFAULT_TIMEOUT, acquire_semaphore, swapchain->metering_fence, &swapchain->acquired_image_index);
 
         if(acquire_result>=VK_SUCCESS)
         {
@@ -425,6 +424,7 @@ const cvm_vk_swapchain_presentable_image * cvm_vk_swapchain_acquire_presentable_
 
                 swapchain->image_acquisition_semaphores[--swapchain->acquired_image_count]=presentable_image->acquire_semaphore;
 
+                #warning the following should ALWAYS be true at this point!
                 cvm_vk_timeline_semaphore_moment_wait(device,&presentable_image->last_use_moment);
             }
 

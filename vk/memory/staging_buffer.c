@@ -19,14 +19,6 @@ along with cvm_shared.  If not, see <https://www.gnu.org/licenses/>.
 
 #include "cvm_shared.h"
 
-struct cvm_vk_staging_buffer_segment
-{
-    ///fuck, what happens if multiple queues require this moment!? (worry about it later)
-    cvm_vk_timeline_semaphore_moment moment_of_last_use;/// when this region is finished being used
-    VkDeviceSize offset;
-    VkDeviceSize size;/// must be greater than or equal to start (can be greater than buffer_size)
-};
-
 void cvm_vk_staging_buffer_initialise(cvm_vk_staging_buffer_ * staging_buffer, cvm_vk_device * device, VkBufferUsageFlags usage, VkDeviceSize buffer_size, VkDeviceSize reserved_high_priority_space)
 {
     const VkDeviceSize alignment=cvm_vk_buffer_alignment_requirements(device, usage);
@@ -65,40 +57,32 @@ void cvm_vk_staging_buffer_initialise(cvm_vk_staging_buffer_ * staging_buffer, c
     mtx_init(&staging_buffer->access_mutex,mtx_plain);
     cnd_init(&staging_buffer->setup_stall_condition);
 
-    staging_buffer->segment_space=16;
-    staging_buffer->active_segments=malloc(sizeof(cvm_vk_staging_buffer_segment)*staging_buffer->segment_space);
-    staging_buffer->first_active_segment_index=0;
-    staging_buffer->active_segment_count=0;
+    cvm_vk_staging_buffer_segment_queue_initialise(&staging_buffer->segment_queue);
 }
 
 void cvm_vk_staging_buffer_terminate(cvm_vk_staging_buffer_ * staging_buffer, cvm_vk_device * device)
 {
-    const uint32_t segment_mask = staging_buffer->segment_space-1;/// can be const here because the access mutex is not unlocked during this function
     cvm_vk_staging_buffer_segment * oldest_active_segment;
 
     /// wait for all memory uses to complete, must be externally synchronised to ensure buffer is not in use elsewhere
-    while(staging_buffer->active_segment_count)
+    while((oldest_active_segment = cvm_vk_staging_buffer_segment_queue_dequeue_ptr(&staging_buffer->segment_queue)))
     {
-        oldest_active_segment = staging_buffer->active_segments+(staging_buffer->first_active_segment_index&segment_mask);
-
         assert(oldest_active_segment->moment_of_last_use.semaphore != VK_NULL_HANDLE);///cant try to terminate while still in use
         assert(oldest_active_segment->size);///segment must occupy space
 
         cvm_vk_timeline_semaphore_moment_wait(device,&oldest_active_segment->moment_of_last_use);
 
+        /// this checks that the start of this segment is the end of the available space
         assert(oldest_active_segment->offset == (staging_buffer->current_offset+staging_buffer->remaining_space) % staging_buffer->buffer_size);/// out of order free for some reason, or offset mismatch
 
         staging_buffer->remaining_space += oldest_active_segment->size;///relinquish this segments space space
-
-        staging_buffer->first_active_segment_index++;
-        staging_buffer->active_segment_count--;
     }
 
     assert(staging_buffer->remaining_space==staging_buffer->buffer_size);
 
     mtx_destroy(&staging_buffer->access_mutex);
     cnd_destroy(&staging_buffer->setup_stall_condition);
-    free(staging_buffer->active_segments);
+    cvm_vk_staging_buffer_segment_queue_terminate(&staging_buffer->segment_queue);
 
     cvm_vk_buffer_memory_pair_destroy(device, staging_buffer->buffer, staging_buffer->memory, true);
 }
@@ -107,30 +91,26 @@ void cvm_vk_staging_buffer_terminate(cvm_vk_staging_buffer_ * staging_buffer, cv
 #warning consider moving this back into the main function?
 static inline void cvm_vk_staging_buffer_query_allocations(cvm_vk_staging_buffer_ * staging_buffer, cvm_vk_device * device)
 {
-    const uint32_t segment_mask = staging_buffer->segment_space-1;/// can be const here because the access mutex is not unlocked during this function
-
     cvm_vk_staging_buffer_segment * oldest_active_segment;
 
-    while(staging_buffer->active_segment_count)
+    while((oldest_active_segment = cvm_vk_staging_buffer_segment_queue_get_front_ptr(&staging_buffer->segment_queue)))
     {
-        oldest_active_segment = staging_buffer->active_segments+(staging_buffer->first_active_segment_index&segment_mask);
-
         if(oldest_active_segment->moment_of_last_use.semaphore == VK_NULL_HANDLE) return; /// oldest segment has not been "completed"
 
         assert(oldest_active_segment->size);///segment must occupy space
 
         if(!cvm_vk_timeline_semaphore_moment_query(device,&oldest_active_segment->moment_of_last_use)) return; /// oldest segment is still in use by command_buffer/queue
 
+        /// this checks that the start of this segment is the end of the available space
         assert(oldest_active_segment->offset == (staging_buffer->current_offset+staging_buffer->remaining_space) % staging_buffer->buffer_size);/// out of order free for some reason, or offset mismatch
 
         staging_buffer->remaining_space += oldest_active_segment->size;///relinquish this segments space space
 
-        staging_buffer->first_active_segment_index++;
-        staging_buffer->active_segment_count--;
+        cvm_vk_staging_buffer_segment_queue_dequeue(&staging_buffer->segment_queue, NULL);/// remove oldest_active_segment from the queue
 
         if(staging_buffer->remaining_space==staging_buffer->buffer_size)
         {
-            assert(staging_buffer->active_segment_count==0);
+            assert(staging_buffer->segment_queue.count==0);
             /// should the whole buffer become available, reset offset to 0 so that we can use the buffer more efficiently (try to avoid wrap)
             staging_buffer->current_offset=0;
         }
@@ -171,9 +151,9 @@ cvm_vk_staging_buffer_allocation cvm_vk_staging_buffer_reserve_allocation(cvm_vk
         }
 
         /// otherwise; more space required
-        assert(staging_buffer->active_segment_count);///should not need more space if there are no active segments
+        assert(staging_buffer->segment_queue.count > 0);///should not need more space if there are no active segments
 
-        oldest_active_segment = staging_buffer->active_segments + (staging_buffer->first_active_segment_index & (staging_buffer->segment_space-1));
+        oldest_active_segment = cvm_vk_staging_buffer_segment_queue_get_front_ptr(&staging_buffer->segment_queue);
 
         if (oldest_active_segment->moment_of_last_use.semaphore == VK_NULL_HANDLE)/// semaphore not actually set up yet, this segment has been reserved but not completed
         {
@@ -190,6 +170,7 @@ cvm_vk_staging_buffer_allocation cvm_vk_staging_buffer_reserve_allocation(cvm_vk
             ///need to retrieve all mutex controlled data used outside mutex, before unlocking mutex
             oldest_moment=oldest_active_segment->moment_of_last_use;
 
+            /// isn't ideal b/c we now have to check this moment again inside the mutex
             mtx_unlock(&staging_buffer->access_mutex);
             /// wait for semaphore outside of mutex so as to not block inside the mutex
             cvm_vk_timeline_semaphore_moment_wait(device,&oldest_moment);
@@ -198,56 +179,20 @@ cvm_vk_staging_buffer_allocation cvm_vk_staging_buffer_reserve_allocation(cvm_vk
         }
     }
 
-    ///make space for new segment as required
-    if(staging_buffer->active_segment_count==staging_buffer->segment_space)
-    {
-        staging_buffer->active_segments=realloc(staging_buffer->active_segments, sizeof(cvm_vk_staging_buffer_segment) * staging_buffer->segment_space * 2);
-        /**
-        need to move the correct part of the buffer to maintain (modulo) indices after resizing:
-        |+++o+++|
-        |---o+++++++----|
-        vs
-                |+++o+++|
-        |+++--------o+++|
-        ^ realloced segment array with alignment of relative (intended) indices/offsets
-        */
-
-        masked_first_segment_index = staging_buffer->first_active_segment_index & (staging_buffer->segment_space-1);
-        /// if (relative) top bit set, then should end up in newly allocated part of the buffer
-        if(staging_buffer->first_active_segment_index & staging_buffer->segment_space)///first needs to end up in second half
-        {
-            src = staging_buffer->active_segments + masked_first_segment_index;
-            segment_count = staging_buffer->segment_space - masked_first_segment_index;
-        }
-        else
-        {
-            ///copy 0 to first to old_space
-            src = staging_buffer->active_segments;
-            segment_count = masked_first_segment_index;
-        }
-
-        ///destination is always src + old_array_size
-        memcpy(src + staging_buffer->segment_space, src, sizeof(cvm_vk_staging_buffer_segment) * segment_count);
-
-        staging_buffer->segment_space*=2;
-    }
-
     /// note active segment count is incremented, also importantly this index is UNWRAPPED, so that if the segment buffer gets expanded this index will still be valid
-    segment_index = staging_buffer->first_active_segment_index + staging_buffer->active_segment_count++;
+    segment_index = cvm_vk_staging_buffer_segment_queue_enqueue(&staging_buffer->segment_queue, (cvm_vk_staging_buffer_segment)
+    {
+        .moment_of_last_use = cvm_vk_timeline_semaphore_moment_null,
+        .offset = staging_buffer->current_offset,
+        .size = required_space,
+    });
 
     allocation.acquired_offset = wrap ? 0 : staging_buffer->current_offset;
     allocation.mapping = staging_buffer->mapping + allocation.acquired_offset;
     allocation.segment_index = segment_index;
 
-    staging_buffer->active_segments[segment_index&(staging_buffer->segment_space-1)]=(cvm_vk_staging_buffer_segment)
-    {
-        .moment_of_last_use = cvm_vk_timeline_semaphore_moment_null,
-        .offset = staging_buffer->current_offset,
-        .size = required_space,
-    };
-
-    staging_buffer->remaining_space-=requested_space;
-    staging_buffer->current_offset+=requested_space;
+    staging_buffer->remaining_space-=required_space;
+    staging_buffer->current_offset+=required_space;
 
     if(staging_buffer->current_offset > staging_buffer->buffer_size)
     {
@@ -285,7 +230,7 @@ void cvm_vk_staging_buffer_complete_allocation(cvm_vk_staging_buffer_ * staging_
 {
     mtx_lock(&staging_buffer->access_mutex);
 
-    staging_buffer->active_segments[allocation_segment_index & (staging_buffer->segment_space-1)].moment_of_last_use=moment_of_last_use;
+    cvm_vk_staging_buffer_segment_queue_get_ptr(&staging_buffer->segment_queue, allocation_segment_index)->moment_of_last_use=moment_of_last_use;
 
     if(staging_buffer->threads_waiting_on_semaphore_setup)
     {

@@ -671,7 +671,7 @@ void cvm_vk_managed_buffer_submit_all_batch_copy_actions(cvm_vk_managed_buffer *
 
             ///multithreaded consideration shouldn't be necessary as this should only ever be called from the main thread relevant to this resource while no worker threads are operating on the resource
 
-            vkCmdCopyBuffer(transfer_cb,mb->staging_buffer->buffer,mb->buffer,mb->pending_copies.count,mb->pending_copies.stack);
+            vkCmdCopyBuffer(transfer_cb,mb->staging_buffer->buffer,mb->buffer,mb->pending_copies.count,mb->pending_copies.data);
 
             cvm_vk_buffer_copy_stack_reset(&mb->pending_copies);
 
@@ -683,7 +683,7 @@ void cvm_vk_managed_buffer_submit_all_batch_copy_actions(cvm_vk_managed_buffer *
                 .memoryBarrierCount=0,
                 .pMemoryBarriers=NULL,
                 .bufferMemoryBarrierCount=mb->copy_release_barriers.count,
-                .pBufferMemoryBarriers=mb->copy_release_barriers.stack,
+                .pBufferMemoryBarriers=mb->copy_release_barriers.data,
                 .imageMemoryBarrierCount=0,
                 .pImageMemoryBarriers=NULL
             };

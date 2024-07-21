@@ -342,7 +342,7 @@ static inline void cvm_render_fill_fading_overlay_element(cvm_overlay_element_re
 typedef struct cvm_overlay_frame_resources
 {
     /// identifier for changes to rendering
-    uint16_t unique_swapchain_image_identifier;
+    uint16_t swapchain_image_index;
 
     VkFramebuffer framebuffer;
 }
@@ -366,7 +366,7 @@ typedef struct cvm_overlay_swapchain_resources
 }
 cvm_overlay_swapchain_resources;
 
-CVM_STACK(cvm_overlay_swapchain_resources,cvm_overlay_swapchain_resources,4)
+CVM_QUEUE(cvm_overlay_swapchain_resources,cvm_overlay_swapchain_resources,4)
 
 
 typedef struct cvm_overlay_images
@@ -413,7 +413,7 @@ typedef struct cvm_overlay_renderer
     VkPipelineShaderStageCreateInfo pipeline_stages[2];//vertex,fragment
 
     /// collection of resources dependent upon the render target (swapchain)
-    cvm_overlay_swapchain_resources_stack swapchain_dependent_resources;
+    cvm_overlay_swapchain_resources_queue swapchain_resources;
 }
 cvm_overlay_renderer;
 

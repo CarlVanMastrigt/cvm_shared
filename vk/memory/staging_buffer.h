@@ -35,7 +35,15 @@ typedef struct cvm_vk_staging_buffer_allocation
 }
 cvm_vk_staging_buffer_allocation;
 
-typedef struct cvm_vk_staging_buffer_segment cvm_vk_staging_buffer_segment;
+typedef struct cvm_vk_staging_buffer_segment
+{
+    ///fuck, what happens if multiple queues require this moment!? (worry about it later)
+    cvm_vk_timeline_semaphore_moment moment_of_last_use;/// when this region is finished being used
+    VkDeviceSize offset;
+    VkDeviceSize size;/// must be greater than or equal to start (can be greater than buffer_size)
+}cvm_vk_staging_buffer_segment;
+
+CVM_QUEUE(cvm_vk_staging_buffer_segment,cvm_vk_staging_buffer_segment,16);
 
 typedef struct cvm_vk_staging_buffer_
 {
@@ -60,17 +68,7 @@ typedef struct cvm_vk_staging_buffer_
     mtx_t access_mutex;
     cnd_t setup_stall_condition;
 
-    cvm_vk_staging_buffer_segment * active_segments;
-    uint32_t segment_space;
-    uint32_t first_active_segment_index;///must wrap??
-    uint32_t active_segment_count;
-    /// ^ptrs to thread local variables containing conditions, used to register front of queue (maybe)
-    /// ^ this doesnt handle spurrious wakeup...
-    /// do we even really want use a condition??
-    /// wait on either condition or per entry timeline semaphore
-
-    /// a saturated staging buffer when accessed by many high priority requests may stall forever without appropriate manual scheduling to handle it...
-
+    cvm_vk_staging_buffer_segment_queue segment_queue;
 }
 cvm_vk_staging_buffer_;
 

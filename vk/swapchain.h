@@ -47,7 +47,7 @@ typedef struct cvm_vk_swapchain_presentable_image
     VkImageView image_view;
 
     /// "unique" identifier used to differentiate images after swapchain recreation
-    uint16_t unique_image_identifier;
+    uint16_t index;
 
     VkSemaphore acquire_semaphore;///held temporarily by this struct, not owner, not created or destroyed as part of it
 
@@ -66,9 +66,20 @@ typedef struct cvm_vk_swapchain_presentable_image
     /// the command buffers to recieve the QFOT should be created as necessary
     VkCommandBuffer * present_acquire_command_buffers;
 
-    cvm_vk_timeline_semaphore_moment last_use_moment;///changes throughout the frame, not strictly necessary for most applications, can probably be removed
+    cvm_vk_timeline_semaphore_moment last_use_moment;/// used for ensuring a swapchain has had ann its images returned before being destroyed
 }
 cvm_vk_swapchain_presentable_image;
+
+typedef struct cvm_vk_swapchain_instance
+{
+    VkSwapchainKHR swapchain;
+
+    VkSemaphore * image_acquisition_semaphores;///number of these should match swapchain image count plus 1
+    cvm_vk_swapchain_presentable_image * presenting_images;
+    uint32_t image_count;/// this is also the number of swapchain images
+    uint32_t acquired_image_count;/// init as 0
+}
+cvm_vk_swapchain_instance;
 
 /// all the data associated with a window and rendering to a surface(usually a window)
 typedef struct cvm_vk_surface_swapchain
@@ -88,6 +99,8 @@ typedef struct cvm_vk_surface_swapchain
 
     VkSurfaceCapabilitiesKHR surface_capabilities;
 
+//    cvm_vk_swapchain_instance current_instance;
+
 
     VkSwapchainKHR swapchain;
     VkSurfaceFormatKHR surface_format;
@@ -104,7 +117,6 @@ typedef struct cvm_vk_surface_swapchain
     ///both frames in flight and frames acquired by rendereer
     uint32_t acquired_image_count;/// init as 0
 
-    uint16_t unique_image_counter;
     uint16_t generation;
 
     ///following used to determine number of swapchain images to allocate
@@ -119,7 +131,7 @@ void cvm_vk_swapchain_terminate(const cvm_vk_device * device, cvm_vk_surface_swa
 int cvm_vk_swapchain_regenerate(const cvm_vk_device * device, cvm_vk_surface_swapchain * swapchain);
 
 #warning remove cleanup index at some point
-const cvm_vk_swapchain_presentable_image * cvm_vk_swapchain_acquire_presentable_image(const cvm_vk_device * device, cvm_vk_surface_swapchain * swapchain, bool rendering_resources_invalid, uint32_t * cleanup_index);
+const cvm_vk_swapchain_presentable_image * cvm_vk_swapchain_acquire_presentable_image(const cvm_vk_device * device, cvm_vk_surface_swapchain * swapchain, uint32_t * cleanup_index);
 bool cvm_vk_check_for_remaining_frames(const cvm_vk_device * device, cvm_vk_surface_swapchain * swapchain, uint32_t * cleanup_index);
 
 void cvm_vk_swapchain_present_image(const cvm_vk_device * device, cvm_vk_surface_swapchain * swapchain, cvm_vk_swapchain_presentable_image * presentable_image);
