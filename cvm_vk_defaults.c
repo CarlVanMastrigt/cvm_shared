@@ -334,7 +334,7 @@ void cvm_vk_destroy_defaults(void)
     cvm_vk_destroy_shader_stage_info(&cvm_vk_default_fullscreen_vertex_stage);
 }
 
-void cvm_vk_create_swapchain_dependednt_defaults(uint32_t width,uint32_t height)
+void cvm_vk_create_swapchain_dependent_defaults(uint32_t width,uint32_t height)
 {
     cvm_vk_default_screen_rectangle=(VkRect2D)
     {
@@ -429,7 +429,7 @@ void cvm_vk_create_swapchain_dependednt_defaults(uint32_t width,uint32_t height)
     };
 }
 
-void cvm_vk_destroy_swapchain_dependednt_defaults(void)
+void cvm_vk_destroy_swapchain_dependent_defaults(void)
 {
 }
 

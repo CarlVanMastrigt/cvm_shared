@@ -341,10 +341,8 @@ static inline void cvm_render_fill_fading_overlay_element(cvm_overlay_element_re
 /// move this to swapchain dependent data?? is a nice simple solution tbh
 typedef struct cvm_overlay_frame_resources
 {
-    /// identifier for changes to rendering
-    uint16_t swapchain_image_index;
-
     VkFramebuffer framebuffer;
+    /// as its own struct in case it makes sense to put something else here
 }
 cvm_overlay_frame_resources;
 
@@ -355,12 +353,15 @@ CVM_STACK(cvm_overlay_frame_resources,cvm_overlay_frame_resources,4)
 typedef struct cvm_overlay_swapchain_resources
 {
     /// identifier for a change to rendering resources
-    uint16_t swapchain_generation;/// this could instead be a resolution and colour space?
+    uint32_t swapchain_generation;/// this could instead be a resolution and colour space?
 
     uint16_t in_flight_frame_count;/// use count, used to determine if resources can be freed/cleared
 
+    uint16_t frame_count;
     /// could require that the framebuffer must get passed into this function, and that it's ref counted!
-    cvm_overlay_frame_resources_stack frame_resources;
+    cvm_overlay_frame_resources * frame_resources_;
+
+
     VkRenderPass render_pass;
     VkPipeline pipeline;
 }

@@ -394,6 +394,22 @@ static inline type * name##_queue_get_back_ptr( name##_queue * q )              
     if(q->count==0)return NULL;                                                 \
     return q->data + ((q->front + q->count - 1) & (q->space - 1));              \
 }                                                                               \
+                                                                                \
+static inline uint32_t name##_queue_front_index( name##_queue * q )             \
+{                                                                               \
+    return q->front;                                                            \
+}                                                                               \
+                                                                                \
+static inline uint32_t name##_queue_back_index( name##_queue * q )              \
+{                                                                               \
+    return q->front + q->count - 1;                                             \
+}                                                                               \
+                                                                                \
+static inline bool name##_queue_is_empty( name##_queue * q )                    \
+{                                                                               \
+    return (q->count==0);                                                       \
+}                                                                               \
+
 
 #endif
 

@@ -43,7 +43,7 @@ typedef struct cvm_vk_surface_swapchain cvm_vk_surface_swapchain;
 
 typedef struct cvm_vk_swapchain_presentable_image
 {
-    VkImage image;///theese are provided by the WSI
+    VkImage image;///theese are provided by the WSI, need access to this for synchronization purposes
     VkImageView image_view;
 
     /// "unique" identifier used to differentiate images after swapchain recreation
@@ -73,6 +73,13 @@ cvm_vk_swapchain_presentable_image;
 typedef struct cvm_vk_swapchain_instance
 {
     VkSwapchainKHR swapchain;
+    VkSurfaceFormatKHR surface_format;
+    VkPresentModeKHR present_mode;
+
+    uint64_t queue_family_presentable_mask;
+    uint32_t fallback_present_queue_family;///if we can't present on the current queue family we'll present on the fallback (lowest indexed queue family that supports present)
+
+    VkSurfaceCapabilitiesKHR surface_capabilities;
 
     VkSemaphore * image_acquisition_semaphores;///number of these should match swapchain image count plus 1
     cvm_vk_swapchain_presentable_image * presenting_images;
@@ -81,17 +88,29 @@ typedef struct cvm_vk_swapchain_instance
 }
 cvm_vk_swapchain_instance;
 
+CVM_QUEUE(cvm_vk_swapchain_instance,cvm_vk_swapchain_instance,4);
+
 /// all the data associated with a window and rendering to a surface(usually a window)
-typedef struct cvm_vk_surface_swapchain
+struct cvm_vk_surface_swapchain
 {
     VkSurfaceKHR surface;/// effectively the window
+    VkImageUsageFlagBits usage_flags;/// how the presentable images will be used
+    uint32_t min_image_count;/// copied from setup, is min count required/requested by the rest of the system
 
     VkFence metering_fence;///wait till previous fence is acquired before acquiring another
     bool metering_fence_active;
 
-    uint32_t min_image_count;
+    cvm_vk_swapchain_instance_queue swapchain_queue;/// need to preserve out of date/invalid swapchains while they're still in use
+
+    uint32_t generation;
+
+    ///following used to determine number of swapchain images to allocate
+    bool rendering_resources_valid;/// starts false, used to determine if rebuilding of resources is required due to swapchain invalidation (e.g. because window was resized)
+    #warning REMOVE rendering_resources_valid, should rebuild swapchain immediately if it becomes true!
+
+    /// =================== below here can be removed ===========================
     uint32_t max_image_count;///max count experienced over the lifetime of this swapchain
-    VkImageUsageFlagBits usage_flags;
+
 
     uint64_t queue_family_presentable_mask;
     ///if we can't present on the current queue family we'll present on the fallback (lowest indexed queue family that supports present)
@@ -100,6 +119,7 @@ typedef struct cvm_vk_surface_swapchain
     VkSurfaceCapabilitiesKHR surface_capabilities;
 
 //    cvm_vk_swapchain_instance current_instance;
+
 
 
     VkSwapchainKHR swapchain;
@@ -116,13 +136,7 @@ typedef struct cvm_vk_surface_swapchain
 
     ///both frames in flight and frames acquired by rendereer
     uint32_t acquired_image_count;/// init as 0
-
-    uint16_t generation;
-
-    ///following used to determine number of swapchain images to allocate
-    bool rendering_resources_valid;/// starts false, used to determine if rebuilding of resources is required due to swapchain invalidation (e.g. because window was resized)
-}
-cvm_vk_surface_swapchain;
+};
 
 
 int cvm_vk_swapchain_initialse(const cvm_vk_device * device, cvm_vk_surface_swapchain * swapchain, const cvm_vk_swapchain_setup * setup);

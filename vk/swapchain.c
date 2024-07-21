@@ -80,7 +80,7 @@ static inline int cvm_vk_swapchain_create(const cvm_vk_device * device, cvm_vk_s
     };
 
     swapchain->generation++;
-    if(swapchain->generation==CVM_INVALID_U16_INDEX)
+    if(swapchain->generation==CVM_INVALID_U32_INDEX)
     {
         swapchain->generation=0;
     }
@@ -166,7 +166,7 @@ static inline int cvm_vk_swapchain_create(const cvm_vk_device * device, cvm_vk_s
 
     free(swapchain_images);
 
-    cvm_vk_create_swapchain_dependednt_defaults(swapchain->surface_capabilities.currentExtent.width,swapchain->surface_capabilities.currentExtent.height);
+    cvm_vk_create_swapchain_dependent_defaults(swapchain->surface_capabilities.currentExtent.width,swapchain->surface_capabilities.currentExtent.height);
     #warning make these defaults part of the swapchain!?
 
     swapchain->rendering_resources_valid=true;
@@ -177,7 +177,7 @@ static inline void cvm_vk_swapchain_destroy(const cvm_vk_device * device, cvm_vk
     uint32_t i,j;
     cvm_vk_swapchain_presentable_image * presentable_image;
 
-    cvm_vk_destroy_swapchain_dependednt_defaults();
+    cvm_vk_destroy_swapchain_dependent_defaults();
     #warning make above defaults part of the swapchain
 
 

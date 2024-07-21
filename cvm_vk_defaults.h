@@ -30,8 +30,8 @@ along with cvm_shared.  If not, see <https://www.gnu.org/licenses/>.
 void cvm_vk_create_defaults(void);
 void cvm_vk_destroy_defaults(void);
 
-void cvm_vk_create_swapchain_dependednt_defaults(uint32_t width,uint32_t height);
-void cvm_vk_destroy_swapchain_dependednt_defaults(void);
+void cvm_vk_create_swapchain_dependent_defaults(uint32_t width,uint32_t height);
+void cvm_vk_destroy_swapchain_dependent_defaults(void);
 
 
 VkRect2D cvm_vk_get_default_render_area(void);
