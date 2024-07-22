@@ -177,11 +177,11 @@ void cvm_vk_command_buffer_signal_presenting_image_complete(cvm_vk_command_buffe
 {
     #warning remove parent references and just pass the parents in here
     assert(command_buffer->signal_count < 3);
-    assert(!presentable_image->present_setup);
-    presentable_image->present_setup=true;
+    assert(!presentable_image->present_attempted);
+    presentable_image->present_attempted=true;
     presentable_image->last_use_queue_family=command_buffer->parent_pool->device_queue_family_index;
 
-    bool can_present = presentable_image->parent_swapchain->queue_family_presentable_mask | (1<<command_buffer->parent_pool->device_queue_family_index);
+    bool can_present = presentable_image->parent_swapchain_instance->queue_family_presentable_mask | (1<<command_buffer->parent_pool->device_queue_family_index);
     if(can_present)
     {
         /// signal after any stage that could modify the image contents
@@ -220,7 +220,7 @@ void cvm_vk_command_buffer_signal_presenting_image_complete(cvm_vk_command_buffe
                     .oldLayout=VK_IMAGE_LAYOUT_PRESENT_SRC_KHR,///colour attachment optimal? modify  renderpasses as necessary to accommodate this (must match present acquire)
                     .newLayout=VK_IMAGE_LAYOUT_PRESENT_SRC_KHR,
                     .srcQueueFamilyIndex=command_buffer->parent_pool->device_queue_family_index,
-                    .dstQueueFamilyIndex=presentable_image->parent_swapchain->fallback_present_queue_family,
+                    .dstQueueFamilyIndex=presentable_image->parent_swapchain_instance->fallback_present_queue_family,
                     .image=presentable_image->image,
                     .subresourceRange=(VkImageSubresourceRange)
                     {

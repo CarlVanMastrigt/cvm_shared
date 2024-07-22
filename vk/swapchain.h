@@ -39,7 +39,7 @@ typedef struct cvm_vk_swapchain_setup
 }
 cvm_vk_swapchain_setup;
 
-typedef struct cvm_vk_surface_swapchain cvm_vk_surface_swapchain;
+typedef struct cvm_vk_swapchain_instance cvm_vk_swapchain_instance;
 
 typedef struct cvm_vk_swapchain_presentable_image
 {
@@ -51,15 +51,14 @@ typedef struct cvm_vk_swapchain_presentable_image
 
     VkSemaphore acquire_semaphore;///held temporarily by this struct, not owner, not created or destroyed as part of it
 
-    cvm_vk_surface_swapchain * parent_swapchain;
+    const cvm_vk_swapchain_instance * parent_swapchain_instance;
 
     VkSemaphore present_semaphore;///needed by VkPresentInfoKHR, which doesn not accept timeline semaphores
     VkSemaphore qfot_semaphore;///required in cases where a QFOT is required, i.e. present_semaphore was signalled but alter work is required to actually present the image
+    bool acquired; /// if acquired we should always TRY to present
     bool qfot_required;/// whether the above was used
-    bool present_setup;/// present semaphore has been set
-
-    bool acquired;
-    bool presented;
+    bool present_attempted;/// present semaphore has been set
+    bool present_successful;
 
     uint32_t last_use_queue_family;
 
@@ -70,83 +69,83 @@ typedef struct cvm_vk_swapchain_presentable_image
 }
 cvm_vk_swapchain_presentable_image;
 
-typedef struct cvm_vk_swapchain_instance
+struct cvm_vk_swapchain_instance
 {
-    VkSwapchainKHR swapchain;
+    /// its assumed these can change as the surface changes, probably not the case but whatever
     VkSurfaceFormatKHR surface_format;
     VkPresentModeKHR present_mode;
 
-    uint64_t queue_family_presentable_mask;
+    VkSwapchainKHR swapchain;
+
+    uint32_t generation;/// essentially just index in the queue, used to identify this instance as novel
+
     uint32_t fallback_present_queue_family;///if we can't present on the current queue family we'll present on the fallback (lowest indexed queue family that supports present)
+    uint64_t queue_family_presentable_mask;
 
     VkSurfaceCapabilitiesKHR surface_capabilities;
 
     VkSemaphore * image_acquisition_semaphores;///number of these should match swapchain image count plus 1
-    cvm_vk_swapchain_presentable_image * presenting_images;
+    cvm_vk_swapchain_presentable_image * presentable_images;
     uint32_t image_count;/// this is also the number of swapchain images
-    uint32_t acquired_image_count;/// init as 0
-}
-cvm_vk_swapchain_instance;
+    uint32_t acquired_image_count;/// init as 0, used for tracking use of image_acquisition_semaphores
+};
 
-CVM_QUEUE(cvm_vk_swapchain_instance,cvm_vk_swapchain_instance,4);
+CVM_QUEUE(cvm_vk_swapchain_instance,cvm_vk_swapchain_instance,4)
 
 /// all the data associated with a window and rendering to a surface(usually a window)
-struct cvm_vk_surface_swapchain
+typedef struct cvm_vk_surface_swapchain
 {
-    VkSurfaceKHR surface;/// effectively the window
-    VkImageUsageFlagBits usage_flags;/// how the presentable images will be used
-    uint32_t min_image_count;/// copied from setup, is min count required/requested by the rest of the system
+    cvm_vk_swapchain_setup setup_info;
 
     VkFence metering_fence;///wait till previous fence is acquired before acquiring another
     bool metering_fence_active;
 
-    cvm_vk_swapchain_instance_queue swapchain_queue;/// need to preserve out of date/invalid swapchains while they're still in use
-
-    uint32_t generation;
-
-    ///following used to determine number of swapchain images to allocate
     bool rendering_resources_valid;/// starts false, used to determine if rebuilding of resources is required due to swapchain invalidation (e.g. because window was resized)
     #warning REMOVE rendering_resources_valid, should rebuild swapchain immediately if it becomes true!
 
+    cvm_vk_swapchain_instance_queue swapchain_queue;/// need to preserve out of date/invalid swapchains while they're still in use
+
+//    uint32_t generation_counter;/// this is just queue index!
+
+
+
     /// =================== below here can be removed ===========================
-    uint32_t max_image_count;///max count experienced over the lifetime of this swapchain
-
-
-    uint64_t queue_family_presentable_mask;
-    ///if we can't present on the current queue family we'll present on the fallback (lowest indexed queue family that supports present)
-    uint32_t fallback_present_queue_family;
-
-    VkSurfaceCapabilitiesKHR surface_capabilities;
-
-//    cvm_vk_swapchain_instance current_instance;
-
-
-
-    VkSwapchainKHR swapchain;
-    VkSurfaceFormatKHR surface_format;
-    VkPresentModeKHR present_mode;
-
-    ///may want to rename cvm_vk_frames, cvm_vk_presentation_instance probably isnt that bad tbh...
-    ///realloc these only if number of swapchain image count changes (it wont really)
-    VkSemaphore * image_acquisition_semaphores;///number of these should match swapchain image count
-    cvm_vk_swapchain_presentable_image * presenting_images;
-    uint32_t image_count;/// this is also the number of swapchain images
-    uint32_t acquired_image_index;///CVM_INVALID_U32_INDEX
-    #warning above can be removed!
-
-    ///both frames in flight and frames acquired by rendereer
-    uint32_t acquired_image_count;/// init as 0
-};
+//    uint32_t max_image_count;///max count experienced over the lifetime of this swapchain
+//
+//
+//    uint64_t queue_family_presentable_mask;
+//    ///if we can't present on the current queue family we'll present on the fallback (lowest indexed queue family that supports present)
+//    uint32_t fallback_present_queue_family;
+//
+//    VkSurfaceCapabilitiesKHR surface_capabilities;
+//
+////    cvm_vk_swapchain_instance current_instance;
+//
+//
+//
+//    VkSwapchainKHR swapchain;
+//    VkSurfaceFormatKHR surface_format;
+//    VkPresentModeKHR present_mode;
+//
+//    ///may want to rename cvm_vk_frames, cvm_vk_presentation_instance probably isnt that bad tbh...
+//    ///realloc these only if number of swapchain image count changes (it wont really)
+//    VkSemaphore * image_acquisition_semaphores;///number of these should match swapchain image count
+//    cvm_vk_swapchain_presentable_image * presenting_images;
+//    uint32_t image_count;/// this is also the number of swapchain images
+//    uint32_t acquired_image_index;///CVM_INVALID_U32_INDEX
+//    #warning above can be removed!
+//
+//    ///both frames in flight and frames acquired by rendereer
+//    uint32_t acquired_image_count;/// init as 0
+}
+cvm_vk_surface_swapchain;
 
 
 int cvm_vk_swapchain_initialse(const cvm_vk_device * device, cvm_vk_surface_swapchain * swapchain, const cvm_vk_swapchain_setup * setup);
 void cvm_vk_swapchain_terminate(const cvm_vk_device * device, cvm_vk_surface_swapchain * swapchain);
 
-int cvm_vk_swapchain_regenerate(const cvm_vk_device * device, cvm_vk_surface_swapchain * swapchain);
-
 #warning remove cleanup index at some point
 const cvm_vk_swapchain_presentable_image * cvm_vk_swapchain_acquire_presentable_image(const cvm_vk_device * device, cvm_vk_surface_swapchain * swapchain, uint32_t * cleanup_index);
-bool cvm_vk_check_for_remaining_frames(const cvm_vk_device * device, cvm_vk_surface_swapchain * swapchain, uint32_t * cleanup_index);
 
 void cvm_vk_swapchain_present_image(const cvm_vk_device * device, cvm_vk_surface_swapchain * swapchain, cvm_vk_swapchain_presentable_image * presentable_image);
 

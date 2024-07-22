@@ -80,7 +80,7 @@ typedef struct cvm_overlay_element_render_data
 }
 cvm_overlay_element_render_data;
 
-CVM_STACK(cvm_overlay_element_render_data,cvm_overlay_element_render_data,16);
+CVM_STACK(cvm_overlay_element_render_data,cvm_overlay_element_render_data,16)
 /// make starting size bigger
 
 
