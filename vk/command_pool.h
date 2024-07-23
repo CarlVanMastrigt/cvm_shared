@@ -36,18 +36,12 @@ typedef struct cvm_vk_command_pool
     uint32_t acquired_buffer_count;
     uint32_t submitted_buffer_count;
     uint32_t total_buffer_count;
-
-    /// when the last of the work done by the command pool has been completed (may want this to become a stack/list)
-    /// may need multiple buffers if this "entry" has more than one command buffer
-//    cvm_vk_timeline_semaphore_moment completion_moment;///if null handle is not presently in flight
-
-    /// cleanup information? (buffer sections to relinquish &c. framebuffer images that have expired? -- though that probably wants special handling)
 }
 cvm_vk_command_pool;
 
 typedef struct cvm_vk_command_buffer
 {
-    cvm_vk_command_pool * parent_pool;
+    const cvm_vk_command_pool * parent_pool;
     VkCommandBuffer buffer;
 
     uint32_t signal_count;
@@ -61,18 +55,14 @@ typedef struct cvm_vk_command_buffer
 }
 cvm_vk_command_buffer;
 
-void cvm_vk_command_pool_initialise(const cvm_vk_device * device, cvm_vk_command_pool * pool, uint32_t device_queue_family_index, uint32_t device_queue_index);
-void cvm_vk_command_pool_terminate(const cvm_vk_device * device, cvm_vk_command_pool * pool);
-void cvm_vk_command_pool_reset(const cvm_vk_device * device, cvm_vk_command_pool * pool);
+void cvm_vk_command_pool_initialise(cvm_vk_command_pool * pool, const cvm_vk_device * device, uint32_t device_queue_family_index, uint32_t device_queue_index);
+void cvm_vk_command_pool_terminate(cvm_vk_command_pool * pool, const cvm_vk_device * device);
+void cvm_vk_command_pool_reset(cvm_vk_command_pool * pool, const cvm_vk_device * device);
 
-void cvm_vk_command_pool_acquire_command_buffer(const cvm_vk_device * device, cvm_vk_command_pool * pool, cvm_vk_command_buffer * command_buffer);
-void cvm_vk_command_buffer_submit(const cvm_vk_device * device, cvm_vk_command_pool * pool, cvm_vk_command_buffer * command_buffer, VkPipelineStageFlags2 completion_signal_stages, cvm_vk_timeline_semaphore_moment * completion_moment);
+void cvm_vk_command_pool_acquire_command_buffer(cvm_vk_command_pool * pool, const cvm_vk_device * device, cvm_vk_command_buffer * command_buffer);
+void cvm_vk_command_pool_submit_command_buffer(cvm_vk_command_pool * pool, const cvm_vk_device * device, cvm_vk_command_buffer * command_buffer, VkPipelineStageFlags2 completion_signal_stages, cvm_vk_timeline_semaphore_moment * completion_moment);
 
 void cvm_vk_command_buffer_wait_on_timeline_moment(cvm_vk_command_buffer * command_buffer, const cvm_vk_timeline_semaphore_moment * moment, VkPipelineStageFlags2 wait_stages);
-
-/// these should be called exactly(?) once per presentable image, is really a combination of the 2 paradigms, so could go here or in swapchain
-void cvm_vk_command_buffer_wait_on_presentable_image_acquisition(cvm_vk_command_buffer * command_buffer, cvm_vk_swapchain_presentable_image * presentable_image);/// can potentially be called multiple times, must be called before presentable_image is written to
-void cvm_vk_command_buffer_signal_presenting_image_complete(cvm_vk_command_buffer * command_buffer, cvm_vk_swapchain_presentable_image * presentable_image);///all modification of presentable_image has completed, must be called after last modification of image data
 
 
 #endif

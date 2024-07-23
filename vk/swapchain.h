@@ -123,5 +123,10 @@ const cvm_vk_swapchain_presentable_image * cvm_vk_surface_swapchain_acquire_pres
 void cvm_vk_surface_swapchain_present_image(const cvm_vk_surface_swapchain * swapchain, const cvm_vk_device * device, cvm_vk_swapchain_presentable_image * presentable_image);
 
 
+/// these should be called exactly(?) once per presentable image, is really a combination of the 2 paradigms, so could go here or in swapchain
+void cvm_vk_swapchain_presentable_image_wait_in_command_buffer(cvm_vk_swapchain_presentable_image * presentable_image, cvm_vk_command_buffer * command_buffer);
+void cvm_vk_swapchain_presentable_image_complete_in_command_buffer(cvm_vk_swapchain_presentable_image * presentable_image, cvm_vk_command_buffer * command_buffer);///all modification of presentable_image has completed, must be called after last modification of image data
+
+
 #endif
 

@@ -700,29 +700,31 @@ cvm_overlay_renderer_work_entry;
 
 void cvm_overlay_renderer_work_entry_initialise(void * shared_ptr, void * entry_ptr)
 {
-    cvm_overlay_renderer * renderer=shared_ptr;
-    cvm_overlay_renderer_work_entry * entry=entry_ptr;
+    cvm_overlay_renderer * renderer = shared_ptr;
+    cvm_overlay_renderer_work_entry * entry = entry_ptr;
 
-    cvm_vk_command_pool_initialise(renderer->device,&entry->command_pool,renderer->device->graphics_queue_family_index,0);
-    entry->frame_descriptor_set=cvm_overlay_frame_descriptor_set_allocate(renderer);
+    cvm_vk_command_pool_initialise(&entry->command_pool, renderer->device, renderer->device->graphics_queue_family_index, 0);
+    entry->frame_descriptor_set = cvm_overlay_frame_descriptor_set_allocate(renderer);
 }
 
 void cvm_overlay_renderer_work_entry_terminate(void * shared_ptr, void * entry_ptr)
 {
-    cvm_overlay_renderer * renderer=shared_ptr;
-    cvm_overlay_renderer_work_entry * entry=entry_ptr;
+    cvm_overlay_renderer * renderer = shared_ptr;
+    cvm_overlay_renderer_work_entry * entry = entry_ptr;
 
-    cvm_vk_command_pool_terminate(renderer->device,&entry->command_pool);
+    cvm_vk_command_pool_terminate(&entry->command_pool, renderer->device);
 }
 
 void cvm_overlay_renderer_work_entry_reset(void * shared_ptr, void * entry_ptr)
 {
     uint32_t i;
-    cvm_overlay_renderer * renderer=shared_ptr;
-    cvm_overlay_renderer_work_entry * entry=entry_ptr;
     cvm_overlay_swapchain_resources * swapchain_resources;
 
-    cvm_vk_command_pool_reset(renderer->device,&entry->command_pool);
+    cvm_overlay_renderer * renderer = shared_ptr;
+    cvm_overlay_renderer_work_entry * entry=entry_ptr;
+
+
+    cvm_vk_command_pool_reset(&entry->command_pool, renderer->device);
 
     swapchain_resources = cvm_overlay_swapchain_resources_queue_get_ptr(&renderer->swapchain_resources, entry->swapchain_resource_index);
     assert(swapchain_resources->swapchain_generation == entry->swapchain_generation);
@@ -838,8 +840,8 @@ void overlay_render_to_image(const cvm_vk_device * device, cvm_overlay_renderer 
     /// acting on the shunt buffer directly in this way feels a little off
 
     work_entry = cvm_vk_work_queue_entry_acquire(&renderer->work_queue, device);
-    cvm_vk_command_pool_acquire_command_buffer(device,&work_entry->command_pool,&cb);
-    cvm_vk_command_buffer_wait_on_presentable_image_acquisition(&cb,presentable_image);
+    cvm_vk_command_pool_acquire_command_buffer(&work_entry->command_pool, device, &cb);
+    cvm_vk_swapchain_presentable_image_wait_in_command_buffer(presentable_image, &cb);
 
     frame_resources=cvm_overlay_renderer_frame_resource_set_acquire(renderer, device, presentable_image);
 
@@ -905,8 +907,8 @@ void overlay_render_to_image(const cvm_vk_device * device, cvm_overlay_renderer 
     vkCmdEndRenderPass(cb.buffer);///================
 
 
-    cvm_vk_command_buffer_signal_presenting_image_complete(&cb,presentable_image);
-    cvm_vk_command_buffer_submit(device, &work_entry->command_pool, &cb, VK_PIPELINE_STAGE_2_COLOR_ATTACHMENT_OUTPUT_BIT, &completion_moment);
+    cvm_vk_swapchain_presentable_image_complete_in_command_buffer(presentable_image, &cb);
+    cvm_vk_command_pool_submit_command_buffer(&work_entry->command_pool, device, &cb, VK_PIPELINE_STAGE_2_COLOR_ATTACHMENT_OUTPUT_BIT, &completion_moment);
 
     cvm_vk_staging_buffer_complete_allocation(renderer->staging_buffer,staging_buffer_allocation.segment_index,completion_moment);
     cvm_vk_work_queue_entry_release(&renderer->work_queue, work_entry, &completion_moment);

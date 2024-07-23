@@ -20,7 +20,7 @@ along with cvm_shared.  If not, see <https://www.gnu.org/licenses/>.
 #include "cvm_shared.h"
 
 
-void cvm_vk_command_pool_initialise(const cvm_vk_device * device, cvm_vk_command_pool * pool, uint32_t device_queue_family_index, uint32_t device_queue_index)
+void cvm_vk_command_pool_initialise(cvm_vk_command_pool * pool, const cvm_vk_device * device, uint32_t device_queue_family_index, uint32_t device_queue_index)
 {
     uint32_t i;
 
@@ -53,7 +53,7 @@ void cvm_vk_command_pool_initialise(const cvm_vk_device * device, cvm_vk_command
     CVM_VK_CHECK(vkAllocateCommandBuffers(device->device,&allocate_info,pool->buffers));
 }
 
-void cvm_vk_command_pool_terminate(const cvm_vk_device * device, cvm_vk_command_pool * pool)
+void cvm_vk_command_pool_terminate(cvm_vk_command_pool * pool, const cvm_vk_device * device)
 {
     vkFreeCommandBuffers(device->device,pool->pool,pool->total_buffer_count,pool->buffers);
     free(pool->buffers);
@@ -61,7 +61,7 @@ void cvm_vk_command_pool_terminate(const cvm_vk_device * device, cvm_vk_command_
     vkDestroyCommandPool(device->device,pool->pool,NULL);
 }
 
-void cvm_vk_command_pool_reset(const cvm_vk_device * device, cvm_vk_command_pool * pool)
+void cvm_vk_command_pool_reset(cvm_vk_command_pool * pool, const cvm_vk_device * device)
 {
     vkResetCommandPool(device->device,pool->pool,0);
     assert(pool->acquired_buffer_count==pool->submitted_buffer_count);///not all acquired command buffers were submitted
@@ -74,7 +74,7 @@ void cvm_vk_command_pool_reset(const cvm_vk_device * device, cvm_vk_command_pool
 
 
 
-void cvm_vk_command_pool_acquire_command_buffer(const cvm_vk_device * device, cvm_vk_command_pool * pool, cvm_vk_command_buffer * command_buffer)
+void cvm_vk_command_pool_acquire_command_buffer(cvm_vk_command_pool * pool, const cvm_vk_device * device, cvm_vk_command_buffer * command_buffer)
 {
     if(pool->acquired_buffer_count==pool->total_buffer_count)
     {
@@ -110,7 +110,7 @@ void cvm_vk_command_pool_acquire_command_buffer(const cvm_vk_device * device, cv
     CVM_VK_CHECK(vkBeginCommandBuffer(command_buffer->buffer, &command_buffer_begin_info));
 }
 
-void cvm_vk_command_buffer_submit(const cvm_vk_device * device, cvm_vk_command_pool * pool, cvm_vk_command_buffer * command_buffer, VkPipelineStageFlags2 completion_signal_stages, cvm_vk_timeline_semaphore_moment * completion_moment)
+void cvm_vk_command_pool_submit_command_buffer(cvm_vk_command_pool * pool, const cvm_vk_device * device, cvm_vk_command_buffer * command_buffer, VkPipelineStageFlags2 completion_signal_stages, cvm_vk_timeline_semaphore_moment * completion_moment)
 {
     const cvm_vk_device_queue_family * queue_family;
     cvm_vk_device_queue * queue;
@@ -164,79 +164,7 @@ void cvm_vk_command_buffer_wait_on_timeline_moment(cvm_vk_command_buffer * comma
 }
 
 
-void cvm_vk_command_buffer_wait_on_presentable_image_acquisition(cvm_vk_command_buffer * command_buffer, cvm_vk_swapchain_presentable_image * presentable_image)
-{
-    assert(command_buffer->wait_count<11);
 
-    /// need to wait on image becoming available before writing to it, writing can only happen 2 ways, cover both
-    command_buffer->wait_info[command_buffer->wait_count++]=cvm_vk_binary_semaphore_submit_info(presentable_image->acquire_semaphore,
-        VK_PIPELINE_STAGE_2_COLOR_ATTACHMENT_OUTPUT_BIT | VK_PIPELINE_STAGE_2_COMPUTE_SHADER_BIT);
-}
-
-void cvm_vk_command_buffer_signal_presenting_image_complete(cvm_vk_command_buffer * command_buffer, cvm_vk_swapchain_presentable_image * presentable_image)
-{
-    #warning remove parent references and just pass the parents in here
-    assert(command_buffer->signal_count < 3);
-    assert(presentable_image->state == cvm_vk_presentable_image_state_acquired);
-    presentable_image->last_use_queue_family=command_buffer->parent_pool->device_queue_family_index;
-
-    bool can_present = presentable_image->parent_swapchain_instance->queue_family_presentable_mask | (1<<command_buffer->parent_pool->device_queue_family_index);
-    if(can_present)
-    {
-        presentable_image->state = cvm_vk_presentable_image_state_complete;
-        /// signal after any stage that could modify the image contents
-        command_buffer->signal_info[command_buffer->signal_count++]=cvm_vk_binary_semaphore_submit_info(presentable_image->present_semaphore,
-            VK_PIPELINE_STAGE_2_COLOR_ATTACHMENT_OUTPUT_BIT | VK_PIPELINE_STAGE_2_COMPUTE_SHADER_BIT);
-
-        command_buffer->present_completion_moment=&presentable_image->last_use_moment;///REMOVE also this feels unsafe as all hell
-    }
-    else
-    {
-        presentable_image->state = cvm_vk_presentable_image_state_tranferred_initiated;
-
-        command_buffer->signal_info[command_buffer->signal_count++]=cvm_vk_binary_semaphore_submit_info(presentable_image->qfot_semaphore,
-            VK_PIPELINE_STAGE_2_COLOR_ATTACHMENT_OUTPUT_BIT | VK_PIPELINE_STAGE_2_COMPUTE_SHADER_BIT);
-
-        VkDependencyInfo present_relinquish_dependencies=
-        {
-            .sType=VK_STRUCTURE_TYPE_DEPENDENCY_INFO,
-            .pNext=NULL,
-            .dependencyFlags=VK_DEPENDENCY_BY_REGION_BIT,
-            .memoryBarrierCount=0,
-            .pMemoryBarriers=NULL,
-            .bufferMemoryBarrierCount=0,
-            .pBufferMemoryBarriers=NULL,
-            .imageMemoryBarrierCount=1,
-            .pImageMemoryBarriers=(VkImageMemoryBarrier2[1])
-            {
-                {
-                    .sType=VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER_2,
-                    .pNext=NULL,
-                    .srcStageMask=VK_PIPELINE_STAGE_2_COLOR_ATTACHMENT_OUTPUT_BIT | VK_PIPELINE_STAGE_2_COMPUTE_SHADER_BIT,
-                    .srcAccessMask=VK_ACCESS_2_COLOR_ATTACHMENT_WRITE_BIT | VK_ACCESS_2_SHADER_WRITE_BIT,
-                    /// ignored by QFOT??
-                    .dstStageMask=0,///no relevant stage representing present... (afaik), maybe VK_PIPELINE_STAGE_2_BOTTOM_OF_PIPE_BIT ??
-                    .dstAccessMask=0,///should be 0 by spec
-                    .oldLayout=VK_IMAGE_LAYOUT_PRESENT_SRC_KHR,///colour attachment optimal? modify  renderpasses as necessary to accommodate this (must match present acquire)
-                    .newLayout=VK_IMAGE_LAYOUT_PRESENT_SRC_KHR,
-                    .srcQueueFamilyIndex=command_buffer->parent_pool->device_queue_family_index,
-                    .dstQueueFamilyIndex=presentable_image->parent_swapchain_instance->fallback_present_queue_family,
-                    .image=presentable_image->image,
-                    .subresourceRange=(VkImageSubresourceRange)
-                    {
-                        .aspectMask=VK_IMAGE_ASPECT_COLOR_BIT,
-                        .baseMipLevel=0,
-                        .levelCount=1,
-                        .baseArrayLayer=0,
-                        .layerCount=1
-                    }
-                }
-            },
-        };
-
-        vkCmdPipelineBarrier2(command_buffer->buffer,&present_relinquish_dependencies);
-    }
-}
 
 
 

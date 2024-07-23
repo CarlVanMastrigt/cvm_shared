@@ -43,8 +43,7 @@ cvm_vk_timeline_semaphore_moment;
 void cvm_vk_timeline_semaphore_initialise(cvm_vk_device * device,cvm_vk_timeline_semaphore * timeline_semaphore);
 void cvm_vk_timeline_semaphore_terminate(cvm_vk_device * device,cvm_vk_timeline_semaphore * timeline_semaphore);
 
-inline VkSemaphoreSubmitInfo cvm_vk_timeline_semaphore_signal_submit_info(cvm_vk_timeline_semaphore * ts,VkPipelineStageFlags2 stages, cvm_vk_timeline_semaphore_moment * created_moment);
-
+VkSemaphoreSubmitInfo cvm_vk_timeline_semaphore_signal_submit_info(cvm_vk_timeline_semaphore * ts,VkPipelineStageFlags2 stages, cvm_vk_timeline_semaphore_moment * created_moment);
 VkSemaphoreSubmitInfo cvm_vk_timeline_semaphore_moment_wait_submit_info(const cvm_vk_timeline_semaphore_moment * moment,VkPipelineStageFlags2 stages);
 
 void cvm_vk_timeline_semaphore_moment_wait(cvm_vk_device * device,const cvm_vk_timeline_semaphore_moment * moment);

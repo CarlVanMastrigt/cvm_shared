@@ -89,8 +89,8 @@ static inline VkDeviceSize cvm_vk_align(VkDeviceSize size, VkDeviceSize alignmen
 
 
 #include "vk/timeline_semaphore.h"
-#include "vk/swapchain.h"
 #include "vk/command_pool.h"
+#include "vk/swapchain.h"
 #include "vk/work_queue.h"
 
 
