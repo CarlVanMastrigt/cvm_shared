@@ -404,11 +404,6 @@ static inline uint32_t name##_queue_back_index( name##_queue * q )              
 {                                                                               \
     return q->front + q->count - 1;                                             \
 }                                                                               \
-                                                                                \
-static inline uint32_t name##_queue_get_count( name##_queue * q )               \
-{                                                                               \
-    return q->count;                                                            \
-}                                                                               \
 
 
 #endif

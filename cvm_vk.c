@@ -490,10 +490,9 @@ static void cvm_vk_create_logical_device(cvm_vk_device * device, const cvm_vk_de
     VkExtensionProperties * available_extensions;
     const char ** enabled_extension_names;
     VkPhysicalDeviceFeatures2 * available_features;
-    VkBool32 surface_supported;
     VkDeviceQueueCreateInfo * device_queue_creation_infos;
     VkQueueFlags queue_flags;
-    bool graphics, transfer, compute, present;
+    bool graphics, transfer, compute;
     float * priorities;
     uint32_t queue_counts[CVM_VK_MAX_QUEUE_FAMILY_COUNT];
 

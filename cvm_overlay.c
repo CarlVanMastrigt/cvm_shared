@@ -571,8 +571,8 @@ static void cvm_overlay_images_initialise(cvm_overlay_images * images, const cvm
     assert(created == VK_SUCCESS);
 
 
-    cvm_vk_create_image_atlas(&images->alpha_atlas , images->images[0], images->views[0], sizeof(uint8_t)  , alpha_image_width , alpha_image_height , true, shunt_buffer);
-    cvm_vk_create_image_atlas(&images->colour_atlas, images->images[1], images->views[1], sizeof(uint8_t)*4, colour_image_width, colour_image_height, true, shunt_buffer);
+    cvm_vk_create_image_atlas(&images->alpha_atlas , images->images[0], images->views[0], sizeof(uint8_t)  , alpha_image_width , alpha_image_height , false, shunt_buffer);
+    cvm_vk_create_image_atlas(&images->colour_atlas, images->images[1], images->views[1], sizeof(uint8_t)*4, colour_image_width, colour_image_height, false, shunt_buffer);
 }
 
 static void cvm_overlay_images_terminate(const cvm_vk_device * device, cvm_overlay_images * images)
@@ -746,7 +746,7 @@ void cvm_overlay_renderer_initialise(cvm_overlay_renderer * renderer, cvm_vk_dev
     cvm_vk_create_shader_stage_info(renderer->pipeline_stages+1,"cvm_shared/shaders/overlay.frag.spv",VK_SHADER_STAGE_FRAGMENT_BIT);
 
 
-    cvm_vk_staging_shunt_buffer_initialise(&renderer->shunt_buffer, staging_buffer->alignment);
+    cvm_vk_staging_shunt_buffer_initialise(&renderer->shunt_buffer, staging_buffer->alignment, 1<<18, false);
     cvm_overlay_element_render_data_stack_initialise(&renderer->element_render_stack);
     cvm_overlay_swapchain_resources_queue_initialise(&renderer->swapchain_resources);
     cvm_overlay_images_initialise(&renderer->images, device, 1024, 1024, 1024, 1024, &renderer->shunt_buffer);
@@ -829,88 +829,87 @@ void overlay_render_to_image(const cvm_vk_device * device, cvm_overlay_renderer 
         0.4,0.6,0.9,0.8,///OVERLAY_TEXT_COLOUR_0
     };
 
+    assert(presentable_image);
+    assert(presentable_image->state == cvm_vk_presentable_image_state_acquired);
 
-    if(presentable_image)
+
+    cvm_overlay_element_render_data_stack_reset(element_render_stack);
+    cvm_vk_staging_shunt_buffer_reset(shunt_buffer);
+    /// acting on the shunt buffer directly in this way feels a little off
+
+    work_entry = cvm_vk_work_queue_entry_acquire(&renderer->work_queue, device);
+    cvm_vk_command_pool_acquire_command_buffer(device,&work_entry->command_pool,&cb);
+    cvm_vk_command_buffer_wait_on_presentable_image_acquisition(&cb,presentable_image);
+
+    frame_resources=cvm_overlay_renderer_frame_resource_set_acquire(renderer, device, presentable_image);
+
+    work_entry->swapchain_generation = presentable_image->parent_swapchain_instance->generation;
+    work_entry->swapchain_resource_index = frame_resources.swapchain_resource_index;
+
+    ///this uses the shunt buffer!
+    render_widget_overlay(element_render_stack,menu_widget);
+
+    /// upload all staged resources needed by this frame
+    uniform_offset  = 0;
+    upload_offset   = cvm_vk_staging_buffer_allocation_align_offset(staging_buffer, uniform_offset + sizeof(float)*4*OVERLAY_NUM_COLOURS);
+    instance_offset = cvm_vk_staging_buffer_allocation_align_offset(staging_buffer, upload_offset  + shunt_buffer->offset);
+    staging_space   = cvm_vk_staging_buffer_allocation_align_offset(staging_buffer, instance_offset + cvm_overlay_element_render_data_stack_size(element_render_stack));
+
+    staging_buffer_allocation=cvm_vk_staging_buffer_reserve_allocation(staging_buffer, device, staging_space, true);
+    staging_offset = staging_buffer_allocation.acquired_offset;
+    staging_mapping = staging_buffer_allocation.mapping;
+
+    memcpy(staging_mapping+uniform_offset,overlay_colours,sizeof(float)*4*OVERLAY_NUM_COLOURS);
+
+    /// copy necessary changes to the overlay images, using the rendering command buffer
+    cvm_vk_staging_shunt_buffer_copy(shunt_buffer, staging_mapping+upload_offset);
+    cvm_vk_image_atlas_submit_all_pending_copy_actions(&renderer->images.alpha_atlas , cb.buffer, staging_buffer->buffer, staging_offset+upload_offset);
+    cvm_vk_image_atlas_submit_all_pending_copy_actions(&renderer->images.colour_atlas, cb.buffer, staging_buffer->buffer, staging_offset+upload_offset);
+
+    cvm_overlay_element_render_data_stack_copy(element_render_stack, staging_mapping+instance_offset);
+    ///end of transfer
+
+
+    ///start of graphics
+    cvm_overlay_frame_descriptor_set_write(device, work_entry->frame_descriptor_set, staging_buffer->buffer, staging_offset+uniform_offset);///should really build buffer acquisition into update uniforms function
+
+
+    cvm_vk_staging_buffer_flush_allocation(renderer->staging_buffer, device, &staging_buffer_allocation, 0, staging_space);
+
+    /// get resolution of target from the swapchain
+    screen_w=(float)presentable_image->parent_swapchain_instance->surface_capabilities.currentExtent.width;
+    screen_h=(float)presentable_image->parent_swapchain_instance->surface_capabilities.currentExtent.height;
+    float screen_dimensions[4]={2.0/screen_w,2.0/screen_h,screen_w,screen_h};
+    vkCmdPushConstants(cb.buffer,renderer->pipeline_layout,VK_SHADER_STAGE_VERTEX_BIT|VK_SHADER_STAGE_FRAGMENT_BIT,0,4*sizeof(float),screen_dimensions);
+    vkCmdBindDescriptorSets(cb.buffer,VK_PIPELINE_BIND_POINT_GRAPHICS,renderer->pipeline_layout,0,1,&work_entry->frame_descriptor_set,0,NULL);
+    vkCmdBindDescriptorSets(cb.buffer,VK_PIPELINE_BIND_POINT_GRAPHICS,renderer->pipeline_layout,1,1,&renderer->image_descriptor_set,0,NULL);
+
+
+    VkRenderPassBeginInfo render_pass_begin_info=(VkRenderPassBeginInfo)
     {
-        cvm_overlay_element_render_data_stack_reset(element_render_stack);
-        cvm_vk_staging_shunt_buffer_reset(shunt_buffer);
-        /// acting on the shunt buffer directly in this way feels a little off
+        .sType=VK_STRUCTURE_TYPE_RENDER_PASS_BEGIN_INFO,
+        .pNext=NULL,
+        .renderPass=frame_resources.render_pass,
+        .framebuffer=frame_resources.framebuffer,
+        .renderArea=cvm_vk_get_default_render_area(),
+        .clearValueCount=1,
+        #warning overlay shouldnt clear (normally), temporary measure
+        .pClearValues=(VkClearValue[1]){{.color=(VkClearColorValue){.float32={0.0f,0.0f,0.0f,0.0f}}}},
+    };
+    vkCmdBeginRenderPass(cb.buffer,&render_pass_begin_info,VK_SUBPASS_CONTENTS_INLINE);///================
 
-        work_entry = cvm_vk_work_queue_entry_acquire(&renderer->work_queue, device);
-        cvm_vk_command_pool_acquire_command_buffer(device,&work_entry->command_pool,&cb);
-        cvm_vk_command_buffer_wait_on_presentable_image_acquisition(&cb,presentable_image);
+    vkCmdBindPipeline(cb.buffer,VK_PIPELINE_BIND_POINT_GRAPHICS,frame_resources.pipeline);
+    vkCmdBindVertexBuffers(cb.buffer, 0, 1, &renderer->staging_buffer->buffer, &(VkDeviceSize){instance_offset+staging_offset});///little bit of hacky stuff to create lvalue
+    vkCmdDraw(cb.buffer,4,renderer->element_render_stack.count,0,0);
 
-        frame_resources=cvm_overlay_renderer_frame_resource_set_acquire(renderer, device, presentable_image);
-
-        work_entry->swapchain_generation = presentable_image->parent_swapchain_instance->generation;
-        work_entry->swapchain_resource_index = frame_resources.swapchain_resource_index;
-
-        ///this uses the shunt buffer!
-        render_widget_overlay(element_render_stack,menu_widget);
-
-        /// upload all staged resources needed by this frame
-        uniform_offset  = 0;
-        upload_offset   = cvm_vk_staging_buffer_allocation_align_offset(staging_buffer, uniform_offset + sizeof(float)*4*OVERLAY_NUM_COLOURS);
-        instance_offset = cvm_vk_staging_buffer_allocation_align_offset(staging_buffer, upload_offset  + shunt_buffer->offset);
-        staging_space   = cvm_vk_staging_buffer_allocation_align_offset(staging_buffer, instance_offset + cvm_overlay_element_render_data_stack_size(element_render_stack));
-
-        staging_buffer_allocation=cvm_vk_staging_buffer_reserve_allocation(staging_buffer, device, staging_space, true);
-        staging_offset = staging_buffer_allocation.acquired_offset;
-        staging_mapping = staging_buffer_allocation.mapping;
-
-        memcpy(staging_mapping+uniform_offset,overlay_colours,sizeof(float)*4*OVERLAY_NUM_COLOURS);
-
-        #warning shunt buffer needs its own mutex!
-        /// copy necessary changes to the overlay images, using the rendering command buffer
-        cvm_vk_staging_shunt_buffer_copy(shunt_buffer, staging_mapping+upload_offset);
-        cvm_vk_image_atlas_submit_all_pending_copy_actions(&renderer->images.alpha_atlas , cb.buffer, staging_buffer->buffer, staging_offset+upload_offset);
-        cvm_vk_image_atlas_submit_all_pending_copy_actions(&renderer->images.colour_atlas, cb.buffer, staging_buffer->buffer, staging_offset+upload_offset);
-
-        cvm_overlay_element_render_data_stack_copy(element_render_stack, staging_mapping+instance_offset);
-        ///end of transfer
+    vkCmdEndRenderPass(cb.buffer);///================
 
 
-        ///start of graphics
-        cvm_overlay_frame_descriptor_set_write(device, work_entry->frame_descriptor_set, staging_buffer->buffer, staging_offset+uniform_offset);///should really build buffer acquisition into update uniforms function
+    cvm_vk_command_buffer_signal_presenting_image_complete(&cb,presentable_image);
+    cvm_vk_command_buffer_submit(device, &work_entry->command_pool, &cb, VK_PIPELINE_STAGE_2_COLOR_ATTACHMENT_OUTPUT_BIT, &completion_moment);
 
-
-        cvm_vk_staging_buffer_flush_allocation(renderer->staging_buffer, device, &staging_buffer_allocation, 0, staging_space);
-
-        /// get resolution of target from the swapchain
-        screen_w=(float)presentable_image->parent_swapchain_instance->surface_capabilities.currentExtent.width;
-        screen_h=(float)presentable_image->parent_swapchain_instance->surface_capabilities.currentExtent.height;
-        float screen_dimensions[4]={2.0/screen_w,2.0/screen_h,screen_w,screen_h};
-        vkCmdPushConstants(cb.buffer,renderer->pipeline_layout,VK_SHADER_STAGE_VERTEX_BIT|VK_SHADER_STAGE_FRAGMENT_BIT,0,4*sizeof(float),screen_dimensions);
-        vkCmdBindDescriptorSets(cb.buffer,VK_PIPELINE_BIND_POINT_GRAPHICS,renderer->pipeline_layout,0,1,&work_entry->frame_descriptor_set,0,NULL);
-        vkCmdBindDescriptorSets(cb.buffer,VK_PIPELINE_BIND_POINT_GRAPHICS,renderer->pipeline_layout,1,1,&renderer->image_descriptor_set,0,NULL);
-
-
-        VkRenderPassBeginInfo render_pass_begin_info=(VkRenderPassBeginInfo)
-        {
-            .sType=VK_STRUCTURE_TYPE_RENDER_PASS_BEGIN_INFO,
-            .pNext=NULL,
-            .renderPass=frame_resources.render_pass,
-            .framebuffer=frame_resources.framebuffer,
-            .renderArea=cvm_vk_get_default_render_area(),
-            .clearValueCount=1,
-            #warning overlay shouldnt clear (normally), temporary measure
-            .pClearValues=(VkClearValue[1]){{.color=(VkClearColorValue){.float32={0.0f,0.0f,0.0f,0.0f}}}},
-        };
-        vkCmdBeginRenderPass(cb.buffer,&render_pass_begin_info,VK_SUBPASS_CONTENTS_INLINE);///================
-
-        vkCmdBindPipeline(cb.buffer,VK_PIPELINE_BIND_POINT_GRAPHICS,frame_resources.pipeline);
-        vkCmdBindVertexBuffers(cb.buffer, 0, 1, &renderer->staging_buffer->buffer, &(VkDeviceSize){instance_offset+staging_offset});///little bit of hacky stuff to create lvalue
-        vkCmdDraw(cb.buffer,4,renderer->element_render_stack.count,0,0);
-
-        vkCmdEndRenderPass(cb.buffer);///================
-
-
-        cvm_vk_command_buffer_signal_presenting_image_complete(&cb,presentable_image);
-        cvm_vk_command_buffer_submit(device, &work_entry->command_pool, &cb, VK_PIPELINE_STAGE_2_COLOR_ATTACHMENT_OUTPUT_BIT, &completion_moment);
-
-        cvm_vk_staging_buffer_complete_allocation(renderer->staging_buffer,staging_buffer_allocation.segment_index,completion_moment);
-        cvm_vk_work_queue_entry_release(&renderer->work_queue, work_entry, &completion_moment);
-    }
+    cvm_vk_staging_buffer_complete_allocation(renderer->staging_buffer,staging_buffer_allocation.segment_index,completion_moment);
+    cvm_vk_work_queue_entry_release(&renderer->work_queue, work_entry, &completion_moment);
 }
 
 

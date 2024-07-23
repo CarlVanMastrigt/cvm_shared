@@ -23,6 +23,8 @@ void cvm_vk_create_image_atlas(cvm_vk_image_atlas * ia,VkImage image,VkImageView
 {
     uint32_t i,j;
 
+    assert(!multithreaded || shunt_buffer->multithreaded);/// if atlas is multithreaded then the shunk buffer it uses must be too
+
     assert(width > 1<<CVM_VK_BASE_TILE_SIZE_FACTOR && height > 1<<CVM_VK_BASE_TILE_SIZE_FACTOR);///IMAGE ATLAS TOO SMALL
 
     mtx_init(&ia->structure_mutex,mtx_plain);
@@ -714,9 +716,7 @@ cvm_vk_image_atlas_tile * cvm_vk_acquire_image_atlas_tile_with_staging(cvm_vk_im
     VkDeviceSize upload_offset;
     cvm_vk_image_atlas_tile * tile;
 
-    #warning shunt buffer needs multithreaded handling! also needs max size handling
-    upload_offset=cvm_vk_staging_shunt_buffer_new_segment(ia->shunt_buffer);
-    *staging = cvm_vk_staging_shunt_buffer_reserve_bytes(ia->shunt_buffer,ia->bytes_per_pixel*width*height);
+    *staging = cvm_vk_staging_shunt_buffer_reserve_bytes(ia->shunt_buffer, ia->bytes_per_pixel*width*height, &upload_offset);
 
     if(!*staging)
     {
@@ -775,11 +775,7 @@ void * cvm_vk_acquire_staging_for_image_atlas_tile(cvm_vk_image_atlas * ia,cvm_v
     VkDeviceSize upload_offset;
     void * staging;
 
-    #warning shunt buffer needs multithreaded handling! also needs max size handling
-    #warning this means we can't actually return staging! need MT and non MT variants...
-    /// possibly fix shunt buffer size?
-    upload_offset=cvm_vk_staging_shunt_buffer_new_segment(ia->shunt_buffer);
-    staging = cvm_vk_staging_shunt_buffer_reserve_bytes(ia->shunt_buffer,ia->bytes_per_pixel*width*height);
+    staging = cvm_vk_staging_shunt_buffer_reserve_bytes(ia->shunt_buffer, ia->bytes_per_pixel*width*height, &upload_offset);
 
     if(!staging)
     {

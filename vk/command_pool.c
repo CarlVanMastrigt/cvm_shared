@@ -177,13 +177,13 @@ void cvm_vk_command_buffer_signal_presenting_image_complete(cvm_vk_command_buffe
 {
     #warning remove parent references and just pass the parents in here
     assert(command_buffer->signal_count < 3);
-    assert(!presentable_image->present_attempted);
-    presentable_image->present_attempted=true;
+    assert(presentable_image->state == cvm_vk_presentable_image_state_acquired);
     presentable_image->last_use_queue_family=command_buffer->parent_pool->device_queue_family_index;
 
     bool can_present = presentable_image->parent_swapchain_instance->queue_family_presentable_mask | (1<<command_buffer->parent_pool->device_queue_family_index);
     if(can_present)
     {
+        presentable_image->state = cvm_vk_presentable_image_state_complete;
         /// signal after any stage that could modify the image contents
         command_buffer->signal_info[command_buffer->signal_count++]=cvm_vk_binary_semaphore_submit_info(presentable_image->present_semaphore,
             VK_PIPELINE_STAGE_2_COLOR_ATTACHMENT_OUTPUT_BIT | VK_PIPELINE_STAGE_2_COMPUTE_SHADER_BIT);
@@ -192,7 +192,7 @@ void cvm_vk_command_buffer_signal_presenting_image_complete(cvm_vk_command_buffe
     }
     else
     {
-        presentable_image->qfot_required=true;
+        presentable_image->state = cvm_vk_presentable_image_state_tranferred_initiated;
 
         command_buffer->signal_info[command_buffer->signal_count++]=cvm_vk_binary_semaphore_submit_info(presentable_image->qfot_semaphore,
             VK_PIPELINE_STAGE_2_COLOR_ATTACHMENT_OUTPUT_BIT | VK_PIPELINE_STAGE_2_COMPUTE_SHADER_BIT);

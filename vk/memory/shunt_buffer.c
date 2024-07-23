@@ -19,12 +19,24 @@ along with cvm_shared.  If not, see <https://www.gnu.org/licenses/>.
 
 #include "cvm_shared.h"
 
-void cvm_vk_staging_shunt_buffer_initialise(cvm_vk_staging_shunt_buffer * buffer, VkDeviceSize alignment/**, VkDeviceSize max_size, bool multithreaded*/)
+void cvm_vk_staging_shunt_buffer_initialise(cvm_vk_staging_shunt_buffer * buffer, VkDeviceSize alignment, VkDeviceSize max_size, bool multithreaded)
 {
-    buffer->size=CVM_MAX(4096, alignment);
-    buffer->backing=malloc(buffer->size);
-    buffer->alignment=alignment;
-    buffer->offset=0;
+    assert((alignment & (alignment-1)) == 0);///alignment must be a power of 2
+    buffer->alignment = alignment;
+    buffer->multithreaded = multithreaded;
+    buffer->max_size = cvm_vk_align(max_size, alignment);
+    if(multithreaded)
+    {
+        atomic_init(&buffer->atomic_offset, 0);
+        buffer->size = buffer->max_size;
+    }
+    else
+    {
+        buffer->offset=0;
+        buffer->size = CVM_MAX(16384, alignment * 4);
+        assert(buffer->size <= buffer->max_size);/// specified size too small
+    }
+    buffer->backing = malloc(buffer->size);
 }
 
 void cvm_vk_staging_shunt_buffer_terminate(cvm_vk_staging_shunt_buffer * buffer)
@@ -35,33 +47,66 @@ void cvm_vk_staging_shunt_buffer_terminate(cvm_vk_staging_shunt_buffer * buffer)
 
 void cvm_vk_staging_shunt_buffer_reset(cvm_vk_staging_shunt_buffer * buffer)
 {
-    buffer->offset=0;
-}
-
-void * cvm_vk_staging_shunt_buffer_reserve_bytes(cvm_vk_staging_shunt_buffer * buffer, VkDeviceSize byte_count)
-{
-    #warning have max viable size and assert that we are under it!
-    void * ptr;
-
-    if(buffer->offset+byte_count > buffer->size)
+    if(buffer->multithreaded)
     {
-        buffer->backing = realloc(buffer->backing, (buffer->size*=2));
+        atomic_store_explicit(&buffer->atomic_offset, 0, memory_order_relaxed);
     }
-    ptr=buffer->backing+buffer->offset;
-    buffer->offset+=byte_count;
-
-    return ptr;
+    else
+    {
+        buffer->offset=0;
+    }
 }
 
-VkDeviceSize cvm_vk_staging_shunt_buffer_new_segment(cvm_vk_staging_shunt_buffer * buffer)
+void * cvm_vk_staging_shunt_buffer_reserve_bytes(cvm_vk_staging_shunt_buffer * buffer, VkDeviceSize byte_count, VkDeviceSize * offset)
 {
-    buffer->offset = cvm_vk_align(buffer->offset, buffer->alignment);
-    return buffer->offset;
+    byte_count = cvm_vk_align(byte_count, buffer->alignment);
+
+    if(buffer->multithreaded)
+    {
+        *offset = atomic_fetch_add_explicit(&buffer->atomic_offset, byte_count, memory_order_relaxed);
+        if(*offset + byte_count > buffer->size) return NULL;
+    }
+    else
+    {
+        *offset = buffer->offset;
+        buffer->offset += byte_count;
+
+        if(buffer->offset > buffer->size)
+        {
+            do buffer->size = cvm_allocation_increase_step(buffer->size);
+            while(buffer->offset > buffer->size);
+
+            buffer->size = CVM_MIN(buffer->size, buffer->max_size);
+
+            if(buffer->offset > buffer->size)
+            {
+                /// allocation cannot fit!
+                buffer->offset -= byte_count;
+                return NULL;
+            }
+
+            buffer->backing = realloc(buffer->backing, buffer->size);
+        }
+    }
+
+    return buffer->backing + *offset;
+}
+
+VkDeviceSize cvm_vk_staging_shunt_buffer_usage(cvm_vk_staging_shunt_buffer * buffer)
+{
+    if(buffer->multithreaded)
+    {
+        return atomic_load_explicit(&buffer->atomic_offset, memory_order_relaxed);
+    }
+    else
+    {
+        return buffer->offset;
+    }
 }
 
 void cvm_vk_staging_shunt_buffer_copy(cvm_vk_staging_shunt_buffer * buffer, void * dst)
 {
-    memcpy(dst,buffer->backing,buffer->offset);
+    memcpy(dst,buffer->backing,cvm_vk_staging_shunt_buffer_usage(buffer));
 }
 
 
