@@ -377,8 +377,6 @@ const cvm_vk_swapchain_presentable_image * cvm_vk_surface_swapchain_acquire_pres
 
     presentable_image = NULL;
 
-    #warning needs massive cleanup
-
     do
     {
         instance = cvm_vk_swapchain_instance_queue_get_back_ptr(&swapchain->swapchain_queue);
@@ -396,11 +394,9 @@ const cvm_vk_swapchain_presentable_image * cvm_vk_surface_swapchain_acquire_pres
         cvm_vk_swapchain_cleanup_out_of_date_instances(swapchain, device);/// must be called after replacing the instance (require the out of date instances swapchain for recreation)
 
 
-
         if(swapchain->metering_fence_active)
         {
-            /// this should be the source stalls now
-            cvm_vk_wait_on_fence_and_reset(device, swapchain->metering_fence);
+            cvm_vk_wait_on_fence_and_reset(device, swapchain->metering_fence);/// should stall here
             swapchain->metering_fence_active=false;
         }
 
@@ -447,10 +443,11 @@ const cvm_vk_swapchain_presentable_image * cvm_vk_surface_swapchain_acquire_pres
 
 
 
-static VkCommandBuffer cvm_vk_swapchain_create_image_qfot_command_buffer(const cvm_vk_device * device, VkImage image, uint32_t dst_queue_family, uint32_t src_queue_family)
+static VkCommandBuffer cvm_vk_swapchain_create_image_qfot_command_buffer(const cvm_vk_device * device, VkImage image, uint32_t src_queue_family, uint32_t dst_queue_family)
 {
     VkCommandBuffer command_buffer;
     #warning mutex lock on device internal command pool (device no longer const?)
+    #warning instead move command pool to the swapchain instance? only need 1 command pool! for the fallback queue family!
     VkCommandBufferAllocateInfo command_buffer_allocate_info=(VkCommandBufferAllocateInfo)
     {
         .sType=VK_STRUCTURE_TYPE_COMMAND_BUFFER_ALLOCATE_INFO,
@@ -512,6 +509,8 @@ static VkCommandBuffer cvm_vk_swapchain_create_image_qfot_command_buffer(const c
     vkCmdPipelineBarrier2(command_buffer,&present_acquire_dependencies);
 
     CVM_VK_CHECK(vkEndCommandBuffer(command_buffer));
+
+    return command_buffer;
 }
 
 void cvm_vk_surface_swapchain_present_image(const cvm_vk_surface_swapchain * swapchain, const cvm_vk_device * device, cvm_vk_swapchain_presentable_image * presentable_image)
@@ -534,7 +533,7 @@ void cvm_vk_surface_swapchain_present_image(const cvm_vk_surface_swapchain * swa
         {
             #warning could allocate the command buffers upfront and only reset upon swapchain recreation...
             presentable_image->present_acquire_command_buffers[presentable_image->last_use_queue_family] =
-                cvm_vk_swapchain_create_image_qfot_command_buffer(device, presentable_image->image, swapchain_instance->fallback_present_queue_family, presentable_image->last_use_queue_family);
+                cvm_vk_swapchain_create_image_qfot_command_buffer(device, presentable_image->image, presentable_image->last_use_queue_family, swapchain_instance->fallback_present_queue_family);
         }
 
 
@@ -569,7 +568,7 @@ void cvm_vk_surface_swapchain_present_image(const cvm_vk_surface_swapchain * swa
             .pSignalSemaphoreInfos=signal_semaphores
         };
 
-        CVM_VK_CHECK(vkQueueSubmit2(present_queue->queue,1,&submit_info,VK_NULL_HANDLE));
+        CVM_VK_CHECK(vkQueueSubmit2(present_queue->queue, 1, &submit_info, VK_NULL_HANDLE));
 
         presentable_image->state = cvm_vk_presentable_image_state_complete;
     }
@@ -642,6 +641,8 @@ void cvm_vk_swapchain_presentable_image_complete_in_command_buffer(cvm_vk_swapch
     presentable_image->last_use_queue_family=command_buffer->parent_pool->device_queue_family_index;
 
     bool can_present = presentable_image->parent_swapchain_instance->queue_family_presentable_mask | (1<<command_buffer->parent_pool->device_queue_family_index);
+    can_present = false;
+    #warning above is hack to test QFOT
     if(can_present)
     {
         presentable_image->state = cvm_vk_presentable_image_state_complete;
