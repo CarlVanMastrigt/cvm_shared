@@ -53,7 +53,7 @@ along with cvm_shared.  If not, see <https://www.gnu.org/licenses/>.
 #define CVM_SHARED_ENGINE_VERSION 1
 
 #define CVM_INVALID_U32_INDEX 0xFFFFFFFF
-#define CVM_INVALID_U16_INDEX 0xFFFF
+#define CVM_INVALID_U16 0xFFFF
 
 #define CVM_CONCAT2_MACRO(A,B) A ## B
 #define CVM_CONCAT2(A, B) CVM_CONCAT2_MACRO(A, B)

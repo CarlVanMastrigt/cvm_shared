@@ -292,7 +292,7 @@ static VkPipelineLayout cvm_overlay_pipeline_layout_create(const cvm_vk_device *
     return pipeline_layout;
 }
 
-static VkRenderPass cvm_overlay_render_pass_create(const cvm_vk_device * device,VkFormat swapchain_format)
+static VkRenderPass cvm_overlay_render_pass_create(const cvm_vk_device * device,VkFormat target_format)
 {
     VkRenderPass render_pass;
     VkResult created;
@@ -319,7 +319,7 @@ static VkRenderPass cvm_overlay_render_pass_create(const cvm_vk_device * device,
 //            }
             {
                 .flags=0,
-                .format=swapchain_format,
+                .format=target_format,
                 .samples=VK_SAMPLE_COUNT_1_BIT,///sample_count not relevant for actual render target (swapchain image)
                 .loadOp=VK_ATTACHMENT_LOAD_OP_CLEAR,
                 .storeOp=VK_ATTACHMENT_STORE_OP_STORE,
@@ -624,9 +624,10 @@ static inline void cvm_overlay_swapchain_resources_terminate(cvm_overlay_swapcha
 static inline cvm_overlay_frame_resource_set cvm_overlay_renderer_frame_resource_set_acquire(cvm_overlay_renderer * renderer, const cvm_vk_device * device, const cvm_vk_swapchain_presentable_image * presentable_image)
 {
     cvm_overlay_swapchain_resources * swapchain_resources;
+    struct cvm_overlay_target_resources * target_resources;
     cvm_overlay_frame_resources * frame_resources;
     uint32_t i,swapchain_resource_index;
-    bool frame_resources_found;
+    bool frame_resources_found, evicted;
 
 
     /// first, prune unused resources, assuming the oldest will end first
@@ -661,6 +662,8 @@ static inline cvm_overlay_frame_resource_set cvm_overlay_renderer_frame_resource
     /// record that we're using this swapchain
     swapchain_resources->in_flight_frame_count++;
 
+//    target_resources =
+
 
     /// get or create appropriate frame resources
     assert(presentable_image->index < swapchain_resources->frame_count);
@@ -681,6 +684,23 @@ static inline cvm_overlay_frame_resource_set cvm_overlay_renderer_frame_resource
         .swapchain_resource_index = swapchain_resource_index,
     };
 }
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 
 
@@ -751,6 +771,7 @@ void cvm_overlay_renderer_initialise(cvm_overlay_renderer * renderer, cvm_vk_dev
     cvm_vk_staging_shunt_buffer_initialise(&renderer->shunt_buffer, staging_buffer->alignment, 1<<18, false);
     cvm_overlay_element_render_data_stack_initialise(&renderer->element_render_stack);
     cvm_overlay_swapchain_resources_queue_initialise(&renderer->swapchain_resources);
+    cvm_overlay_target_resources_cache_initialise(&renderer->target_resources);
     cvm_overlay_images_initialise(&renderer->images, device, 1024, 1024, 1024, 1024, &renderer->shunt_buffer);
 
     renderer->image_descriptor_set = cvm_overlay_image_descriptor_set_allocate(device, renderer->descriptor_pool, renderer->image_descriptor_set_layout); /// no matching free necessary
@@ -772,6 +793,7 @@ void cvm_overlay_renderer_initialise(cvm_overlay_renderer * renderer, cvm_vk_dev
 void cvm_overlay_renderer_terminate(cvm_overlay_renderer * renderer, cvm_vk_device * device)
 {
     cvm_overlay_swapchain_resources * resources;
+    struct cvm_overlay_target_resources * resources_;
 
 
     cvm_vk_work_queue_terminate(device,&renderer->work_queue);
@@ -796,6 +818,12 @@ void cvm_overlay_renderer_terminate(cvm_overlay_renderer * renderer, cvm_vk_devi
         cvm_overlay_swapchain_resources_terminate(resources, device);
     }
     cvm_overlay_swapchain_resources_queue_terminate(&renderer->swapchain_resources);
+
+    while(resources_ = cvm_overlay_target_resources_cache_evict(&renderer->target_resources))
+    {
+        //free resources
+    }
+    cvm_overlay_target_resources_cache_terminate(&renderer->target_resources);
 }
 
 
@@ -819,6 +847,8 @@ void overlay_render_to_image(const cvm_vk_device * device, cvm_overlay_renderer 
     shunt_buffer = &renderer->shunt_buffer;
     staging_buffer = renderer->staging_buffer;
 
+    /// move this somewhere?? theme data? allow non-destructive mutation based on these?
+    #warning make it so this is used in uniform texel buffer, good to test that
     const float overlay_colours[OVERLAY_NUM_COLOURS*4]=
     {
         1.0,0.1,0.1,1.0,///OVERLAY_NO_COLOUR (error)

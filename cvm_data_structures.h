@@ -220,6 +220,8 @@ desirable
 /**
 CVM_BIN_HEAP_CMP(A,B) must be declared, with true resulting in the value A
 moving UP the heap
+
+TODO: make any inputs to heap_cmp pointers and constant
 */
 
 #ifndef CVM_BIN_HEAP
@@ -240,7 +242,7 @@ static inline void name##_bin_heap_ini( name##_bin_heap * h )                   
     h->count=0;                                                                 \
 }                                                                               \
                                                                                 \
-static inline void name##_bin_heap_add( name##_bin_heap * h ,   type data )     \
+static inline void name##_bin_heap_add( name##_bin_heap * h , const type data ) \
 {                                                                               \
     if(h->count==h->space)h->heap=realloc(h->heap,sizeof(type)*(h->space*=2));  \
                                                                                 \
@@ -263,7 +265,10 @@ static inline void name##_bin_heap_clr( name##_bin_heap * h )                   
                                                                                 \
 static inline bool name##_bin_heap_get( name##_bin_heap * h , type * data )     \
 {                                                                               \
-    if(h->count==0)return false;                                                \
+    if(h->count==0)                                                             \
+    {                                                                           \
+        return false;                                                           \
+    }                                                                           \
                                                                                 \
     *data=h->heap[0];                                                           \
                                                                                 \
@@ -274,7 +279,10 @@ static inline bool name##_bin_heap_get( name##_bin_heap * h , type * data )     
     while((d=(u<<1)+1) < (h->count))                                            \
     {                                                                           \
         d+=((d+1 < h->count)&&(CVM_BIN_HEAP_CMP(h->heap[d+1],h->heap[d])));     \
-        if(CVM_BIN_HEAP_CMP(r,h->heap[d])) break;                               \
+        if(CVM_BIN_HEAP_CMP(r,h->heap[d]))                                      \
+        {                                                                       \
+            break;                                                              \
+        }                                                                       \
         h->heap[u]=h->heap[d];                                                  \
         u=d;                                                                    \
     }                                                                           \
@@ -289,6 +297,8 @@ static inline void name##_bin_heap_del( name##_bin_heap * h )                   
 }                                                                               \
 
 #endif
+
+
 
 
 
@@ -321,7 +331,7 @@ static inline uint32_t name##_queue_new_index( name##_queue * q )               
 {                                                                               \
     uint_fast32_t front_offset, move_count;                                     \
     type * src;                                                                 \
-    if(q->count==q->space)                                                      \
+    if(q->count == q->space)                                                    \
     {                                                                           \
         q->data = realloc(q->data, sizeof(type) * q->count * 2);                \
         front_offset = q->front & (q->space - 1);                               \
@@ -361,8 +371,14 @@ static inline uint32_t name##_queue_enqueue( name##_queue * q , type value )    
                                                                                 \
 static inline bool name##_queue_dequeue( name##_queue * q , type * value )      \
 {                                                                               \
-    if(q->count==0) return false;                                               \
-    if(value) *value=q->data[ q->front & (q->space - 1) ];                      \
+    if(q->count == 0)                                                           \
+    {                                                                           \
+        return false;                                                           \
+    }                                                                           \
+    if(value)                                                                   \
+    {                                                                           \
+        *value = q->data[ q->front & (q->space - 1) ];                          \
+    }                                                                           \
     q->front++;                                                                 \
     q->count--;                                                                 \
     return true;                                                                \
@@ -371,8 +387,11 @@ static inline bool name##_queue_dequeue( name##_queue * q , type * value )      
 static inline type * name##_queue_dequeue_ptr( name##_queue * q )               \
 {                                                                               \
     type * ptr;                                                                 \
-    if(q->count==0) return NULL;                                                \
-    ptr=q->data + (q->front & (q->space - 1));                                  \
+    if(q->count == 0)                                                           \
+    {                                                                           \
+        return NULL;                                                            \
+    }                                                                           \
+    ptr = q->data + (q->front & (q->space - 1));                                \
     q->front++;                                                                 \
     q->count--;                                                                 \
     return ptr;                                                                 \
@@ -385,13 +404,19 @@ static inline void name##_queue_terminate( name##_queue * q )                   
                                                                                 \
 static inline type * name##_queue_get_front_ptr( name##_queue * q )             \
 {                                                                               \
-    if(q->count==0)return NULL;                                                 \
+    if(q->count == 0)                                                           \
+    {                                                                           \
+        return NULL;                                                            \
+    }                                                                           \
     return q->data + (q->front & (q->space - 1));                               \
 }                                                                               \
                                                                                 \
 static inline type * name##_queue_get_back_ptr( name##_queue * q )              \
 {                                                                               \
-    if(q->count==0)return NULL;                                                 \
+    if(q->count == 0)                                                           \
+    {                                                                           \
+        return NULL;                                                            \
+    }                                                                           \
     return q->data + ((q->front + q->count - 1) & (q->space - 1));              \
 }                                                                               \
                                                                                 \
@@ -429,38 +454,156 @@ CVM_QUEUE(uint32_t,u32,16)
 
 
 
-///legacy, should probably be removed/reconsidered at some point
-typedef uint8_t cvm_atomic_pad[256-sizeof(atomic_uint_fast32_t)];
 
-typedef struct cvm_thread_safe_expanding_queue
+
+struct cvm_cache_link
 {
-    size_t type_size;
-    uint_fast32_t block_size;
-    char * in_block;
-    char * out_block;
-    char * end_block;
-    cvm_atomic_pad start_pad;
-    atomic_uint_fast32_t spinlock;
-    cvm_atomic_pad spinlock_pad;
-    atomic_uint_fast32_t in;
-    cvm_atomic_pad in_pad;
-    atomic_uint_fast32_t out;
-    cvm_atomic_pad out_pad;
-    atomic_uint_fast32_t in_buffer_fence;
-    cvm_atomic_pad in_buffer_fence_pad;
-    atomic_uint_fast32_t out_buffer_fence;
-    cvm_atomic_pad out_buffer_fence_pad;
-    atomic_uint_fast32_t in_completions;
-    cvm_atomic_pad in_completions_pad;
-    atomic_uint_fast32_t out_completions;
-    cvm_atomic_pad out_completions_pad;
-}
-cvm_thread_safe_expanding_queue;
+    uint16_t prev;
+    uint16_t next;
+};
 
-void cvm_thread_safe_expanding_queue_ini( cvm_thread_safe_expanding_queue * list , uint_fast32_t block_size , size_t type_size );///not coherent
-void cvm_thread_safe_expanding_queue_add( cvm_thread_safe_expanding_queue * list , void * value );
-bool cvm_thread_safe_expanding_queue_get( cvm_thread_safe_expanding_queue * list , void * value );
-void cvm_thread_safe_expanding_queue_del( cvm_thread_safe_expanding_queue * list );///not coherent
+/**
+CVM_CACHE_CMP(A,B) must be declared, is used for equality checking when finding
+entries in the cache; this comparison should take pointers of the type (a) and
+the key_type (B)
+*/
+
+#ifndef CVM_CACHE
+#define CVM_CACHE(type,key_type,name,size)                                      \
+typedef struct name##_cache                                                     \
+{                                                                               \
+    type entries[size];                                                         \
+    struct cvm_cache_link links[size];                                          \
+    uint16_t oldest;                                                            \
+    uint16_t newest;                                                            \
+    uint16_t first_free;                                                        \
+}                                                                               \
+name##_cache;                                                                   \
+                                                                                \
+static inline void name##_cache_initialise( name##_cache * cache )              \
+{                                                                               \
+    uint16_t i;                                                                 \
+    assert(size >= 2);                                                          \
+    cache->oldest = CVM_INVALID_U16;                                            \
+    cache->newest = CVM_INVALID_U16;                                            \
+    cache->first_free = size - 1;                                               \
+    i = size;                                                                   \
+    while(i--)                                                                  \
+    {                                                                           \
+        cache->links[i].next = i - 1;                                           \
+        cache->links[i].prev = CVM_INVALID_U16;/*not needed*/                   \
+    }                                                                           \
+    assert(cache->links[0].next == CVM_INVALID_U16);                            \
+}                                                                               \
+                                                                                \
+static inline void name##_cache_terminate( name##_cache * cache )               \
+{                                                                               \
+}                                                                               \
+                                                                                \
+static inline type * name##_cache_find                                          \
+( name##_cache * cache , const key_type key )                                   \
+{                                                                               \
+    uint16_t i,p;                                                               \
+    const type * e;                                                             \
+    for(i = cache->oldest; i != CVM_INVALID_U16; i = cache->links[i].next)      \
+    {                                                                           \
+        e = cache->entries + i;                                                 \
+        if(CVM_CACHE_CMP( e , key ))                                            \
+        {/** move to newest slot in cache */                                    \
+            if(cache->newest != i)                                              \
+            {                                                                   \
+                if(cache->oldest == i)                                          \
+                {                                                               \
+                    cache->oldest = cache->links[i].next;                       \
+                }                                                               \
+                else                                                            \
+                {                                                               \
+                    p = cache->links[i].prev;                                   \
+                    cache->links[p].next = cache->links[i].next;                \
+                }                                                               \
+                cache->links[cache->newest].next = i;                           \
+                cache->links[i].prev = cache->newest;                           \
+                cache->links[i].next = CVM_INVALID_U16;                         \
+                cache->newest = i;                                              \
+            }                                                                   \
+            return cache->entries + i;                                          \
+        }                                                                       \
+    }                                                                           \
+                                                                                \
+    return NULL;                                                                \
+}                                                                               \
+                                                                                \
+static inline type * name##_cache_new( name##_cache * cache , bool * evicted )  \
+{                                                                               \
+    uint16_t i;                                                                 \
+    if(cache->first_free != CVM_INVALID_U16)                                    \
+    {                                                                           \
+        if(evicted)                                                             \
+        {                                                                       \
+            *evicted = false;                                                   \
+        }                                                                       \
+        i = cache->first_free;                                                  \
+        cache->first_free = cache->links[i].next;                               \
+        if(cache->newest == CVM_INVALID_U16)                                    \
+        {                                                                       \
+            cache->oldest = i;                                                  \
+        }                                                                       \
+        else                                                                    \
+        {                                                                       \
+            cache->links[cache->newest].next = i;                               \
+        }                                                                       \
+    }                                                                           \
+    else                                                                        \
+    {                                                                           \
+        if(evicted)                                                             \
+        {                                                                       \
+            *evicted = true;                                                    \
+        }                                                                       \
+        i = cache->oldest;                                                      \
+        cache->oldest = cache->links[i].next;                                   \
+        cache->links[cache->oldest].prev = CVM_INVALID_U16;                     \
+        cache->links[cache->newest].next = i;                                   \
+    }                                                                           \
+    cache->links[i].next = CVM_INVALID_U16;                                     \
+    cache->links[i].prev = cache->newest;                                       \
+    cache->newest = i;                                                          \
+    return cache->entries + i;                                                  \
+}                                                                               \
+                                                                                \
+static inline type * name##_cache_evict( name##_cache * cache )                 \
+{                                                                               \
+    uint16_t i;                                                                 \
+    i = cache->oldest;                                                          \
+    if(i == CVM_INVALID_U16)                                                    \
+    {                                                                           \
+        return NULL;                                                            \
+    }                                                                           \
+    cache->oldest = cache->links[i].next;                                       \
+    if(cache->oldest == CVM_INVALID_U16)                                        \
+    {                                                                           \
+        cache->newest = CVM_INVALID_U16;                                        \
+    }                                                                           \
+    else                                                                        \
+    {                                                                           \
+        cache->links[cache->oldest].prev = CVM_INVALID_U16;                     \
+    }                                                                           \
+    cache->links[i].next = cache->first_free;                                   \
+    cache->links[i].prev = CVM_INVALID_U16;/*not needed*/                       \
+    cache->first_free = i;                                                      \
+    return cache->entries + i;                                                  \
+}                                                                               \
+
+#endif
+
+
+
+
+
+
+
+
+
+
 
 
 

@@ -383,6 +383,56 @@ typedef struct cvm_overlay_images
 }
 cvm_overlay_images;
 
+
+
+typedef struct cvm_overlay_target
+{
+    VkImageView image_view;
+    VkExtent2D extent;
+    VkFormat format;
+    VkColorSpaceKHR color_space;
+}
+cvm_overlay_target;
+
+
+
+struct cvm_overlay_frame_resources_new
+{
+    /// used for finding extant resources in cache
+    VkImageView image_view;
+
+    /// data to cache
+    VkFramebuffer framebuffer;
+
+    /// used to ensure isn't in use before deletion when being evicted
+    cvm_vk_timeline_semaphore_moment last_use_moment;/// when this cache entry is completed and can thus be evicted
+};
+
+#define CVM_CACHE_CMP( lhs , rhs ) lhs->image_view == rhs->image_view
+CVM_CACHE(struct cvm_overlay_frame_resources_new, cvm_overlay_target*, cvm_overlay_frame_resources, 8)
+#undef CVM_CACHE_CMP
+
+struct cvm_overlay_target_resources
+{
+    /// used for finding extant resources in cache
+    VkExtent2D extent;
+    VkFormat format;
+    VkColorSpaceKHR color_space;
+
+    /// data to cache
+    VkRenderPass render_pass;
+    VkPipeline pipeline;
+
+    /// rely on all frame resources being deleted to ensure not in use
+    cvm_overlay_frame_resources_cache frame_resources;
+};
+
+#define CVM_CACHE_CMP( lhs, rhs ) lhs->extent.width == rhs->extent.width && lhs->extent.height == rhs->extent.height && lhs->format == rhs->format && lhs->color_space == rhs->color_space
+CVM_CACHE(struct cvm_overlay_target_resources, cvm_overlay_target*, cvm_overlay_target_resources, 4)
+#undef CVM_CACHE_CMP
+
+
+
 typedef struct cvm_overlay_renderer
 {
     cvm_vk_device * device;///is there a better place to put this? probably...
@@ -415,8 +465,27 @@ typedef struct cvm_overlay_renderer
 
     /// collection of resources dependent upon the render target (swapchain)
     cvm_overlay_swapchain_resources_queue swapchain_resources;
+
+    cvm_overlay_target_resources_cache target_resources;
+
+
+    VkImageLayout initial_target_layout;
+    VkImageLayout final_target_layout;
 }
 cvm_overlay_renderer;
+
+typedef struct cvm_overlay_setup
+{
+    cvm_vk_staging_buffer_ * staging_buffer;
+
+    VkImageLayout initial_target_layout;
+    VkImageLayout final_target_layout;
+
+    uint32_t renderer_resource_queue_count;///effectively max frames in flight, size of work queue
+    uint32_t target_resource_cache_size;/// size of cache for target dependent resources, effectively max swapchain size, should be lightweight so 8 or 16 is reasonable
+}
+cvm_overlay_setup;
+
 
 void cvm_overlay_renderer_initialise(cvm_overlay_renderer * renderer, cvm_vk_device * device, cvm_vk_staging_buffer_ * staging_buffer, uint32_t renderer_cycle_count);
 void cvm_overlay_renderer_terminate(cvm_overlay_renderer * renderer, cvm_vk_device * device);

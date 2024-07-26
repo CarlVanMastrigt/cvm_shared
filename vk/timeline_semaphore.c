@@ -100,4 +100,5 @@ bool cvm_vk_timeline_semaphore_moment_query(cvm_vk_device * device,const cvm_vk_
     uint64_t v;
     vkGetSemaphoreCounterValue(device->device,moment->semaphore,&v);
     return v>=moment->value;
+    #warning do range based comparison respecting the under the hood wrapping values
 }
