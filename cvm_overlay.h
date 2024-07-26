@@ -336,38 +336,6 @@ static inline void cvm_render_fill_fading_overlay_element(cvm_overlay_element_re
 #include "themes/cubic.h"
 
 
-/// need a concept of swapchain dependent data (e.g. render pass, descriptor set?) that can be destroyed when no longer referenced...
-
-/// move this to swapchain dependent data?? is a nice simple solution tbh
-typedef struct cvm_overlay_frame_resources
-{
-    VkFramebuffer framebuffer;
-    /// as its own struct in case it makes sense to put something else here
-}
-cvm_overlay_frame_resources;
-
-CVM_STACK(cvm_overlay_frame_resources,cvm_overlay_frame_resources,4)
-
-
-/// resources dependent upon the render configuration (swapchain &c.)
-typedef struct cvm_overlay_swapchain_resources
-{
-    /// identifier for a change to rendering resources
-    uint32_t swapchain_generation;/// this could instead be a resolution and colour space?
-
-    uint16_t in_flight_frame_count;/// use count, used to determine if resources can be freed/cleared
-
-    uint16_t frame_count;
-    /// could require that the framebuffer must get passed into this function, and that it's ref counted!
-    cvm_overlay_frame_resources * frame_resources_;
-
-
-    VkRenderPass render_pass;
-    VkPipeline pipeline;
-}
-cvm_overlay_swapchain_resources;
-
-CVM_QUEUE(cvm_overlay_swapchain_resources,cvm_overlay_swapchain_resources,4)
 
 
 typedef struct cvm_overlay_images
@@ -384,19 +352,33 @@ typedef struct cvm_overlay_images
 cvm_overlay_images;
 
 
-
+/// target information and synchronization requirements
 typedef struct cvm_overlay_target
 {
     VkImageView image_view;
     VkExtent2D extent;
     VkFormat format;
-    VkColorSpaceKHR color_space;
+    VkColorSpaceKHR color_space;/// respecting the colour space is NYI
+    VkImageLayout initial_target_layout;
+    VkImageLayout final_target_layout;
+    bool clear_image;
+
+    /// in / out synchronization setup data
+    uint32_t wait_semaphore_count;
+    uint32_t acquire_barrier_count;
+    VkSemaphoreSubmitInfo wait_semaphores[4];
+    VkImageMemoryBarrier2 acquire_barriers[4];
+
+    uint32_t signal_semaphore_count;
+    uint32_t release_barrier_count;
+    VkSemaphoreSubmitInfo signal_semaphores[4];
+    VkImageMemoryBarrier2 release_barriers[4];
 }
 cvm_overlay_target;
 
 
 
-struct cvm_overlay_frame_resources_new
+struct cvm_overlay_frame_resources
 {
     /// used for finding extant resources in cache
     VkImageView image_view;
@@ -409,7 +391,7 @@ struct cvm_overlay_frame_resources_new
 };
 
 #define CVM_CACHE_CMP( lhs , rhs ) lhs->image_view == rhs->image_view
-CVM_CACHE(struct cvm_overlay_frame_resources_new, cvm_overlay_target*, cvm_overlay_frame_resources, 8)
+CVM_CACHE(struct cvm_overlay_frame_resources, cvm_overlay_target*, cvm_overlay_frame_resources, 8)
 #undef CVM_CACHE_CMP
 
 struct cvm_overlay_target_resources
@@ -418,6 +400,9 @@ struct cvm_overlay_target_resources
     VkExtent2D extent;
     VkFormat format;
     VkColorSpaceKHR color_space;
+    VkImageLayout initial_target_layout;
+    VkImageLayout final_target_layout;
+    bool clear_image;
 
     /// data to cache
     VkRenderPass render_pass;
@@ -428,7 +413,7 @@ struct cvm_overlay_target_resources
 };
 
 #define CVM_CACHE_CMP( lhs, rhs ) lhs->extent.width == rhs->extent.width && lhs->extent.height == rhs->extent.height && lhs->format == rhs->format && lhs->color_space == rhs->color_space
-CVM_CACHE(struct cvm_overlay_target_resources, cvm_overlay_target*, cvm_overlay_target_resources, 4)
+CVM_CACHE(struct cvm_overlay_target_resources, cvm_overlay_target*, cvm_overlay_target_resources, 8)
 #undef CVM_CACHE_CMP
 
 
@@ -463,14 +448,7 @@ typedef struct cvm_overlay_renderer
     VkPipelineLayout pipeline_layout;
     VkPipelineShaderStageCreateInfo pipeline_stages[2];//vertex,fragment
 
-    /// collection of resources dependent upon the render target (swapchain)
-    cvm_overlay_swapchain_resources_queue swapchain_resources;
-
     cvm_overlay_target_resources_cache target_resources;
-
-
-    VkImageLayout initial_target_layout;
-    VkImageLayout final_target_layout;
 }
 cvm_overlay_renderer;
 
@@ -490,7 +468,10 @@ cvm_overlay_setup;
 void cvm_overlay_renderer_initialise(cvm_overlay_renderer * renderer, cvm_vk_device * device, cvm_vk_staging_buffer_ * staging_buffer, uint32_t renderer_cycle_count);
 void cvm_overlay_renderer_terminate(cvm_overlay_renderer * renderer, cvm_vk_device * device);
 
-void overlay_render_to_image(const cvm_vk_device * device, cvm_overlay_renderer * renderer, cvm_vk_swapchain_presentable_image * presentable_image, widget * menu_widget);
+cvm_vk_timeline_semaphore_moment cvm_overlay_render_to_target(const cvm_vk_device * device, cvm_overlay_renderer * renderer, const cvm_overlay_target* target, widget * menu_widget);
+
+/// make device renderer in this??
+void cvm_overlay_render_target_from_presentable_image(cvm_overlay_target * target, cvm_vk_swapchain_presentable_image * presentable_image, const cvm_vk_device * device, bool first_use, bool last_use);
 
 
 #endif

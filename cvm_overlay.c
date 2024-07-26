@@ -592,96 +592,96 @@ static void cvm_overlay_images_terminate(const cvm_vk_device * device, cvm_overl
 
 
 
-typedef struct cvm_overlay_frame_resource_set
+struct cvm_overlay_frame_resource_set
 {
-    VkFramebuffer framebuffer;
-    VkPipeline pipeline;
-    VkRenderPass render_pass;
-    uint32_t swapchain_resource_index;
-}
-cvm_overlay_frame_resource_set;
+    struct cvm_overlay_target_resources* target_resources;
+    struct cvm_overlay_frame_resources* frame_resources;
+};
 
 
-
-static inline void cvm_overlay_swapchain_resources_terminate(cvm_overlay_swapchain_resources * resources, const cvm_vk_device * device)
+static inline void cvm_overlay_frame_resources_initialise(struct cvm_overlay_frame_resources* frame_resources, const cvm_vk_device* device,
+    const struct cvm_overlay_target_resources* target_resources, const cvm_overlay_target * target)
 {
-    uint16_t i;
-    assert(resources->in_flight_frame_count==0);
+    frame_resources->image_view = target->image_view;
 
-    for(i=0;i<resources->frame_count;i++)
-    {
-        if(resources->frame_resources_[i].framebuffer != VK_NULL_HANDLE)
-        {
-            vkDestroyFramebuffer(device->device, resources->frame_resources_[i].framebuffer, NULL);
-        }
-    }
-    free(resources->frame_resources_);
+    frame_resources->framebuffer = cvm_overlay_framebuffer_create(device, target->extent, target_resources->render_pass, target->image_view);
 
-    vkDestroyRenderPass(device->device, resources->render_pass, NULL);
-    vkDestroyPipeline(device->device, resources->pipeline, NULL);
+    frame_resources->last_use_moment = cvm_vk_timeline_semaphore_moment_null;
 }
 
-static inline cvm_overlay_frame_resource_set cvm_overlay_renderer_frame_resource_set_acquire(cvm_overlay_renderer * renderer, const cvm_vk_device * device, const cvm_vk_swapchain_presentable_image * presentable_image)
+static inline void cvm_overlay_frame_resources_terminate(struct cvm_overlay_frame_resources* frame_resources, const cvm_vk_device* device)
 {
-    cvm_overlay_swapchain_resources * swapchain_resources;
-    struct cvm_overlay_target_resources * target_resources;
-    cvm_overlay_frame_resources * frame_resources;
-    uint32_t i,swapchain_resource_index;
-    bool frame_resources_found, evicted;
+    vkDestroyFramebuffer(device->device, frame_resources->framebuffer, NULL);
+}
 
+static inline void cvm_overlay_target_resources_initialise(struct cvm_overlay_target_resources* target_resources, const cvm_vk_device* device,
+    const cvm_overlay_renderer * renderer, const cvm_overlay_target * target)
+{
+    #warning if extent not relevant to target resources move it to frame resources! (do after checking everything works though)
+    target_resources->extent = target->extent;
+    target_resources->format = target->format;
+    target_resources->color_space = target->color_space;
 
-    /// first, prune unused resources, assuming the oldest will end first
-    while((swapchain_resources = cvm_overlay_swapchain_resources_queue_get_front_ptr(&renderer->swapchain_resources)) &&
-        (swapchain_resources->swapchain_generation != presentable_image->parent_swapchain_instance->generation) && (swapchain_resources->in_flight_frame_count == 0))
+    target_resources->render_pass = cvm_overlay_render_pass_create(device, target->format);
+    target_resources->pipeline = cvm_overlay_pipeline_create(device, renderer->pipeline_stages, renderer->pipeline_layout, target_resources->render_pass);
+
+    cvm_overlay_frame_resources_cache_initialise(&target_resources->frame_resources);
+}
+
+static inline void cvm_overlay_target_resources_terminate(struct cvm_overlay_target_resources* target_resources, const cvm_vk_device* device)
+{
+    struct cvm_overlay_frame_resources* frame_resources;
+
+    while((frame_resources = cvm_overlay_frame_resources_cache_evict(&target_resources->frame_resources)))
     {
-        /// these resources are out of date and no longer in use, delete them!
-        cvm_overlay_swapchain_resources_terminate(swapchain_resources, device);
-        cvm_overlay_swapchain_resources_queue_dequeue(&renderer->swapchain_resources, NULL);///remove from the queue
+        ///these both MUST exist right?
+        assert(frame_resources->last_use_moment.semaphore != VK_NULL_HANDLE);
+        cvm_vk_timeline_semaphore_moment_wait(device, &frame_resources->last_use_moment);
+        vkDestroyFramebuffer(device->device, frame_resources->framebuffer, NULL);
     }
+    cvm_overlay_frame_resources_cache_terminate(&target_resources->frame_resources);
+
+    vkDestroyRenderPass(device->device, target_resources->render_pass, NULL);
+    vkDestroyPipeline(device->device, target_resources->pipeline, NULL);
+}
 
 
-    swapchain_resources = cvm_overlay_swapchain_resources_queue_get_back_ptr(&renderer->swapchain_resources);
 
-    if( swapchain_resources==NULL || swapchain_resources->swapchain_generation != presentable_image->parent_swapchain_instance->generation)
+static inline struct cvm_overlay_frame_resource_set cvm_overlay_renderer_frame_resource_set_acquire(cvm_overlay_renderer * renderer, const cvm_vk_device * device, const cvm_overlay_target * target)
+{
+    struct cvm_overlay_target_resources* target_resources;
+    struct cvm_overlay_frame_resources* frame_resources;
+    bool evicted;
+
+
+    target_resources = cvm_overlay_target_resources_cache_find(&renderer->target_resources, target);
+    if(target_resources==NULL)
     {
-        swapchain_resources = cvm_overlay_swapchain_resources_queue_new(&renderer->swapchain_resources);
-
-        swapchain_resources->swapchain_generation = presentable_image->parent_swapchain_instance->generation;
-        swapchain_resources->in_flight_frame_count = 0;
-        swapchain_resources->render_pass = cvm_overlay_render_pass_create(device, presentable_image->parent_swapchain_instance->surface_format.format);
-        swapchain_resources->pipeline = cvm_overlay_pipeline_create(device, renderer->pipeline_stages, renderer->pipeline_layout, swapchain_resources->render_pass);
-        swapchain_resources->frame_count = presentable_image->parent_swapchain_instance->image_count;
-        swapchain_resources->frame_resources_ = malloc(sizeof(cvm_overlay_frame_resources)*presentable_image->parent_swapchain_instance->image_count);
-        for(i=0;i<swapchain_resources->frame_count;i++)
+        target_resources = cvm_overlay_target_resources_cache_new(&renderer->target_resources, &evicted);
+        if(evicted)
         {
-            swapchain_resources->frame_resources_[i].framebuffer = VK_NULL_HANDLE;
+            cvm_overlay_target_resources_terminate(target_resources, device);
         }
+
+        cvm_overlay_target_resources_initialise(target_resources, device, renderer, target);
     }
 
-    swapchain_resource_index = cvm_overlay_swapchain_resources_queue_back_index(&renderer->swapchain_resources);
-    /// record that we're using this swapchain
-    swapchain_resources->in_flight_frame_count++;
-
-//    target_resources =
-
-
-    /// get or create appropriate frame resources
-    assert(presentable_image->index < swapchain_resources->frame_count);
-    frame_resources = swapchain_resources->frame_resources_ + presentable_image->index;
-    if(frame_resources->framebuffer == VK_NULL_HANDLE)
+    frame_resources = cvm_overlay_frame_resources_cache_find(&target_resources->frame_resources, target);
+    if(frame_resources==NULL)
     {
-        /// frame resources not init because they haven't been used yet
-        frame_resources->framebuffer = cvm_overlay_framebuffer_create(device, presentable_image->parent_swapchain_instance->surface_capabilities.currentExtent,
-                                                                      swapchain_resources->render_pass, presentable_image->image_view);
+        frame_resources = cvm_overlay_frame_resources_cache_new(&target_resources->frame_resources, &evicted);
+        if(evicted)
+        {
+            cvm_overlay_frame_resources_terminate(frame_resources, device);
+        }
+        cvm_overlay_frame_resources_initialise(frame_resources, device, target_resources, target);
     }
 
 
-    return (cvm_overlay_frame_resource_set)
+    return (struct cvm_overlay_frame_resource_set)
     {
-        .render_pass = swapchain_resources->render_pass,
-        .pipeline = swapchain_resources->pipeline,
-        .framebuffer = frame_resources->framebuffer,
-        .swapchain_resource_index = swapchain_resource_index,
+        .target_resources = target_resources,
+        .frame_resources = frame_resources,
     };
 }
 
@@ -709,12 +709,6 @@ typedef struct cvm_overlay_renderer_work_entry
     cvm_vk_command_pool command_pool;
 
     VkDescriptorSet frame_descriptor_set;
-
-    ///descriptor sets?? can descriptor sets not be shared???
-
-    ///used to identify swapchain_dependent_resources in use
-    uint32_t swapchain_generation;/// purely for debugging
-    uint32_t swapchain_resource_index;
 }
 cvm_overlay_renderer_work_entry;
 
@@ -738,18 +732,11 @@ void cvm_overlay_renderer_work_entry_terminate(void * shared_ptr, void * entry_p
 void cvm_overlay_renderer_work_entry_reset(void * shared_ptr, void * entry_ptr)
 {
     uint32_t i;
-    cvm_overlay_swapchain_resources * swapchain_resources;
-
     cvm_overlay_renderer * renderer = shared_ptr;
     cvm_overlay_renderer_work_entry * entry=entry_ptr;
 
 
     cvm_vk_command_pool_reset(&entry->command_pool, renderer->device);
-
-    swapchain_resources = cvm_overlay_swapchain_resources_queue_get_ptr(&renderer->swapchain_resources, entry->swapchain_resource_index);
-    assert(swapchain_resources->swapchain_generation == entry->swapchain_generation);
-    assert(swapchain_resources->in_flight_frame_count > 0);
-    swapchain_resources->in_flight_frame_count--;
 }
 
 void cvm_overlay_renderer_initialise(cvm_overlay_renderer * renderer, cvm_vk_device * device, cvm_vk_staging_buffer_ * staging_buffer, uint32_t renderer_cycle_count)
@@ -770,7 +757,6 @@ void cvm_overlay_renderer_initialise(cvm_overlay_renderer * renderer, cvm_vk_dev
 
     cvm_vk_staging_shunt_buffer_initialise(&renderer->shunt_buffer, staging_buffer->alignment, 1<<18, false);
     cvm_overlay_element_render_data_stack_initialise(&renderer->element_render_stack);
-    cvm_overlay_swapchain_resources_queue_initialise(&renderer->swapchain_resources);
     cvm_overlay_target_resources_cache_initialise(&renderer->target_resources);
     cvm_overlay_images_initialise(&renderer->images, device, 1024, 1024, 1024, 1024, &renderer->shunt_buffer);
 
@@ -792,8 +778,7 @@ void cvm_overlay_renderer_initialise(cvm_overlay_renderer * renderer, cvm_vk_dev
 
 void cvm_overlay_renderer_terminate(cvm_overlay_renderer * renderer, cvm_vk_device * device)
 {
-    cvm_overlay_swapchain_resources * resources;
-    struct cvm_overlay_target_resources * resources_;
+    struct cvm_overlay_target_resources * target_resources;
 
 
     cvm_vk_work_queue_terminate(device,&renderer->work_queue);
@@ -813,22 +798,66 @@ void cvm_overlay_renderer_terminate(cvm_overlay_renderer * renderer, cvm_vk_devi
 
     cvm_overlay_element_render_data_stack_terminate(&renderer->element_render_stack);
 
-    while((resources = cvm_overlay_swapchain_resources_queue_dequeue_ptr(&renderer->swapchain_resources)))
+    while(target_resources = cvm_overlay_target_resources_cache_evict(&renderer->target_resources))
     {
-        cvm_overlay_swapchain_resources_terminate(resources, device);
-    }
-    cvm_overlay_swapchain_resources_queue_terminate(&renderer->swapchain_resources);
-
-    while(resources_ = cvm_overlay_target_resources_cache_evict(&renderer->target_resources))
-    {
-        //free resources
+        cvm_overlay_target_resources_terminate(target_resources, device);
     }
     cvm_overlay_target_resources_cache_terminate(&renderer->target_resources);
 }
 
+static inline void cvm_overlay_add_target_acquire_instructions(cvm_vk_command_buffer * command_buffer, const cvm_overlay_target * target)
+{
+    #warning make this a function;
+    assert(command_buffer->wait_count + target->wait_semaphore_count < 11);
+    memcpy(command_buffer->wait_info + command_buffer->wait_count, target->wait_semaphores, sizeof(VkSemaphoreSubmitInfo) * target->wait_semaphore_count);
+    command_buffer->wait_count += target->wait_semaphore_count;
 
+    if(target->acquire_barrier_count)
+    {
+        VkDependencyInfo dependencies =
+        {
+            .sType=VK_STRUCTURE_TYPE_DEPENDENCY_INFO,
+            .pNext=NULL,
+            .dependencyFlags=VK_DEPENDENCY_BY_REGION_BIT,
+            .memoryBarrierCount=0,
+            .pMemoryBarriers=NULL,
+            .bufferMemoryBarrierCount=0,
+            .pBufferMemoryBarriers=NULL,
+            .imageMemoryBarrierCount=target->acquire_barrier_count,
+            .pImageMemoryBarriers=target->acquire_barriers,
+        };
 
-void overlay_render_to_image(const cvm_vk_device * device, cvm_overlay_renderer * renderer, cvm_vk_swapchain_presentable_image * presentable_image, widget * menu_widget)
+        vkCmdPipelineBarrier2(command_buffer->buffer, &dependencies);
+    }
+}
+
+static inline void cvm_overlay_add_target_release_instructions(cvm_vk_command_buffer * command_buffer, const cvm_overlay_target * target)
+{
+    #warning make this a function;
+    assert(command_buffer->signal_count + target->signal_semaphore_count < 4);
+    memcpy(command_buffer->signal_info + command_buffer->signal_count, target->signal_semaphores, sizeof(VkSemaphoreSubmitInfo) * target->signal_semaphore_count);
+    command_buffer->signal_count += target->signal_semaphore_count;
+
+    if(target->release_barrier_count)
+    {
+        VkDependencyInfo dependencies =
+        {
+            .sType=VK_STRUCTURE_TYPE_DEPENDENCY_INFO,
+            .pNext=NULL,
+            .dependencyFlags=VK_DEPENDENCY_BY_REGION_BIT,
+            .memoryBarrierCount=0,
+            .pMemoryBarriers=NULL,
+            .bufferMemoryBarrierCount=0,
+            .pBufferMemoryBarriers=NULL,
+            .imageMemoryBarrierCount=target->release_barrier_count,
+            .pImageMemoryBarriers=target->release_barriers,
+        };
+
+        vkCmdPipelineBarrier2(command_buffer->buffer, &dependencies);
+    }
+}
+
+cvm_vk_timeline_semaphore_moment cvm_overlay_render_to_target(const cvm_vk_device * device, cvm_overlay_renderer * renderer, const cvm_overlay_target* target, widget * menu_widget)
 {
     cvm_overlay_renderer_work_entry * work_entry;
     cvm_vk_command_buffer cb;
@@ -838,10 +867,11 @@ void overlay_render_to_image(const cvm_vk_device * device, cvm_overlay_renderer 
     cvm_overlay_element_render_data_stack * element_render_stack;
     cvm_vk_staging_shunt_buffer * shunt_buffer;
     cvm_vk_staging_buffer_ * staging_buffer;
-    cvm_overlay_frame_resource_set frame_resources;
+    struct cvm_overlay_frame_resource_set frame_resources_set;
     VkDeviceSize staging_offset;
     char * staging_mapping;
     float screen_w,screen_h;
+
 
     element_render_stack = &renderer->element_render_stack;
     shunt_buffer = &renderer->shunt_buffer;
@@ -861,9 +891,7 @@ void overlay_render_to_image(const cvm_vk_device * device, cvm_overlay_renderer 
         0.4,0.6,0.9,0.8,///OVERLAY_TEXT_COLOUR_0
     };
 
-    assert(presentable_image);
-    assert(presentable_image->state == cvm_vk_presentable_image_state_acquired);
-
+    #warning renderer needs to know queue familt to present on!
 
     cvm_overlay_element_render_data_stack_reset(element_render_stack);
     cvm_vk_staging_shunt_buffer_reset(shunt_buffer);
@@ -871,12 +899,9 @@ void overlay_render_to_image(const cvm_vk_device * device, cvm_overlay_renderer 
 
     work_entry = cvm_vk_work_queue_entry_acquire(&renderer->work_queue, device);
     cvm_vk_command_pool_acquire_command_buffer(&work_entry->command_pool, device, &cb);
-    cvm_vk_swapchain_presentable_image_wait_in_command_buffer(presentable_image, &cb);
 
-    frame_resources=cvm_overlay_renderer_frame_resource_set_acquire(renderer, device, presentable_image);
 
-    work_entry->swapchain_generation = presentable_image->parent_swapchain_instance->generation;
-    work_entry->swapchain_resource_index = frame_resources.swapchain_resource_index;
+    frame_resources_set = cvm_overlay_renderer_frame_resource_set_acquire(renderer, device, target);
 
     ///this uses the shunt buffer!
     render_widget_overlay(element_render_stack,menu_widget);
@@ -903,14 +928,16 @@ void overlay_render_to_image(const cvm_vk_device * device, cvm_overlay_renderer 
 
 
     ///start of graphics
+    cvm_overlay_add_target_acquire_instructions(&cb, target);
+
     cvm_overlay_frame_descriptor_set_write(device, work_entry->frame_descriptor_set, staging_buffer->buffer, staging_offset+uniform_offset);///should really build buffer acquisition into update uniforms function
 
 
     cvm_vk_staging_buffer_flush_allocation(renderer->staging_buffer, device, &staging_buffer_allocation, 0, staging_space);
 
     /// get resolution of target from the swapchain
-    screen_w=(float)presentable_image->parent_swapchain_instance->surface_capabilities.currentExtent.width;
-    screen_h=(float)presentable_image->parent_swapchain_instance->surface_capabilities.currentExtent.height;
+    screen_w=(float)target->extent.width;
+    screen_h=(float)target->extent.height;
     float screen_dimensions[4]={2.0/screen_w,2.0/screen_h,screen_w,screen_h};
     vkCmdPushConstants(cb.buffer,renderer->pipeline_layout,VK_SHADER_STAGE_VERTEX_BIT|VK_SHADER_STAGE_FRAGMENT_BIT,0,4*sizeof(float),screen_dimensions);
     vkCmdBindDescriptorSets(cb.buffer,VK_PIPELINE_BIND_POINT_GRAPHICS,renderer->pipeline_layout,0,1,&work_entry->frame_descriptor_set,0,NULL);
@@ -921,8 +948,8 @@ void overlay_render_to_image(const cvm_vk_device * device, cvm_overlay_renderer 
     {
         .sType=VK_STRUCTURE_TYPE_RENDER_PASS_BEGIN_INFO,
         .pNext=NULL,
-        .renderPass=frame_resources.render_pass,
-        .framebuffer=frame_resources.framebuffer,
+        .renderPass=frame_resources_set.target_resources->render_pass,
+        .framebuffer=frame_resources_set.frame_resources->framebuffer,
         .renderArea=cvm_vk_get_default_render_area(),
         .clearValueCount=1,
         #warning overlay shouldnt clear (normally), temporary measure
@@ -930,21 +957,102 @@ void overlay_render_to_image(const cvm_vk_device * device, cvm_overlay_renderer 
     };
     vkCmdBeginRenderPass(cb.buffer,&render_pass_begin_info,VK_SUBPASS_CONTENTS_INLINE);///================
 
-    vkCmdBindPipeline(cb.buffer,VK_PIPELINE_BIND_POINT_GRAPHICS,frame_resources.pipeline);
+    vkCmdBindPipeline(cb.buffer,VK_PIPELINE_BIND_POINT_GRAPHICS,frame_resources_set.target_resources->pipeline);
     vkCmdBindVertexBuffers(cb.buffer, 0, 1, &renderer->staging_buffer->buffer, &(VkDeviceSize){instance_offset+staging_offset});///little bit of hacky stuff to create lvalue
     vkCmdDraw(cb.buffer,4,renderer->element_render_stack.count,0,0);
 
     vkCmdEndRenderPass(cb.buffer);///================
 
+    cvm_overlay_add_target_release_instructions(&cb, target);
 
-    cvm_vk_swapchain_presentable_image_complete_in_command_buffer(presentable_image, &cb);
     cvm_vk_command_pool_submit_command_buffer(&work_entry->command_pool, device, &cb, VK_PIPELINE_STAGE_2_COLOR_ATTACHMENT_OUTPUT_BIT, &completion_moment);
 
-    cvm_vk_staging_buffer_complete_allocation(renderer->staging_buffer,staging_buffer_allocation.segment_index,completion_moment);
+    cvm_vk_staging_buffer_complete_allocation(renderer->staging_buffer, staging_buffer_allocation.segment_index, completion_moment);
+
     cvm_vk_work_queue_entry_release(&renderer->work_queue, work_entry, &completion_moment);
+    frame_resources_set.frame_resources->last_use_moment = completion_moment;///somewhat hacky but w/e
+
+    return completion_moment;
 }
 
 
+#warning presentable image should track layout?
+void cvm_overlay_render_target_from_presentable_image(cvm_overlay_target * target, cvm_vk_swapchain_presentable_image * presentable_image,  const cvm_vk_device * device, bool first_use, bool last_use)
+{
+    bool can_present;
+    uint32_t overlay_queue_family_index;
+
+    target->color_space = presentable_image->parent_swapchain_instance->surface_format.colorSpace;
+    target->format = presentable_image->parent_swapchain_instance->surface_format.format;
+    target->extent = presentable_image->parent_swapchain_instance->surface_capabilities.currentExtent;
+    target->image_view = presentable_image->image_view;
+
+    target->wait_semaphore_count = 0;
+    target->acquire_barrier_count = 0;
+
+    target->signal_semaphore_count = 0;
+    target->release_barrier_count = 0;
+
+    if(first_use)/// can figure out from state
+    {
+        assert(presentable_image->state == cvm_vk_presentable_image_state_acquired);
+        presentable_image->state = cvm_vk_presentable_image_state_started;
+
+        target->wait_semaphores[target->wait_semaphore_count++] = cvm_vk_binary_semaphore_submit_info(presentable_image->acquire_semaphore, VK_PIPELINE_STAGE_2_COLOR_ATTACHMENT_OUTPUT_BIT);
+    }
+
+    assert(presentable_image->state == cvm_vk_presentable_image_state_started);
+
+    if(last_use)/// don't have a perfect way to figure out, but could infer from
+    {
+        overlay_queue_family_index = device->graphics_queue_family_index;
+
+        presentable_image->last_use_queue_family = overlay_queue_family_index;
+
+        can_present = presentable_image->parent_swapchain_instance->queue_family_presentable_mask | (1<<overlay_queue_family_index);
+
+//        can_present = false;
+//        #warning above is hack to test QFOT
+
+        if(can_present)
+        {
+            presentable_image->state = cvm_vk_presentable_image_state_complete;
+            /// signal after any stage that could modify the image contents
+            target->signal_semaphores[target->signal_semaphore_count++] = cvm_vk_binary_semaphore_submit_info(presentable_image->present_semaphore, VK_PIPELINE_STAGE_2_COLOR_ATTACHMENT_OUTPUT_BIT);
+        }
+        else
+        {
+            presentable_image->state = cvm_vk_presentable_image_state_tranferred;
+
+            target->signal_semaphores[target->signal_semaphore_count++] = cvm_vk_binary_semaphore_submit_info(presentable_image->qfot_semaphore, VK_PIPELINE_STAGE_2_COLOR_ATTACHMENT_OUTPUT_BIT);
+
+            #warning does destination barrier (presentable_image) need/want to know this access mask??
+            target->release_barriers[target->release_barrier_count++] = (VkImageMemoryBarrier2)
+            {
+                .sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER_2,
+                .pNext = NULL,
+                .srcStageMask  =  VK_PIPELINE_STAGE_2_COLOR_ATTACHMENT_OUTPUT_BIT,
+                .srcAccessMask  =  VK_ACCESS_2_COLOR_ATTACHMENT_WRITE_BIT,
+                /// ignored by QFOT??
+                .dstStageMask = 0,///no relevant stage representing present... (afaik), maybe VK_PIPELINE_STAGE_2_BOTTOM_OF_PIPE_BIT ??
+                .dstAccessMask = 0,///should be 0 by spec
+                .oldLayout = VK_IMAGE_LAYOUT_PRESENT_SRC_KHR,///colour attachment optimal? modify  renderpasses as necessary to accommodate this (must match present acquire)
+                .newLayout = VK_IMAGE_LAYOUT_PRESENT_SRC_KHR,
+                .srcQueueFamilyIndex = overlay_queue_family_index,
+                .dstQueueFamilyIndex = presentable_image->parent_swapchain_instance->fallback_present_queue_family,
+                .image = presentable_image->image,
+                .subresourceRange = (VkImageSubresourceRange)
+                {
+                    .aspectMask = VK_IMAGE_ASPECT_COLOR_BIT,
+                    .baseMipLevel = 0,
+                    .levelCount = 1,
+                    .baseArrayLayer = 0,
+                    .layerCount = 1
+                }
+            };
+        }
+    }
+}
 
 
 

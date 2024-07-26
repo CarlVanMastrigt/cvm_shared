@@ -30,10 +30,10 @@ enum cvm_vk_presentable_image_state
 {
     cvm_vk_presentable_image_state_ready = 0,/// basically uninitialised
     cvm_vk_presentable_image_state_acquired = 1,
-//    cvm_vk_presentable_image_state_written = 2,
-    cvm_vk_presentable_image_state_tranferred_initiated = 2, /// for QFOT
-    cvm_vk_presentable_image_state_complete = 3,
-    cvm_vk_presentable_image_state_presented = 4,
+    cvm_vk_presentable_image_state_started = 2,/// have waited on acquire semaphore basically
+    cvm_vk_presentable_image_state_tranferred = 3, /// for QFOT
+    cvm_vk_presentable_image_state_complete = 4,
+    cvm_vk_presentable_image_state_presented = 5,
 };
 
 typedef struct cvm_vk_swapchain_setup
@@ -73,7 +73,7 @@ typedef struct cvm_vk_swapchain_presentable_image
     /// the command buffers to recieve the QFOT should be created as necessary
     VkCommandBuffer * present_acquire_command_buffers;
 
-    cvm_vk_timeline_semaphore_moment last_use_moment;/// used for ensuring a swapchain has had ann its images returned before being destroyed
+    cvm_vk_timeline_semaphore_moment last_use_moment;/// used for ensuring a swapchain has had all its images returned before being destroyed
 }
 cvm_vk_swapchain_presentable_image;
 
@@ -121,11 +121,6 @@ void cvm_vk_swapchain_terminate(const cvm_vk_device * device, cvm_vk_surface_swa
 const cvm_vk_swapchain_presentable_image * cvm_vk_surface_swapchain_acquire_presentable_image(cvm_vk_surface_swapchain * swapchain, const cvm_vk_device * device);
 
 void cvm_vk_surface_swapchain_present_image(const cvm_vk_surface_swapchain * swapchain, const cvm_vk_device * device, cvm_vk_swapchain_presentable_image * presentable_image);
-
-
-/// these should be called exactly(?) once per presentable image, is really a combination of the 2 paradigms, so could go here or in swapchain
-void cvm_vk_swapchain_presentable_image_wait_in_command_buffer(cvm_vk_swapchain_presentable_image * presentable_image, cvm_vk_command_buffer * command_buffer);
-void cvm_vk_swapchain_presentable_image_complete_in_command_buffer(cvm_vk_swapchain_presentable_image * presentable_image, cvm_vk_command_buffer * command_buffer);///all modification of presentable_image has completed, must be called after last modification of image data
 
 
 #endif
