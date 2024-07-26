@@ -38,7 +38,6 @@ static VkPipelineColorBlendAttachmentState cvm_vk_default_additive_blend_state;
 
 static VkImageCreateInfo cvm_vk_default_framebuffer_image_creation_info;
 static VkImageViewCreateInfo cvm_vk_default_framebuffer_image_view_creation_info;
-static VkFramebufferCreateInfo cvm_vk_default_framebuffer_creation_info;
 
 ///implement more variants when mesh supports vertex normas and tex-coords
 static VkVertexInputBindingDescription cvm_vk_default_pos_vertex_input_binding;
@@ -414,19 +413,6 @@ void cvm_vk_create_swapchain_dependent_defaults(uint32_t width,uint32_t height)
             .layerCount=1
         }
     };
-
-    cvm_vk_default_framebuffer_creation_info=(VkFramebufferCreateInfo)
-    {
-        .sType=VK_STRUCTURE_TYPE_FRAMEBUFFER_CREATE_INFO,
-        .pNext=NULL,
-        .flags=0,
-        .renderPass=VK_NULL_HANDLE,///set later
-        .attachmentCount=0,///set later
-        .pAttachments=NULL,///set later
-        .width=width,
-        .height=height,
-        .layers=1
-    };
 }
 
 void cvm_vk_destroy_swapchain_dependent_defaults(void)
@@ -527,15 +513,6 @@ void cvm_vk_create_default_framebuffer_image_views(VkImageView * views,VkImage *
         cvm_vk_default_framebuffer_image_view_creation_info.image=images[count];
         cvm_vk_create_image_view(views+count,&cvm_vk_default_framebuffer_image_view_creation_info);
     }
-}
-
-void cvm_vk_create_default_framebuffer(VkFramebuffer * framebuffer,VkRenderPass render_pass,VkImageView * attachments,uint32_t attachment_count)
-{
-    cvm_vk_default_framebuffer_creation_info.renderPass=render_pass;
-    cvm_vk_default_framebuffer_creation_info.attachmentCount=attachment_count;
-    cvm_vk_default_framebuffer_creation_info.pAttachments=attachments;
-
-    cvm_vk_create_framebuffer(framebuffer,&cvm_vk_default_framebuffer_creation_info);
 }
 
 

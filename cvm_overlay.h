@@ -355,12 +355,14 @@ cvm_overlay_images;
 /// target information and synchronization requirements
 typedef struct cvm_overlay_target
 {
+    /// framebuffer depends on these
     VkImageView image_view;
+    /// render pass depends on these
     VkExtent2D extent;
     VkFormat format;
     VkColorSpaceKHR color_space;/// respecting the colour space is NYI
-    VkImageLayout initial_target_layout;
-    VkImageLayout final_target_layout;
+    VkImageLayout initial_layout;
+    VkImageLayout final_layout;
     bool clear_image;
 
     /// in / out synchronization setup data
@@ -400,8 +402,8 @@ struct cvm_overlay_target_resources
     VkExtent2D extent;
     VkFormat format;
     VkColorSpaceKHR color_space;
-    VkImageLayout initial_target_layout;
-    VkImageLayout final_target_layout;
+    VkImageLayout initial_layout;
+    VkImageLayout final_layout;
     bool clear_image;
 
     /// data to cache
@@ -412,7 +414,8 @@ struct cvm_overlay_target_resources
     cvm_overlay_frame_resources_cache frame_resources;
 };
 
-#define CVM_CACHE_CMP( lhs, rhs ) lhs->extent.width == rhs->extent.width && lhs->extent.height == rhs->extent.height && lhs->format == rhs->format && lhs->color_space == rhs->color_space
+#define CVM_CACHE_CMP( lhs, rhs ) lhs->extent.width == rhs->extent.width && lhs->extent.height == rhs->extent.height && lhs->format == rhs->format && \
+lhs->color_space == rhs->color_space && lhs->initial_layout == rhs->initial_layout && lhs->final_layout == rhs->final_layout && lhs->clear_image == rhs->clear_image
 CVM_CACHE(struct cvm_overlay_target_resources, cvm_overlay_target*, cvm_overlay_target_resources, 8)
 #undef CVM_CACHE_CMP
 
@@ -468,11 +471,9 @@ cvm_overlay_setup;
 void cvm_overlay_renderer_initialise(cvm_overlay_renderer * renderer, cvm_vk_device * device, cvm_vk_staging_buffer_ * staging_buffer, uint32_t renderer_cycle_count);
 void cvm_overlay_renderer_terminate(cvm_overlay_renderer * renderer, cvm_vk_device * device);
 
-cvm_vk_timeline_semaphore_moment cvm_overlay_render_to_target(const cvm_vk_device * device, cvm_overlay_renderer * renderer, const cvm_overlay_target* target, widget * menu_widget);
+cvm_vk_timeline_semaphore_moment cvm_overlay_render_to_target(const cvm_vk_device * device, cvm_overlay_renderer * renderer, widget * menu_widget, const cvm_overlay_target* target);
 
-/// make device renderer in this??
-void cvm_overlay_render_target_from_presentable_image(cvm_overlay_target * target, cvm_vk_swapchain_presentable_image * presentable_image, const cvm_vk_device * device, bool first_use, bool last_use);
-
+cvm_vk_timeline_semaphore_moment cvm_overlay_render_to_presentable_image(const cvm_vk_device * device, cvm_overlay_renderer * renderer, widget * menu_widget, cvm_vk_swapchain_presentable_image * presentable_image, bool last_use);
 
 #endif
 

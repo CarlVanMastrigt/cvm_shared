@@ -96,7 +96,7 @@ static inline void cvm_vk_swapchain_presentable_image_terminate(cvm_vk_swapchain
 
 static inline int cvm_vk_swapchain_instance_initialise(cvm_vk_swapchain_instance * instance, const cvm_vk_device * device, const cvm_vk_surface_swapchain * swapchain, uint32_t generation, VkSwapchainKHR old_swapchain)
 {
-    uint32_t i,j,fallback_present_queue_family,format_count,present_mode_count,image_acquisition_semaphore_count;
+    uint32_t i,j,fallback_present_queue_family,format_count,present_mode_count,image_acquisition_semaphore_count,width,height;
     VkBool32 surface_supported;
     VkSurfaceFormatKHR * formats;
     VkPresentModeKHR * present_modes;
@@ -156,9 +156,6 @@ static inline int cvm_vk_swapchain_instance_initialise(cvm_vk_swapchain_instance
     }
     if(instance->queue_family_presentable_mask==0) return -1;///cannot present to this surface!
     assert(instance->fallback_present_queue_family != CVM_INVALID_U32_INDEX);
-    instance->fallback_present_queue_family = device->fallback_present_queue_family_index;
-    #warning ABOVE IS FOR TESTING
-
 
     /// check surface capabilities and create a the new swapchain
     CVM_VK_CHECK(vkGetPhysicalDeviceSurfaceCapabilitiesKHR(device->physical_device, swapchain->setup_info.surface, &instance->surface_capabilities));
@@ -422,6 +419,7 @@ const cvm_vk_swapchain_presentable_image * cvm_vk_surface_swapchain_acquire_pres
             presentable_image->last_use_moment = cvm_vk_timeline_semaphore_moment_null;
             presentable_image->acquire_semaphore = acquire_semaphore;
             presentable_image->state = cvm_vk_presentable_image_state_acquired;
+            presentable_image->layout = VK_IMAGE_LAYOUT_UNDEFINED;
             presentable_image->last_use_queue_family=CVM_INVALID_U32_INDEX;
         }
         else
@@ -526,6 +524,7 @@ void cvm_vk_surface_swapchain_present_image(const cvm_vk_surface_swapchain * swa
     swapchain_instance = presentable_image->parent_swapchain_instance;
 
     assert(presentable_image->last_use_queue_family != CVM_INVALID_U32_INDEX);
+    assert(presentable_image->layout == VK_IMAGE_LAYOUT_PRESENT_SRC_KHR);
 
     if(presentable_image->state == cvm_vk_presentable_image_state_tranferred)
     {

@@ -51,7 +51,6 @@ VkPipelineColorBlendAttachmentState cvm_vk_get_default_additive_blend_state(void
 
 void cvm_vk_create_default_framebuffer_images(VkImage * images,VkFormat format,uint32_t count,VkSampleCountFlagBits samples,VkImageUsageFlags usage);
 void cvm_vk_create_default_framebuffer_image_views(VkImageView * views,VkImage * images,VkFormat format,VkImageAspectFlags aspects,uint32_t count);
-void cvm_vk_create_default_framebuffer(VkFramebuffer * framebuffer,VkRenderPass render_pass,VkImageView * attachments,uint32_t attachment_count);
 
 VkPipelineVertexInputStateCreateInfo * cvm_vk_get_mesh_vertex_input_state(uint16_t flags);
 VkPipelineVertexInputStateCreateInfo * cvm_vk_get_empty_vertex_input_state(void);

@@ -20,16 +20,6 @@ along with cvm_shared.  If not, see <https://www.gnu.org/licenses/>.
 #include "cvm_shared.h"
 
 
-///if uniform paradigm is based on max per frame being respected then the descrptor sets can be pre baked with offsets per swapchain image
-/// separate uniform buffer for fixed data (colour, screen size &c.) ?
-
-
-/// swapchain generation probably useful, needs a way to clean up last used swapchain generation
-///relevant descriptors, share as much as possible
-
-
-
-
 void test_timing(bool start,char * name)
 {
     static struct timespec tso,tsn;
@@ -292,7 +282,7 @@ static VkPipelineLayout cvm_overlay_pipeline_layout_create(const cvm_vk_device *
     return pipeline_layout;
 }
 
-static VkRenderPass cvm_overlay_render_pass_create(const cvm_vk_device * device,VkFormat target_format)
+static VkRenderPass cvm_overlay_render_pass_create(const cvm_vk_device * device,VkFormat target_format, VkImageLayout initial_layout, VkImageLayout final_layout, bool clear)
 {
     VkRenderPass render_pass;
     VkResult created;
@@ -305,28 +295,16 @@ static VkRenderPass cvm_overlay_render_pass_create(const cvm_vk_device * device,
         .attachmentCount=1,
         .pAttachments=(VkAttachmentDescription[1])
         {
-            #warning make this change dependent upon whether we clear or not
-//            {
-//                .flags=0,
-//                .format=cvm_vk_get_screen_format(),
-//                .samples=VK_SAMPLE_COUNT_1_BIT,///sample_count not relevant for actual render target (swapchain image)
-//                .loadOp=VK_ATTACHMENT_LOAD_OP_LOAD,
-//                .storeOp=VK_ATTACHMENT_STORE_OP_STORE,
-//                .stencilLoadOp=VK_ATTACHMENT_LOAD_OP_DONT_CARE,
-//                .stencilStoreOp=VK_ATTACHMENT_STORE_OP_DONT_CARE,
-//                .initialLayout=VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL,/// is first render pass (ergo the clear above) thus the VK_IMAGE_LAYOUT_UNDEFINED rather than VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL
-//                .finalLayout=VK_IMAGE_LAYOUT_PRESENT_SRC_KHR///is last render pass thus the VK_IMAGE_LAYOUT_PRESENT_SRC_KHR rather than VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL
-//            }
             {
                 .flags=0,
                 .format=target_format,
                 .samples=VK_SAMPLE_COUNT_1_BIT,///sample_count not relevant for actual render target (swapchain image)
-                .loadOp=VK_ATTACHMENT_LOAD_OP_CLEAR,
+                .loadOp=clear ? VK_ATTACHMENT_LOAD_OP_CLEAR : VK_ATTACHMENT_LOAD_OP_LOAD,
                 .storeOp=VK_ATTACHMENT_STORE_OP_STORE,
                 .stencilLoadOp=VK_ATTACHMENT_LOAD_OP_DONT_CARE,
                 .stencilStoreOp=VK_ATTACHMENT_STORE_OP_DONT_CARE,
-                .initialLayout=VK_IMAGE_LAYOUT_UNDEFINED,/// is first render pass (ergo the clear above) thus the VK_IMAGE_LAYOUT_UNDEFINED rather than VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL
-                .finalLayout=VK_IMAGE_LAYOUT_PRESENT_SRC_KHR///is last render pass thus the VK_IMAGE_LAYOUT_PRESENT_SRC_KHR rather than VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL
+                .initialLayout=initial_layout,
+                .finalLayout=final_layout,
             }
         },
         .subpassCount=1,
@@ -389,7 +367,7 @@ static VkFramebuffer cvm_overlay_framebuffer_create(const cvm_vk_device * device
     return framebuffer;
 }
 
-static VkPipeline cvm_overlay_pipeline_create(const cvm_vk_device * device, const VkPipelineShaderStageCreateInfo * stages, VkPipelineLayout pipeline_layout, VkRenderPass render_pass)
+static VkPipeline cvm_overlay_pipeline_create(const cvm_vk_device * device, const VkPipelineShaderStageCreateInfo * stages, VkPipelineLayout pipeline_layout, VkRenderPass render_pass, VkExtent2D extent)
 {
     VkResult created;
     VkPipeline pipeline;
@@ -401,75 +379,129 @@ static VkPipeline cvm_overlay_pipeline_create(const cvm_vk_device * device, cons
         .flags=0,
         .stageCount=2,
         .pStages=stages,
-        .pVertexInputState=(VkPipelineVertexInputStateCreateInfo[1])
+        .pVertexInputState=&(VkPipelineVertexInputStateCreateInfo)
         {
+            .sType=VK_STRUCTURE_TYPE_PIPELINE_VERTEX_INPUT_STATE_CREATE_INFO,
+            .pNext=NULL,
+            .flags=0,
+            .vertexBindingDescriptionCount=1,
+            .pVertexBindingDescriptions= (VkVertexInputBindingDescription[1])
             {
-                .sType=VK_STRUCTURE_TYPE_PIPELINE_VERTEX_INPUT_STATE_CREATE_INFO,
-                .pNext=NULL,
-                .flags=0,
-                .vertexBindingDescriptionCount=1,
-                .pVertexBindingDescriptions= (VkVertexInputBindingDescription[1])
                 {
-                    {
-                        .binding=0,
-                        .stride=sizeof(cvm_overlay_element_render_data),
-                        .inputRate=VK_VERTEX_INPUT_RATE_INSTANCE
-                    }
+                    .binding=0,
+                    .stride=sizeof(cvm_overlay_element_render_data),
+                    .inputRate=VK_VERTEX_INPUT_RATE_INSTANCE
+                }
+            },
+            .vertexAttributeDescriptionCount=3,
+            .pVertexAttributeDescriptions=(VkVertexInputAttributeDescription[3])
+            {
+                {
+                    .location=0,
+                    .binding=0,
+                    .format=VK_FORMAT_R16G16B16A16_UINT,
+                    .offset=offsetof(cvm_overlay_element_render_data,data0)
                 },
-                .vertexAttributeDescriptionCount=3,
-                .pVertexAttributeDescriptions=(VkVertexInputAttributeDescription[3])
                 {
-                    {
-                        .location=0,
-                        .binding=0,
-                        .format=VK_FORMAT_R16G16B16A16_UINT,
-                        .offset=offsetof(cvm_overlay_element_render_data,data0)
-                    },
-                    {
-                        .location=1,
-                        .binding=0,
-                        .format=VK_FORMAT_R32G32_UINT,
-                        .offset=offsetof(cvm_overlay_element_render_data,data1)
-                    },
-                    {
-                        .location=2,
-                        .binding=0,
-                        .format=VK_FORMAT_R16G16B16A16_UINT,
-                        .offset=offsetof(cvm_overlay_element_render_data,data2)
-                    }
+                    .location=1,
+                    .binding=0,
+                    .format=VK_FORMAT_R32G32_UINT,
+                    .offset=offsetof(cvm_overlay_element_render_data,data1)
+                },
+                {
+                    .location=2,
+                    .binding=0,
+                    .format=VK_FORMAT_R16G16B16A16_UINT,
+                    .offset=offsetof(cvm_overlay_element_render_data,data2)
                 }
             }
         },
-        .pInputAssemblyState=(VkPipelineInputAssemblyStateCreateInfo[1])
+        .pInputAssemblyState=&(VkPipelineInputAssemblyStateCreateInfo)
         {
-            {
-                .sType=VK_STRUCTURE_TYPE_PIPELINE_INPUT_ASSEMBLY_STATE_CREATE_INFO,
-                .pNext=NULL,
-                .flags=0,
-                .topology=VK_PRIMITIVE_TOPOLOGY_TRIANGLE_STRIP,///not the default
-                .primitiveRestartEnable=VK_FALSE
-            }
+            .sType=VK_STRUCTURE_TYPE_PIPELINE_INPUT_ASSEMBLY_STATE_CREATE_INFO,
+            .pNext=NULL,
+            .flags=0,
+            .topology=VK_PRIMITIVE_TOPOLOGY_TRIANGLE_STRIP,///not the default
+            .primitiveRestartEnable=VK_FALSE
         },
         .pTessellationState=NULL,///not needed (yet)
-        .pViewportState=cvm_vk_get_default_viewport_state(),
-        .pRasterizationState=cvm_vk_get_default_raster_state(false),
-        .pMultisampleState=cvm_vk_get_default_multisample_state(),
-        .pDepthStencilState=NULL,
-        .pColorBlendState=(VkPipelineColorBlendStateCreateInfo[1])
+        .pViewportState=&(VkPipelineViewportStateCreateInfo)
         {
+            .sType=VK_STRUCTURE_TYPE_PIPELINE_VIEWPORT_STATE_CREATE_INFO,
+            .pNext=NULL,
+            .flags=0,
+            .viewportCount=1,
+            .pViewports=(VkViewport[1])
             {
-                .sType=VK_STRUCTURE_TYPE_PIPELINE_COLOR_BLEND_STATE_CREATE_INFO,
-                .pNext=NULL,
-                .flags=0,
-                .logicOpEnable=VK_FALSE,
-                .logicOp=VK_LOGIC_OP_COPY,
-                .attachmentCount=1,///must equal colorAttachmentCount in subpass
-                .pAttachments= (VkPipelineColorBlendAttachmentState[])
                 {
-                    cvm_vk_get_default_alpha_blend_state()
+                .x=0.0,
+                .y=0.0,
+                .width=(float)extent.width,
+                .height=(float)extent.height,
+                .minDepth=0.0,
+                .maxDepth=1.0,
                 },
-                .blendConstants={0.0,0.0,0.0,0.0}
-            }
+            },
+            .scissorCount=1,
+            .pScissors= (VkRect2D[1])
+            {
+                {
+                    .offset=(VkOffset2D){.x=0,.y=0},
+                    .extent=extent,
+                },
+            },
+        },
+        .pRasterizationState=&(VkPipelineRasterizationStateCreateInfo)
+        {
+            .sType=VK_STRUCTURE_TYPE_PIPELINE_RASTERIZATION_STATE_CREATE_INFO,
+            .pNext=NULL,
+            .flags=0,
+            .depthClampEnable=VK_FALSE,
+            .rasterizerDiscardEnable=VK_FALSE,
+            .polygonMode=VK_POLYGON_MODE_FILL,
+            .cullMode=VK_CULL_MODE_NONE,
+            .frontFace=VK_FRONT_FACE_COUNTER_CLOCKWISE,
+            .depthBiasEnable=VK_FALSE,
+            .depthBiasConstantFactor=0.0,
+            .depthBiasClamp=0.0,
+            .depthBiasSlopeFactor=0.0,
+            .lineWidth=1.0
+        },
+        .pMultisampleState=&(VkPipelineMultisampleStateCreateInfo)
+        {
+            .sType=VK_STRUCTURE_TYPE_PIPELINE_MULTISAMPLE_STATE_CREATE_INFO,
+            .pNext=NULL,
+            .flags=0,
+            .rasterizationSamples=VK_SAMPLE_COUNT_1_BIT,
+            .sampleShadingEnable=VK_FALSE,
+            .minSampleShading=1.0,
+            .pSampleMask=NULL,
+            .alphaToCoverageEnable=VK_FALSE,
+            .alphaToOneEnable=VK_FALSE
+        },
+        .pDepthStencilState=NULL,
+        .pColorBlendState=&(VkPipelineColorBlendStateCreateInfo)
+        {
+            .sType=VK_STRUCTURE_TYPE_PIPELINE_COLOR_BLEND_STATE_CREATE_INFO,
+            .pNext=NULL,
+            .flags=0,
+            .logicOpEnable=VK_FALSE,
+            .logicOp=VK_LOGIC_OP_COPY,
+            .attachmentCount=1,///must equal colorAttachmentCount in subpass
+            .pAttachments= (VkPipelineColorBlendAttachmentState[1])
+            {
+                {
+                    .blendEnable=VK_TRUE,
+                    .srcColorBlendFactor=VK_BLEND_FACTOR_SRC_ALPHA,
+                    .dstColorBlendFactor=VK_BLEND_FACTOR_ONE_MINUS_SRC_ALPHA,
+                    .colorBlendOp=VK_BLEND_OP_ADD,
+                    .srcAlphaBlendFactor=VK_BLEND_FACTOR_ZERO,
+                    .dstAlphaBlendFactor=VK_BLEND_FACTOR_ZERO,
+                    .alphaBlendOp=VK_BLEND_OP_ADD,
+                    .colorWriteMask=VK_COLOR_COMPONENT_R_BIT|VK_COLOR_COMPONENT_G_BIT|VK_COLOR_COMPONENT_B_BIT|VK_COLOR_COMPONENT_A_BIT
+                },
+            },
+            .blendConstants={0.0,0.0,0.0,0.0},
         },
         .pDynamicState=NULL,
         .layout=pipeline_layout,
@@ -617,13 +649,16 @@ static inline void cvm_overlay_frame_resources_terminate(struct cvm_overlay_fram
 static inline void cvm_overlay_target_resources_initialise(struct cvm_overlay_target_resources* target_resources, const cvm_vk_device* device,
     const cvm_overlay_renderer * renderer, const cvm_overlay_target * target)
 {
-    #warning if extent not relevant to target resources move it to frame resources! (do after checking everything works though)
+    /// set cache key information
     target_resources->extent = target->extent;
     target_resources->format = target->format;
     target_resources->color_space = target->color_space;
+    target_resources->initial_layout = target->initial_layout;
+    target_resources->final_layout = target->final_layout;
+    target_resources->clear_image = target->clear_image;
 
-    target_resources->render_pass = cvm_overlay_render_pass_create(device, target->format);
-    target_resources->pipeline = cvm_overlay_pipeline_create(device, renderer->pipeline_stages, renderer->pipeline_layout, target_resources->render_pass);
+    target_resources->render_pass = cvm_overlay_render_pass_create(device, target->format, target->initial_layout, target->final_layout, target->clear_image);
+    target_resources->pipeline = cvm_overlay_pipeline_create(device, renderer->pipeline_stages, renderer->pipeline_layout, target_resources->render_pass, target->extent);
 
     cvm_overlay_frame_resources_cache_initialise(&target_resources->frame_resources);
 }
@@ -684,20 +719,6 @@ static inline struct cvm_overlay_frame_resource_set cvm_overlay_renderer_frame_r
         .frame_resources = frame_resources,
     };
 }
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 
 
 
@@ -857,7 +878,7 @@ static inline void cvm_overlay_add_target_release_instructions(cvm_vk_command_bu
     }
 }
 
-cvm_vk_timeline_semaphore_moment cvm_overlay_render_to_target(const cvm_vk_device * device, cvm_overlay_renderer * renderer, const cvm_overlay_target* target, widget * menu_widget)
+cvm_vk_timeline_semaphore_moment cvm_overlay_render_to_target(const cvm_vk_device * device, cvm_overlay_renderer * renderer, widget * menu_widget, const cvm_overlay_target* target)
 {
     cvm_overlay_renderer_work_entry * work_entry;
     cvm_vk_command_buffer cb;
@@ -976,29 +997,34 @@ cvm_vk_timeline_semaphore_moment cvm_overlay_render_to_target(const cvm_vk_devic
 }
 
 
-#warning presentable image should track layout?
-void cvm_overlay_render_target_from_presentable_image(cvm_overlay_target * target, cvm_vk_swapchain_presentable_image * presentable_image,  const cvm_vk_device * device, bool first_use, bool last_use)
+cvm_vk_timeline_semaphore_moment cvm_overlay_render_to_presentable_image(const cvm_vk_device * device, cvm_overlay_renderer * renderer, widget * menu_widget, cvm_vk_swapchain_presentable_image * presentable_image, bool last_use)
 {
-    bool can_present;
+    bool can_present, first_use;
     uint32_t overlay_queue_family_index;
+    cvm_overlay_target target;
 
-    target->color_space = presentable_image->parent_swapchain_instance->surface_format.colorSpace;
-    target->format = presentable_image->parent_swapchain_instance->surface_format.format;
-    target->extent = presentable_image->parent_swapchain_instance->surface_capabilities.currentExtent;
-    target->image_view = presentable_image->image_view;
+    first_use = (presentable_image->layout == VK_IMAGE_LAYOUT_UNDEFINED);
 
-    target->wait_semaphore_count = 0;
-    target->acquire_barrier_count = 0;
+    target.color_space = presentable_image->parent_swapchain_instance->surface_format.colorSpace;
+    target.format = presentable_image->parent_swapchain_instance->surface_format.format;
+    target.extent = presentable_image->parent_swapchain_instance->surface_capabilities.currentExtent;
+    target.image_view = presentable_image->image_view;
 
-    target->signal_semaphore_count = 0;
-    target->release_barrier_count = 0;
+    target.wait_semaphore_count = 0;
+    target.acquire_barrier_count = 0;
+
+    target.signal_semaphore_count = 0;
+    target.release_barrier_count = 0;
+
+    target.initial_layout = presentable_image->layout;
+
+    target.clear_image = first_use;
 
     if(first_use)/// can figure out from state
     {
-        assert(presentable_image->state == cvm_vk_presentable_image_state_acquired);
+        assert(presentable_image->state == cvm_vk_presentable_image_state_acquired);///also indicates first use
         presentable_image->state = cvm_vk_presentable_image_state_started;
-
-        target->wait_semaphores[target->wait_semaphore_count++] = cvm_vk_binary_semaphore_submit_info(presentable_image->acquire_semaphore, VK_PIPELINE_STAGE_2_COLOR_ATTACHMENT_OUTPUT_BIT);
+        target.wait_semaphores[target.wait_semaphore_count++] = cvm_vk_binary_semaphore_submit_info(presentable_image->acquire_semaphore, VK_PIPELINE_STAGE_2_COLOR_ATTACHMENT_OUTPUT_BIT);
     }
 
     assert(presentable_image->state == cvm_vk_presentable_image_state_started);
@@ -1008,26 +1034,24 @@ void cvm_overlay_render_target_from_presentable_image(cvm_overlay_target * targe
         overlay_queue_family_index = device->graphics_queue_family_index;
 
         presentable_image->last_use_queue_family = overlay_queue_family_index;
+        presentable_image->layout = VK_IMAGE_LAYOUT_PRESENT_SRC_KHR;
+        target.final_layout = VK_IMAGE_LAYOUT_PRESENT_SRC_KHR;
 
         can_present = presentable_image->parent_swapchain_instance->queue_family_presentable_mask | (1<<overlay_queue_family_index);
-
-//        can_present = false;
-//        #warning above is hack to test QFOT
 
         if(can_present)
         {
             presentable_image->state = cvm_vk_presentable_image_state_complete;
             /// signal after any stage that could modify the image contents
-            target->signal_semaphores[target->signal_semaphore_count++] = cvm_vk_binary_semaphore_submit_info(presentable_image->present_semaphore, VK_PIPELINE_STAGE_2_COLOR_ATTACHMENT_OUTPUT_BIT);
+            target.signal_semaphores[target.signal_semaphore_count++] = cvm_vk_binary_semaphore_submit_info(presentable_image->present_semaphore, VK_PIPELINE_STAGE_2_COLOR_ATTACHMENT_OUTPUT_BIT);
         }
         else
         {
             presentable_image->state = cvm_vk_presentable_image_state_tranferred;
 
-            target->signal_semaphores[target->signal_semaphore_count++] = cvm_vk_binary_semaphore_submit_info(presentable_image->qfot_semaphore, VK_PIPELINE_STAGE_2_COLOR_ATTACHMENT_OUTPUT_BIT);
+            target.signal_semaphores[target.signal_semaphore_count++] = cvm_vk_binary_semaphore_submit_info(presentable_image->qfot_semaphore, VK_PIPELINE_STAGE_2_COLOR_ATTACHMENT_OUTPUT_BIT);
 
-            #warning does destination barrier (presentable_image) need/want to know this access mask??
-            target->release_barriers[target->release_barrier_count++] = (VkImageMemoryBarrier2)
+            target.release_barriers[target.release_barrier_count++] = (VkImageMemoryBarrier2)
             {
                 .sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER_2,
                 .pNext = NULL,
@@ -1052,6 +1076,15 @@ void cvm_overlay_render_target_from_presentable_image(cvm_overlay_target * targe
             };
         }
     }
+    else
+    {
+        presentable_image->layout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL;
+        target.final_layout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL;
+    }
+
+    presentable_image->last_use_moment = cvm_overlay_render_to_target(device, renderer, menu_widget, &target);
+
+    return presentable_image->last_use_moment;
 }
 
 

@@ -67,6 +67,7 @@ typedef struct cvm_vk_swapchain_presentable_image
     VkSemaphore qfot_semaphore;///required in cases where a QFOT is required, i.e. present_semaphore was signalled but alter work is required to actually present the image
 
     enum cvm_vk_presentable_image_state state;
+    VkImageLayout layout;
 
     uint32_t last_use_queue_family;
 
@@ -98,6 +99,15 @@ struct cvm_vk_swapchain_instance
     uint32_t acquired_image_count;/// init as 0, used for tracking use of image_acquisition_semaphores
 
     bool out_of_date;/// can be used
+
+//    struct /// pregenerated defaults for use in creating other state
+//    {
+//        VkRect2D scissor;
+//        VkViewport viewport;
+//        VkPipelineViewportStateCreateInfo pipeline_viewport_state;
+////        VkExtent3D ??
+//    }
+//    defaults;
 };
 
 CVM_QUEUE(cvm_vk_swapchain_instance,cvm_vk_swapchain_instance,4)
