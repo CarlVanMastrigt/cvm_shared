@@ -88,10 +88,11 @@ static inline VkDeviceSize cvm_vk_align(VkDeviceSize size, VkDeviceSize alignmen
 }
 
 
+CVM_STACK(VkBufferImageCopy, cvm_vk_buffer_image_copy, 16)
+
 #include "vk/timeline_semaphore.h"
 #include "vk/command_pool.h"
 #include "vk/swapchain.h"
-#include "vk/work_queue.h"
 
 
 
@@ -154,6 +155,11 @@ typedef struct cvm_vk_device_queue_family
 }
 cvm_vk_device_queue_family;
 
+struct cvm_vk_defaults
+{
+    VkSampler fetch_sampler;
+};
+
 struct cvm_vk_device
 {
     /// base shared structures
@@ -185,13 +191,10 @@ struct cvm_vk_device
     uint32_t transfer_queue_family_index;///rename to host_device_transfer ??
     uint32_t async_compute_queue_family_index;
 
-//    uint32_t * queue_family_queue_count;
-
     uint32_t fallback_present_queue_family_index;
     #warning remove present, this should be per swapchain image
 
-//    VkCommandPool * internal_command_pools;
-    /// above used for long lived commands
+    struct cvm_vk_defaults defaults;
 };
 
 

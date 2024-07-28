@@ -21,7 +21,7 @@ along with cvm_shared.  If not, see <https://www.gnu.org/licenses/>.
 
 
 
-void cvm_vk_timeline_semaphore_initialise(cvm_vk_device * device,cvm_vk_timeline_semaphore * timeline_semaphore)
+void cvm_vk_timeline_semaphore_initialise(const cvm_vk_device * device,cvm_vk_timeline_semaphore * timeline_semaphore)
 {
     VkSemaphoreCreateInfo timeline_semaphore_create_info=(VkSemaphoreCreateInfo)
     {
@@ -42,7 +42,7 @@ void cvm_vk_timeline_semaphore_initialise(cvm_vk_device * device,cvm_vk_timeline
     timeline_semaphore->value=0;
 }
 
-void cvm_vk_timeline_semaphore_terminate(cvm_vk_device * device, cvm_vk_timeline_semaphore * timeline_semaphore)
+void cvm_vk_timeline_semaphore_terminate(const cvm_vk_device * device, cvm_vk_timeline_semaphore * timeline_semaphore)
 {
     vkDestroySemaphore(device->device,timeline_semaphore->semaphore,NULL);
 }
@@ -81,7 +81,7 @@ VkSemaphoreSubmitInfo cvm_vk_timeline_semaphore_moment_wait_submit_info(const cv
     };
 }
 
-void cvm_vk_timeline_semaphore_moment_wait(cvm_vk_device * device,const cvm_vk_timeline_semaphore_moment * moment)
+void cvm_vk_timeline_semaphore_moment_wait(const cvm_vk_device * device,const cvm_vk_timeline_semaphore_moment * moment)
 {
     VkSemaphoreWaitInfo wait=
     {
@@ -95,7 +95,7 @@ void cvm_vk_timeline_semaphore_moment_wait(cvm_vk_device * device,const cvm_vk_t
     CVM_VK_CHECK(vkWaitSemaphores(device->device,&wait,CVM_VK_DEFAULT_TIMEOUT));
 }
 
-bool cvm_vk_timeline_semaphore_moment_query(cvm_vk_device * device,const cvm_vk_timeline_semaphore_moment * moment)
+bool cvm_vk_timeline_semaphore_moment_query(const cvm_vk_device * device,const cvm_vk_timeline_semaphore_moment * moment)
 {
     uint64_t v;
     vkGetSemaphoreCounterValue(device->device,moment->semaphore,&v);

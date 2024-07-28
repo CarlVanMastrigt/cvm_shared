@@ -108,11 +108,8 @@ typedef struct cvm_vk_image_atlas
     mtx_t copy_action_mutex;
     /// used to orchistrate uploads, should be filled out
     cvm_vk_staging_shunt_buffer * shunt_buffer;
-    #warning the shunt buffer not being inherrently multithreaded is kinda problematic
 
-    VkBufferImageCopy * pending_copy_actions;
-    uint32_t pending_copy_space;
-    uint32_t pending_copy_count;
+    cvm_vk_buffer_image_copy_stack pending_copy_actions;
 }
 cvm_vk_image_atlas;
 ///probably just going to use simple 2d version of PO2 allocator used in memory...

@@ -100,9 +100,7 @@ void cvm_vk_create_image_atlas(cvm_vk_image_atlas * ia,VkImage image,VkImageView
     ia->available_tiles_bitmasks[t->size_factor_h]=1<<t->size_factor_v;
 
     ia->shunt_buffer=shunt_buffer;
-    ia->pending_copy_actions=malloc(sizeof(VkBufferImageCopy)*16);
-    ia->pending_copy_space=16;
-    ia->pending_copy_count=0;
+    cvm_vk_buffer_image_copy_stack_initialise(&ia->pending_copy_actions);
 }
 
 void cvm_vk_destroy_image_atlas(cvm_vk_image_atlas * ia)
@@ -148,7 +146,7 @@ void cvm_vk_destroy_image_atlas(cvm_vk_image_atlas * ia)
         free(current);///free all base allocations (to mathch appropriate allocs)
     }
 
-    free(ia->pending_copy_actions);
+    cvm_vk_buffer_image_copy_stack_terminate(&ia->pending_copy_actions);
 
     mtx_destroy(&ia->structure_mutex);
     mtx_destroy(&ia->copy_action_mutex);
@@ -731,12 +729,7 @@ cvm_vk_image_atlas_tile * cvm_vk_acquire_image_atlas_tile_with_staging(cvm_vk_im
         mtx_lock(&ia->copy_action_mutex);
     }
 
-    if(ia->pending_copy_count==ia->pending_copy_space)
-    {
-        ia->pending_copy_actions=realloc(ia->pending_copy_actions,sizeof(VkBufferImageCopy)*(ia->pending_copy_space*=2));
-    }
-
-    ia->pending_copy_actions[ia->pending_copy_count++]=(VkBufferImageCopy)
+    *cvm_vk_buffer_image_copy_stack_new(&ia->pending_copy_actions) = (VkBufferImageCopy)
     {
         .bufferOffset=upload_offset,
         .bufferRowLength=width,
@@ -787,12 +780,7 @@ void * cvm_vk_acquire_staging_for_image_atlas_tile(cvm_vk_image_atlas * ia,cvm_v
         mtx_lock(&ia->copy_action_mutex);
     }
 
-    if(ia->pending_copy_count==ia->pending_copy_space)
-    {
-        ia->pending_copy_actions=realloc(ia->pending_copy_actions,sizeof(VkBufferImageCopy)*(ia->pending_copy_space*=2));
-    }
-
-    ia->pending_copy_actions[ia->pending_copy_count++]=(VkBufferImageCopy)
+    *cvm_vk_buffer_image_copy_stack_new(&ia->pending_copy_actions) = (VkBufferImageCopy)
     {
         .bufferOffset=upload_offset,
         .bufferRowLength=width,
@@ -831,12 +819,14 @@ void cvm_vk_image_atlas_submit_all_pending_copy_actions(cvm_vk_image_atlas * ia,
 {
     uint32_t i;
 
+    #warning need handling for when copy actions happen on a different queue
+
     if(ia->multithreaded)
     {
         mtx_lock(&ia->copy_action_mutex);
     }
 
-    if(ia->pending_copy_count || !ia->initialised)
+    if(ia->pending_copy_actions.count || !ia->initialised)
     {
         VkDependencyInfo copy_acquire_dependencies=
         {
@@ -853,8 +843,8 @@ void cvm_vk_image_atlas_submit_all_pending_copy_actions(cvm_vk_image_atlas * ia,
                 {
                     .sType=VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER_2,
                     .pNext=NULL,
-                    .srcStageMask=ia->initialised?VK_PIPELINE_STAGE_2_FRAGMENT_SHADER_BIT:VK_PIPELINE_STAGE_2_TOP_OF_PIPE_BIT,
-                    .srcAccessMask=ia->initialised?VK_ACCESS_2_SHADER_READ_BIT:0,
+                    .srcStageMask  = ia->initialised ? VK_PIPELINE_STAGE_2_FRAGMENT_SHADER_BIT : VK_PIPELINE_STAGE_2_TOP_OF_PIPE_BIT,
+                    .srcAccessMask = ia->initialised ? VK_ACCESS_2_SHADER_READ_BIT : 0,
                     .dstStageMask=VK_PIPELINE_STAGE_2_TRANSFER_BIT,
                     .dstAccessMask=VK_ACCESS_2_TRANSFER_WRITE_BIT,
                     .oldLayout=ia->initialised?VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL:VK_IMAGE_LAYOUT_UNDEFINED,
@@ -875,19 +865,20 @@ void cvm_vk_image_atlas_submit_all_pending_copy_actions(cvm_vk_image_atlas * ia,
         };
 
         vkCmdPipelineBarrier2(transfer_cb,&copy_acquire_dependencies);
+        ia->initialised=true;
 
         ///actually execute the copies!
         ///unfortunately need another test here in case initialised path is being taken
-        if(ia->pending_copy_count)
+        #warning want a for-each function/macro here?? stack pull??
+        if(ia->pending_copy_actions.count)
         {
-            for(i=0;i<ia->pending_copy_count;i++)
+            for(i=0;i<ia->pending_copy_actions.count;i++)
             {
-                ia->pending_copy_actions[i].bufferOffset+=shunt_buffer_base_offset;
+                ia->pending_copy_actions.data[i].bufferOffset+=shunt_buffer_base_offset;
             }
-            vkCmdCopyBufferToImage(transfer_cb,staging_buffer,ia->image,VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,ia->pending_copy_count,ia->pending_copy_actions);
+            vkCmdCopyBufferToImage(transfer_cb,staging_buffer, ia->image,VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, ia->pending_copy_actions.count ,ia->pending_copy_actions.data);
+            ia->pending_copy_actions.count=0;
         }
-        ia->pending_copy_count=0;
-        ia->initialised=true;
 
         VkDependencyInfo copy_release_dependencies=
         {

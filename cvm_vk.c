@@ -724,7 +724,40 @@ VkImageView cvm_vk_get_swapchain_image_view(uint32_t index)
 }
 
 
+static inline void cvm_vk_defaults_initialise(struct cvm_vk_defaults* defaults, const cvm_vk_device * device)
+{
+    VkResult created;
 
+    VkSamplerCreateInfo fetch_sampler_create_info =
+    {
+        .sType=VK_STRUCTURE_TYPE_SAMPLER_CREATE_INFO,
+        .pNext=NULL,
+        .flags=0,
+        .magFilter=VK_FILTER_NEAREST,
+        .minFilter=VK_FILTER_NEAREST,
+        .mipmapMode=VK_SAMPLER_MIPMAP_MODE_NEAREST,
+        .addressModeU=VK_SAMPLER_ADDRESS_MODE_CLAMP_TO_EDGE,
+        .addressModeV=VK_SAMPLER_ADDRESS_MODE_CLAMP_TO_EDGE,
+        .addressModeW=VK_SAMPLER_ADDRESS_MODE_CLAMP_TO_EDGE,
+        .mipLodBias=0.0f,
+        .anisotropyEnable=VK_FALSE,
+        .maxAnisotropy=0.0f,
+        .compareEnable=VK_FALSE,
+        .compareOp=VK_COMPARE_OP_NEVER,
+        .minLod=0.0f,
+        .maxLod=0.0f,
+        .borderColor=VK_BORDER_COLOR_FLOAT_TRANSPARENT_BLACK,
+        .unnormalizedCoordinates=VK_TRUE,
+    };
+
+    created = vkCreateSampler(device->device, &fetch_sampler_create_info, NULL, &defaults->fetch_sampler);
+    assert(created == VK_SUCCESS);
+}
+
+static inline void cvm_vk_defaults_terminate(struct cvm_vk_defaults* defaults, const cvm_vk_device * device)
+{
+    vkDestroySampler(device->device, defaults->fetch_sampler, NULL);
+}
 
 int cvm_vk_device_initialise(cvm_vk_device * device, const cvm_vk_device_setup * external_device_setup, SDL_Window * window)
 {
@@ -747,7 +780,8 @@ int cvm_vk_device_initialise(cvm_vk_device * device, const cvm_vk_device_setup *
 
     cvm_vk_create_transfer_chain();///make conditional on separate transfer queue?
 
-    cvm_vk_create_defaults();
+    cvm_vk_create_defaults_old();
+    cvm_vk_defaults_initialise(&device->defaults, device);
 
     cvm_vk_internal_device_setup_destroy(&device_setup);
 
@@ -760,7 +794,8 @@ void cvm_vk_device_terminate(cvm_vk_device * device)
     /// shouldnt we have waited on all things using this device before we terminate it?
     vkDeviceWaitIdle(device->device);
 
-    cvm_vk_destroy_defaults();
+    cvm_vk_destroy_defaults_old();
+    cvm_vk_defaults_terminate(&device->defaults, device);
 
     cvm_vk_destroy_transfer_chain();///make conditional on separate transfer queue?
 

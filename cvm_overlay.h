@@ -388,12 +388,12 @@ struct cvm_overlay_frame_resources
     /// data to cache
     VkFramebuffer framebuffer;
 
-    /// used to ensure isn't in use before deletion when being evicted
-    cvm_vk_timeline_semaphore_moment last_use_moment;/// when this cache entry is completed and can thus be evicted
+    /// moment when this cache entry is no longer in use and can thus be evicted, only checked as part of eviction, otherwise use is managed by external image availability
+    cvm_vk_timeline_semaphore_moment last_use_moment;
 };
 
 #define CVM_CACHE_CMP( lhs , rhs ) lhs->image_view == rhs->image_view
-CVM_CACHE(struct cvm_overlay_frame_resources, cvm_overlay_target*, cvm_overlay_frame_resources, 8)
+CVM_CACHE(struct cvm_overlay_frame_resources, cvm_overlay_target*, cvm_overlay_frame_resources)
 #undef CVM_CACHE_CMP
 
 struct cvm_overlay_target_resources
@@ -416,10 +416,25 @@ struct cvm_overlay_target_resources
 
 #define CVM_CACHE_CMP( lhs, rhs ) lhs->extent.width == rhs->extent.width && lhs->extent.height == rhs->extent.height && lhs->format == rhs->format && \
 lhs->color_space == rhs->color_space && lhs->initial_layout == rhs->initial_layout && lhs->final_layout == rhs->final_layout && lhs->clear_image == rhs->clear_image
-CVM_CACHE(struct cvm_overlay_target_resources, cvm_overlay_target*, cvm_overlay_target_resources, 8)
+CVM_CACHE(struct cvm_overlay_target_resources, cvm_overlay_target*, cvm_overlay_target_resources)
 #undef CVM_CACHE_CMP
 
 
+/// resources used in a per cycle fashion
+struct cvm_overlay_cycle_resources
+{
+    cvm_vk_command_pool command_pool;
+
+    VkDescriptorSet frame_descriptor_set;
+
+    cvm_vk_timeline_semaphore_moment last_use_moment;
+};
+
+CVM_QUEUE(struct cvm_overlay_cycle_resources*,cvm_overlay_cycle_resources,8)
+
+/// fixed sized queue of these?
+/// queue init at runtime? (custom size)
+/// make cache init at runtime too? (not great but w/e)
 
 typedef struct cvm_overlay_renderer
 {
@@ -427,8 +442,11 @@ typedef struct cvm_overlay_renderer
     /// for uploading to images, is NOT locally owned
     cvm_vk_staging_buffer_ * staging_buffer;
 
-    uint32_t cycle_count;/// needs better name
-    cvm_vk_work_queue work_queue;
+    /// needs better name
+    uint32_t cycle_count;
+    uint32_t cycle_count_initialised;
+    struct cvm_overlay_cycle_resources* cycle_resources_backing;
+    cvm_overlay_cycle_resources_queue cycle_resources_queue;
 
     /// are separate shunt buffers even the best way to do this??
     cvm_overlay_element_render_data_stack element_render_stack;

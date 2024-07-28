@@ -163,6 +163,18 @@ void cvm_vk_command_buffer_wait_on_timeline_moment(cvm_vk_command_buffer * comma
     command_buffer->wait_info[command_buffer->wait_count++]=cvm_vk_timeline_semaphore_moment_wait_submit_info(moment,wait_stages);
 }
 
+void cvm_vk_command_buffer_add_wait_info(cvm_vk_command_buffer* command_buffer, const VkSemaphoreSubmitInfo* info, uint32_t count)
+{
+    assert(command_buffer->wait_count + count <= 11);
+    memcpy(command_buffer->wait_info + command_buffer->wait_count, info, sizeof(VkSemaphoreSubmitInfo) * count);
+    command_buffer->wait_count += count;
+}
+void cvm_vk_command_buffer_add_signal_info(cvm_vk_command_buffer* command_buffer, const VkSemaphoreSubmitInfo* info, uint32_t count)
+{
+    assert(command_buffer->signal_count + count <= 4);
+    memcpy(command_buffer->signal_info + command_buffer->signal_count, info, sizeof(VkSemaphoreSubmitInfo) * count);
+    command_buffer->signal_count += count;
+}
 
 
 

@@ -81,7 +81,7 @@ static inline void name##_stack_reset( name##_stack * s )                       
 }                                                                               \
                                                                                 \
 static inline void name##_stack_push_multiple                                   \
-( name##_stack * s , const type * values , uint_fast32_t count)                 \
+( name##_stack * s , uint_fast32_t count , const type * values)                 \
 {                                                                               \
     uint_fast32_t n;                                                            \
     while((s->count+count) > s->space)                                          \
@@ -318,13 +318,13 @@ typedef struct name##_queue                                                     
 name##_queue;                                                                   \
                                                                                 \
                                                                                 \
-static inline void name##_queue_initialise( name##_queue * s )                  \
+static inline void name##_queue_initialise( name##_queue * q )                  \
 {                                                                               \
     assert(( (start_size) & ( (start_size) - 1 )) == 0);                        \
-    s->data=malloc( sizeof( type ) * start_size );                              \
-    s->space=start_size;                                                        \
-    s->count=0;                                                                 \
-    s->front=0;                                                                 \
+    q->data=malloc( sizeof( type ) * start_size );                              \
+    q->space=start_size;                                                        \
+    q->count=0;                                                                 \
+    q->front=0;                                                                 \
 }                                                                               \
                                                                                 \
 static inline uint32_t name##_queue_new_index( name##_queue * q )               \
@@ -469,35 +469,38 @@ the key_type (B)
 */
 
 #ifndef CVM_CACHE
-#define CVM_CACHE(type,key_type,name,size)                                      \
+#define CVM_CACHE(type,key_type,name)                                           \
 typedef struct name##_cache                                                     \
 {                                                                               \
-    type entries[size];                                                         \
-    struct cvm_cache_link links[size];                                          \
+    type* entries;                                                              \
+    struct cvm_cache_link* links;                                               \
     uint16_t oldest;                                                            \
     uint16_t newest;                                                            \
     uint16_t first_free;                                                        \
 }                                                                               \
 name##_cache;                                                                   \
                                                                                 \
-static inline void name##_cache_initialise( name##_cache * cache )              \
+static inline void name##_cache_initialise                                      \
+( name##_cache * cache , uint32_t size)                                         \
 {                                                                               \
-    uint16_t i;                                                                 \
     assert(size >= 2);                                                          \
+    cache->links = malloc(sizeof(struct cvm_cache_link) * size);                \
+    cache->entries = malloc(sizeof( type ) * size);                             \
     cache->oldest = CVM_INVALID_U16;                                            \
     cache->newest = CVM_INVALID_U16;                                            \
     cache->first_free = size - 1;                                               \
-    i = size;                                                                   \
-    while(i--)                                                                  \
+    while(size--)                                                               \
     {                                                                           \
-        cache->links[i].next = i - 1;                                           \
-        cache->links[i].prev = CVM_INVALID_U16;/*not needed*/                   \
+        cache->links[size].next = size - 1;                                     \
+        cache->links[size].prev = CVM_INVALID_U16;/*not needed*/                \
     }                                                                           \
     assert(cache->links[0].next == CVM_INVALID_U16);                            \
 }                                                                               \
                                                                                 \
 static inline void name##_cache_terminate( name##_cache * cache )               \
 {                                                                               \
+    free(cache->links);                                                         \
+    free(cache->entries);                                                       \
 }                                                                               \
                                                                                 \
 static inline type * name##_cache_find                                          \

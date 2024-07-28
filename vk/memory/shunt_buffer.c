@@ -102,7 +102,7 @@ void * cvm_vk_staging_shunt_buffer_reserve_bytes(cvm_vk_staging_shunt_buffer * b
     return buffer->backing + *offset;
 }
 
-VkDeviceSize cvm_vk_staging_shunt_buffer_usage(cvm_vk_staging_shunt_buffer * buffer)
+VkDeviceSize cvm_vk_staging_shunt_buffer_get_space_used(cvm_vk_staging_shunt_buffer * buffer)
 {
     if(buffer->multithreaded)
     {
@@ -116,7 +116,7 @@ VkDeviceSize cvm_vk_staging_shunt_buffer_usage(cvm_vk_staging_shunt_buffer * buf
 
 void cvm_vk_staging_shunt_buffer_copy(cvm_vk_staging_shunt_buffer * buffer, void * dst)
 {
-    memcpy(dst,buffer->backing,cvm_vk_staging_shunt_buffer_usage(buffer));
+    memcpy(dst, buffer->backing, cvm_vk_staging_shunt_buffer_get_space_used(buffer));
 }
 
 
