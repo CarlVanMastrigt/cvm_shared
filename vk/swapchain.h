@@ -25,15 +25,14 @@ along with cvm_shared.  If not, see <https://www.gnu.org/licenses/>.
 #ifndef CVM_VK_SWAPCHAIN_H
 #define CVM_VK_SWAPCHAIN_H
 
-
 enum cvm_vk_presentable_image_state
 {
-    cvm_vk_presentable_image_state_ready = 0,/// basically uninitialised
-    cvm_vk_presentable_image_state_acquired = 1,
-    cvm_vk_presentable_image_state_started = 2,/// have waited on acquire semaphore basically
-    cvm_vk_presentable_image_state_tranferred = 3, /// for QFOT
-    cvm_vk_presentable_image_state_complete = 4,
-    cvm_vk_presentable_image_state_presented = 5,
+    CVM_VK_PRESENTABLE_IMAGE_STATE_READY = 0,/// basically uninitialised
+    CVM_VK_PRESENTABLE_IMAGE_STATE_ACQUIRED = 1,
+    CVM_VK_PRESENTABLE_IMAGE_STATE_STARTED = 2,/// have waited on acquire semaphore basically
+    CVM_VK_PRESENTABLE_IMAGE_STATE_TRANSFERRED = 3, /// for QFOT
+    CVM_VK_PRESENTABLE_IMAGE_STATE_COMPLETE = 4,
+    CVM_VK_PRESENTABLE_IMAGE_STATE_PRESENTED = 5,
 };
 
 typedef struct cvm_vk_swapchain_setup
@@ -55,6 +54,7 @@ typedef struct cvm_vk_swapchain_presentable_image
 {
     VkImage image;///theese are provided by the WSI, need access to this for synchronization purposes
     VkImageView image_view;
+    cvm_vk_resource_identifier image_view_unique_identifier;
 
     /// "unique" identifier used to differentiate images after swapchain recreation
     uint16_t index;

@@ -353,14 +353,17 @@ cvm_overlay_images;
 
 
 /// target information and synchronization requirements
-typedef struct cvm_overlay_target
+struct cvm_overlay_target
 {
     /// framebuffer depends on these
     VkImageView image_view;
+    cvm_vk_resource_identifier image_view_unique_identifier;
     /// render pass depends on these
     VkExtent2D extent;
     VkFormat format;
+    // start respecting colour space, to do so must support different input colour space (i believe) and must have information on which space blending is done in and how
     VkColorSpaceKHR color_space;/// respecting the colour space is NYI
+
     VkImageLayout initial_layout;
     VkImageLayout final_layout;
     bool clear_image;
@@ -375,27 +378,25 @@ typedef struct cvm_overlay_target
     uint32_t release_barrier_count;
     VkSemaphoreSubmitInfo signal_semaphores[4];
     VkImageMemoryBarrier2 release_barriers[4];
-}
-cvm_overlay_target;
+};
 
 
 
 struct cvm_overlay_frame_resources
 {
-    /// used for finding extant resources in cache
+    /// copy of target image view, used as key to the framebuffer cache
     VkImageView image_view;
+    cvm_vk_resource_identifier image_view_unique_identifier;
 
     /// data to cache
     VkFramebuffer framebuffer;
-
-    /// moment when this cache entry is no longer in use and can thus be evicted, only checked as part of eviction, otherwise use is managed by external image availability
-    cvm_vk_timeline_semaphore_moment last_use_moment;
 };
 
-#define CVM_CACHE_CMP( lhs , rhs ) lhs->image_view == rhs->image_view
-CVM_CACHE(struct cvm_overlay_frame_resources, cvm_overlay_target*, cvm_overlay_frame_resources)
+#define CVM_CACHE_CMP( entry , key ) entry->image_view_unique_identifier == key->image_view_unique_identifier
+CVM_CACHE(struct cvm_overlay_frame_resources, struct cvm_overlay_target*, cvm_overlay_frame_resources)
 #undef CVM_CACHE_CMP
 
+/// needs a better name
 struct cvm_overlay_target_resources
 {
     /// used for finding extant resources in cache
@@ -412,16 +413,16 @@ struct cvm_overlay_target_resources
 
     /// rely on all frame resources being deleted to ensure not in use
     cvm_overlay_frame_resources_cache frame_resources;
+
+    /// moment when this cache entry is no longer in use and can thus be evicted
+    cvm_vk_timeline_semaphore_moment last_use_moment;
 };
 
-#define CVM_CACHE_CMP( lhs, rhs ) lhs->extent.width == rhs->extent.width && lhs->extent.height == rhs->extent.height && lhs->format == rhs->format && \
-lhs->color_space == rhs->color_space && lhs->initial_layout == rhs->initial_layout && lhs->final_layout == rhs->final_layout && lhs->clear_image == rhs->clear_image
-CVM_CACHE(struct cvm_overlay_target_resources, cvm_overlay_target*, cvm_overlay_target_resources)
-#undef CVM_CACHE_CMP
+CVM_QUEUE(struct cvm_overlay_target_resources, cvm_overlay_target_resources, 8)
+/// queue as is done above might not be best if it's desirable to maintain multiple targets as renderable
 
-
-/// resources used in a per cycle fashion
-struct cvm_overlay_cycle_resources
+/// resources used in a per cycle/frame fashion
+struct cvm_overlay_transient_resources
 {
     cvm_vk_command_pool command_pool;
 
@@ -430,7 +431,7 @@ struct cvm_overlay_cycle_resources
     cvm_vk_timeline_semaphore_moment last_use_moment;
 };
 
-CVM_QUEUE(struct cvm_overlay_cycle_resources*,cvm_overlay_cycle_resources,8)
+CVM_QUEUE(struct cvm_overlay_transient_resources*,cvm_overlay_transient_resources,8)
 
 /// fixed sized queue of these?
 /// queue init at runtime? (custom size)
@@ -438,15 +439,14 @@ CVM_QUEUE(struct cvm_overlay_cycle_resources*,cvm_overlay_cycle_resources,8)
 
 typedef struct cvm_overlay_renderer
 {
-    cvm_vk_device * device;///is there a better place to put this? probably...
     /// for uploading to images, is NOT locally owned
     cvm_vk_staging_buffer_ * staging_buffer;
 
-    /// needs better name
-    uint32_t cycle_count;
-    uint32_t cycle_count_initialised;
-    struct cvm_overlay_cycle_resources* cycle_resources_backing;
-    cvm_overlay_cycle_resources_queue cycle_resources_queue;
+
+    uint32_t transient_count;
+    uint32_t transient_count_initialised;
+    struct cvm_overlay_transient_resources* transient_resources_backing;
+    cvm_overlay_transient_resources_queue transient_resources_queue;
 
     /// are separate shunt buffers even the best way to do this??
     cvm_overlay_element_render_data_stack element_render_stack;
@@ -469,7 +469,7 @@ typedef struct cvm_overlay_renderer
     VkPipelineLayout pipeline_layout;
     VkPipelineShaderStageCreateInfo pipeline_stages[2];//vertex,fragment
 
-    cvm_overlay_target_resources_cache target_resources;
+    cvm_overlay_target_resources_queue target_resources;
 }
 cvm_overlay_renderer;
 
@@ -489,7 +489,7 @@ cvm_overlay_setup;
 void cvm_overlay_renderer_initialise(cvm_overlay_renderer * renderer, cvm_vk_device * device, cvm_vk_staging_buffer_ * staging_buffer, uint32_t renderer_cycle_count);
 void cvm_overlay_renderer_terminate(cvm_overlay_renderer * renderer, cvm_vk_device * device);
 
-cvm_vk_timeline_semaphore_moment cvm_overlay_render_to_target(const cvm_vk_device * device, cvm_overlay_renderer * renderer, widget * menu_widget, const cvm_overlay_target* target);
+cvm_vk_timeline_semaphore_moment cvm_overlay_render_to_target(const cvm_vk_device * device, cvm_overlay_renderer * renderer, widget * menu_widget, const struct cvm_overlay_target* target);
 
 cvm_vk_timeline_semaphore_moment cvm_overlay_render_to_presentable_image(const cvm_vk_device * device, cvm_overlay_renderer * renderer, widget * menu_widget, cvm_vk_swapchain_presentable_image * presentable_image, bool last_use);
 

@@ -70,6 +70,12 @@ static inline bool name##_stack_pull( name##_stack * s , type * value )         
     return true;                                                                \
 }                                                                               \
                                                                                 \
+static inline type * name##_stack_pull_ptr( name##_stack * s )                  \
+{                                                                               \
+    if(s->count==0)return NULL;                                                 \
+    return s->data + --s->count;                                                \
+}                                                                               \
+                                                                                \
 static inline void name##_stack_terminate( name##_stack * s )                   \
 {                                                                               \
     free(s->data);                                                              \
@@ -455,7 +461,6 @@ CVM_QUEUE(uint32_t,u32,16)
 
 
 
-
 struct cvm_cache_link
 {
     uint16_t prev;
@@ -463,7 +468,7 @@ struct cvm_cache_link
 };
 
 /**
-CVM_CACHE_CMP(A,B) must be declared, is used for equality checking when finding
+CVM_CACHE_CMP( entry , key ) must be declared, is used for equality checking when finding
 entries in the cache; this comparison should take pointers of the type (a) and
 the key_type (B)
 */
@@ -597,7 +602,6 @@ static inline type * name##_cache_evict( name##_cache * cache )                 
 }                                                                               \
 
 #endif
-
 
 
 

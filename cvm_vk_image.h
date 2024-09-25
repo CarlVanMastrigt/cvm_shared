@@ -119,6 +119,7 @@ static inline void cvm_vk_image_atlas_get_tile_coordinates(cvm_vk_image_atlas * 
 {
     *x=tile->x_pos<<CVM_VK_BASE_TILE_SIZE_FACTOR;
     *y=tile->y_pos<<CVM_VK_BASE_TILE_SIZE_FACTOR;
+    (void)ia;// at some point this may be necessary (image atlas defined CVM_VK_BASE_TILE_SIZE_FACTOR)
 }
 
 void cvm_vk_create_image_atlas(cvm_vk_image_atlas * ia,VkImage image,VkImageView image_view,size_t bytes_per_pixel,uint32_t width,uint32_t height,bool multithreaded,cvm_vk_staging_shunt_buffer * shunt_buffer);

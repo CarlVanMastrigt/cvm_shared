@@ -183,7 +183,7 @@ cvm_vk_staging_buffer_allocation cvm_vk_staging_buffer_allocation_acquire(cvm_vk
     /// note active segment count is incremented, also importantly this index is UNWRAPPED, so that if the segment buffer gets expanded this index will still be valid
     segment_index = cvm_vk_staging_buffer_segment_queue_enqueue(&staging_buffer->segment_queue, (cvm_vk_staging_buffer_segment)
     {
-        .moment_of_last_use = cvm_vk_timeline_semaphore_moment_null,
+        .moment_of_last_use = CVM_VK_TIMELINE_SEMAPHORE_MOMENT_NULL,
         .offset = staging_buffer->current_offset,
         .size = required_space,
     });

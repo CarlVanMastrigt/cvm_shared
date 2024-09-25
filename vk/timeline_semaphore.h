@@ -38,7 +38,8 @@ typedef struct cvm_vk_timeline_semaphore_moment
     uint64_t value;
 }
 cvm_vk_timeline_semaphore_moment;
-#define cvm_vk_timeline_semaphore_moment_null ((cvm_vk_timeline_semaphore_moment){.semaphore=VK_NULL_HANDLE,.value=0})
+#define CVM_VK_TIMELINE_SEMAPHORE_MOMENT_NULL ((cvm_vk_timeline_semaphore_moment){.semaphore=VK_NULL_HANDLE,.value=0})
+
 
 void cvm_vk_timeline_semaphore_initialise(const cvm_vk_device * device,cvm_vk_timeline_semaphore * timeline_semaphore);
 void cvm_vk_timeline_semaphore_terminate(const cvm_vk_device * device,cvm_vk_timeline_semaphore * timeline_semaphore);

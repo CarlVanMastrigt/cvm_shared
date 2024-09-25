@@ -19,7 +19,9 @@ along with cvm_shared.  If not, see <https://www.gnu.org/licenses/>.
 
 #include "cvm_shared.h"
 
-static inline void cvm_vk_swapchain_presentable_image_initialise(cvm_vk_swapchain_presentable_image * presentable_image, const cvm_vk_device * device, VkImage image, uint16_t index, const cvm_vk_swapchain_instance * parent_swapchain_instance)
+
+
+static inline void cvm_vk_swapchain_presentable_image_initialise(cvm_vk_swapchain_presentable_image * presentable_image, const cvm_vk_device * device, VkImage image, uint16_t index, cvm_vk_swapchain_instance * parent_swapchain_instance)
 {
     uint32_t i;
 
@@ -31,10 +33,10 @@ static inline void cvm_vk_swapchain_presentable_image_initialise(cvm_vk_swapchai
     presentable_image->qfot_semaphore = cvm_vk_create_binary_semaphore(device);
 
     presentable_image->acquire_semaphore=VK_NULL_HANDLE;///set using one of the available image_acquisition_semaphores
-    presentable_image->state=cvm_vk_presentable_image_state_ready;
+    presentable_image->state=CVM_VK_PRESENTABLE_IMAGE_STATE_READY;
 
     presentable_image->last_use_queue_family = CVM_INVALID_U32_INDEX;
-    presentable_image->last_use_moment = cvm_vk_timeline_semaphore_moment_null;
+    presentable_image->last_use_moment = CVM_VK_TIMELINE_SEMAPHORE_MOMENT_NULL;
 
     presentable_image->present_acquire_command_buffers = malloc(sizeof(VkCommandBuffer) * device->queue_family_count);
     for(i=0;i<device->queue_family_count;i++)
@@ -44,6 +46,8 @@ static inline void cvm_vk_swapchain_presentable_image_initialise(cvm_vk_swapchai
 
     ///image view
     presentable_image->image_view = VK_NULL_HANDLE;
+    presentable_image->image_view_unique_identifier = cvm_vk_resource_unique_identifier_acquire(device);
+    #warning move above into handled function that atomically increments, ideally in a way that doesnt require a non-const device
     VkImageViewCreateInfo image_view_create_info=(VkImageViewCreateInfo)
     {
         .sType=VK_STRUCTURE_TYPE_IMAGE_VIEW_CREATE_INFO,
@@ -69,6 +73,7 @@ static inline void cvm_vk_swapchain_presentable_image_initialise(cvm_vk_swapchai
         }
     };
     CVM_VK_CHECK(vkCreateImageView(device->device, &image_view_create_info, NULL, &presentable_image->image_view));
+    #warning above may need to move to have a mutex lock, at the very least for the resource identifier
 }
 
 static inline void cvm_vk_swapchain_presentable_image_terminate(cvm_vk_swapchain_presentable_image * presentable_image, const cvm_vk_device * device, const cvm_vk_swapchain_instance * parent_swapchain_instance)
@@ -142,9 +147,9 @@ static inline int cvm_vk_swapchain_instance_initialise(cvm_vk_swapchain_instance
 
 
     /// search for presentable queue families
-    instance->queue_family_presentable_mask=0;
-    i=device->queue_family_count;
+    instance->queue_family_presentable_mask = 0;
     instance->fallback_present_queue_family = CVM_INVALID_U32_INDEX;
+    i = device->queue_family_count;
     while(i--)/// search last to first so that fallback is minimum supported
     {
         CVM_VK_CHECK(vkGetPhysicalDeviceSurfaceSupportKHR(device->physical_device, i, swapchain->setup_info.surface, &surface_supported));
@@ -160,9 +165,9 @@ static inline int cvm_vk_swapchain_instance_initialise(cvm_vk_swapchain_instance
     /// check surface capabilities and create a the new swapchain
     CVM_VK_CHECK(vkGetPhysicalDeviceSurfaceCapabilitiesKHR(device->physical_device, swapchain->setup_info.surface, &instance->surface_capabilities));
 
-    if(instance->surface_capabilities.supportedUsageFlags & swapchain->setup_info.usage_flags != swapchain->setup_info.usage_flags) return -1;///intened usage not supported
+    if((instance->surface_capabilities.supportedUsageFlags & swapchain->setup_info.usage_flags) != swapchain->setup_info.usage_flags) return -1;///intened usage not supported
     if((instance->surface_capabilities.maxImageCount != 0) && (instance->surface_capabilities.maxImageCount < swapchain->setup_info.min_image_count)) return -1;///cannot suppirt minimum image count
-    if(instance->surface_capabilities.supportedCompositeAlpha & VK_COMPOSITE_ALPHA_OPAQUE_BIT_KHR == 0)return -1;///compositing not supported
+    if((instance->surface_capabilities.supportedCompositeAlpha & VK_COMPOSITE_ALPHA_OPAQUE_BIT_KHR) == 0)return -1;///compositing not supported
     /// would like to support different compositing, need to extend to allow this
 
     VkSwapchainCreateInfoKHR swapchain_create_info=(VkSwapchainCreateInfoKHR)
@@ -265,6 +270,8 @@ int cvm_vk_swapchain_initialse(const cvm_vk_device * device, cvm_vk_surface_swap
     }
 
     cvm_vk_swapchain_instance_queue_initialise(&swapchain->swapchain_queue);
+
+    return 0;
 }
 
 void cvm_vk_swapchain_terminate(const cvm_vk_device * device, cvm_vk_surface_swapchain * swapchain)
@@ -290,7 +297,7 @@ void cvm_vk_swapchain_terminate(const cvm_vk_device * device, cvm_vk_surface_swa
         {
             presentable_image = instance->presentable_images+i;
 
-            if(presentable_image->state != cvm_vk_presentable_image_state_ready)
+            if(presentable_image->state != CVM_VK_PRESENTABLE_IMAGE_STATE_READY)
             {
                 assert(presentable_image->last_use_moment.semaphore != VK_NULL_HANDLE);/// probs wrong!
                 assert(presentable_image->acquire_semaphore != VK_NULL_HANDLE);
@@ -299,9 +306,9 @@ void cvm_vk_swapchain_terminate(const cvm_vk_device * device, cvm_vk_surface_swa
 
                 assert(instance->acquired_image_count > 0);
                 instance->image_acquisition_semaphores[--instance->acquired_image_count] = presentable_image->acquire_semaphore;
-                presentable_image->last_use_moment=cvm_vk_timeline_semaphore_moment_null;
+                presentable_image->last_use_moment = CVM_VK_TIMELINE_SEMAPHORE_MOMENT_NULL;
                 presentable_image->acquire_semaphore = VK_NULL_HANDLE;
-                presentable_image->state=cvm_vk_presentable_image_state_ready;
+                presentable_image->state = CVM_VK_PRESENTABLE_IMAGE_STATE_READY;
             }
             else
             {
@@ -330,7 +337,7 @@ static inline void cvm_vk_swapchain_cleanup_out_of_date_instances(cvm_vk_surface
         {
             presentable_image = instance->presentable_images+i;
 
-            if(presentable_image->state != cvm_vk_presentable_image_state_ready)
+            if(presentable_image->state != CVM_VK_PRESENTABLE_IMAGE_STATE_READY)
             {
                 assert(presentable_image->last_use_moment.semaphore != VK_NULL_HANDLE);
                 assert(presentable_image->acquire_semaphore != VK_NULL_HANDLE);
@@ -339,7 +346,7 @@ static inline void cvm_vk_swapchain_cleanup_out_of_date_instances(cvm_vk_surface
                 {
                     assert(instance->acquired_image_count > 0);
                     instance->image_acquisition_semaphores[--instance->acquired_image_count] = presentable_image->acquire_semaphore;
-                    presentable_image->last_use_moment=cvm_vk_timeline_semaphore_moment_null;
+                    presentable_image->last_use_moment = CVM_VK_TIMELINE_SEMAPHORE_MOMENT_NULL;
                     presentable_image->acquire_semaphore = VK_NULL_HANDLE;
                 }
             }
@@ -361,7 +368,6 @@ static inline void cvm_vk_swapchain_cleanup_out_of_date_instances(cvm_vk_surface
         }
     }
 }
-
 
 
 const cvm_vk_swapchain_presentable_image * cvm_vk_surface_swapchain_acquire_presentable_image(cvm_vk_surface_swapchain * swapchain, const cvm_vk_device * device)
@@ -411,14 +417,14 @@ const cvm_vk_swapchain_presentable_image * cvm_vk_surface_swapchain_acquire_pres
 
             presentable_image = instance->presentable_images + image_index;
 
-            if(presentable_image->state != cvm_vk_presentable_image_state_ready)
+            if(presentable_image->state != CVM_VK_PRESENTABLE_IMAGE_STATE_READY)
             {
                 instance->image_acquisition_semaphores[--instance->acquired_image_count] = presentable_image->acquire_semaphore;
             }
 
-            presentable_image->last_use_moment = cvm_vk_timeline_semaphore_moment_null;
+            presentable_image->last_use_moment = CVM_VK_TIMELINE_SEMAPHORE_MOMENT_NULL;
             presentable_image->acquire_semaphore = acquire_semaphore;
-            presentable_image->state = cvm_vk_presentable_image_state_acquired;
+            presentable_image->state = CVM_VK_PRESENTABLE_IMAGE_STATE_ACQUIRED;
             presentable_image->layout = VK_IMAGE_LAYOUT_UNDEFINED;
             presentable_image->last_use_queue_family=CVM_INVALID_U32_INDEX;
         }
@@ -526,7 +532,7 @@ void cvm_vk_surface_swapchain_present_image(const cvm_vk_surface_swapchain * swa
     assert(presentable_image->last_use_queue_family != CVM_INVALID_U32_INDEX);
     assert(presentable_image->layout == VK_IMAGE_LAYOUT_PRESENT_SRC_KHR);
 
-    if(presentable_image->state == cvm_vk_presentable_image_state_tranferred)
+    if(presentable_image->state == CVM_VK_PRESENTABLE_IMAGE_STATE_TRANSFERRED)
     {
         if(presentable_image->present_acquire_command_buffers[presentable_image->last_use_queue_family]==VK_NULL_HANDLE)
         {
@@ -569,7 +575,7 @@ void cvm_vk_surface_swapchain_present_image(const cvm_vk_surface_swapchain * swa
 
         CVM_VK_CHECK(vkQueueSubmit2(present_queue->queue, 1, &submit_info, VK_NULL_HANDLE));
 
-        presentable_image->state = cvm_vk_presentable_image_state_complete;
+        presentable_image->state = CVM_VK_PRESENTABLE_IMAGE_STATE_COMPLETE;
     }
     else
     {
@@ -578,7 +584,7 @@ void cvm_vk_surface_swapchain_present_image(const cvm_vk_surface_swapchain * swa
         present_queue = present_queue_family->queues + 0;/// use queue 0
     }
 
-    assert(presentable_image->state == cvm_vk_presentable_image_state_complete);
+    assert(presentable_image->state == CVM_VK_PRESENTABLE_IMAGE_STATE_COMPLETE);
 
 
 
@@ -605,7 +611,7 @@ void cvm_vk_surface_swapchain_present_image(const cvm_vk_surface_swapchain * swa
             swapchain_instance->out_of_date = true;
         }
         else if(r!=VK_SUCCESS)fprintf(stderr,"PRESENTATION SUCCEEDED WITH RESULT : %d\n",r);
-        presentable_image->state = cvm_vk_presentable_image_state_presented;
+        presentable_image->state = CVM_VK_PRESENTABLE_IMAGE_STATE_PRESENTED;
     }
     else
     {

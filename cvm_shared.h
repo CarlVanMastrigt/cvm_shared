@@ -62,6 +62,11 @@ along with cvm_shared.  If not, see <https://www.gnu.org/licenses/>.
 #define CVM_MIN(A,B) (((A)<(B))?(A):(B))
 #define CVM_CLAMP(X,MIN,MAX) CVM_MAX(MIN,CVM_MIN(MAX,X))
 
+static inline uint32_t cvm_align_u32(uint32_t size, uint32_t alignment)
+{
+    return (size+alignment-1) & ~(alignment-1);
+}
+
 typedef union widget widget;
 
 static inline uint64_t cvm_po2_64_gte(uint64_t v){ return 64-__builtin_clzl(v-1); }

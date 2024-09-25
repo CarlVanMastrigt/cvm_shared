@@ -43,10 +43,11 @@ cvm_vk_surface_swapchain * cvm_vk_swapchain_get(void)
 
 
 
-VkInstance cvm_vk_instance_initialise(const cvm_vk_instance_setup * setup)
+int cvm_vk_instance_initialise(struct cvm_vk_instance* instance, const cvm_vk_instance_setup * setup)
 {
-    VkInstance instance;
     uint32_t api_version,major_version,minor_version,patch_version,variant;
+
+    instance->host_allocator = setup->host_allocator;
 
     CVM_VK_CHECK(vkEnumerateInstanceVersion(&api_version));
 
@@ -54,10 +55,10 @@ VkInstance cvm_vk_instance_initialise(const cvm_vk_instance_setup * setup)
     major_version=(api_version>>22)&0x7F;
     minor_version=(api_version>>12)&0x3FF;
     patch_version=api_version&0xFFF;
-    printf("Vulkan API version: %u.%u.%u - %u\n",major_version,minor_version,patch_version,variant);
+    printf("Vulkan API version: %u.%u.%u - %u\n", major_version, minor_version, patch_version, variant);
 
-    if(major_version==1 && minor_version<3) return VK_NULL_HANDLE;
-    if(variant) return VK_NULL_HANDLE;
+    if(major_version==1 && minor_version<3) return -1;
+    if(variant) return -1;
 
     VkApplicationInfo application_info=(VkApplicationInfo)
     {
@@ -83,17 +84,17 @@ VkInstance cvm_vk_instance_initialise(const cvm_vk_instance_setup * setup)
         .ppEnabledExtensionNames=setup->extension_names,
     };
 
-    CVM_VK_CHECK(vkCreateInstance(&instance_creation_info,NULL,&instance));
+    CVM_VK_CHECK(vkCreateInstance(&instance_creation_info, setup->host_allocator, &instance->instance));
 
-    return instance;
+    return 0;
 }
 
-VkInstance cvm_vk_instance_initialise_for_SDL(const char * application_name,uint32_t application_version,bool validation_enabled)
+int cvm_vk_instance_initialise_for_SDL(struct cvm_vk_instance* instance, const char* application_name,uint32_t application_version,bool validation_enabled,const VkAllocationCallbacks* host_allocator)
 {
-    VkInstance instance=VK_NULL_HANDLE;
     cvm_vk_instance_setup setup;
     SDL_Window * window;
     const char * validation = "VK_LAYER_KHRONOS_validation";
+    int return_value = -1;
 
     if(validation_enabled)
     {
@@ -105,44 +106,50 @@ VkInstance cvm_vk_instance_initialise_for_SDL(const char * application_name,uint
         setup.layer_count=0;
     }
 
-    setup.application_name=application_name;
-    setup.application_version=application_version;
+    setup.host_allocator = host_allocator;
+    setup.application_name = application_name;
+    setup.application_version = application_version;
 
-    window = SDL_CreateWindow("",SDL_WINDOWPOS_UNDEFINED,SDL_WINDOWPOS_UNDEFINED,0,0,SDL_WINDOW_VULKAN|SDL_WINDOW_HIDDEN);
+    window = SDL_CreateWindow("", SDL_WINDOWPOS_UNDEFINED, SDL_WINDOWPOS_UNDEFINED, 0, 0, SDL_WINDOW_VULKAN|SDL_WINDOW_HIDDEN);
+
+    if(!window)
+    {
+        return -1;
+    }
 
     if(SDL_Vulkan_GetInstanceExtensions(window,&setup.extension_count,NULL))
     {
         setup.extension_names=malloc(sizeof(const char*)*setup.extension_count);
-        if(SDL_Vulkan_GetInstanceExtensions(window,&setup.extension_count,setup.extension_names))
+        if(SDL_Vulkan_GetInstanceExtensions(window, &setup.extension_count, setup.extension_names))
         {
-            instance=cvm_vk_instance_initialise(&setup);
+            return_value = cvm_vk_instance_initialise(instance, &setup);
         }
         free(setup.extension_names);
     }
 
     SDL_DestroyWindow(window);
 
-    return instance;
+    return return_value;
 }
 
-void cvm_vk_instance_terminate(VkInstance instance)
+void cvm_vk_instance_terminate(struct cvm_vk_instance* instance)
 {
-    vkDestroyInstance(instance,NULL);
+    vkDestroyInstance(instance->instance, instance->host_allocator);
 }
 
-VkSurfaceKHR cvm_vk_create_surface_from_SDL_window(VkInstance instance, SDL_Window * window)
+VkSurfaceKHR cvm_vk_create_surface_from_SDL_window(const struct cvm_vk_instance* instance, SDL_Window * window)
 {
     SDL_bool created_surface;
     VkSurfaceKHR surface;
 
-    created_surface=SDL_Vulkan_CreateSurface(window,instance,&surface);
+    created_surface = SDL_Vulkan_CreateSurface(window, instance->instance, &surface);
 
     return created_surface ? surface : VK_NULL_HANDLE;
 }
 
-void cvm_vk_destroy_surface(VkInstance instance, VkSurfaceKHR surface)
+void cvm_vk_destroy_surface(const struct cvm_vk_instance* instance, VkSurfaceKHR surface)
 {
-    vkDestroySurfaceKHR(instance,surface,NULL);
+    vkDestroySurfaceKHR(instance->instance, surface, instance->host_allocator);
 }
 
 
@@ -264,7 +271,7 @@ static void cvm_vk_internal_device_setup_init(cvm_vk_device_setup * internal, co
 
     if(!external)
     {
-        external=&empty_device_setup;
+        external = &empty_device_setup;
     }
 
     internal->feature_validation=malloc(sizeof(cvm_vk_device_feature_validation_function*)*(external->feature_validation_count+1));
@@ -306,7 +313,8 @@ static void cvm_vk_internal_device_setup_init(cvm_vk_device_setup * internal, co
     internal->desired_transfer_queues = CVM_CLAMP(external->desired_transfer_queues,1,8);
     internal->desired_async_compute_queues = CVM_CLAMP(external->desired_async_compute_queues,1,8);
 
-    internal->instance=external->instance;
+    internal->parent_instance = external->parent_instance;
+    internal->host_allocator = external->host_allocator;
 }
 
 static void cvm_vk_internal_device_setup_destroy(cvm_vk_device_setup * setup)
@@ -374,15 +382,15 @@ static float cvm_vk_test_physical_device_capabilities(VkPhysicalDevice physical_
     vkGetPhysicalDeviceMemoryProperties(physical_device_to_test,&memory_properties);
 
     features = cvm_vk_create_device_feature_structure_list(device_setup);
-    vkGetPhysicalDeviceFeatures2(physical_device_to_test,features);
+    vkGetPhysicalDeviceFeatures2(physical_device_to_test, features);
 
-    vkEnumerateDeviceExtensionProperties(physical_device_to_test,NULL,&extension_count,NULL);
+    vkEnumerateDeviceExtensionProperties(physical_device_to_test, NULL, &extension_count, NULL);
     extensions=malloc(sizeof(VkExtensionProperties)*extension_count);
-    vkEnumerateDeviceExtensionProperties(physical_device_to_test,NULL,&extension_count,extensions);
+    vkEnumerateDeviceExtensionProperties(physical_device_to_test, NULL, &extension_count, extensions);
 
-    vkGetPhysicalDeviceQueueFamilyProperties(physical_device_to_test,&queue_family_count,NULL);
+    vkGetPhysicalDeviceQueueFamilyProperties(physical_device_to_test, &queue_family_count, NULL);
     queue_family_properties=malloc(sizeof(VkQueueFamilyProperties)*queue_family_count);
-    vkGetPhysicalDeviceQueueFamilyProperties(physical_device_to_test,&queue_family_count,queue_family_properties);
+    vkGetPhysicalDeviceQueueFamilyProperties(physical_device_to_test, &queue_family_count, queue_family_properties);
 
     /// external feature requirements
     for(i=0;i<device_setup->feature_validation_count;i++)
@@ -412,17 +420,17 @@ static VkPhysicalDevice cvm_vk_create_physical_device(VkInstance vk_instance, co
     float score,best_score;
     VkPhysicalDevice best_device;
 
-    CVM_VK_CHECK(vkEnumeratePhysicalDevices(vk_instance,&device_count,NULL));
-    physical_devices=malloc(sizeof(VkPhysicalDevice)*device_count);
-    CVM_VK_CHECK(vkEnumeratePhysicalDevices(vk_instance,&device_count,physical_devices));
+    CVM_VK_CHECK(vkEnumeratePhysicalDevices(vk_instance, &device_count, NULL));
+    physical_devices = malloc(sizeof(VkPhysicalDevice)*device_count);
+    CVM_VK_CHECK(vkEnumeratePhysicalDevices(vk_instance, &device_count, physical_devices));
 
-    best_score=0.0;
+    best_score = 0.0;
     for(i=0;i<device_count;i++)///check for dedicated gfx cards first
     {
-        score=cvm_vk_test_physical_device_capabilities(physical_devices[i],device_setup);
+        score = cvm_vk_test_physical_device_capabilities(physical_devices[i], device_setup);
         if(score > best_score)
         {
-            best_device=physical_devices[i];
+            best_device = physical_devices[i];
             best_score = score;
         }
     }
@@ -430,7 +438,7 @@ static VkPhysicalDevice cvm_vk_create_physical_device(VkInstance vk_instance, co
     free(physical_devices);
 
     /// no applicable devices meet requirements
-    if(best_score==0.0) return VK_NULL_HANDLE;
+    if(best_score == 0.0) return VK_NULL_HANDLE;
 
     return best_device;
 }
@@ -458,7 +466,7 @@ static void cvm_vk_initialise_device_queue_family(cvm_vk_device * device,cvm_vk_
         .queueFamilyIndex=queue_family_index,
     };
 
-    CVM_VK_CHECK(vkCreateCommandPool(device->device,&command_pool_create_info,NULL,&queue_family->internal_command_pool));
+    CVM_VK_CHECK(vkCreateCommandPool(device->device, &command_pool_create_info, device->host_allocator, &queue_family->internal_command_pool));
 
     queue_family->queues=malloc(sizeof(cvm_vk_device_queue)*queue_count);
     queue_family->queue_count=queue_count;
@@ -472,7 +480,7 @@ static void cvm_vk_terminate_device_queue_family(cvm_vk_device * device,cvm_vk_d
 {
     uint32_t i;
 
-    vkDestroyCommandPool(device->device,queue_family->internal_command_pool,NULL);
+    vkDestroyCommandPool(device->device, queue_family->internal_command_pool, device->host_allocator);
 
     for(i=0;i<queue_family->queue_count;i++)
     {
@@ -481,7 +489,7 @@ static void cvm_vk_terminate_device_queue_family(cvm_vk_device * device,cvm_vk_d
     free(queue_family->queues);
 }
 
-static void cvm_vk_create_logical_device(cvm_vk_device * device, const cvm_vk_device_setup * device_setup)
+static int cvm_vk_create_logical_device(cvm_vk_device * device, const cvm_vk_device_setup * device_setup)
 {
     uint32_t i,j,queue_count,enabled_extension_count,available_extension_count;
     bool * enabled_extensions_table;
@@ -496,6 +504,7 @@ static void cvm_vk_create_logical_device(cvm_vk_device * device, const cvm_vk_de
     float * priorities;
     uint32_t queue_counts[CVM_VK_MAX_QUEUE_FAMILY_COUNT];
 
+    /// being a little sneaky to circumvent const here
     vkGetPhysicalDeviceProperties(device->physical_device, (VkPhysicalDeviceProperties*)&device->properties);
     vkGetPhysicalDeviceMemoryProperties(device->physical_device, (VkPhysicalDeviceMemoryProperties*)&device->memory_properties);
 
@@ -640,9 +649,9 @@ static void cvm_vk_create_logical_device(cvm_vk_device * device, const cvm_vk_de
         .pEnabledFeatures=NULL,///using features2 in pNext chain instead
     };
 
-    CVM_VK_CHECK(vkCreateDevice(device->physical_device,&device_creation_info,NULL,&device->device));
+    CVM_VK_CHECK(vkCreateDevice(device->physical_device, &device_creation_info, device_setup->host_allocator, &device->device));
 
-    device->queue_families=malloc(sizeof(cvm_vk_device_queue_family)*device->queue_family_count);
+    device->queue_families = malloc(sizeof(cvm_vk_device_queue_family)*device->queue_family_count);
 
     for(i=0;i<device->queue_family_count;i++)
     {
@@ -674,7 +683,7 @@ static void cvm_vk_destroy_logical_device(cvm_vk_device * device)
     free(device->queue_families);
     free(device->queue_family_properties);
 
-    vkDestroyDevice(device->device,NULL);
+    vkDestroyDevice(device->device, device->host_allocator);
     cvm_vk_destroy_device_feature_structure_list((void*)device->features);
     free((void*)device->extensions);
 }
@@ -750,33 +759,32 @@ static inline void cvm_vk_defaults_initialise(struct cvm_vk_defaults* defaults, 
         .unnormalizedCoordinates=VK_TRUE,
     };
 
-    created = vkCreateSampler(device->device, &fetch_sampler_create_info, NULL, &defaults->fetch_sampler);
+    created = vkCreateSampler(device->device, &fetch_sampler_create_info, device->host_allocator, &defaults->fetch_sampler);
     assert(created == VK_SUCCESS);
 }
 
 static inline void cvm_vk_defaults_terminate(struct cvm_vk_defaults* defaults, const cvm_vk_device * device)
 {
-    vkDestroySampler(device->device, defaults->fetch_sampler, NULL);
+    vkDestroySampler(device->device, defaults->fetch_sampler, device->host_allocator);
 }
 
 int cvm_vk_device_initialise(cvm_vk_device * device, const cvm_vk_device_setup * external_device_setup, SDL_Window * window)
 {
     cvm_vk_device_setup device_setup;
 
-    if(external_device_setup)
-    {
-        cvm_vk_internal_device_setup_init(&device_setup, external_device_setup);
-    }
-    else
-    {
-        #warning set using defaults
-    }
+    cvm_vk_internal_device_setup_init(&device_setup, external_device_setup);// should be able to handle external being NULL
 
-    device->instance=device_setup.instance;
-    device->physical_device=cvm_vk_create_physical_device(device_setup.instance,&device_setup);
+    device->host_allocator = device_setup.host_allocator;
+
+    device->physical_device = cvm_vk_create_physical_device(device_setup.parent_instance->instance, &device_setup);
     if(device->physical_device==VK_NULL_HANDLE)return -1;
 
     cvm_vk_create_logical_device(device, &device_setup);
+
+    #warning make these init discrete PARTS of the device struct ??
+
+    device->resource_identifier_monotonic = malloc(sizeof(atomic_uint_least64_t));
+    atomic_init(device->resource_identifier_monotonic, 1);/// nonzero for debugging zero is invalid while testing
 
     cvm_vk_create_transfer_chain();///make conditional on separate transfer queue?
 
@@ -800,6 +808,8 @@ void cvm_vk_device_terminate(cvm_vk_device * device)
     cvm_vk_destroy_transfer_chain();///make conditional on separate transfer queue?
 
     cvm_vk_destroy_logical_device(device);
+
+    free(device->resource_identifier_monotonic);
 }
 
 
@@ -849,7 +859,7 @@ VkFence cvm_vk_create_fence(const cvm_vk_device * device,bool initially_signalle
         .flags=initially_signalled ? VK_FENCE_CREATE_SIGNALED_BIT : 0,
     };
 
-    r=vkCreateFence(device->device,&create_info,NULL,&fence);
+    r=vkCreateFence(device->device, &create_info, device->host_allocator, &fence);
     assert(r==VK_SUCCESS);
 
     return r==VK_SUCCESS ? fence : VK_NULL_HANDLE;
@@ -857,13 +867,13 @@ VkFence cvm_vk_create_fence(const cvm_vk_device * device,bool initially_signalle
 
 void cvm_vk_destroy_fence(const cvm_vk_device * device,VkFence fence)
 {
-    vkDestroyFence(device->device,fence,NULL);
+    vkDestroyFence(device->device, fence, device->host_allocator);
 }
 
 void cvm_vk_wait_on_fence_and_reset(const cvm_vk_device * device, VkFence fence)
 {
-    CVM_VK_CHECK(vkWaitForFences(device->device,1,&fence,VK_TRUE,CVM_VK_DEFAULT_TIMEOUT));
-    vkResetFences(device->device,1,&fence);
+    CVM_VK_CHECK(vkWaitForFences(device->device, 1, &fence, VK_TRUE,CVM_VK_DEFAULT_TIMEOUT));
+    vkResetFences(device->device, 1, &fence);
 }
 
 VkSemaphore cvm_vk_create_binary_semaphore(const cvm_vk_device * device)
@@ -878,7 +888,7 @@ VkSemaphore cvm_vk_create_binary_semaphore(const cvm_vk_device * device)
         .flags=0
     };
 
-    r=vkCreateSemaphore(device->device,&create_info,NULL,&semaphore);
+    r=vkCreateSemaphore(device->device, &create_info, device->host_allocator, &semaphore);
     assert(r==VK_SUCCESS);
 
     return r==VK_SUCCESS ? semaphore : VK_NULL_HANDLE;
@@ -886,7 +896,7 @@ VkSemaphore cvm_vk_create_binary_semaphore(const cvm_vk_device * device)
 
 void cvm_vk_destroy_binary_semaphore(const cvm_vk_device * device,VkSemaphore semaphore)
 {
-    vkDestroySemaphore(device->device,semaphore,NULL);
+    vkDestroySemaphore(device->device, semaphore, NULL);
 }
 
 
@@ -968,7 +978,7 @@ void cvm_vk_create_shader_stage_info(VkPipelineShaderStageCreateInfo * stage_inf
             .pCode=(uint32_t*)data_buffer
         };
 
-        VkResult r= vkCreateShaderModule(cvm_vk_.device,&shader_module_create_info,NULL,&shader_module);
+        VkResult r= vkCreateShaderModule(cvm_vk_.device,&shader_module_create_info, cvm_vk_.host_allocator,&shader_module);
         assert(r==VK_SUCCESS || !fprintf(stderr,"ERROR CREATING SHADER MODULE FROM FILE: %s\n",filename));
 
         free(data_buffer);
@@ -1033,12 +1043,12 @@ void cvm_vk_destroy_image(VkImage image)
     vkDestroyImage(cvm_vk_.device,image,NULL);
 }
 
-static bool cvm_vk_find_appropriate_memory_type(uint32_t supported_type_bits,VkMemoryPropertyFlags required_properties,uint32_t * index)
+static inline bool cvm_vk_find_appropriate_memory_type(uint32_t supported_type_mask,VkMemoryPropertyFlags required_properties,uint32_t * index)
 {
     uint32_t i;
     for(i=0;i<cvm_vk_.memory_properties.memoryTypeCount;i++)
     {
-        if(( supported_type_bits & 1<<i ) && ((cvm_vk_.memory_properties.memoryTypes[i].propertyFlags & required_properties) == required_properties))
+        if(( (supported_type_mask>>i) & 1) && ((cvm_vk_.memory_properties.memoryTypes[i].propertyFlags & required_properties) == required_properties))
         {
             *index=i;
             return true;
@@ -1047,47 +1057,218 @@ static bool cvm_vk_find_appropriate_memory_type(uint32_t supported_type_bits,VkM
     return false;
 }
 
-void cvm_vk_create_and_bind_memory_for_images(VkDeviceMemory * memory,VkImage * images,uint32_t image_count,VkMemoryPropertyFlags required_properties,VkMemoryPropertyFlags desired_properties)
+
+void cvm_vk_set_view_create_info_using_image_create_info(VkImageViewCreateInfo* view_create_info, const VkImageCreateInfo* image_create_info, VkImage image)
+{
+    VkImageViewType view_type;
+    VkImageAspectFlags aspect;
+
+    /// cannot create a cube array like this unfortunately
+    switch(image_create_info->imageType)
+    {
+    case VK_IMAGE_TYPE_1D:
+        view_type = (image_create_info->arrayLayers == 1) ? VK_IMAGE_VIEW_TYPE_1D : VK_IMAGE_VIEW_TYPE_1D_ARRAY;
+        break;
+    case VK_IMAGE_TYPE_2D:
+        view_type = (image_create_info->arrayLayers == 1) ? VK_IMAGE_VIEW_TYPE_2D : VK_IMAGE_VIEW_TYPE_2D_ARRAY;
+        break;
+    case VK_IMAGE_TYPE_3D:
+        assert(image_create_info->arrayLayers == 1);
+        view_type = VK_IMAGE_VIEW_TYPE_3D;
+        break;
+    default:
+        view_type = VK_IMAGE_VIEW_TYPE_MAX_ENUM;
+    }
+
+    /// remember these are DEFAULTS, none of the exotic aspects need be considered
+    switch(image_create_info->format)
+    {
+    case VK_FORMAT_D16_UNORM:
+        aspect = VK_IMAGE_ASPECT_DEPTH_BIT;
+        break;
+    case VK_FORMAT_X8_D24_UNORM_PACK32:
+        aspect = VK_IMAGE_ASPECT_DEPTH_BIT;
+        break;
+    case VK_FORMAT_D32_SFLOAT:
+        aspect = VK_IMAGE_ASPECT_DEPTH_BIT;
+        break;
+    case VK_FORMAT_S8_UINT:
+        aspect = VK_IMAGE_ASPECT_STENCIL_BIT;
+        break;
+    case VK_FORMAT_D16_UNORM_S8_UINT:
+        aspect = VK_IMAGE_ASPECT_DEPTH_BIT | VK_IMAGE_ASPECT_STENCIL_BIT;
+        break;
+    case VK_FORMAT_D24_UNORM_S8_UINT:
+        aspect = VK_IMAGE_ASPECT_DEPTH_BIT | VK_IMAGE_ASPECT_STENCIL_BIT;
+        break;
+    case VK_FORMAT_D32_SFLOAT_S8_UINT:
+        aspect = VK_IMAGE_ASPECT_DEPTH_BIT | VK_IMAGE_ASPECT_STENCIL_BIT;
+        break;
+    default:
+        aspect = VK_IMAGE_ASPECT_COLOR_BIT;
+        break;
+    }
+
+    *view_create_info = (VkImageViewCreateInfo)
+    {
+        .sType = VK_STRUCTURE_TYPE_IMAGE_VIEW_CREATE_INFO,
+        .pNext = NULL,
+        .flags = 0,
+        .image = image,
+        .viewType = view_type,
+        .format = image_create_info->format,
+        .components = (VkComponentMapping)
+        {
+            .r = VK_COMPONENT_SWIZZLE_IDENTITY,
+            .g = VK_COMPONENT_SWIZZLE_IDENTITY,
+            .b = VK_COMPONENT_SWIZZLE_IDENTITY,
+            .a = VK_COMPONENT_SWIZZLE_IDENTITY
+        },
+        .subresourceRange = (VkImageSubresourceRange)
+        {
+            .aspectMask = aspect,
+            .baseMipLevel = 0,
+            .levelCount = image_create_info->mipLevels,
+            .baseArrayLayer = 0,
+            .layerCount = image_create_info->arrayLayers,
+        }
+    };
+}
+
+VkResult cvm_vk_create_and_bind_memory_for_images(VkDeviceMemory * memory,VkImage * images,uint32_t image_count,VkMemoryPropertyFlags required_properties,VkMemoryPropertyFlags desired_properties)
 {
     VkDeviceSize offsets[image_count];
-    VkDeviceSize current_offset=0;
+    VkDeviceSize current_offset;
     VkMemoryRequirements requirements;
-    uint32_t i,memory_type_index,supported_type_bits=0xFFFFFFFF;
+    uint32_t i,memory_type_index,supported_type_bits;
     bool type_found;
+    VkResult result;
 
+    current_offset = 0;
+    supported_type_bits = 0xFFFFFFFF;
     for(i=0;i<image_count;i++)
     {
-        vkGetImageMemoryRequirements(cvm_vk_.device,images[i],&requirements);
-        offsets[i]=(current_offset+requirements.alignment-1)& ~(requirements.alignment-1);
-        current_offset=offsets[i]+requirements.size;
-        supported_type_bits&=requirements.memoryTypeBits;
+        vkGetImageMemoryRequirements(cvm_vk_.device,images[i], &requirements);
+        offsets[i] = (current_offset+requirements.alignment-1) & ~(requirements.alignment-1);
+        current_offset = offsets[i]+requirements.size;
+        supported_type_bits &= requirements.memoryTypeBits;
     }
 
     assert(supported_type_bits);
 
-    type_found=cvm_vk_find_appropriate_memory_type(supported_type_bits,desired_properties|required_properties,&memory_type_index);
+    type_found = cvm_vk_find_appropriate_memory_type(supported_type_bits,desired_properties|required_properties,&memory_type_index);
 
     if(!type_found)
     {
-        type_found=cvm_vk_find_appropriate_memory_type(supported_type_bits,required_properties,&memory_type_index);
+        type_found = cvm_vk_find_appropriate_memory_type(supported_type_bits,required_properties,&memory_type_index);
     }
 
-    assert(type_found);
+    if(!type_found)
+    {
+        return VK_ERROR_UNKNOWN;
+    }
 
     VkMemoryAllocateInfo memory_allocate_info=(VkMemoryAllocateInfo)
     {
         .sType=VK_STRUCTURE_TYPE_MEMORY_ALLOCATE_INFO,
         .pNext=NULL,
-        .allocationSize=current_offset,
-        .memoryTypeIndex=memory_type_index
+        .allocationSize = current_offset,
+        .memoryTypeIndex = memory_type_index
     };
 
-    CVM_VK_CHECK(vkAllocateMemory(cvm_vk_.device,&memory_allocate_info,NULL,memory));
+    result = vkAllocateMemory(cvm_vk_.device, &memory_allocate_info, cvm_vk_.host_allocator, memory);
+
+    if(result != VK_SUCCESS)
+    {
+        return result;
+    }
 
     for(i=0;i<image_count;i++)
     {
-        CVM_VK_CHECK(vkBindImageMemory(cvm_vk_.device,images[i],*memory,offsets[i]));
+        result = vkBindImageMemory(cvm_vk_.device,images[i], *memory, offsets[i]);
+        if(result != VK_SUCCESS)
+        {
+            break;
+        }
     }
+
+    if(result != VK_SUCCESS)
+    {
+        vkFreeMemory(cvm_vk_.device, *memory, cvm_vk_.host_allocator);
+    }
+
+    return result;
+}
+
+VkResult cvm_vk_create_images(cvm_vk_device* device, const VkImageCreateInfo* image_create_infos, uint32_t image_count, VkDeviceMemory * memory,VkImage * images, VkImageView* default_image_views)
+{
+    uint32_t i;
+    VkResult result = VK_SUCCESS;
+    VkImageViewCreateInfo view_create_info;
+    #warning have this unwind resources created upon failure
+
+    *memory = VK_NULL_HANDLE;
+
+    for(i=0;i<image_count;i++)
+    {
+        images[i] = VK_NULL_HANDLE;
+    }
+
+    if(default_image_views)
+    {
+        for(i=0;i<image_count;i++)
+        {
+            default_image_views[i] = VK_NULL_HANDLE;
+        }
+    }
+
+    for(i=0;i<image_count;i++)
+    {
+        result = vkCreateImage(device->device, image_create_infos+i, device->host_allocator, images+i);
+        if(result != VK_SUCCESS)
+        {
+            break;
+        }
+    }
+
+    if(result == VK_SUCCESS)
+    {
+        result = cvm_vk_create_and_bind_memory_for_images(memory, images, image_count, 0, VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT);
+
+        if(default_image_views && result == VK_SUCCESS)
+        {
+            for(i=0;i<image_count;i++)
+            {
+                cvm_vk_set_view_create_info_using_image_create_info(&view_create_info, image_create_infos+i, images[i]);
+                result = vkCreateImageView(device->device, &view_create_info, device->host_allocator, default_image_views+i);
+                if(result != VK_SUCCESS)
+                {
+                    break;
+                }
+            }
+        }
+    }
+
+    if(result != VK_SUCCESS)
+    {
+        for(i=0;i<image_count;i++)
+        {
+            if(images[i] != VK_NULL_HANDLE)
+            {
+                vkDestroyImage(device->device, images[i], device->host_allocator);
+            }
+            if(default_image_views && default_image_views[i] != VK_NULL_HANDLE)
+            {
+                vkDestroyImageView(device->device, default_image_views[i], device->host_allocator);
+            }
+        }
+        if(!memory != VK_NULL_HANDLE)
+        {
+            vkFreeMemory(device->device, *memory, device->host_allocator);
+        }
+    }
+
+    return result;
 }
 
 void cvm_vk_create_image_view(VkImageView * image_view,VkImageViewCreateInfo * info)
@@ -1651,7 +1832,7 @@ void cvm_vk_setup_new_graphics_payload_from_batch(cvm_vk_module_work_payload * p
             };
             vkCmdPipelineBarrier2(payload->command_buffer,&copy_aquire_dependencies);
 
-            //#warning assert queue families are actually different! before performing barriers (perhaps if instead of asserting, not sure yet)
+            #warning assert queue families are actually different! before performing barriers (perhaps if instead of asserting, not sure yet)
 
             //assert(transfer_data->associated_queue_family_index==cvm_vk_transfer_queue_family);
 

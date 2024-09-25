@@ -82,6 +82,8 @@ going to have to rely on acquire op failing to know when to recreate swapchain
 
 typedef struct cvm_vk_device cvm_vk_device;
 
+typedef uint_least64_t cvm_vk_resource_identifier;
+
 static inline VkDeviceSize cvm_vk_align(VkDeviceSize size, VkDeviceSize alignment)
 {
     return (size+alignment-1) & ~(alignment-1);
@@ -95,10 +97,10 @@ CVM_STACK(VkBufferImageCopy, cvm_vk_buffer_image_copy, 16)
 #include "vk/swapchain.h"
 
 
-
-
 typedef struct cvm_vk_instance_setup
 {
+    const VkAllocationCallbacks* host_allocator;
+
     const char ** layer_names;
     uint32_t layer_count;
 
@@ -110,13 +112,22 @@ typedef struct cvm_vk_instance_setup
 }
 cvm_vk_instance_setup;
 
+struct cvm_vk_instance
+{
+    VkInstance instance;
+    /// consider removing above, separeating it from the device
+
+    const VkAllocationCallbacks* host_allocator;
+};
+
 
 typedef float cvm_vk_device_feature_validation_function(const VkBaseInStructure*, const VkPhysicalDeviceProperties*, const VkPhysicalDeviceMemoryProperties*, const VkExtensionProperties*, uint32_t, const VkQueueFamilyProperties*, uint32_t);
 typedef void cvm_vk_device_feature_request_function(VkBaseOutStructure*, bool*, const VkBaseInStructure*, const VkPhysicalDeviceProperties*, const VkPhysicalDeviceMemoryProperties*, const VkExtensionProperties*, uint32_t, const VkQueueFamilyProperties*, uint32_t);
 
 typedef struct cvm_vk_device_setup
 {
-    VkInstance instance;
+    const struct cvm_vk_instance* parent_instance;
+    const VkAllocationCallbacks* host_allocator;
 
     cvm_vk_device_feature_validation_function ** feature_validation;
     uint32_t feature_validation_count;
@@ -162,9 +173,7 @@ struct cvm_vk_defaults
 
 struct cvm_vk_device
 {
-    /// base shared structures
-    VkInstance instance;
-    #warning remove above
+    const VkAllocationCallbacks* host_allocator;
 
     VkPhysicalDevice physical_device;
     VkDevice device;///"logical" device
@@ -195,19 +204,24 @@ struct cvm_vk_device
     #warning remove present, this should be per swapchain image
 
     struct cvm_vk_defaults defaults;
+
+    atomic_uint_least64_t * resource_identifier_monotonic;
 };
 
+static inline cvm_vk_resource_identifier cvm_vk_resource_unique_identifier_acquire(const cvm_vk_device * device)
+{
+    return atomic_fetch_add_explicit(device->resource_identifier_monotonic, 1, memory_order_relaxed);
+}
 
 
 
-
-VkInstance cvm_vk_instance_initialise_for_SDL(const char * application_name,uint32_t application_version,bool validation_enabled);
-VkInstance cvm_vk_instance_initialise(const cvm_vk_instance_setup * setup);
+int cvm_vk_instance_initialise_for_SDL(struct cvm_vk_instance* instance,const char * application_name,uint32_t application_version,bool validation_enabled,const VkAllocationCallbacks* host_allocator);
+int cvm_vk_instance_initialise(struct cvm_vk_instance* instance,const cvm_vk_instance_setup * setup);
 ///above extra is the max extra used by any module
-void cvm_vk_instance_terminate(VkInstance instance);
+void cvm_vk_instance_terminate(struct cvm_vk_instance* instance);
 
-VkSurfaceKHR cvm_vk_create_surface_from_SDL_window(VkInstance instance, SDL_Window * window);
-void cvm_vk_destroy_surface(VkInstance instance, VkSurfaceKHR surface);
+VkSurfaceKHR cvm_vk_create_surface_from_SDL_window(const struct cvm_vk_instance* instance, SDL_Window * window);
+void cvm_vk_destroy_surface(const struct cvm_vk_instance* instance, VkSurfaceKHR surface);
 
 
 
@@ -255,7 +269,11 @@ void cvm_vk_write_descriptor_sets(VkWriteDescriptorSet * writes,uint32_t count);
 void cvm_vk_create_image(VkImage * image,VkImageCreateInfo * info);
 void cvm_vk_destroy_image(VkImage image);
 
-void cvm_vk_create_and_bind_memory_for_images(VkDeviceMemory * memory,VkImage * images,uint32_t image_count,VkMemoryPropertyFlags required_properties,VkMemoryPropertyFlags desired_properties);
+void cvm_vk_set_view_create_info_using_image_create_info(VkImageViewCreateInfo* view_create_info, const VkImageCreateInfo* image_create_info, VkImage image);
+
+VkResult cvm_vk_create_and_bind_memory_for_images(VkDeviceMemory * memory,VkImage * images,uint32_t image_count,VkMemoryPropertyFlags required_properties,VkMemoryPropertyFlags desired_properties);
+/// default_image_views is optional
+VkResult cvm_vk_create_images(cvm_vk_device* device, const VkImageCreateInfo* image_create_infos, uint32_t image_count, VkDeviceMemory * memory,VkImage * images, VkImageView* default_image_views);
 
 void cvm_vk_create_image_view(VkImageView * image_view,VkImageViewCreateInfo * info);
 void cvm_vk_destroy_image_view(VkImageView image_view);
