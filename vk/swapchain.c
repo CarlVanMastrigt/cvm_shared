@@ -297,7 +297,12 @@ void cvm_vk_swapchain_terminate(const cvm_vk_device * device, cvm_vk_surface_swa
         {
             presentable_image = instance->presentable_images+i;
 
-            if(presentable_image->state != CVM_VK_PRESENTABLE_IMAGE_STATE_READY)
+            if(presentable_image->state == CVM_VK_PRESENTABLE_IMAGE_STATE_READY)
+            {
+                assert(presentable_image->last_use_moment.semaphore == VK_NULL_HANDLE);
+                assert(presentable_image->acquire_semaphore == VK_NULL_HANDLE);
+            }
+            else
             {
                 assert(presentable_image->last_use_moment.semaphore != VK_NULL_HANDLE);/// probs wrong!
                 assert(presentable_image->acquire_semaphore != VK_NULL_HANDLE);
@@ -309,11 +314,6 @@ void cvm_vk_swapchain_terminate(const cvm_vk_device * device, cvm_vk_surface_swa
                 presentable_image->last_use_moment = CVM_VK_TIMELINE_SEMAPHORE_MOMENT_NULL;
                 presentable_image->acquire_semaphore = VK_NULL_HANDLE;
                 presentable_image->state = CVM_VK_PRESENTABLE_IMAGE_STATE_READY;
-            }
-            else
-            {
-                assert(presentable_image->last_use_moment.semaphore == VK_NULL_HANDLE);
-                assert(presentable_image->acquire_semaphore == VK_NULL_HANDLE);
             }
         }
         assert(instance->acquired_image_count == 0);
@@ -337,7 +337,12 @@ static inline void cvm_vk_swapchain_cleanup_out_of_date_instances(cvm_vk_surface
         {
             presentable_image = instance->presentable_images+i;
 
-            if(presentable_image->state != CVM_VK_PRESENTABLE_IMAGE_STATE_READY)
+            if(presentable_image->state == CVM_VK_PRESENTABLE_IMAGE_STATE_READY)
+            {
+                assert(presentable_image->last_use_moment.semaphore == VK_NULL_HANDLE);
+                assert(presentable_image->acquire_semaphore == VK_NULL_HANDLE);
+            }
+            else
             {
                 assert(presentable_image->last_use_moment.semaphore != VK_NULL_HANDLE);
                 assert(presentable_image->acquire_semaphore != VK_NULL_HANDLE);
@@ -348,12 +353,8 @@ static inline void cvm_vk_swapchain_cleanup_out_of_date_instances(cvm_vk_surface
                     instance->image_acquisition_semaphores[--instance->acquired_image_count] = presentable_image->acquire_semaphore;
                     presentable_image->last_use_moment = CVM_VK_TIMELINE_SEMAPHORE_MOMENT_NULL;
                     presentable_image->acquire_semaphore = VK_NULL_HANDLE;
+                    presentable_image->state = CVM_VK_PRESENTABLE_IMAGE_STATE_READY;
                 }
-            }
-            else
-            {
-                assert(presentable_image->last_use_moment.semaphore == VK_NULL_HANDLE);
-                assert(presentable_image->acquire_semaphore == VK_NULL_HANDLE);
             }
         }
 
