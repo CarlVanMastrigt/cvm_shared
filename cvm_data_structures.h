@@ -463,8 +463,8 @@ CVM_QUEUE(uint32_t,u32,16)
 
 struct cvm_cache_link
 {
-    uint16_t prev;
-    uint16_t next;
+    uint16_t older;
+    uint16_t newer;
 };
 
 /**
@@ -482,6 +482,7 @@ typedef struct name##_cache                                                     
     uint16_t oldest;                                                            \
     uint16_t newest;                                                            \
     uint16_t first_free;                                                        \
+    uint16_t count;                                                             \
 }                                                                               \
 name##_cache;                                                                   \
                                                                                 \
@@ -493,13 +494,14 @@ static inline void name##_cache_initialise                                      
     cache->entries = malloc(sizeof( type ) * size);                             \
     cache->oldest = CVM_INVALID_U16;                                            \
     cache->newest = CVM_INVALID_U16;                                            \
+    cache->count  = 0;                                                          \
     cache->first_free = size - 1;                                               \
     while(size--)                                                               \
     {                                                                           \
-        cache->links[size].next = size - 1;                                     \
-        cache->links[size].prev = CVM_INVALID_U16;/*not needed*/                \
+        cache->links[size].newer = size - 1;                                    \
+        cache->links[size].older = CVM_INVALID_U16;/*not needed*/               \
     }                                                                           \
-    assert(cache->links[0].next == CVM_INVALID_U16);                            \
+    assert(cache->links[0].newer == CVM_INVALID_U16);                           \
 }                                                                               \
                                                                                 \
 static inline void name##_cache_terminate( name##_cache * cache )               \
@@ -513,7 +515,7 @@ static inline type * name##_cache_find                                          
 {                                                                               \
     uint16_t i,p;                                                               \
     const type * e;                                                             \
-    for(i = cache->oldest; i != CVM_INVALID_U16; i = cache->links[i].next)      \
+    for(i = cache->newest; i != CVM_INVALID_U16; i = cache->links[i].older)     \
     {                                                                           \
         e = cache->entries + i;                                                 \
         if(CVM_CACHE_CMP( e , key ))                                            \
@@ -522,16 +524,16 @@ static inline type * name##_cache_find                                          
             {                                                                   \
                 if(cache->oldest == i)                                          \
                 {                                                               \
-                    cache->oldest = cache->links[i].next;                       \
+                    cache->oldest = cache->links[i].newer;                      \
                 }                                                               \
                 else                                                            \
                 {                                                               \
-                    p = cache->links[i].prev;                                   \
-                    cache->links[p].next = cache->links[i].next;                \
+                    p = cache->links[i].older;                                  \
+                    cache->links[p].newer = cache->links[i].newer;              \
                 }                                                               \
-                cache->links[cache->newest].next = i;                           \
-                cache->links[i].prev = cache->newest;                           \
-                cache->links[i].next = CVM_INVALID_U16;                         \
+                cache->links[cache->newest].newer = i;                          \
+                cache->links[i].older = cache->newest;                          \
+                cache->links[i].newer = CVM_INVALID_U16;                        \
                 cache->newest = i;                                              \
             }                                                                   \
             return cache->entries + i;                                          \
@@ -551,14 +553,14 @@ static inline type * name##_cache_new( name##_cache * cache , bool * evicted )  
             *evicted = false;                                                   \
         }                                                                       \
         i = cache->first_free;                                                  \
-        cache->first_free = cache->links[i].next;                               \
+        cache->first_free = cache->links[i].newer;                              \
         if(cache->newest == CVM_INVALID_U16)                                    \
         {                                                                       \
             cache->oldest = i;                                                  \
         }                                                                       \
         else                                                                    \
         {                                                                       \
-            cache->links[cache->newest].next = i;                               \
+            cache->links[cache->newest].newer = i;                              \
         }                                                                       \
     }                                                                           \
     else                                                                        \
@@ -568,13 +570,14 @@ static inline type * name##_cache_new( name##_cache * cache , bool * evicted )  
             *evicted = true;                                                    \
         }                                                                       \
         i = cache->oldest;                                                      \
-        cache->oldest = cache->links[i].next;                                   \
-        cache->links[cache->oldest].prev = CVM_INVALID_U16;                     \
-        cache->links[cache->newest].next = i;                                   \
+        cache->oldest = cache->links[i].newer;                                  \
+        cache->links[cache->oldest].older = CVM_INVALID_U16;                    \
+        cache->links[cache->newest].newer = i;                                  \
     }                                                                           \
-    cache->links[i].next = CVM_INVALID_U16;                                     \
-    cache->links[i].prev = cache->newest;                                       \
+    cache->links[i].newer = CVM_INVALID_U16;                                    \
+    cache->links[i].older = cache->newest;                                      \
     cache->newest = i;                                                          \
+    cache->count++;                                                             \
     return cache->entries + i;                                                  \
 }                                                                               \
                                                                                 \
@@ -586,19 +589,56 @@ static inline type * name##_cache_evict( name##_cache * cache )                 
     {                                                                           \
         return NULL;                                                            \
     }                                                                           \
-    cache->oldest = cache->links[i].next;                                       \
+    cache->oldest = cache->links[i].newer;                                      \
     if(cache->oldest == CVM_INVALID_U16)                                        \
     {                                                                           \
         cache->newest = CVM_INVALID_U16;                                        \
     }                                                                           \
     else                                                                        \
     {                                                                           \
-        cache->links[cache->oldest].prev = CVM_INVALID_U16;                     \
+        cache->links[cache->oldest].older = CVM_INVALID_U16;                    \
     }                                                                           \
-    cache->links[i].next = cache->first_free;                                   \
-    cache->links[i].prev = CVM_INVALID_U16;/*not needed*/                       \
+    cache->links[i].newer = cache->first_free;                                  \
+    cache->links[i].older = CVM_INVALID_U16;/*not needed*/                      \
     cache->first_free = i;                                                      \
+    cache->count--;                                                             \
     return cache->entries + i;                                                  \
+}                                                                               \
+                                                                                \
+static inline void name##_cache_remove( name##_cache * cache , type * entry)    \
+{                                                                               \
+    uint16_t i = entry - cache->entries;                                        \
+    if(cache->oldest == i)                                                      \
+    {                                                                           \
+        cache->oldest = cache->links[i].newer;                                  \
+        cache->links[cache->oldest].older = CVM_INVALID_U16;                    \
+    }                                                                           \
+    else                                                                        \
+    {                                                                           \
+        cache->links[cache->links[i].older].newer = cache->links[i].newer;      \
+    }                                                                           \
+    if(cache->newest == i)                                                      \
+    {                                                                           \
+        cache->newest = cache->links[i].older;                                  \
+        cache->links[cache->newest].newer = CVM_INVALID_U16;                    \
+    }                                                                           \
+    else                                                                        \
+    {                                                                           \
+        cache->links[cache->links[i].newer].older = cache->links[i].older;      \
+    }                                                                           \
+    cache->links[i].newer = cache->first_free;                                  \
+    cache->links[i].older = CVM_INVALID_U16;/*not needed*/                      \
+    cache->first_free = i;                                                      \
+    cache->count--;                                                             \
+}                                                                               \
+                                                                                \
+static inline type * name##_cache_get_oldest_ptr( name##_cache * cache )        \
+{                                                                               \
+    if(cache->oldest == CVM_INVALID_U16)                                        \
+    {                                                                           \
+        return NULL;                                                            \
+    }                                                                           \
+    return cache->entries + cache->oldest;                                      \
 }                                                                               \
 
 #endif

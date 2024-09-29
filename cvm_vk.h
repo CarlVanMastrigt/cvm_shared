@@ -126,7 +126,7 @@ typedef void cvm_vk_device_feature_request_function(VkBaseOutStructure*, bool*, 
 
 typedef struct cvm_vk_device_setup
 {
-    const struct cvm_vk_instance* parent_instance;
+    VkInstance instance;
     const VkAllocationCallbacks* host_allocator;
 
     cvm_vk_device_feature_validation_function ** feature_validation;

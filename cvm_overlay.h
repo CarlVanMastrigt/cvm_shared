@@ -384,6 +384,7 @@ struct cvm_overlay_target
 
 struct cvm_overlay_frame_resources
 {
+    #warning does this require a last use moment!?
     /// copy of target image view, used as key to the framebuffer cache
     VkImageView image_view;
     cvm_vk_resource_identifier image_view_unique_identifier;
@@ -392,7 +393,7 @@ struct cvm_overlay_frame_resources
     VkFramebuffer framebuffer;
 };
 
-#define CVM_CACHE_CMP( entry , key ) entry->image_view_unique_identifier == key->image_view_unique_identifier
+#define CVM_CACHE_CMP( entry , key ) (entry->image_view_unique_identifier == key->image_view_unique_identifier) && (entry->image_view == key->image_view)
 CVM_CACHE(struct cvm_overlay_frame_resources, struct cvm_overlay_target*, cvm_overlay_frame_resources)
 #undef CVM_CACHE_CMP
 

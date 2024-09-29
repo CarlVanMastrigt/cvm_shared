@@ -313,7 +313,7 @@ static void cvm_vk_internal_device_setup_init(cvm_vk_device_setup * internal, co
     internal->desired_transfer_queues = CVM_CLAMP(external->desired_transfer_queues,1,8);
     internal->desired_async_compute_queues = CVM_CLAMP(external->desired_async_compute_queues,1,8);
 
-    internal->parent_instance = external->parent_instance;
+    internal->instance = external->instance;
     internal->host_allocator = external->host_allocator;
 }
 
@@ -403,7 +403,7 @@ static float cvm_vk_test_physical_device_capabilities(VkPhysicalDevice physical_
     free(extensions);
     free(queue_family_properties);
 
-    printf("testing GPU : %s : %f\n",properties.deviceName,score);
+    printf("testing GPU : %s : d:%u v:%u : %f\n",properties.deviceName, properties.deviceID, properties.vendorID, score);
 
     return score;
 }
@@ -776,7 +776,7 @@ int cvm_vk_device_initialise(cvm_vk_device * device, const cvm_vk_device_setup *
 
     device->host_allocator = device_setup.host_allocator;
 
-    device->physical_device = cvm_vk_create_physical_device(device_setup.parent_instance->instance, &device_setup);
+    device->physical_device = cvm_vk_create_physical_device(device_setup.instance, &device_setup);
     if(device->physical_device==VK_NULL_HANDLE)return -1;
 
     cvm_vk_create_logical_device(device, &device_setup);

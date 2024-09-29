@@ -83,6 +83,7 @@ VkSemaphoreSubmitInfo cvm_vk_timeline_semaphore_moment_wait_submit_info(const cv
 
 void cvm_vk_timeline_semaphore_moment_wait(const cvm_vk_device * device,const cvm_vk_timeline_semaphore_moment * moment)
 {
+    /// should this check non-null?
     VkSemaphoreWaitInfo wait=
     {
         .sType=VK_STRUCTURE_TYPE_SEMAPHORE_WAIT_INFO,

@@ -22,8 +22,8 @@ along with cvm_shared.  If not, see <https://www.gnu.org/licenses/>.
 
 static VkDescriptorPool cvm_overlay_descriptor_pool_create(const cvm_vk_device * device, uint32_t frame_transient_count)
 {
-    VkResult created;
     VkDescriptorPool pool=VK_NULL_HANDLE;
+    VkResult result;
 
     VkDescriptorPoolCreateInfo create_info =
     {
@@ -45,16 +45,16 @@ static VkDescriptorPool cvm_overlay_descriptor_pool_create(const cvm_vk_device *
         }
     };
 
-    created = vkCreateDescriptorPool(device->device, &create_info, device->host_allocator, &pool);
-    assert(created == VK_SUCCESS);
+    result = vkCreateDescriptorPool(device->device, &create_info, device->host_allocator, &pool);
+    assert(result == VK_SUCCESS);
 
     return pool;
 }
 
 static VkDescriptorSetLayout cvm_overlay_image_descriptor_set_layout_create(const cvm_vk_device * device)
 {
-    VkResult created;
-    VkDescriptorSetLayout set_layout=VK_NULL_HANDLE;
+    VkDescriptorSetLayout set_layout = VK_NULL_HANDLE;
+    VkResult result;
 
     VkDescriptorSetLayoutCreateInfo create_info =
     {
@@ -81,16 +81,16 @@ static VkDescriptorSetLayout cvm_overlay_image_descriptor_set_layout_create(cons
         },
     };
 
-    created = vkCreateDescriptorSetLayout(device->device, &create_info, device->host_allocator, &set_layout);
-    assert(created == VK_SUCCESS);
+    result = vkCreateDescriptorSetLayout(device->device, &create_info, device->host_allocator, &set_layout);
+    assert(result == VK_SUCCESS);
 
     return set_layout;
 }
 
 static VkDescriptorSet cvm_overlay_image_descriptor_set_allocate(const cvm_vk_device * device, VkDescriptorPool pool, VkDescriptorSetLayout set_layout)
 {
-    VkResult created;
-    VkDescriptorSet set=VK_NULL_HANDLE;
+    VkDescriptorSet set = VK_NULL_HANDLE;
+    VkResult result;
 
     VkDescriptorSetAllocateInfo allocate_info=
     {
@@ -101,8 +101,8 @@ static VkDescriptorSet cvm_overlay_image_descriptor_set_allocate(const cvm_vk_de
         .pSetLayouts=&set_layout
     };
 
-    created = vkAllocateDescriptorSets(device->device, &allocate_info, &set);
-    assert(created == VK_SUCCESS);
+    result = vkAllocateDescriptorSets(device->device, &allocate_info, &set);
+    assert(result == VK_SUCCESS);
 
     return set;
 }
@@ -172,7 +172,7 @@ static VkDescriptorSetLayout cvm_overlay_frame_descriptor_set_layout_create(cons
                 .descriptorType=VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER,///VK_DESCRIPTOR_TYPE_UNIFORM_TEXEL_BUFFER probably preferable here...
                 .descriptorCount=1,
                 .stageFlags=VK_SHADER_STAGE_FRAGMENT_BIT,
-                .pImmutableSamplers=NULL
+                .pImmutableSamplers=NULL,
             }
         },
     };
@@ -183,9 +183,10 @@ static VkDescriptorSetLayout cvm_overlay_frame_descriptor_set_layout_create(cons
     return set_layout;
 }
 
-static VkDescriptorSet cvm_overlay_frame_descriptor_set_allocate(const cvm_overlay_renderer * renderer)
+static VkDescriptorSet cvm_overlay_frame_descriptor_set_allocate(const cvm_vk_device * device, const cvm_overlay_renderer * renderer)
 {
     VkDescriptorSet descriptor_set;
+    VkResult result;
     ///separate pool for image descriptor sets? (so that they dont need to be reallocated/recreated upon swapchain changes)
 
     VkDescriptorSetAllocateInfo descriptor_set_allocate_info=
@@ -197,7 +198,8 @@ static VkDescriptorSet cvm_overlay_frame_descriptor_set_allocate(const cvm_overl
         .pSetLayouts=&renderer->frame_descriptor_set_layout,
     };
 
-    cvm_vk_allocate_descriptor_sets(&descriptor_set,&descriptor_set_allocate_info);
+    result = vkAllocateDescriptorSets(device->device, &descriptor_set_allocate_info, &descriptor_set);
+    assert(result == VK_SUCCESS);
 
     return descriptor_set;
 }
@@ -628,7 +630,6 @@ static inline struct cvm_overlay_frame_resources* cvm_overlay_frame_resources_ac
         }
         cvm_overlay_frame_resources_initialise(frame_resources, device, target_resources, target);
     }
-    assert(frame_resources->image_view == target->image_view);
 
     return frame_resources;
 }
@@ -694,6 +695,7 @@ static inline void cvm_overlay_target_resources_prune(cvm_overlay_renderer * ren
     /// prune out of date resources
     while(renderer->target_resources.count > 1)
     {
+        ///deletion queue, get the first entry ready to be deleted
         target_resources = cvm_overlay_target_resources_queue_get_front_ptr(&renderer->target_resources);
         assert(target_resources->last_use_moment.semaphore != VK_NULL_HANDLE);
         if(cvm_vk_timeline_semaphore_moment_query(device, &target_resources->last_use_moment))
@@ -701,9 +703,11 @@ static inline void cvm_overlay_target_resources_prune(cvm_overlay_renderer * ren
             cvm_overlay_target_resources_terminate(target_resources, device);
             cvm_overlay_target_resources_queue_dequeue(&renderer->target_resources, NULL);
         }
+        else break;
     }
 }
 
+#warning "target_resources" needs a better name
 static inline struct cvm_overlay_target_resources* cvm_overlay_target_resources_acquire(cvm_overlay_renderer * renderer, const cvm_vk_device * device, const struct cvm_overlay_target * target)
 {
     struct cvm_overlay_target_resources* target_resources;
@@ -777,9 +781,10 @@ static inline void cvm_overlay_add_target_release_instructions(cvm_vk_command_bu
 
 static inline void cvm_overlay_transient_resources_initialise(struct cvm_overlay_transient_resources* transient_resources, const cvm_vk_device* device, const cvm_overlay_renderer * renderer)
 {
-    cvm_vk_command_pool_initialise(&transient_resources->command_pool, device, device->graphics_queue_family_index, 0);
     transient_resources->last_use_moment = CVM_VK_TIMELINE_SEMAPHORE_MOMENT_NULL;
-    transient_resources->frame_descriptor_set = cvm_overlay_frame_descriptor_set_allocate(renderer);
+
+    cvm_vk_command_pool_initialise(&transient_resources->command_pool, device, device->graphics_queue_family_index, 0);
+    transient_resources->frame_descriptor_set = cvm_overlay_frame_descriptor_set_allocate(device, renderer);
 }
 
 static inline void cvm_overlay_transient_resources_terminate(struct cvm_overlay_transient_resources* transient_resources, const cvm_vk_device* device)

@@ -63,10 +63,10 @@ void cvm_vk_command_pool_terminate(cvm_vk_command_pool * pool, const cvm_vk_devi
 
 void cvm_vk_command_pool_reset(cvm_vk_command_pool * pool, const cvm_vk_device * device)
 {
-    vkResetCommandPool(device->device,pool->pool,0);
-    assert(pool->acquired_buffer_count==pool->submitted_buffer_count);///not all acquired command buffers were submitted
-    pool->acquired_buffer_count=0;
-    pool->submitted_buffer_count=0;
+    vkResetCommandPool(device->device, pool->pool, 0);
+    assert(pool->acquired_buffer_count == pool->submitted_buffer_count);///not all acquired command buffers were submitted
+    pool->acquired_buffer_count  = 0;
+    pool->submitted_buffer_count = 0;
 }
 
 
