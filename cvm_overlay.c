@@ -61,23 +61,20 @@ static VkDescriptorSetLayout cvm_overlay_image_descriptor_set_layout_create(cons
         .sType=VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO,
         .pNext=NULL,
         .flags=0,
-        .bindingCount=2,
-        .pBindings=(VkDescriptorSetLayoutBinding[2])
+        .bindingCount=1,
+        .pBindings=(VkDescriptorSetLayoutBinding[1])
         {
             {
                 .binding=0,
                 .descriptorType=VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER,///VK_DESCRIPTOR_TYPE_UNIFORM_TEXEL_BUFFER probably preferable here...
-                .descriptorCount=1,
+                .descriptorCount=2,
                 .stageFlags=VK_SHADER_STAGE_FRAGMENT_BIT,
-                .pImmutableSamplers=&device->defaults.fetch_sampler /// also test w/ null & setting samplers directly
+                .pImmutableSamplers=(VkSampler[2]) /// also test w/ null & setting samplers directly
+                {
+                    device->defaults.fetch_sampler,
+                    device->defaults.fetch_sampler
+                }
             },
-            {
-                .binding=1,
-                .descriptorType=VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER,///VK_DESCRIPTOR_TYPE_UNIFORM_TEXEL_BUFFER probably preferable here...
-                .descriptorCount=1,
-                .stageFlags=VK_SHADER_STAGE_FRAGMENT_BIT,
-                .pImmutableSamplers=&device->defaults.fetch_sampler /// also test w/ null & setting samplers directly
-            }
         },
     };
 
@@ -109,49 +106,33 @@ static VkDescriptorSet cvm_overlay_image_descriptor_set_allocate(const cvm_vk_de
 
 static void cvm_overlay_image_descriptor_set_write(const cvm_vk_device * device, VkDescriptorSet descriptor_set, const VkImageView * views)
 {
-    VkWriteDescriptorSet writes[2]=
+    VkWriteDescriptorSet writes =
     {
-        {
             .sType=VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET,
             .pNext=NULL,
             .dstSet=descriptor_set,
             .dstBinding=0,
             .dstArrayElement=0,
-            .descriptorCount=1,
+            .descriptorCount=2,
             .descriptorType=VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER,
-            .pImageInfo=(VkDescriptorImageInfo[1])
+            .pImageInfo=(VkDescriptorImageInfo[2])
             {
                 {
                     .sampler=VK_NULL_HANDLE,///using immutable sampler (for now)
                     .imageView=views[0],
                     .imageLayout=VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL
-                }
-            },
-            .pBufferInfo=NULL,
-            .pTexelBufferView=NULL
-        },
-        {
-            .sType=VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET,
-            .pNext=NULL,
-            .dstSet=descriptor_set,
-            .dstBinding=1,
-            .dstArrayElement=0,
-            .descriptorCount=1,
-            .descriptorType=VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER,
-            .pImageInfo=(VkDescriptorImageInfo[1])
-            {
+                },
                 {
                     .sampler=VK_NULL_HANDLE,///using immutable sampler (for now)
                     .imageView=views[1],
                     .imageLayout=VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL
-                }
+                },
             },
             .pBufferInfo=NULL,
             .pTexelBufferView=NULL
-        }
     };
 
-    vkUpdateDescriptorSets(device->device, 2, writes, 0, NULL);
+    vkUpdateDescriptorSets(device->device, 1, &writes, 0, NULL);
 }
 
 static VkDescriptorSetLayout cvm_overlay_frame_descriptor_set_layout_create(const cvm_vk_device * device)
@@ -183,6 +164,7 @@ static VkDescriptorSetLayout cvm_overlay_frame_descriptor_set_layout_create(cons
     return set_layout;
 }
 
+#warning probably want to allocate these in some other fashion, passing in the renderer like this isn't great, splitting up descriptors to this degree isn't great either...
 static VkDescriptorSet cvm_overlay_frame_descriptor_set_allocate(const cvm_vk_device * device, const cvm_overlay_renderer * renderer)
 {
     VkDescriptorSet descriptor_set;
@@ -801,8 +783,11 @@ static inline struct cvm_overlay_transient_resources* cvm_overlay_transient_reso
 
     if(renderer->transient_count_initialised < renderer->transient_count)
     {
-        transient_resources = renderer->transient_resources_backing + renderer->transient_count_initialised++;
+        transient_resources = renderer->transient_resources_backing + renderer->transient_count_initialised;
+
         cvm_overlay_transient_resources_initialise(transient_resources, device, renderer);
+
+        renderer->transient_count_initialised++;
     }
     else
     {
@@ -814,6 +799,7 @@ static inline struct cvm_overlay_transient_resources* cvm_overlay_transient_reso
         /// reset resources
         cvm_vk_command_pool_reset(&transient_resources->command_pool, device);
     }
+
     return transient_resources;
 }
 
@@ -972,6 +958,7 @@ cvm_vk_timeline_semaphore_moment cvm_overlay_render_to_target(const cvm_vk_devic
     screen_h=(float)target->extent.height;
     float screen_dimensions[4]={2.0/screen_w,2.0/screen_h,screen_w,screen_h};
     vkCmdPushConstants(cb.buffer,renderer->pipeline_layout,VK_SHADER_STAGE_VERTEX_BIT|VK_SHADER_STAGE_FRAGMENT_BIT,0,4*sizeof(float),screen_dimensions);
+    /// set index (firstSet) is defined in pipeline creation (index in array)
     vkCmdBindDescriptorSets(cb.buffer,VK_PIPELINE_BIND_POINT_GRAPHICS,renderer->pipeline_layout,0,1,&transient_resources->frame_descriptor_set,0,NULL);
     vkCmdBindDescriptorSets(cb.buffer,VK_PIPELINE_BIND_POINT_GRAPHICS,renderer->pipeline_layout,1,1,&renderer->image_descriptor_set,0,NULL);
 

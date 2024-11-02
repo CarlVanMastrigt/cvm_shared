@@ -43,58 +43,94 @@ cvm_vk_surface_swapchain * cvm_vk_swapchain_get(void)
 
 
 
-int cvm_vk_instance_initialise(struct cvm_vk_instance* instance, const cvm_vk_instance_setup * setup)
+VkResult cvm_vk_instance_initialise(struct cvm_vk_instance* instance, const cvm_vk_instance_setup * setup)
 {
-    uint32_t api_version,major_version,minor_version,patch_version,variant;
+    uint32_t api_version, major_version, minor_version, patch_version, variant, i, j, extension_count;
+    char** extension_names;
+    const uint32_t internal_extension_count = 0;
+    const char* internal_extension_names[1] =
+    {
+//        "VK_KHR_present_wait",
+//        "VK_EXT_swapchain_maintenance1"
+    };
+
+//    char ** ext_names;
+//    vkEnumerateInstanceExtensionProperties(NULL, &extension_count, NULL);
+//    printf("EXT COUNT: %u\n",extension_count);
+
+    VkResult result;
+
+    extension_count = internal_extension_count + setup->extension_count;/// check for duplicates?
+    extension_names = malloc(sizeof(char*)*extension_count);
+    memcpy(extension_names, internal_extension_names, sizeof(char*)*internal_extension_count);
+    memcpy(extension_names+internal_extension_count, setup->extension_names, sizeof(char*)*setup->extension_count);
+
 
     instance->host_allocator = setup->host_allocator;
 
-    CVM_VK_CHECK(vkEnumerateInstanceVersion(&api_version));
+    result = vkEnumerateInstanceVersion(&api_version);
 
-    variant=api_version>>29;
-    major_version=(api_version>>22)&0x7F;
-    minor_version=(api_version>>12)&0x3FF;
-    patch_version=api_version&0xFFF;
-    printf("Vulkan API version: %u.%u.%u - %u\n", major_version, minor_version, patch_version, variant);
-
-    if(major_version==1 && minor_version<3) return -1;
-    if(variant) return -1;
-
-    VkApplicationInfo application_info=(VkApplicationInfo)
+    if(result == VK_SUCCESS)
     {
-        .sType=VK_STRUCTURE_TYPE_APPLICATION_INFO,
-        .pNext=NULL,
-        .pApplicationName=setup->application_name,
-        .applicationVersion=setup->application_version,
-        .pEngineName=CVM_SHARED_ENGINE_NAME,
-        .engineVersion=CVM_SHARED_ENGINE_VERSION,
-        .apiVersion=api_version,
-    };
+        variant=api_version>>29;
+        major_version=(api_version>>22)&0x7F;
+        minor_version=(api_version>>12)&0x3FF;
+        patch_version=api_version&0xFFF;
+        printf("Vulkan API version: %u.%u.%u - %u\n", major_version, minor_version, patch_version, variant);
 
-    uint32_t i;
-    for(i=0;i<setup->extension_count;i++)puts(setup->extension_names[i]);
+        #warning make minimum required version part of setup
+        if((major_version<=1 && minor_version<3) || variant)
+        {
+            #warning print message tp stderr
+            result = VK_RESULT_MAX_ENUM;
+        }
+    }
 
-    VkInstanceCreateInfo instance_creation_info=(VkInstanceCreateInfo)
+    if(result == VK_SUCCESS)
     {
-        .sType=VK_STRUCTURE_TYPE_INSTANCE_CREATE_INFO,
-        .pApplicationInfo= &application_info,
-        .enabledLayerCount=setup->layer_count,
-        .ppEnabledLayerNames=setup->layer_names,
-        .enabledExtensionCount=setup->extension_count,
-        .ppEnabledExtensionNames=setup->extension_names,
-    };
+        VkApplicationInfo application_info=(VkApplicationInfo)
+        {
+            .sType = VK_STRUCTURE_TYPE_APPLICATION_INFO,
+            .pNext = NULL,
+            .pApplicationName = setup->application_name,
+            .applicationVersion = setup->application_version,
+            .pEngineName = CVM_SHARED_ENGINE_NAME,
+            .engineVersion = CVM_SHARED_ENGINE_VERSION,
+            .apiVersion = api_version,
+        };
 
-    CVM_VK_CHECK(vkCreateInstance(&instance_creation_info, setup->host_allocator, &instance->instance));
+        for(i=0;i<setup->extension_count;i++)
+        {
+            puts(setup->extension_names[i]);
+        }
 
-    return 0;
+        VkInstanceCreateInfo instance_creation_info=(VkInstanceCreateInfo)
+        {
+            .sType = VK_STRUCTURE_TYPE_INSTANCE_CREATE_INFO,
+            .pApplicationInfo = &application_info,
+            .enabledLayerCount = setup->layer_count,
+            .ppEnabledLayerNames = setup->layer_names,
+            .enabledExtensionCount = extension_count,
+            .ppEnabledExtensionNames = extension_names,
+        };
+        result = vkCreateInstance(&instance_creation_info, setup->host_allocator, &instance->instance);
+    }
+
+    free(extension_names);
+    if(result != VK_SUCCESS)
+    {
+        printf("FUCK %d\n",result);
+    }
+
+    return result;
 }
 
-int cvm_vk_instance_initialise_for_SDL(struct cvm_vk_instance* instance, const char* application_name,uint32_t application_version,bool validation_enabled,const VkAllocationCallbacks* host_allocator)
+VkResult cvm_vk_instance_initialise_for_SDL(struct cvm_vk_instance* instance, const char* application_name,uint32_t application_version,bool validation_enabled,const VkAllocationCallbacks* host_allocator)
 {
     cvm_vk_instance_setup setup;
     SDL_Window * window;
     const char * validation = "VK_LAYER_KHRONOS_validation";
-    int return_value = -1;
+    VkResult result = VK_SUCCESS;
 
     if(validation_enabled)
     {
@@ -110,26 +146,26 @@ int cvm_vk_instance_initialise_for_SDL(struct cvm_vk_instance* instance, const c
     setup.application_name = application_name;
     setup.application_version = application_version;
 
+    result = VK_RESULT_MAX_ENUM;/// default result of error
+
     window = SDL_CreateWindow("", SDL_WINDOWPOS_UNDEFINED, SDL_WINDOWPOS_UNDEFINED, 0, 0, SDL_WINDOW_VULKAN|SDL_WINDOW_HIDDEN);
 
-    if(!window)
+    if(window)
     {
-        return -1;
-    }
-
-    if(SDL_Vulkan_GetInstanceExtensions(window,&setup.extension_count,NULL))
-    {
-        setup.extension_names=malloc(sizeof(const char*)*setup.extension_count);
-        if(SDL_Vulkan_GetInstanceExtensions(window, &setup.extension_count, setup.extension_names))
+        if(SDL_Vulkan_GetInstanceExtensions(window,&setup.extension_count,NULL))
         {
-            return_value = cvm_vk_instance_initialise(instance, &setup);
+            setup.extension_names=malloc(sizeof(const char*)*setup.extension_count);
+            if(SDL_Vulkan_GetInstanceExtensions(window, &setup.extension_count, setup.extension_names))
+            {
+                result = cvm_vk_instance_initialise(instance, &setup);
+            }
+            free(setup.extension_names);
         }
-        free(setup.extension_names);
+
+        SDL_DestroyWindow(window);
     }
 
-    SDL_DestroyWindow(window);
-
-    return return_value;
+    return result;
 }
 
 void cvm_vk_instance_terminate(struct cvm_vk_instance* instance)
@@ -264,9 +300,25 @@ static void cvm_vk_internal_device_feature_request_function(VkBaseOutStructure* 
 
 static void cvm_vk_internal_device_setup_init(cvm_vk_device_setup * internal, const cvm_vk_device_setup * external)
 {
-    static const cvm_vk_device_setup empty_device_setup = {0};
-    VkStructureType feature_struct_types[3]={VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_VULKAN_1_1_FEATURES, VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_VULKAN_1_2_FEATURES, VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_VULKAN_1_3_FEATURES};
-    size_t feature_struct_sizes[3]={sizeof(VkPhysicalDeviceVulkan11Features), sizeof(VkPhysicalDeviceVulkan12Features), sizeof(VkPhysicalDeviceVulkan13Features)};
+    const cvm_vk_device_setup empty_device_setup = {0};// does this actually need to be static?? what terrible code is this??
+
+    const internal_feature_count = 3;
+    VkStructureType feature_struct_types[4] =
+    {
+        VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_VULKAN_1_1_FEATURES,
+        VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_VULKAN_1_2_FEATURES,
+        VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_VULKAN_1_3_FEATURES,
+//        VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_PRESENT_WAIT_FEATURES_KHR,
+    };
+    size_t feature_struct_sizes[4] =
+    {
+        sizeof(VkPhysicalDeviceVulkan11Features),
+        sizeof(VkPhysicalDeviceVulkan12Features),
+        sizeof(VkPhysicalDeviceVulkan13Features),
+//        sizeof(VkPhysicalDevicePresentWaitFeaturesKHR),
+
+    };
+
     uint32_t i,j;
 
     if(!external)
@@ -274,9 +326,9 @@ static void cvm_vk_internal_device_setup_init(cvm_vk_device_setup * internal, co
         external = &empty_device_setup;
     }
 
-    internal->feature_validation=malloc(sizeof(cvm_vk_device_feature_validation_function*)*(external->feature_validation_count+1));
-    internal->feature_validation_count=external->feature_validation_count+1;
-    internal->feature_validation[0]=&cvm_vk_internal_device_feature_validation_function;
+    internal->feature_validation = malloc(sizeof(cvm_vk_device_feature_validation_function*)*(external->feature_validation_count+1));
+    internal->feature_validation_count = external->feature_validation_count+1;
+    internal->feature_validation[0] = &cvm_vk_internal_device_feature_validation_function;
     memcpy(internal->feature_validation+1,external->feature_validation,sizeof(cvm_vk_device_feature_validation_function*)*external->feature_validation_count);
 
     internal->feature_request=malloc(sizeof(cvm_vk_device_feature_request_function*)*(external->feature_request_count+1));
@@ -286,11 +338,11 @@ static void cvm_vk_internal_device_setup_init(cvm_vk_device_setup * internal, co
 
 
     ///following ones shouldnt contain duplicates
-    internal->device_feature_struct_types=malloc(sizeof(VkStructureType)*(external->device_feature_struct_count+3));
-    internal->device_feature_struct_sizes=malloc(sizeof(size_t)*(external->device_feature_struct_count+3));
-    internal->device_feature_struct_count=3;
-    memcpy(internal->device_feature_struct_types, feature_struct_types, sizeof(VkStructureType)*3);
-    memcpy(internal->device_feature_struct_sizes, feature_struct_sizes, sizeof(size_t)*3);
+    internal->device_feature_struct_types = malloc(sizeof(VkStructureType)*(external->device_feature_struct_count+internal_feature_count));
+    internal->device_feature_struct_sizes = malloc(sizeof(size_t)*(external->device_feature_struct_count+internal_feature_count));
+    internal->device_feature_struct_count = internal_feature_count;
+    memcpy(internal->device_feature_struct_types, feature_struct_types, sizeof(VkStructureType)*internal_feature_count);
+    memcpy(internal->device_feature_struct_sizes, feature_struct_sizes, sizeof(size_t)*internal_feature_count);
 
     for(i=0;i<external->device_feature_struct_count;i++)
     {
@@ -303,8 +355,8 @@ static void cvm_vk_internal_device_setup_init(cvm_vk_device_setup * internal, co
         }
         if(j==internal->device_feature_struct_count)
         {
-            internal->device_feature_struct_types[j]=external->device_feature_struct_types[i];
-            internal->device_feature_struct_sizes[j]=external->device_feature_struct_sizes[i];
+            internal->device_feature_struct_types[j] = external->device_feature_struct_types[i];
+            internal->device_feature_struct_sizes[j] = external->device_feature_struct_sizes[i];
             internal->device_feature_struct_count++;
         }
     }
@@ -420,6 +472,8 @@ static VkPhysicalDevice cvm_vk_create_physical_device(VkInstance vk_instance, co
     float score,best_score;
     VkPhysicalDevice best_device;
 
+    best_device = VK_NULL_HANDLE;
+
     CVM_VK_CHECK(vkEnumeratePhysicalDevices(vk_instance, &device_count, NULL));
     physical_devices = malloc(sizeof(VkPhysicalDevice)*device_count);
     CVM_VK_CHECK(vkEnumeratePhysicalDevices(vk_instance, &device_count, physical_devices));
@@ -436,9 +490,6 @@ static VkPhysicalDevice cvm_vk_create_physical_device(VkInstance vk_instance, co
     }
 
     free(physical_devices);
-
-    /// no applicable devices meet requirements
-    if(best_score == 0.0) return VK_NULL_HANDLE;
 
     return best_device;
 }
@@ -681,7 +732,7 @@ static void cvm_vk_destroy_logical_device(cvm_vk_device * device)
         cvm_vk_terminate_device_queue_family(device,device->queue_families+i);
     }
     free(device->queue_families);
-    free(device->queue_family_properties);
+    free((void*)device->queue_family_properties);
 
     vkDestroyDevice(device->device, device->host_allocator);
     cvm_vk_destroy_device_feature_structure_list((void*)device->features);
@@ -716,6 +767,66 @@ VkSemaphoreSubmitInfo cvm_vk_binary_semaphore_submit_info(VkSemaphore semaphore,
         .deviceIndex=0
     };
 }
+
+VkResult cvm_vk_create_descriptor_set_layout_registering_requirements(VkDescriptorSetLayout* set_layout, const VkDescriptorSetLayoutCreateInfo* set_layout_create_info, const struct cvm_vk_device* device, struct cvm_vk_descriptor_pool_requirements* pool_requirements, uint32_t sets_using_this_layout)
+{
+    VkResult r;
+    uint32_t i,j;
+    const VkDescriptorSetLayoutBinding* binding;
+
+    r = vkCreateDescriptorSetLayout(device->device, set_layout_create_info, device->host_allocator, set_layout);
+
+    if(r==VK_SUCCESS)
+    {
+        for(i=0;i<set_layout_create_info->bindingCount;i++)
+        {
+            binding = set_layout_create_info->pBindings + i;
+
+            for(j=0;j<pool_requirements->type_count;j++)
+            {
+                if(pool_requirements->type_sizes[j].type == binding->descriptorType)
+                {
+                    pool_requirements->type_sizes[j].descriptorCount += binding->descriptorCount * sets_using_this_layout;
+                    break;
+                }
+            }
+            if(j == pool_requirements->type_count)
+            {
+                pool_requirements->type_sizes[pool_requirements->type_count++]=(VkDescriptorPoolSize)
+                {
+                    .type = binding->descriptorType,
+                    .descriptorCount = binding->descriptorCount * sets_using_this_layout,
+                };
+            }
+
+            pool_requirements->set_count += sets_using_this_layout;
+        }
+    }
+
+    return r;
+}
+
+
+VkResult cvm_vk_create_descriptor_pool_for_sizes(VkDescriptorPool* pool, const struct cvm_vk_device* device, struct cvm_vk_descriptor_pool_requirements* pool_requirements)
+{
+    VkDescriptorPoolCreateInfo create_info =
+    {
+        .sType=VK_STRUCTURE_TYPE_DESCRIPTOR_POOL_CREATE_INFO,
+        .pNext=NULL,
+        .flags=0,///by not specifying individual free must reset whole pool (which is fine)
+        .maxSets=pool_requirements->set_count,
+        .poolSizeCount=pool_requirements->type_count,
+        .pPoolSizes=pool_requirements->type_sizes
+    };
+
+    return vkCreateDescriptorPool(device->device, &create_info, device->host_allocator, pool);
+}
+
+
+
+
+
+
 
 VkFormat cvm_vk_get_screen_format(void)
 {
@@ -1045,6 +1156,7 @@ void cvm_vk_destroy_image(VkImage image)
 
 static inline bool cvm_vk_find_appropriate_memory_type(uint32_t supported_type_mask,VkMemoryPropertyFlags required_properties,uint32_t * index)
 {
+    #warning remove this after it has been replaced with cvm_vk_find_appropriate_memory_type_
     uint32_t i;
     for(i=0;i<cvm_vk_.memory_properties.memoryTypeCount;i++)
     {
@@ -1055,6 +1167,19 @@ static inline bool cvm_vk_find_appropriate_memory_type(uint32_t supported_type_m
         }
     }
     return false;
+}
+
+static uint32_t cvm_vk_find_appropriate_memory_type_(const cvm_vk_device * device, uint32_t supported_type_bits, VkMemoryPropertyFlags required_properties)
+{
+    uint32_t i;
+    for(i=0;i<device->memory_properties.memoryTypeCount;i++)
+    {
+        if(( supported_type_bits & 1<<i ) && ((device->memory_properties.memoryTypes[i].propertyFlags & required_properties) == required_properties))
+        {
+            return i;
+        }
+    }
+    return CVM_INVALID_U32_INDEX;
 }
 
 
@@ -1135,14 +1260,13 @@ void cvm_vk_set_view_create_info_using_image_create_info(VkImageViewCreateInfo* 
     };
 }
 
-VkResult cvm_vk_create_and_bind_memory_for_images(VkDeviceMemory * memory,VkImage * images,uint32_t image_count,VkMemoryPropertyFlags required_properties,VkMemoryPropertyFlags desired_properties)
+VkResult cvm_vk_allocate_and_bind_memory_for_images(VkDeviceMemory * memory,VkImage * images,uint32_t image_count,VkMemoryPropertyFlags required_properties,VkMemoryPropertyFlags desired_properties)
 {
     VkDeviceSize offsets[image_count];
     VkDeviceSize current_offset;
     VkMemoryRequirements requirements;
     uint32_t i,memory_type_index,supported_type_bits;
-    bool type_found;
-    VkResult result;
+    VkResult result = VK_SUCCESS;
 
     current_offset = 0;
     supported_type_bits = 0xFFFFFFFF;
@@ -1150,46 +1274,48 @@ VkResult cvm_vk_create_and_bind_memory_for_images(VkDeviceMemory * memory,VkImag
     {
         vkGetImageMemoryRequirements(cvm_vk_.device,images[i], &requirements);
         offsets[i] = (current_offset+requirements.alignment-1) & ~(requirements.alignment-1);
-        current_offset = offsets[i]+requirements.size;
+        current_offset = offsets[i] + requirements.size;
         supported_type_bits &= requirements.memoryTypeBits;
     }
 
-    assert(supported_type_bits);
-
-    type_found = cvm_vk_find_appropriate_memory_type(supported_type_bits,desired_properties|required_properties,&memory_type_index);
-
-    if(!type_found)
+    if(!supported_type_bits)
     {
-        type_found = cvm_vk_find_appropriate_memory_type(supported_type_bits,required_properties,&memory_type_index);
+        //fprintf(stderr,"CVM VK ERROR - images have no singular supported memory types, consider splitting backing memory\n");
+        result = VK_RESULT_MAX_ENUM;
     }
 
-    if(!type_found)
+    if(result == VK_SUCCESS)
     {
-        return VK_ERROR_UNKNOWN;
-    }
+        memory_type_index = cvm_vk_find_appropriate_memory_type_(&cvm_vk_, supported_type_bits, desired_properties|required_properties);
 
-    VkMemoryAllocateInfo memory_allocate_info=(VkMemoryAllocateInfo)
-    {
-        .sType=VK_STRUCTURE_TYPE_MEMORY_ALLOCATE_INFO,
-        .pNext=NULL,
-        .allocationSize = current_offset,
-        .memoryTypeIndex = memory_type_index
-    };
-
-    result = vkAllocateMemory(cvm_vk_.device, &memory_allocate_info, cvm_vk_.host_allocator, memory);
-
-    if(result != VK_SUCCESS)
-    {
-        return result;
-    }
-
-    for(i=0;i<image_count;i++)
-    {
-        result = vkBindImageMemory(cvm_vk_.device,images[i], *memory, offsets[i]);
-        if(result != VK_SUCCESS)
+        if(memory_type_index == CVM_INVALID_U32_INDEX)
         {
-            break;
+            memory_type_index = cvm_vk_find_appropriate_memory_type_(&cvm_vk_, supported_type_bits, required_properties);
         }
+
+        if(memory_type_index == CVM_INVALID_U32_INDEX)
+        {
+            //fprintf(stderr,"CVM VK ERROR - images have no singular supported memory types with required properties, consider splitting backing memory, or perhaps using less stringent requirements\n");
+            result = VK_RESULT_MAX_ENUM;
+        }
+    }
+
+    if(result == VK_SUCCESS)
+    {
+        VkMemoryAllocateInfo memory_allocate_info=(VkMemoryAllocateInfo)
+        {
+            .sType=VK_STRUCTURE_TYPE_MEMORY_ALLOCATE_INFO,
+            .pNext=NULL,
+            .allocationSize = current_offset,
+            .memoryTypeIndex = memory_type_index
+        };
+
+        result = vkAllocateMemory(cvm_vk_.device, &memory_allocate_info, cvm_vk_.host_allocator, memory);
+    }
+
+    for(i=0 ; result == VK_SUCCESS && i < image_count ; i++)
+    {
+        result = vkBindImageMemory(cvm_vk_.device, images[i], *memory, offsets[i]);
     }
 
     if(result != VK_SUCCESS)
@@ -1233,7 +1359,7 @@ VkResult cvm_vk_create_images(cvm_vk_device* device, const VkImageCreateInfo* im
 
     if(result == VK_SUCCESS)
     {
-        result = cvm_vk_create_and_bind_memory_for_images(memory, images, image_count, 0, VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT);
+        result = cvm_vk_allocate_and_bind_memory_for_images(memory, images, image_count, 0, VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT);
 
         if(default_image_views && result == VK_SUCCESS)
         {
@@ -1432,102 +1558,110 @@ VkDeviceSize cvm_vk_buffer_alignment_requirements(const cvm_vk_device * device, 
     return alignment;
 }
 
-static uint32_t cvm_vk_find_appropriate_memory_type_(const cvm_vk_device * device, uint32_t supported_type_bits, VkMemoryPropertyFlags required_properties)
-{
-    uint32_t i;
-    for(i=0;i<device->memory_properties.memoryTypeCount;i++)
-    {
-        if(( supported_type_bits & 1<<i ) && ((device->memory_properties.memoryTypes[i].propertyFlags & required_properties) == required_properties))
-        {
-            return i;
-        }
-    }
-    return CVM_INVALID_U32_INDEX;
-}
-
-void cvm_vk_buffer_memory_pair_create(const cvm_vk_device * device, cvm_vk_buffer_memory_pair_setup * setup)
+VkResult cvm_vk_buffer_memory_pair_create(const cvm_vk_device * device, cvm_vk_buffer_memory_pair_setup * setup)
 {
     VkMemoryRequirements memory_requirements;
     uint32_t memory_type_index;
+    VkResult result;
+    VkMemoryPropertyFlags required_properties, desired_properties;
+
+    required_properties = setup->required_properties | (setup->map_memory ? VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT : 0);
+    desired_properties = required_properties | setup->desired_properties;
+
+    /// set mapping fallback values
+    setup->buffer = VK_NULL_HANDLE;
+    setup->memory = VK_NULL_HANDLE;
+    setup->mapping = NULL;
+    setup->mapping_coherent = false;
+    setup->acquired_properties = 0;
+
+
 
     VkBufferCreateInfo buffer_create_info=(VkBufferCreateInfo)
     {
-        .sType=VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO,
-        .pNext=NULL,
-        .flags=0,
-        .size=setup->buffer_size,
-        .usage=setup->usage,
-        .sharingMode=VK_SHARING_MODE_EXCLUSIVE,
-        .queueFamilyIndexCount=0,
-        .pQueueFamilyIndices=NULL
+        .sType = VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO,
+        .pNext = NULL,
+        .flags = 0,
+        .size = setup->buffer_size,
+        .usage = setup->usage,
+        .sharingMode = VK_SHARING_MODE_EXCLUSIVE,
+        .queueFamilyIndexCount = 0,
+        .pQueueFamilyIndices = NULL,
     };
 
-    if(vkCreateBuffer(device->device,&buffer_create_info,NULL,&setup->buffer)!=VK_SUCCESS)
+    result = vkCreateBuffer(device->device, &buffer_create_info, device->host_allocator, &setup->buffer);
+
+    if(result == VK_SUCCESS)
     {
-        setup->buffer=VK_NULL_HANDLE;
-        setup->memory=VK_NULL_HANDLE;
-        return;
-    }
+        vkGetBufferMemoryRequirements(device->device, setup->buffer, &memory_requirements);
 
+        memory_type_index = cvm_vk_find_appropriate_memory_type_(device, memory_requirements.memoryTypeBits, desired_properties);
 
-    vkGetBufferMemoryRequirements(device->device,setup->buffer,&memory_requirements);
-
-    memory_type_index = cvm_vk_find_appropriate_memory_type_(device, memory_requirements.memoryTypeBits, setup->desired_properties|setup->required_properties);
-    if(memory_type_index==CVM_INVALID_U32_INDEX)
-    {
-        ///try again without desired properties
-        memory_type_index = cvm_vk_find_appropriate_memory_type(device, memory_requirements.memoryTypeBits, setup->required_properties);
-        if(memory_type_index==CVM_INVALID_U32_INDEX)
+        if(memory_type_index == CVM_INVALID_U32_INDEX)
         {
-            vkDestroyBuffer(device->device,setup->buffer,NULL);
-            setup->buffer=VK_NULL_HANDLE;
-            setup->memory=VK_NULL_HANDLE;
-            return;
+            ///try again with only required properties
+            memory_type_index = cvm_vk_find_appropriate_memory_type_(device, memory_requirements.memoryTypeBits, required_properties);
         }
-    }
 
-
-    VkMemoryAllocateInfo memory_allocate_info=(VkMemoryAllocateInfo)
-    {
-        .sType=VK_STRUCTURE_TYPE_MEMORY_ALLOCATE_INFO,
-        .pNext=NULL,
-        .allocationSize=memory_requirements.size,
-        .memoryTypeIndex=memory_type_index
-    };
-
-    if(vkAllocateMemory(device->device,&memory_allocate_info,NULL,&setup->memory) != VK_SUCCESS)
-    {
-        vkDestroyBuffer(device->device,setup->buffer,NULL);
-        setup->buffer=VK_NULL_HANDLE;
-        setup->memory=VK_NULL_HANDLE;
-        return;
-    }
-
-    if(vkBindBufferMemory(device->device,setup->buffer,setup->memory,0) != VK_SUCCESS)
-    {
-        vkDestroyBuffer(device->device,setup->buffer,NULL);
-        vkFreeMemory(device->device,setup->memory,NULL);
-        setup->buffer=VK_NULL_HANDLE;
-        setup->memory=VK_NULL_HANDLE;
-        return;
-    }
-
-    /// set mapping fallback values
-    setup->mapping=NULL;
-    setup->mapping_coherent=false;
-
-    if(setup->map_memory && (device->memory_properties.memoryTypes[memory_type_index].propertyFlags&VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT))
-    {
-        if(vkMapMemory(device->device, setup->memory, 0, VK_WHOLE_SIZE, 0, &setup->mapping)==VK_SUCCESS)
+        if(memory_type_index == CVM_INVALID_U32_INDEX)
         {
-            setup->mapping_coherent = cvm_vk_.memory_properties.memoryTypes[memory_type_index].propertyFlags&VK_MEMORY_PROPERTY_HOST_COHERENT_BIT;
-//            printf("MAPPING COHERENT? : %d\n",setup->mapping_coherent);
+            //fprintf(stderr,"CVM VK ERROR - memory with required properties not found in buffer allocation\n");
+            result = VK_RESULT_MAX_ENUM;
         }
         else
         {
-            fprintf(stderr,"CVM VK ERROR - unable to map buffer that should be mappable\n");
+            setup->acquired_properties = device->memory_properties.memoryTypes[memory_type_index].propertyFlags;
         }
     }
+
+    if(result == VK_SUCCESS)
+    {
+        VkMemoryAllocateInfo memory_allocate_info=(VkMemoryAllocateInfo)
+        {
+            .sType = VK_STRUCTURE_TYPE_MEMORY_ALLOCATE_INFO,
+            .pNext = NULL,
+            .allocationSize = memory_requirements.size,
+            .memoryTypeIndex = memory_type_index
+        };
+
+        result = vkAllocateMemory(device->device, &memory_allocate_info, device->host_allocator, &setup->memory);
+    }
+
+    if(result == VK_SUCCESS)
+    {
+        result = vkBindBufferMemory(device->device, setup->buffer, setup->memory, 0);
+    }
+
+    if(result == VK_SUCCESS && setup->map_memory)
+    {
+        result = vkMapMemory(device->device, setup->memory, 0, VK_WHOLE_SIZE, 0, &setup->mapping);
+
+        if(result == VK_SUCCESS)
+        {
+            setup->mapping_coherent = (cvm_vk_.memory_properties.memoryTypes[memory_type_index].propertyFlags & VK_MEMORY_PROPERTY_HOST_COHERENT_BIT) == VK_MEMORY_PROPERTY_HOST_COHERENT_BIT;
+        }
+    }
+
+    /// failure handling
+    if(result != VK_SUCCESS)
+    {
+        if(setup->buffer != VK_NULL_HANDLE)
+        {
+            vkDestroyBuffer(device->device, setup->buffer, NULL);
+            setup->buffer = VK_NULL_HANDLE;
+        }
+        if(setup->memory != VK_NULL_HANDLE)
+        {
+            vkFreeMemory(device->device, setup->memory, NULL);
+            setup->memory = VK_NULL_HANDLE;
+        }
+
+        setup->mapping = NULL;
+        setup->mapping_coherent = false;
+        setup->acquired_properties = 0;
+    }
+
+    return result;
 }
 
 void cvm_vk_buffer_memory_pair_destroy(const cvm_vk_device * device, VkBuffer buffer, VkDeviceMemory memory, bool memory_was_mapped)

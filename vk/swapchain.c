@@ -231,7 +231,9 @@ static inline void cvm_vk_swapchain_instance_terminate(cvm_vk_swapchain_instance
     /// free up instances ??
 
     #warning FUCK FUCK FUCK how do we actually track completion
-    #warning need to ensure this instance has catually completed
+    #warning need to ensure this instance has actually completed
+    vkDeviceWaitIdle(device->device);//?
+    /// above required b/c presently there is no way to know that the semaphore used by present has actually been used by WSI
 
     assert(instance->acquired_image_count == 0);///MUST WAIT TILL ALL IMAGES ARE RETURNED BEFORE TERMINATING SWAPCHAIN
 
@@ -261,8 +263,8 @@ int cvm_vk_swapchain_initialse(const cvm_vk_device * device, cvm_vk_surface_swap
 {
     swapchain->setup_info = *setup;
 
-    swapchain->metering_fence=cvm_vk_create_fence(device,false);
-    swapchain->metering_fence_active=false;
+    swapchain->metering_fence = cvm_vk_create_fence(device,false);
+    swapchain->metering_fence_active = false;
 
     if(setup->preferred_surface_format.format == VK_FORMAT_UNDEFINED)
     {
@@ -280,9 +282,7 @@ void cvm_vk_swapchain_terminate(const cvm_vk_device * device, cvm_vk_surface_swa
     cvm_vk_swapchain_presentable_image * presentable_image;
     uint32_t i;
 
-    vkDeviceWaitIdle(device->device);
-    /// above required b/c presently there is no way to know that the semaphore used by present has actually been used by WSI
-
+    #warning move metering fence to the instance???
     if(swapchain->metering_fence_active)
     {
         cvm_vk_wait_on_fence_and_reset(device, swapchain->metering_fence);
@@ -331,6 +331,7 @@ static inline void cvm_vk_swapchain_cleanup_out_of_date_instances(cvm_vk_surface
     cvm_vk_swapchain_instance * instance;
     uint32_t i;
 
+    /// get the front of the deletion queue
     while((instance = cvm_vk_swapchain_instance_queue_get_front_ptr(&swapchain->swapchain_queue)) && instance->out_of_date)
     {
         for(i=0;i<instance->image_count;i++)
@@ -400,6 +401,7 @@ const cvm_vk_swapchain_presentable_image * cvm_vk_surface_swapchain_acquire_pres
 
         if(swapchain->metering_fence_active)
         {
+            /// wait for image to actually be acquired before acquiring another
             cvm_vk_wait_on_fence_and_reset(device, swapchain->metering_fence);/// should stall here
             swapchain->metering_fence_active=false;
         }
@@ -550,7 +552,7 @@ void cvm_vk_surface_swapchain_present_image(const cvm_vk_surface_swapchain * swa
         wait_semaphores[0]=cvm_vk_binary_semaphore_submit_info(presentable_image->qfot_semaphore,VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT);
 
         /// presentable_image->present_semaphore triggered either here or above when CVM_VK_PAYLOAD_LAST_SWAPCHAIN_USE, this path being taken when present queue != graphics queue
-        signal_semaphores[0]=cvm_vk_binary_semaphore_submit_info(presentable_image->present_semaphore,VK_PIPELINE_STAGE_BOTTOM_OF_PIPE_BIT);
+        signal_semaphores[0]=cvm_vk_binary_semaphore_submit_info(presentable_image->present_semaphore, VK_PIPELINE_STAGE_BOTTOM_OF_PIPE_BIT);
         signal_semaphores[1]=cvm_vk_timeline_semaphore_signal_submit_info(&present_queue->timeline, VK_PIPELINE_STAGE_BOTTOM_OF_PIPE_BIT, &presentable_image->last_use_moment);///REMOVE THIS
 
         VkSubmitInfo2 submit_info=(VkSubmitInfo2)
@@ -591,18 +593,18 @@ void cvm_vk_surface_swapchain_present_image(const cvm_vk_surface_swapchain * swa
 
     VkPresentInfoKHR present_info=(VkPresentInfoKHR)
     {
-        .sType=VK_STRUCTURE_TYPE_PRESENT_INFO_KHR,
-        .pNext=NULL,
-        .waitSemaphoreCount=1,
-        .pWaitSemaphores=&presentable_image->present_semaphore,
-        .swapchainCount=1,
-        .pSwapchains=&swapchain_instance->swapchain,
-        .pImageIndices=&image_index,
-        .pResults=NULL
+        .sType = VK_STRUCTURE_TYPE_PRESENT_INFO_KHR,
+        .pNext = NULL,
+        .waitSemaphoreCount = 1,
+        .pWaitSemaphores = &presentable_image->present_semaphore,
+        .swapchainCount = 1,
+        .pSwapchains = &swapchain_instance->swapchain,
+        .pImageIndices = &image_index,
+        .pResults = NULL
     };
     #warning present should be synchronised (check this is true) -- does present (or regular submission for that matter) need to be externally synchronised!?
 
-    VkResult r=vkQueuePresentKHR(present_queue->queue,&present_info);
+    VkResult r = vkQueuePresentKHR(present_queue->queue, &present_info);
 
     if(r>=VK_SUCCESS)
     {

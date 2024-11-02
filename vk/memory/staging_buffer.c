@@ -19,45 +19,50 @@ along with cvm_shared.  If not, see <https://www.gnu.org/licenses/>.
 
 #include "cvm_shared.h"
 
-void cvm_vk_staging_buffer_initialise(cvm_vk_staging_buffer_ * staging_buffer, cvm_vk_device * device, VkBufferUsageFlags usage, VkDeviceSize buffer_size, VkDeviceSize reserved_high_priority_space)
+VkResult cvm_vk_staging_buffer_initialise(cvm_vk_staging_buffer_ * staging_buffer, cvm_vk_device * device, VkBufferUsageFlags usage, VkDeviceSize buffer_size, VkDeviceSize reserved_high_priority_space)
 {
-    const VkDeviceSize alignment=cvm_vk_buffer_alignment_requirements(device, usage);
+    VkResult result;
+    const VkDeviceSize alignment = cvm_vk_buffer_alignment_requirements(device, usage);
 
-    buffer_size=cvm_vk_align(buffer_size, alignment);/// round to multiple of alignment
+    buffer_size = cvm_vk_align(buffer_size, alignment);/// round to multiple of alignment
 
     cvm_vk_buffer_memory_pair_setup buffer_setup=(cvm_vk_buffer_memory_pair_setup)
     {
-            /// in
+        /// in
         .buffer_size=buffer_size,
         .usage=usage,
         .required_properties=VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT,
         .desired_properties=VK_MEMORY_PROPERTY_HOST_COHERENT_BIT,
         .map_memory=true,
+        /// out starts uninit
     };
 
-    cvm_vk_buffer_memory_pair_create(device, &buffer_setup);
+    result = cvm_vk_buffer_memory_pair_create(device, &buffer_setup);
 
-    assert(buffer_setup.buffer != VK_NULL_HANDLE && buffer_setup.memory != VK_NULL_HANDLE && buffer_setup.mapping != NULL);/// for now requre success
+    if(result == VK_SUCCESS)
+    {
+        staging_buffer->buffer = buffer_setup.buffer;
+        staging_buffer->memory = buffer_setup.memory;
+        staging_buffer->mapping = buffer_setup.mapping;
+        staging_buffer->mapping_coherent = buffer_setup.mapping_coherent;
 
-    staging_buffer->buffer=buffer_setup.buffer;
-    staging_buffer->memory=buffer_setup.memory;
-    staging_buffer->mapping=buffer_setup.mapping;
-    staging_buffer->mapping_coherent=buffer_setup.mapping_coherent;
+        staging_buffer->usage = usage;
+        staging_buffer->alignment = alignment;
 
-    staging_buffer->usage=usage;
-    staging_buffer->alignment=alignment;
+        staging_buffer->threads_waiting_on_semaphore_setup=false;
 
-    staging_buffer->threads_waiting_on_semaphore_setup=false;
+        staging_buffer->buffer_size = buffer_size;
+        staging_buffer->reserved_high_priority_space = reserved_high_priority_space;
+        staging_buffer->current_offset = 0;
+        staging_buffer->remaining_space = buffer_size;
 
-    staging_buffer->buffer_size=buffer_size;
-    staging_buffer->reserved_high_priority_space=reserved_high_priority_space;
-    staging_buffer->current_offset=0;
-    staging_buffer->remaining_space=buffer_size;
+        mtx_init(&staging_buffer->access_mutex, mtx_plain);
+        cnd_init(&staging_buffer->setup_stall_condition);
 
-    mtx_init(&staging_buffer->access_mutex,mtx_plain);
-    cnd_init(&staging_buffer->setup_stall_condition);
+        cvm_vk_staging_buffer_segment_queue_initialise(&staging_buffer->segment_queue);
+    }
 
-    cvm_vk_staging_buffer_segment_queue_initialise(&staging_buffer->segment_queue);
+    return result;
 }
 
 void cvm_vk_staging_buffer_terminate(cvm_vk_staging_buffer_ * staging_buffer, cvm_vk_device * device)

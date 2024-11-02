@@ -215,8 +215,9 @@ static inline cvm_vk_resource_identifier cvm_vk_resource_unique_identifier_acqui
 
 
 
-int cvm_vk_instance_initialise_for_SDL(struct cvm_vk_instance* instance,const char * application_name,uint32_t application_version,bool validation_enabled,const VkAllocationCallbacks* host_allocator);
-int cvm_vk_instance_initialise(struct cvm_vk_instance* instance,const cvm_vk_instance_setup * setup);
+VkResult cvm_vk_instance_initialise(struct cvm_vk_instance* instance,const cvm_vk_instance_setup * setup);
+/// need a way to include extension names, include setup which gets combined?
+VkResult cvm_vk_instance_initialise_for_SDL(struct cvm_vk_instance* instance,const char * application_name,uint32_t application_version,bool validation_enabled,const VkAllocationCallbacks* host_allocator);
 ///above extra is the max extra used by any module
 void cvm_vk_instance_terminate(struct cvm_vk_instance* instance);
 
@@ -271,19 +272,20 @@ void cvm_vk_destroy_image(VkImage image);
 
 void cvm_vk_set_view_create_info_using_image_create_info(VkImageViewCreateInfo* view_create_info, const VkImageCreateInfo* image_create_info, VkImage image);
 
-VkResult cvm_vk_create_and_bind_memory_for_images(VkDeviceMemory * memory,VkImage * images,uint32_t image_count,VkMemoryPropertyFlags required_properties,VkMemoryPropertyFlags desired_properties);
+VkResult cvm_vk_allocate_and_bind_memory_for_images(VkDeviceMemory * memory,VkImage * images,uint32_t image_count,VkMemoryPropertyFlags required_properties,VkMemoryPropertyFlags desired_properties);
+
 /// default_image_views is optional
-VkResult cvm_vk_create_images(cvm_vk_device* device, const VkImageCreateInfo* image_create_infos, uint32_t image_count, VkDeviceMemory * memory,VkImage * images, VkImageView* default_image_views);
+VkResult cvm_vk_create_images(cvm_vk_device* device, const VkImageCreateInfo* image_create_infos, uint32_t image_count, VkDeviceMemory* memory,VkImage* images, VkImageView* default_image_views);
 
 void cvm_vk_create_image_view(VkImageView * image_view,VkImageViewCreateInfo * info);
 void cvm_vk_destroy_image_view(VkImageView image_view);
 
-void cvm_vk_create_sampler(VkSampler * sampler,VkSamplerCreateInfo * info);
+void cvm_vk_create_sampler(VkSampler* sampler,VkSamplerCreateInfo * info);
 void cvm_vk_destroy_sampler(VkSampler sampler);
 
 void cvm_vk_free_memory(VkDeviceMemory memory);
 
-void cvm_vk_create_buffer(VkBuffer * buffer,VkDeviceMemory * memory,VkBufferUsageFlags usage,VkDeviceSize size,void ** mapping,bool * mapping_coherent,VkMemoryPropertyFlags required_properties,VkMemoryPropertyFlags desired_properties);
+void cvm_vk_create_buffer(VkBuffer* buffer,VkDeviceMemory * memory,VkBufferUsageFlags usage,VkDeviceSize size,void ** mapping,bool * mapping_coherent,VkMemoryPropertyFlags required_properties,VkMemoryPropertyFlags desired_properties);
 void cvm_vk_destroy_buffer(VkBuffer buffer,VkDeviceMemory memory,void * mapping);
 void cvm_vk_flush_buffer_memory_range(VkMappedMemoryRange * flush_range);
 uint32_t cvm_vk_get_buffer_alignment_requirements(VkBufferUsageFlags usage);
@@ -291,6 +293,7 @@ uint32_t cvm_vk_get_buffer_alignment_requirements(VkBufferUsageFlags usage);
 
 VkDeviceSize cvm_vk_buffer_alignment_requirements(const cvm_vk_device * device, VkBufferUsageFlags usage);
 
+#warning probably better to split this, create struct and return/result type
 typedef struct cvm_vk_buffer_memory_pair_setup
 {
     /// in
@@ -299,15 +302,17 @@ typedef struct cvm_vk_buffer_memory_pair_setup
     VkMemoryPropertyFlags required_properties;
     VkMemoryPropertyFlags desired_properties;
     bool map_memory;
+
     /// out
     VkBuffer buffer;
     VkDeviceMemory memory;
     void * mapping;
     bool mapping_coherent;
+    VkMemoryPropertyFlags acquired_properties;
 }
 cvm_vk_buffer_memory_pair_setup;
 
-void cvm_vk_buffer_memory_pair_create(const cvm_vk_device * device, cvm_vk_buffer_memory_pair_setup * setup);
+VkResult cvm_vk_buffer_memory_pair_create(const cvm_vk_device * device, cvm_vk_buffer_memory_pair_setup * setup);
 void cvm_vk_buffer_memory_pair_destroy(const cvm_vk_device * device, VkBuffer buffer, VkDeviceMemory memory, bool memory_was_mapped);
 
 VkFormat cvm_vk_get_screen_format(void);///can remove?
@@ -317,7 +322,16 @@ VkImageView cvm_vk_get_swapchain_image_view(uint32_t index);
 VkSemaphoreSubmitInfo cvm_vk_binary_semaphore_submit_info(VkSemaphore semaphore,VkPipelineStageFlags2 stages);
 
 
-
+/// little bit of a utility function set here
+#define CVM_VK_MAX_DESCRIPTOR_POOL_TYPES 16
+struct cvm_vk_descriptor_pool_requirements
+{
+    VkDescriptorPoolSize type_sizes[CVM_VK_MAX_DESCRIPTOR_POOL_TYPES];
+    uint32_t type_count;
+    uint32_t set_count;
+};
+VkResult cvm_vk_create_descriptor_set_layout_registering_requirements(VkDescriptorSetLayout* set_layout, const VkDescriptorSetLayoutCreateInfo* set_layout_create_info, const struct cvm_vk_device* device, struct cvm_vk_descriptor_pool_requirements* pool_requirements, uint32_t sets_using_this_layout);
+VkResult cvm_vk_create_descriptor_pool_for_sizes(VkDescriptorPool* pool, const struct cvm_vk_device* device, struct cvm_vk_descriptor_pool_requirements* pool_requirements);
 
 
 
