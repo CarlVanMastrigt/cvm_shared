@@ -852,8 +852,9 @@ void cvm_overlay_renderer_initialise(cvm_overlay_renderer * renderer, cvm_vk_dev
     cvm_overlay_rendering_static_resources_initialise(&renderer->static_resources, device, renderer_cycle_count, &renderer->shunt_buffer);
 
 
+    renderer->render_batch = malloc(sizeof(struct cvm_overlay_render_batch));
+    cvm_overlay_element_render_data_stack_initialise(&renderer->render_batch->render_elements);
 
-    cvm_overlay_element_render_data_stack_initialise(&renderer->element_render_stack);
     cvm_overlay_target_resources_queue_initialise(&renderer->target_resources);
 }
 
@@ -873,7 +874,8 @@ void cvm_overlay_renderer_terminate(cvm_overlay_renderer * renderer, cvm_vk_devi
 
     cvm_vk_staging_shunt_buffer_terminate(&renderer->shunt_buffer);
 
-    cvm_overlay_element_render_data_stack_terminate(&renderer->element_render_stack);
+    cvm_overlay_element_render_data_stack_terminate(&renderer->render_batch->render_elements);
+    free(renderer->render_batch);
 
     while((target_resources = cvm_overlay_target_resources_queue_dequeue_ptr(&renderer->target_resources)))
     {
@@ -893,7 +895,7 @@ cvm_vk_timeline_semaphore_moment cvm_overlay_render_to_target(const cvm_vk_devic
     cvm_vk_timeline_semaphore_moment completion_moment;
     cvm_vk_staging_buffer_allocation staging_buffer_allocation;
     VkDeviceSize upload_offset,instance_offset,uniform_offset,staging_space;
-    cvm_overlay_element_render_data_stack * element_render_stack;
+    struct cvm_overlay_render_batch* render_batch;
     cvm_vk_staging_shunt_buffer * shunt_buffer;
     cvm_vk_staging_buffer_ * staging_buffer;
     struct cvm_overlay_target_resources* target_resources;
@@ -904,7 +906,7 @@ cvm_vk_timeline_semaphore_moment cvm_overlay_render_to_target(const cvm_vk_devic
     float screen_w,screen_h;
 
 
-    element_render_stack = &renderer->element_render_stack;
+    render_batch = renderer->render_batch;
     shunt_buffer = &renderer->shunt_buffer;
     staging_buffer = renderer->staging_buffer;
 
@@ -922,7 +924,7 @@ cvm_vk_timeline_semaphore_moment cvm_overlay_render_to_target(const cvm_vk_devic
         0.4,0.6,0.9,0.8,///OVERLAY_TEXT_COLOUR_0
     };
 
-    cvm_overlay_element_render_data_stack_reset(element_render_stack);
+    cvm_overlay_element_render_data_stack_reset(&render_batch->render_elements);
     cvm_vk_staging_shunt_buffer_reset(shunt_buffer);
     /// acting on the shunt buffer directly in this way feels a little off
 
@@ -934,14 +936,13 @@ cvm_vk_timeline_semaphore_moment cvm_overlay_render_to_target(const cvm_vk_devic
 
     ///this uses the shunt buffer!
 
-    #warning first param isn't stack!
-    render_widget_overlay(element_render_stack,menu_widget);
+    render_widget_overlay(render_batch, menu_widget);
 
     /// upload all staged resources needed by this frame
     uniform_offset  = 0;
     upload_offset   = cvm_vk_staging_buffer_allocation_align_offset(staging_buffer, uniform_offset + sizeof(float)*4*OVERLAY_NUM_COLOURS);
     instance_offset = cvm_vk_staging_buffer_allocation_align_offset(staging_buffer, upload_offset  + cvm_vk_staging_shunt_buffer_get_space_used(shunt_buffer));
-    staging_space   = cvm_vk_staging_buffer_allocation_align_offset(staging_buffer, instance_offset + cvm_overlay_element_render_data_stack_size(element_render_stack));
+    staging_space   = cvm_vk_staging_buffer_allocation_align_offset(staging_buffer, instance_offset + cvm_overlay_element_render_data_stack_size(&render_batch->render_elements));
 
     staging_buffer_allocation = cvm_vk_staging_buffer_allocation_acquire(staging_buffer, device, staging_space, true);
     staging_offset = staging_buffer_allocation.acquired_offset;
@@ -962,7 +963,7 @@ cvm_vk_timeline_semaphore_moment cvm_overlay_render_to_target(const cvm_vk_devic
     ///         ^ custom struct to manage required overlay uploads while traversing overlay for render prep, both atlases and a shunt buffer PASSED INTO rendering stage
     ///     ^ atlas should REALLY manage its own uploads, this way it can ensure that there are no outstanding copies before replacing a tile!
 
-    cvm_overlay_element_render_data_stack_copy(element_render_stack, staging_mapping+instance_offset);
+    cvm_overlay_element_render_data_stack_copy(&render_batch->render_elements, staging_mapping+instance_offset);
 
 
     ///start of graphics
@@ -997,7 +998,7 @@ cvm_vk_timeline_semaphore_moment cvm_overlay_render_to_target(const cvm_vk_devic
 
     vkCmdBindPipeline(cb.buffer,VK_PIPELINE_BIND_POINT_GRAPHICS,target_resources->pipeline);
     vkCmdBindVertexBuffers(cb.buffer, 0, 1, &renderer->staging_buffer->buffer, &(VkDeviceSize){instance_offset+staging_offset});///little bit of hacky stuff to create lvalue
-    vkCmdDraw(cb.buffer,4,renderer->element_render_stack.count,0,0);
+    vkCmdDraw(cb.buffer,4,render_batch->render_elements.count,0,0);
 
     vkCmdEndRenderPass(cb.buffer);///================
 

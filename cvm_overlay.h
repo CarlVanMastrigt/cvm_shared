@@ -106,6 +106,16 @@ struct cvm_overlay_theme_element_description
     int32_t before;
     int32_t bar;
     int32_t after;
+
+    /// for if widget is constrained by a generic box widget
+    rectangle constraining_box_r;
+    uint32_t constraining_box_status;
+
+    /// for if fading off
+    /// both could probably be made much more clear..
+    rectangle fade_bound;
+    rectangle fade_range;
+    /// ^ may want to consider moving this logic into element rendering
 };
 
 
@@ -167,6 +177,8 @@ struct overlay_theme
     int contiguous_horizintal_bar_h;
 
     void * other_data;
+
+//    void    (*square_render_)           (struct cvm_overlay_render_batch * restrict render_batch, const overlay_theme* theme, const struct cvm_overlay_theme_element_description* description);
 
     void    (*square_render)            (struct cvm_overlay_render_batch * restrict render_batch, overlay_theme * theme, rectangle bounds, rectangle r, uint32_t status, overlay_colour colour);
     void    (*h_bar_render)             (struct cvm_overlay_render_batch * restrict render_batch, overlay_theme * theme, rectangle bounds, rectangle r, uint32_t status, overlay_colour colour);
@@ -335,7 +347,8 @@ typedef struct cvm_overlay_renderer
     cvm_overlay_transient_resources_queue transient_resources_queue;
 
     /// are separate shunt buffers even the best way to do this??
-    cvm_overlay_element_render_data_stack element_render_stack;
+//    cvm_overlay_element_render_data_stack element_render_stack;
+    struct cvm_overlay_render_batch* render_batch;/// <- temporary, move elsewhere
     cvm_vk_staging_shunt_buffer shunt_buffer;
 
     struct cvm_overlay_rendering_static_resources static_resources;
