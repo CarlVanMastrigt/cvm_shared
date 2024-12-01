@@ -92,10 +92,10 @@ static widget_behaviour_function_set anchor_behaviour_functions=
 
 
 
-static void text_anchor_widget_render(overlay_theme * theme,widget * w,int16_t x_off,int16_t y_off,cvm_overlay_element_render_data_stack * restrict render_stack,rectangle bounds)
+static void text_anchor_widget_render(overlay_theme * theme, widget * w, int16_t x_off, int16_t y_off, struct cvm_overlay_render_batch * restrict render_batch, rectangle bounds)
 {
-	rectangle r=rectangle_add_offset(w->base.r,x_off,y_off);
-	theme->h_bar_render(render_stack,theme,bounds,r,w->base.status,OVERLAY_ALTERNATE_MAIN_COLOUR);
+	rectangle r=rectangle_add_offset(w->base.r, x_off, y_off);
+	theme->h_bar_render(render_batch, theme, bounds, r, w->base.status, OVERLAY_ALTERNATE_MAIN_COLOUR);
 
 	overlay_text_single_line_render_data text_render_data=
 	{
@@ -107,7 +107,7 @@ static void text_anchor_widget_render(overlay_theme * theme,widget * w,int16_t x
 	    .colour=OVERLAY_TEXT_COLOUR_0
 	};
 
-    overlay_text_single_line_render(render_stack,theme,&text_render_data);
+    overlay_text_single_line_render(render_batch, theme, &text_render_data);
 }
 
 static widget * text_anchor_widget_select(overlay_theme * theme,widget * w,int16_t x_in,int16_t y_in)

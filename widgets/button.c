@@ -134,7 +134,7 @@ widget * create_button(void * data,widget_function func,bool free_data)
 
 
 
-static void text_button_widget_render(overlay_theme * theme,widget * w,int16_t x_off,int16_t y_off,cvm_overlay_element_render_data_stack * restrict render_stack,rectangle bounds)
+static void text_button_widget_render(overlay_theme * theme,widget * w,int16_t x_off,int16_t y_off,struct cvm_overlay_render_batch * restrict render_batch,rectangle bounds)
 {
     rectangle r=rectangle_add_offset(w->base.r,x_off,y_off);
     overlay_colour c=OVERLAY_MAIN_COLOUR;
@@ -162,9 +162,9 @@ static void text_button_widget_render(overlay_theme * theme,widget * w,int16_t x
         }
     }
 
-    theme->h_bar_render(render_stack,theme,bounds,r,w->base.status,c);
+    theme->h_bar_render(render_batch, theme, bounds, r, w->base.status, c);
 
-    overlay_text_single_line_render(render_stack,theme,&text_render_data);
+    overlay_text_single_line_render(render_batch, theme, &text_render_data);
 }
 
 static widget * text_button_widget_select(overlay_theme * theme,widget * w,int16_t x_in,int16_t y_in)
@@ -260,7 +260,7 @@ widget * create_text_highlight_toggle_button(char * text,void * data,bool free_d
 
 
 
-static void contiguous_text_button_widget_render(overlay_theme * theme,widget * w,int16_t x_off,int16_t y_off,cvm_overlay_element_render_data_stack * restrict render_stack,rectangle bounds)
+static void contiguous_text_button_widget_render(overlay_theme * theme,widget * w,int16_t x_off,int16_t y_off,struct cvm_overlay_render_batch * restrict render_batch,rectangle bounds)
 {
     rectangle r=rectangle_add_offset(w->base.r,x_off,y_off);
 
@@ -287,11 +287,11 @@ static void contiguous_text_button_widget_render(overlay_theme * theme,widget * 
 
         if(w->button.highlight)
         {
-            theme->h_bar_box_constrained_render(render_stack,theme,bounds,r,w->base.status,OVERLAY_HIGHLIGHTING_COLOUR,text_render_data.box_r,text_render_data.box_status);
+            theme->h_bar_box_constrained_render(render_batch,theme,bounds,r,w->base.status,OVERLAY_HIGHLIGHTING_COLOUR,text_render_data.box_r,text_render_data.box_status);
         }
     }
 
-    overlay_text_single_line_render(render_stack,theme,&text_render_data);
+    overlay_text_single_line_render(render_batch,theme,&text_render_data);
 }
 
 static void contiguous_text_button_widget_min_h(overlay_theme * theme,widget * w)
@@ -344,7 +344,7 @@ widget * create_contiguous_text_highlight_toggle_button(char * text,void * data,
 
 
 
-static void icon_button_widget_render(overlay_theme * theme,widget * w,int16_t x_off,int16_t y_off,cvm_overlay_element_render_data_stack * restrict render_stack,rectangle bounds)
+static void icon_button_widget_render(overlay_theme * theme,widget * w,int16_t x_off,int16_t y_off,struct cvm_overlay_render_batch * restrict render_batch,rectangle bounds)
 {
     char * t=w->button.text;
 
@@ -355,8 +355,8 @@ static void icon_button_widget_render(overlay_theme * theme,widget * w,int16_t x
 
     rectangle r=rectangle_add_offset(w->base.r,x_off,y_off);
 
-    theme->square_render(render_stack,theme,bounds,r,w->base.status,OVERLAY_MAIN_COLOUR);
-    overlay_text_centred_glyph_render(render_stack,&theme->font,bounds,r,t,OVERLAY_TEXT_COLOUR_0);
+    theme->square_render(render_batch,theme,bounds,r,w->base.status,OVERLAY_MAIN_COLOUR);
+    overlay_text_centred_glyph_render(render_batch,&theme->font,bounds,r,t,OVERLAY_TEXT_COLOUR_0);
 }
 
 static widget * icon_button_widget_select(overlay_theme * theme,widget * w,int16_t x_in,int16_t y_in)

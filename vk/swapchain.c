@@ -235,6 +235,8 @@ static inline void cvm_vk_swapchain_instance_terminate(cvm_vk_swapchain_instance
     vkDeviceWaitIdle(device->device);//?
     /// above required b/c presently there is no way to know that the semaphore used by present has actually been used by WSI
 
+    #warning is a fence associated with the last use of the semaphore sufficient? (it shouldn't be but sources online suggested it was)
+
     assert(instance->acquired_image_count == 0);///MUST WAIT TILL ALL IMAGES ARE RETURNED BEFORE TERMINATING SWAPCHAIN
 
     cvm_vk_destroy_swapchain_dependent_defaults();

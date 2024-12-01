@@ -88,7 +88,6 @@ static inline uint32_t cvm_lbs_32(uint32_t v){ return __builtin_ctz(v); }
 
 
 
-
 #include "cvm_math.h"
 #include "cvm_data_structures.h"
 #include "cvm_random.h"

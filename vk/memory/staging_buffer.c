@@ -94,7 +94,7 @@ void cvm_vk_staging_buffer_terminate(cvm_vk_staging_buffer_ * staging_buffer, cv
 
 
 #warning consider moving this back into the main function?
-static inline void cvm_vk_staging_buffer_query_allocations(cvm_vk_staging_buffer_ * staging_buffer, cvm_vk_device * device)
+static inline void cvm_vk_staging_buffer_query_allocations(cvm_vk_staging_buffer_ * staging_buffer, const cvm_vk_device * device)
 {
     cvm_vk_staging_buffer_segment * oldest_active_segment;
 

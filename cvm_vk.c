@@ -54,9 +54,9 @@ VkResult cvm_vk_instance_initialise(struct cvm_vk_instance* instance, const cvm_
 //        "VK_EXT_swapchain_maintenance1"
     };
 
-//    char ** ext_names;
-//    vkEnumerateInstanceExtensionProperties(NULL, &extension_count, NULL);
-//    printf("EXT COUNT: %u\n",extension_count);
+    char ** ext_names;
+    vkEnumerateInstanceExtensionProperties(NULL, &extension_count, NULL);
+    printf("EXT COUNT: %u\n",extension_count);
 
     VkResult result;
 
@@ -125,26 +125,19 @@ VkResult cvm_vk_instance_initialise(struct cvm_vk_instance* instance, const cvm_
     return result;
 }
 
-VkResult cvm_vk_instance_initialise_for_SDL(struct cvm_vk_instance* instance, const char* application_name,uint32_t application_version,bool validation_enabled,const VkAllocationCallbacks* host_allocator)
+VkResult cvm_vk_instance_initialise_for_SDL(struct cvm_vk_instance* instance, const cvm_vk_instance_setup * setup)
 {
-    cvm_vk_instance_setup setup;
+    cvm_vk_instance_setup internal_setup;
     SDL_Window * window;
-    const char * validation = "VK_LAYER_KHRONOS_validation";
+    unsigned int num_extensions_required_by_SDL;
+//    const char * validation = "VK_LAYER_KHRONOS_validation";
     VkResult result = VK_SUCCESS;
 
-    if(validation_enabled)
-    {
-        setup.layer_names=&validation;
-        setup.layer_count=1;
-    }
-    else
-    {
-        setup.layer_count=0;
-    }
-
-    setup.host_allocator = host_allocator;
-    setup.application_name = application_name;
-    setup.application_version = application_version;
+    internal_setup.layer_names=setup->layer_names;
+    internal_setup.layer_count=setup->layer_count;
+    internal_setup.host_allocator = setup->host_allocator;
+    internal_setup.application_name = setup->application_name;
+    internal_setup.application_version = setup->application_version;
 
     result = VK_RESULT_MAX_ENUM;/// default result of error
 
@@ -152,14 +145,18 @@ VkResult cvm_vk_instance_initialise_for_SDL(struct cvm_vk_instance* instance, co
 
     if(window)
     {
-        if(SDL_Vulkan_GetInstanceExtensions(window,&setup.extension_count,NULL))
+        if(SDL_Vulkan_GetInstanceExtensions(window,&num_extensions_required_by_SDL,NULL))
         {
-            setup.extension_names=malloc(sizeof(const char*)*setup.extension_count);
-            if(SDL_Vulkan_GetInstanceExtensions(window, &setup.extension_count, setup.extension_names))
+            internal_setup.extension_count = setup->extension_count + num_extensions_required_by_SDL;
+            internal_setup.extension_names = malloc(sizeof(const char*) * internal_setup.extension_count);
+            memcpy(internal_setup.extension_names, setup->extension_names, sizeof(const char*) * setup->extension_count);
+
+            if(SDL_Vulkan_GetInstanceExtensions(window, &num_extensions_required_by_SDL, internal_setup.extension_names + setup->extension_count))
             {
-                result = cvm_vk_instance_initialise(instance, &setup);
+                result = cvm_vk_instance_initialise(instance, &internal_setup);
             }
-            free(setup.extension_names);
+
+            free(internal_setup.extension_names);
         }
 
         SDL_DestroyWindow(window);
@@ -366,7 +363,6 @@ static void cvm_vk_internal_device_setup_init(cvm_vk_device_setup * internal, co
     internal->desired_async_compute_queues = CVM_CLAMP(external->desired_async_compute_queues,1,8);
 
     internal->instance = external->instance;
-    internal->host_allocator = external->host_allocator;
 }
 
 static void cvm_vk_internal_device_setup_destroy(cvm_vk_device_setup * setup)
@@ -700,7 +696,7 @@ static int cvm_vk_create_logical_device(cvm_vk_device * device, const cvm_vk_dev
         .pEnabledFeatures=NULL,///using features2 in pNext chain instead
     };
 
-    CVM_VK_CHECK(vkCreateDevice(device->physical_device, &device_creation_info, device_setup->host_allocator, &device->device));
+    CVM_VK_CHECK(vkCreateDevice(device->physical_device, &device_creation_info, device_setup->instance->host_allocator, &device->device));
 
     device->queue_families = malloc(sizeof(cvm_vk_device_queue_family)*device->queue_family_count);
 
@@ -879,15 +875,15 @@ static inline void cvm_vk_defaults_terminate(struct cvm_vk_defaults* defaults, c
     vkDestroySampler(device->device, defaults->fetch_sampler, device->host_allocator);
 }
 
-int cvm_vk_device_initialise(cvm_vk_device * device, const cvm_vk_device_setup * external_device_setup, SDL_Window * window)
+int cvm_vk_device_initialise(cvm_vk_device * device, const cvm_vk_device_setup * external_device_setup)
 {
     cvm_vk_device_setup device_setup;
 
     cvm_vk_internal_device_setup_init(&device_setup, external_device_setup);// should be able to handle external being NULL
 
-    device->host_allocator = device_setup.host_allocator;
+    device->host_allocator = device_setup.instance->host_allocator;
 
-    device->physical_device = cvm_vk_create_physical_device(device_setup.instance, &device_setup);
+    device->physical_device = cvm_vk_create_physical_device(device_setup.instance->instance, &device_setup);
     if(device->physical_device==VK_NULL_HANDLE)return -1;
 
     cvm_vk_create_logical_device(device, &device_setup);
@@ -1268,6 +1264,8 @@ VkResult cvm_vk_allocate_and_bind_memory_for_images(VkDeviceMemory * memory,VkIm
     uint32_t i,memory_type_index,supported_type_bits;
     VkResult result = VK_SUCCESS;
 
+    *memory = VK_NULL_HANDLE;
+
     current_offset = 0;
     supported_type_bits = 0xFFFFFFFF;
     for(i=0;i<image_count;i++)
@@ -1320,13 +1318,17 @@ VkResult cvm_vk_allocate_and_bind_memory_for_images(VkDeviceMemory * memory,VkIm
 
     if(result != VK_SUCCESS)
     {
-        vkFreeMemory(cvm_vk_.device, *memory, cvm_vk_.host_allocator);
+        if(*memory != VK_NULL_HANDLE)
+        {
+            vkFreeMemory(cvm_vk_.device, *memory, cvm_vk_.host_allocator);
+        }
     }
 
     return result;
 }
 
-VkResult cvm_vk_create_images(cvm_vk_device* device, const VkImageCreateInfo* image_create_infos, uint32_t image_count, VkDeviceMemory * memory,VkImage * images, VkImageView* default_image_views)
+#warning unify the approach used here and in buffer creation, either pass in all variables or pass in struct(s) for in/out
+VkResult cvm_vk_create_images(const cvm_vk_device* device, const VkImageCreateInfo* image_create_infos, uint32_t image_count, VkDeviceMemory* memory,VkImage* images, VkImageView* default_image_views)
 {
     uint32_t i;
     VkResult result = VK_SUCCESS;
@@ -1388,7 +1390,7 @@ VkResult cvm_vk_create_images(cvm_vk_device* device, const VkImageCreateInfo* im
                 vkDestroyImageView(device->device, default_image_views[i], device->host_allocator);
             }
         }
-        if(!memory != VK_NULL_HANDLE)
+        if(*memory != VK_NULL_HANDLE)
         {
             vkFreeMemory(device->device, *memory, device->host_allocator);
         }

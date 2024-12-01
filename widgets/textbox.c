@@ -155,12 +155,12 @@ static widget_behaviour_function_set textbox_behaviour_functions=
 
 
 
-static void textbox_widget_render(overlay_theme * theme,widget * w,int16_t x_off,int16_t y_off,cvm_overlay_element_render_data_stack * restrict render_stack,rectangle bounds)
+static void textbox_widget_render(overlay_theme * theme,widget * w,int16_t x_off,int16_t y_off,struct cvm_overlay_render_batch * restrict render_batch,rectangle bounds)
 {
     char *sb,*se;
 
     rectangle r=rectangle_add_offset(w->base.r,x_off,y_off);
-	theme->box_render(render_stack,theme,bounds,r,w->base.status,OVERLAY_MAIN_COLOUR);
+	theme->box_render(render_batch,theme,bounds,r,w->base.status,OVERLAY_MAIN_COLOUR);
 
 	r.x1+=theme->x_box_offset;
 	r.x2-=theme->x_box_offset;
@@ -170,13 +170,13 @@ static void textbox_widget_render(overlay_theme * theme,widget * w,int16_t x_off
     rectangle b=get_rectangle_overlap(r,bounds);
     if(rectangle_has_positive_area(b))
     {
-        if(w->textbox.selection_begin==w->textbox.selection_end)overlay_text_multiline_render(render_stack,&theme->font,b,&w->textbox.text_block,r.x1,r.y1-w->textbox.y_offset,OVERLAY_TEXT_COLOUR_0);
+        if(w->textbox.selection_begin==w->textbox.selection_end)overlay_text_multiline_render(render_batch,&theme->font,b,&w->textbox.text_block,r.x1,r.y1-w->textbox.y_offset,OVERLAY_TEXT_COLOUR_0);
         else
         {
             if(w->textbox.selection_end > w->textbox.selection_begin) sb=w->textbox.selection_begin, se=w->textbox.selection_end;
             else sb=w->textbox.selection_end, se=w->textbox.selection_begin;
 
-            overlay_text_multiline_selection_render(render_stack,&theme->font,b,&w->textbox.text_block,r.x1,r.y1-w->textbox.y_offset,OVERLAY_TEXT_COLOUR_0,sb,se);
+            overlay_text_multiline_selection_render(render_batch,&theme->font,b,&w->textbox.text_block,r.x1,r.y1-w->textbox.y_offset,OVERLAY_TEXT_COLOUR_0,sb,se);
         }
     }
 }

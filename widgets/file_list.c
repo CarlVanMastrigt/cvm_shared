@@ -704,7 +704,7 @@ static widget_behaviour_function_set enterbox_behaviour_functions=
 };
 
 
-static void file_list_widget_render(overlay_theme * theme,widget * w,int16_t x_off,int16_t y_off,cvm_overlay_element_render_data_stack * restrict render_stack,rectangle bounds)
+static void file_list_widget_render(overlay_theme * theme,widget * w,int16_t x_off,int16_t y_off,struct cvm_overlay_render_batch * restrict render_batch,rectangle bounds)
 {
     file_list_entry * fle;
     rectangle icon_r,r;
@@ -716,7 +716,7 @@ static void file_list_widget_render(overlay_theme * theme,widget * w,int16_t x_o
 
 	r=rectangle_add_offset(w->base.r,x_off,y_off);
 
-	theme->box_render(render_stack,theme,bounds,r,w->base.status,OVERLAY_MAIN_COLOUR);
+	theme->box_render(render_batch, theme, bounds, r, w->base.status, OVERLAY_MAIN_COLOUR);
 
 
 	y_end=r.y2-theme->contiguous_box_y_offset;
@@ -747,7 +747,7 @@ static void file_list_widget_render(overlay_theme * theme,widget * w,int16_t x_o
     {
         if(index==w->file_list.selected_entry_index)/// && is_currently_active_widget(w) not sure the currently selected widget thing is desirable, probably not, other programs don't do it
         {
-            theme->h_bar_box_constrained_render(render_stack,theme,bounds,((rectangle){.x1=r.x1,.y1=y,.x2=r.x2,.y2=y+theme->base_contiguous_unit_h}),w->base.status,OVERLAY_HIGHLIGHTING_COLOUR,r,w->base.status);
+            theme->h_bar_box_constrained_render(render_batch,theme,bounds,((rectangle){.x1=r.x1,.y1=y,.x2=r.x2,.y2=y+theme->base_contiguous_unit_h}),w->base.status,OVERLAY_HIGHLIGHTING_COLOUR,r,w->base.status);
         }
 
         fle=w->file_list.entries+index;
@@ -762,7 +762,7 @@ static void file_list_widget_render(overlay_theme * theme,widget * w,int16_t x_o
             else if(fle->type_id==CVM_FL_MISCELLANEOUS_TYPE_ID) icon_glyph="🗎";
             else icon_glyph=file_types[fle->type_id-CVM_FL_CUSTOM_TYPE_OFFSET].icon;
 
-            overlay_text_centred_glyph_box_constrained_render(render_stack,theme,bounds,icon_r,icon_glyph,OVERLAY_TEXT_COLOUR_0,r,w->base.status);
+            overlay_text_centred_glyph_box_constrained_render(render_batch,theme,bounds,icon_r,icon_glyph,OVERLAY_TEXT_COLOUR_0,r,w->base.status);
         }
 
 
@@ -778,7 +778,7 @@ static void file_list_widget_render(overlay_theme * theme,widget * w,int16_t x_o
 
         text_render_data.text_length=fle->text_length;
 
-        overlay_text_single_line_render(render_stack,theme,&text_render_data);
+        overlay_text_single_line_render(render_batch,theme,&text_render_data);
 
         y+=theme->base_contiguous_unit_h;
         index++;

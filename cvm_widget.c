@@ -36,13 +36,13 @@ bool check_widget_double_clicked(widget * w)
     return (SDL_GetTicks()<(w->base.last_click_time+double_click_time));
 }
 
-void render_widget_overlay(cvm_overlay_element_render_data_stack * restrict render_stack,widget * menu_widget)
+void render_widget_overlay(struct cvm_overlay_render_batch * restrict render_batch,widget * menu_widget)
 {
-    render_widget(menu_widget,0,0,render_stack,menu_widget->base.r);
+    render_widget(menu_widget, 0, 0, render_batch, menu_widget->base.r);
 }
 
 
-static void base_widget_render(overlay_theme * theme,widget * w,int16_t x_off,int16_t y_off,cvm_overlay_element_render_data_stack * restrict render_stack,rectangle bounds)
+static void base_widget_render(overlay_theme * theme,widget * w,int16_t x_off,int16_t y_off,struct cvm_overlay_render_batch * restrict render_batch,rectangle bounds)
 {
     puts("error calling base: render");
 }
@@ -72,7 +72,6 @@ static void base_widget_set_h(overlay_theme * theme,widget * w)
 {
     puts("error calling base: set_h");
 }
-
 
 static widget_appearence_function_set base_appearence_functions=
 {
@@ -155,7 +154,6 @@ static void base_widget_delete(widget * w)
 
 
 static widget_behaviour_function_set base_behaviour_functions =
-(widget_behaviour_function_set)
 {
     .l_click        =   base_widget_left_click,
     .l_release      =   base_widget_left_release,
@@ -182,7 +180,7 @@ widget * create_widget(size_t size)
 
     w->base.parent=NULL;
 
-    w->base.r=(rectangle){0,0,0,0};
+    w->base.r=rectangle_ini(0,0,0,0);
 
     w->base.min_w=0;
     w->base.min_h=0;
@@ -331,7 +329,7 @@ void add_widget_to_widgets_menu(widget * w,widget * to_add)
 
 
 
-void blank_widget_render(overlay_theme * theme,widget * w,int16_t x_off,int16_t y_off,cvm_overlay_element_render_data_stack * restrict render_stack,rectangle bounds)
+void blank_widget_render(overlay_theme * theme,widget * w,int16_t x_off,int16_t y_off,struct cvm_overlay_render_batch * restrict render_batch,rectangle bounds)
 {
 }
 
@@ -455,13 +453,13 @@ void set_currently_active_widget(widget * w)
 }
 
 
-void render_widget(widget * w,int x_off,int y_off,cvm_overlay_element_render_data_stack * restrict render_stack,rectangle bounds)
+void render_widget(widget * w, int x_off, int y_off, struct cvm_overlay_render_batch * restrict render_batch, rectangle bounds)
 {
     rectangle r=rectangle_add_offset(w->base.r,x_off,y_off);
 
     if((w)&&(w->base.status&WIDGET_ACTIVE)&&(rectangles_overlap(r,bounds)))
     {
-        w->base.appearence_functions->render(current_theme,w,x_off,y_off,render_stack,bounds);
+        w->base.appearence_functions->render(current_theme, w, x_off, y_off, render_batch, bounds);
     }
 }
 

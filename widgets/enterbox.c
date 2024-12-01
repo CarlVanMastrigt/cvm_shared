@@ -393,11 +393,11 @@ static widget_behaviour_function_set enterbox_behaviour_functions=
     .wid_delete     =   enterbox_widget_delete
 };
 
-static void enterbox_widget_render(overlay_theme * theme,widget * w,int16_t x_off,int16_t y_off,cvm_overlay_element_render_data_stack * restrict render_stack,rectangle bounds)
+static void enterbox_widget_render(overlay_theme * theme,widget * w,int16_t x_off,int16_t y_off,struct cvm_overlay_render_batch * restrict render_batch,rectangle bounds)
 {
-    rectangle r=rectangle_add_offset(w->base.r,x_off,y_off);
+    rectangle r=rectangle_add_offset(w->base.r, x_off, y_off);
 
-	theme->h_bar_render(render_stack,theme,bounds,r,w->base.status,OVERLAY_MAIN_COLOUR);
+	theme->h_bar_render(render_batch, theme, bounds, r, w->base.status, OVERLAY_MAIN_COLOUR);
 
 	if(w->enterbox.update_contents_func && !is_currently_active_widget(w))w->enterbox.update_contents_func(w);
 
@@ -428,15 +428,23 @@ static void enterbox_widget_render(overlay_theme * theme,widget * w,int16_t x_of
     {
         text_render_data.colour=OVERLAY_TEXT_COLOUR_0;
         text_render_data.text=w->enterbox.text;
-        if(w->enterbox.selection_end > w->enterbox.selection_begin) text_render_data.selection_begin=w->enterbox.selection_begin, text_render_data.selection_end=w->enterbox.selection_end;
-        else text_render_data.selection_begin=w->enterbox.selection_end, text_render_data.selection_end=w->enterbox.selection_begin;
+        if(w->enterbox.selection_end > w->enterbox.selection_begin)
+        {
+            text_render_data.selection_begin = w->enterbox.selection_begin;
+            text_render_data.selection_end = w->enterbox.selection_end;
+        }
+        else
+        {
+            text_render_data.selection_begin = w->enterbox.selection_end;
+            text_render_data.selection_end = w->enterbox.selection_begin;
+        }
         text_render_data.x=text_render_data.text_area.x1-w->enterbox.visible_offset;
     }
 
-    text_render_data.flags|=(w->enterbox.min_glyphs_visible<w->enterbox.max_glyphs)*OVERLAY_TEXT_RENDER_FADING;
-    text_render_data.flags|=is_currently_active_widget(w)*OVERLAY_TEXT_RENDER_SELECTION;
+    text_render_data.flags |= (w->enterbox.min_glyphs_visible < w->enterbox.max_glyphs) ? OVERLAY_TEXT_RENDER_FADING : 0;
+    text_render_data.flags |= is_currently_active_widget(w) ? OVERLAY_TEXT_RENDER_SELECTION : 0;
 
-    overlay_text_single_line_render(render_stack,theme,&text_render_data);
+    overlay_text_single_line_render(render_batch, theme, &text_render_data);
 }
 
 static widget * enterbox_widget_select(overlay_theme * theme,widget * w,int16_t x_in,int16_t y_in)

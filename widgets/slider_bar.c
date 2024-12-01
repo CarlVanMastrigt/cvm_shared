@@ -212,7 +212,7 @@ static widget_behaviour_function_set horizontal_slider_bar_behaviour_functions=
 
 
 
-static void horizontal_slider_bar_widget_render(overlay_theme * theme,widget * w,int16_t x_off,int16_t y_off,cvm_overlay_element_render_data_stack * restrict render_stack,rectangle bounds)
+static void horizontal_slider_bar_widget_render(overlay_theme * theme,widget * w,int16_t x_off,int16_t y_off,struct cvm_overlay_render_batch * restrict render_batch,rectangle bounds)
 {
     int32_t before,bar,after,range,m;
 
@@ -245,8 +245,8 @@ static void horizontal_slider_bar_widget_render(overlay_theme * theme,widget * w
         after=(after*(w->slider_bar.bar_fraction-1))/w->slider_bar.bar_fraction;
     }
 
-    theme->h_bar_render(render_stack,theme,bounds,r,w->base.status,OVERLAY_MAIN_COLOUR);
-	theme->h_bar_slider_render(render_stack,theme,bounds,r,w->base.status,OVERLAY_TEXT_COLOUR_0,before,bar,after);
+    theme->h_bar_render(render_batch, theme, bounds, r, w->base.status, OVERLAY_MAIN_COLOUR);
+	theme->h_bar_slider_render(render_batch, theme, bounds, r, w->base.status, OVERLAY_TEXT_COLOUR_0, before, bar, after);
 }
 
 static widget * horizontal_slider_bar_widget_select(overlay_theme * theme,widget * w,int16_t x_in,int16_t y_in)
