@@ -297,7 +297,7 @@ struct cvm_overlay_transient_resources
 {
     cvm_vk_command_pool command_pool;
 
-    VkDescriptorSet frame_descriptor_set;
+    VkDescriptorSet descriptor_set;
 
     cvm_vk_timeline_semaphore_moment last_use_moment;
 };
@@ -315,11 +315,8 @@ struct cvm_overlay_rendering_static_resources
     VkDescriptorPool descriptor_pool;
 
     ///these descriptors don't change (only need 1 set, always has the same bindings)
-    VkDescriptorSetLayout image_descriptor_set_layout;
-    VkDescriptorSet image_descriptor_set;
+    VkDescriptorSetLayout descriptor_set_layout;
 
-    ///these descriptors will have a different binding per frame
-    VkDescriptorSetLayout frame_descriptor_set_layout;
     /// the actual descriptor sets will exist on the work entry (per frame)
 
     /// for creating pipelines
@@ -334,7 +331,7 @@ void cvm_overlay_rendering_static_resources_terminate(struct cvm_overlay_renderi
 typedef struct cvm_overlay_renderer
 {
     /// for uploading to images, is NOT locally owned
-    cvm_vk_staging_buffer_ * staging_buffer;
+    struct cvm_vk_staging_buffer_ * staging_buffer;
 
 
     uint32_t transient_count;
@@ -355,7 +352,7 @@ cvm_overlay_renderer;
 
 typedef struct cvm_overlay_setup
 {
-    cvm_vk_staging_buffer_ * staging_buffer;
+    struct cvm_vk_staging_buffer_ * staging_buffer;
 
     VkImageLayout initial_target_layout;
     VkImageLayout final_target_layout;
@@ -366,7 +363,7 @@ typedef struct cvm_overlay_setup
 cvm_overlay_setup;
 
 
-void cvm_overlay_renderer_initialise(cvm_overlay_renderer * renderer, cvm_vk_device * device, cvm_vk_staging_buffer_ * staging_buffer, uint32_t renderer_cycle_count);
+void cvm_overlay_renderer_initialise(cvm_overlay_renderer * renderer, cvm_vk_device * device, struct cvm_vk_staging_buffer_ * staging_buffer, uint32_t renderer_cycle_count);
 void cvm_overlay_renderer_terminate(cvm_overlay_renderer * renderer, cvm_vk_device * device);
 
 cvm_vk_timeline_semaphore_moment cvm_overlay_render_to_target(const cvm_vk_device * device, cvm_overlay_renderer * renderer, widget * menu_widget, const struct cvm_overlay_target* target);
@@ -413,10 +410,6 @@ struct cvm_overlay_rendering_resources
 
     /// combine images (to allow them to be dynamic) and
     VkDescriptorSetLayout descriptor_set_layout;
-
-    ///these descriptors will have a different binding per frame
-    VkDescriptorSetLayout transient_descriptor_set_layout;
-    /// the actual descriptor sets will exist on the work entry (per frame)
 
     /// for creating pipelines
     VkPipelineLayout pipeline_layout;
@@ -467,13 +460,19 @@ struct cvm_overlay_render_batch
 
     /// if above is input to prep stage the foollowing is generated from it and *actually* used in rendering
 
-    /// decriptor set (again, now has actually been written)
     /// (staging) buffer with offset of array of render elements/insances
 
-    cvm_vk_staging_buffer_allocation staging_buffer_allocation;
+    struct cvm_vk_staging_buffer_allocation staging_buffer_allocation;
 
     /// also record staging buffer itself here?
-    VkDeviceSize render_element_offset;
+    VkDeviceSize element_offset;
+    VkDeviceSize upload_offset;
+
+    /// set and then used in rendering, copied here just to prevent passing it around
+    VkDescriptorSet descriptor_set;
+
+    uint32_t screen_w;
+    uint32_t screen_h;
 };
 
 /// other data to be passed into rendering

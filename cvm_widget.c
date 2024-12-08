@@ -244,6 +244,14 @@ static void organise_widget(widget * w,int width,int height)
 void organise_menu_widget(widget * menu_widget,int screen_width,int screen_height)
 {
     organise_widget(menu_widget,screen_width,screen_height);
+
+    const rectangle r = menu_widget->base.r;
+    if(r.x1 != 0 || r.x2 != screen_width || r.y1 != 0 || r.y2 != screen_height)
+    {
+        printf(">> %d->%d %d->%d vd %d, %d\n",r.x1,r.x2,r.y1,r.y2, screen_width, screen_height);
+
+        fprintf(stderr, "warning: widget could not fit on screen\n");
+    }
 }
 
 widget * create_widget_menu(void)

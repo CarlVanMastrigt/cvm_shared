@@ -19,17 +19,14 @@ along with cvm_shared.  If not, see <https://www.gnu.org/licenses/>.
 
 #version 450
 
-layout(set=0,binding=0) uniform overlay_colours
+
+
+/// array, [0] = alpha image, [1] = colour image
+layout(set=0,binding=0) uniform sampler2D images[2];
+
+layout(set=0,binding=1) uniform overlay_colours
 {
     vec4 colours[16];
-};
-
-/// array, [0] = transparent image, [1]=colour image
-layout(set=1,binding=0) uniform sampler2D images[2];
-
-layout(push_constant) uniform screen_dimensions
-{
-    layout(offset=8) vec2 screen_size;
 };
 
 layout(location=0) flat in uvec4 d0;

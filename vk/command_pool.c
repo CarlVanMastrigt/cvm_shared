@@ -97,7 +97,6 @@ void cvm_vk_command_pool_acquire_command_buffer(cvm_vk_command_pool * pool, cons
     command_buffer->buffer=pool->buffers[pool->acquired_buffer_count++];
     command_buffer->signal_count=0;
     command_buffer->wait_count=0;
-    command_buffer->present_completion_moment=NULL;
 
     VkCommandBufferBeginInfo command_buffer_begin_info=(VkCommandBufferBeginInfo)
     {
@@ -110,8 +109,9 @@ void cvm_vk_command_pool_acquire_command_buffer(cvm_vk_command_pool * pool, cons
     CVM_VK_CHECK(vkBeginCommandBuffer(command_buffer->buffer, &command_buffer_begin_info));
 }
 
-void cvm_vk_command_pool_submit_command_buffer(cvm_vk_command_pool * pool, const cvm_vk_device * device, cvm_vk_command_buffer * command_buffer, VkPipelineStageFlags2 completion_signal_stages, cvm_vk_timeline_semaphore_moment * completion_moment)
+struct cvm_vk_timeline_semaphore_moment cvm_vk_command_pool_submit_command_buffer(cvm_vk_command_pool * pool, const cvm_vk_device * device, cvm_vk_command_buffer * command_buffer, VkPipelineStageFlags2 completion_signal_stages)
 {
+    cvm_vk_timeline_semaphore_moment completion_moment;
     const cvm_vk_device_queue_family * queue_family;
     cvm_vk_device_queue * queue;
 
@@ -122,12 +122,7 @@ void cvm_vk_command_pool_submit_command_buffer(cvm_vk_command_pool * pool, const
     CVM_VK_CHECK(vkEndCommandBuffer(command_buffer->buffer));
 
     assert(command_buffer->signal_count<4);
-    command_buffer->signal_info[command_buffer->signal_count++]=cvm_vk_timeline_semaphore_signal_submit_info(&queue->timeline,completion_signal_stages,completion_moment);
-
-    if(command_buffer->present_completion_moment)/// REMOVE THIS
-    {
-        *command_buffer->present_completion_moment=*completion_moment;
-    }
+    command_buffer->signal_info[command_buffer->signal_count++] = cvm_vk_timeline_semaphore_signal_submit_info(&queue->timeline,completion_signal_stages, &completion_moment);
 
     VkSubmitInfo2 submit_info=
     {
@@ -153,6 +148,8 @@ void cvm_vk_command_pool_submit_command_buffer(cvm_vk_command_pool * pool, const
     CVM_VK_CHECK(vkQueueSubmit2(queue->queue, 1, &submit_info, VK_NULL_HANDLE));
 
     pool->submitted_buffer_count++;
+
+    return completion_moment;
 }
 
 

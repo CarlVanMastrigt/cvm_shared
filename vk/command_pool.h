@@ -47,8 +47,6 @@ typedef struct cvm_vk_command_buffer
     uint32_t signal_count;
     uint32_t wait_count;
 
-    cvm_vk_timeline_semaphore_moment* present_completion_moment;///REMOVE (when last use moment can be removed)
-
     VkSemaphoreSubmitInfo signal_info[4];/// left open in case we add a way to signal arbitrary semphores
     VkSemaphoreSubmitInfo wait_info[11];
     ///above relatively arbitrarily chosen for struct size reasons
@@ -60,7 +58,7 @@ void cvm_vk_command_pool_terminate(cvm_vk_command_pool * pool, const cvm_vk_devi
 void cvm_vk_command_pool_reset(cvm_vk_command_pool * pool, const cvm_vk_device * device);
 
 void cvm_vk_command_pool_acquire_command_buffer(cvm_vk_command_pool * pool, const cvm_vk_device * device, cvm_vk_command_buffer * command_buffer);
-void cvm_vk_command_pool_submit_command_buffer(cvm_vk_command_pool * pool, const cvm_vk_device * device, cvm_vk_command_buffer * command_buffer, VkPipelineStageFlags2 completion_signal_stages, cvm_vk_timeline_semaphore_moment * completion_moment);
+struct cvm_vk_timeline_semaphore_moment cvm_vk_command_pool_submit_command_buffer(cvm_vk_command_pool * pool, const cvm_vk_device * device, cvm_vk_command_buffer * command_buffer, VkPipelineStageFlags2 completion_signal_stages);
 
 void cvm_vk_command_buffer_wait_on_timeline_moment(cvm_vk_command_buffer * command_buffer, const cvm_vk_timeline_semaphore_moment * moment, VkPipelineStageFlags2 wait_stages);
 
