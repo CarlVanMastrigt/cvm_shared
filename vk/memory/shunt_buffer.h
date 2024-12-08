@@ -25,7 +25,7 @@ along with cvm_shared.  If not, see <https://www.gnu.org/licenses/>.
 #ifndef CVM_VK_SHUNT_BUFFER_H
 #define CVM_VK_SHUNT_BUFFER_H
 
-typedef struct cvm_vk_staging_shunt_buffer
+struct cvm_vk_shunt_buffer
 {
     /// multithreaded variant is WAY more complicated, harsher restrictions on memory usage &c.
     bool multithreaded;
@@ -41,19 +41,18 @@ typedef struct cvm_vk_staging_shunt_buffer
     };
 
     /// add check to make sure nothing added after buffer gets copied?
-}
-cvm_vk_staging_shunt_buffer;
+};
 
-void cvm_vk_staging_shunt_buffer_initialise(cvm_vk_staging_shunt_buffer * buffer, VkDeviceSize alignment, VkDeviceSize max_size, bool multithreaded);
-void cvm_vk_staging_shunt_buffer_terminate(cvm_vk_staging_shunt_buffer * buffer);
+void cvm_vk_shunt_buffer_initialise(struct cvm_vk_shunt_buffer * buffer, VkDeviceSize alignment, VkDeviceSize max_size, bool multithreaded);
+void cvm_vk_shunt_buffer_terminate(struct cvm_vk_shunt_buffer * buffer);
 
 
-void cvm_vk_staging_shunt_buffer_reset(cvm_vk_staging_shunt_buffer * buffer);
+void cvm_vk_shunt_buffer_reset(struct cvm_vk_shunt_buffer * buffer);
 /// returns pointer to location which can be written, this pointer is only valid until next use, unless mltithreaded in which case it will return a persistently valid pointer or NULL
-void * cvm_vk_staging_shunt_buffer_reserve_bytes(cvm_vk_staging_shunt_buffer * buffer, VkDeviceSize byte_count, VkDeviceSize * offset);
+void * cvm_vk_shunt_buffer_reserve_bytes(struct cvm_vk_shunt_buffer * buffer, VkDeviceSize byte_count, VkDeviceSize * offset);
 
-VkDeviceSize cvm_vk_staging_shunt_buffer_get_space_used(cvm_vk_staging_shunt_buffer * buffer);
-void cvm_vk_staging_shunt_buffer_copy(cvm_vk_staging_shunt_buffer * buffer, void * dst);
+VkDeviceSize cvm_vk_shunt_buffer_get_space_used(struct cvm_vk_shunt_buffer * buffer);
+void cvm_vk_shunt_buffer_copy(struct cvm_vk_shunt_buffer * buffer, void * dst);
 
 #endif
 

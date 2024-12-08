@@ -248,7 +248,7 @@ void        blank_widget_delete         (widget * w);
 //
 //void switch_currently_active_menu(menu_header * mh,int new_current_menu);
 
-void render_widget_overlay(struct cvm_overlay_render_batch * restrict render_batch,widget * menu_widget);
+void render_widget_overlay(struct cvm_overlay_render_batch * restrict render_batch, widget * menu_widget);
 
 bool handle_widget_overlay_left_click(widget * menu_widget,int x_in,int y_in);
 bool handle_widget_overlay_left_release(widget * menu_widget,int x_in,int y_in);

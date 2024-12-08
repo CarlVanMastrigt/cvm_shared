@@ -47,7 +47,7 @@ typedef struct cvm_vk_command_buffer
     uint32_t signal_count;
     uint32_t wait_count;
 
-    cvm_vk_timeline_semaphore_moment * present_completion_moment;///REMOVE (when last use moment can be removed)
+    cvm_vk_timeline_semaphore_moment* present_completion_moment;///REMOVE (when last use moment can be removed)
 
     VkSemaphoreSubmitInfo signal_info[4];/// left open in case we add a way to signal arbitrary semphores
     VkSemaphoreSubmitInfo wait_info[11];

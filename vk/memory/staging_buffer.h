@@ -82,7 +82,7 @@ cvm_vk_staging_buffer_allocation cvm_vk_staging_buffer_allocation_acquire(cvm_vk
 void cvm_vk_staging_buffer_allocation_flush(const cvm_vk_staging_buffer_ * staging_buffer, const cvm_vk_device * device, cvm_vk_staging_buffer_allocation* allocation, VkDeviceSize relative_offset, VkDeviceSize size);
 
 /// allocation index is the index param of struct reurned by `cvm_vk_staging_buffer_reserve_allocation`
-void cvm_vk_staging_buffer_allocation_release(cvm_vk_staging_buffer_ * staging_buffer, cvm_vk_staging_buffer_allocation allocation, cvm_vk_timeline_semaphore_moment moment_of_last_use);
+void cvm_vk_staging_buffer_allocation_release(cvm_vk_staging_buffer_ * staging_buffer, cvm_vk_staging_buffer_allocation* allocation, cvm_vk_timeline_semaphore_moment moment_of_last_use);
 
 VkDeviceSize cvm_vk_staging_buffer_allocation_align_offset(cvm_vk_staging_buffer_ * staging_buffer, VkDeviceSize offset);
 

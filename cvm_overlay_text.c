@@ -1,5 +1,5 @@
 /**
-Copyright 2022 Carl van Mastrigt
+Copyright 2022,2024 Carl van Mastrigt
 
 This file is part of cvm_shared.
 
@@ -20,7 +20,7 @@ along with cvm_shared.  If not, see <https://www.gnu.org/licenses/>.
 #include "cvm_shared.h"
 
 
-void cvm_overlay_create_font(cvm_overlay_font * font, const FT_Library * freetype_library, cvm_vk_image_atlas * backing_image_atlas, char * filename, int pixel_size)
+void cvm_overlay_create_font(cvm_overlay_font * font, const FT_Library * freetype_library, char * filename, int pixel_size)
 {
     int r;
 
@@ -30,7 +30,6 @@ void cvm_overlay_create_font(cvm_overlay_font * font, const FT_Library * freetyp
     r=FT_Set_Pixel_Sizes(font->face,0,pixel_size);
     assert(!r || !fprintf(stderr,"COULD NOT SET FONT FACE SIZE %s %d\n",filename,pixel_size));
 
-    font->backing_image_atlas=backing_image_atlas;
     font->glyph_size=pixel_size;
 
     font->space_character_index=FT_Get_Char_Index(font->face,' ');
@@ -47,7 +46,7 @@ void cvm_overlay_create_font(cvm_overlay_font * font, const FT_Library * freetyp
     font->glyph_count=0;
 }
 
-void cvm_overlay_destroy_font(cvm_overlay_font * font)
+void cvm_overlay_destroy_font(cvm_overlay_font * font, cvm_vk_image_atlas * backing_image_atlas)
 {
     uint32_t i;
     int r=FT_Done_Face(font->face);
@@ -55,7 +54,7 @@ void cvm_overlay_destroy_font(cvm_overlay_font * font)
 
     for(i=0;i<font->glyph_count;i++)
     {
-        cvm_vk_relinquish_image_atlas_tile(font->backing_image_atlas, font->glyphs[i].tile);
+        cvm_vk_relinquish_image_atlas_tile(backing_image_atlas, font->glyphs[i].tile);
     }
 
     free(font->glyphs);
@@ -277,7 +276,7 @@ static inline cvm_overlay_glyph * cvm_overlay_find_glpyh(cvm_overlay_font * font
     return font->glyphs+i;
 }
 
-static inline void cvm_overlay_prepare_glyph_render_data(cvm_overlay_font * font,cvm_overlay_glyph * g)
+static inline void cvm_overlay_prepare_glyph_render_data(cvm_overlay_font * font, cvm_overlay_glyph * g, struct cvm_overlay_render_batch * restrict render_batch)
 {
     uint32_t w,h;
     FT_GlyphSlot gs;
@@ -291,7 +290,8 @@ static inline void cvm_overlay_prepare_glyph_render_data(cvm_overlay_font * font
             w=gs->bitmap.width;
             h=gs->bitmap.rows;
 
-            g->tile=cvm_vk_acquire_image_atlas_tile_with_staging(font->backing_image_atlas,w,h,&staging);
+            g->tile = cvm_vk_acquire_image_atlas_tile(render_batch->alpha_atlas, w, h);
+            staging = cvm_vk_stage_image_atlas_upload(&render_batch->upload_shunt_buffer, &render_batch->alpha_atlas_copy_actions, g->tile, w, h, render_batch->alpha_atlas->bytes_per_pixel);
 
             if(g->tile)
             {
@@ -373,7 +373,7 @@ void overlay_text_single_line_render(struct cvm_overlay_render_batch * restrict 
         }
         gi=cvm_overlay_get_utf8_glyph_index(theme->font.face,(uint8_t*)text,&incr);
         g=cvm_overlay_find_glpyh(&theme->font,gi);
-        cvm_overlay_prepare_glyph_render_data(&theme->font,g);
+        cvm_overlay_prepare_glyph_render_data(&theme->font, g, render_batch);
         if(prev_gi && !FT_Get_Kerning(theme->font.face,prev_gi,gi,0,&kern))
         {
             /// kerning in 26.6 format
@@ -633,7 +633,7 @@ void overlay_text_multiline_render(struct cvm_overlay_render_batch * restrict re
 
             g=cvm_overlay_find_glpyh(font,gi);
 
-            cvm_overlay_prepare_glyph_render_data(font,g);
+            cvm_overlay_prepare_glyph_render_data(font, g, render_batch);
 
             if(prev_gi && !FT_Get_Kerning(font->face,prev_gi,gi,0,&kern)) x+=kern.x>>6;
 
@@ -685,7 +685,7 @@ void overlay_text_multiline_selection_render(struct cvm_overlay_render_batch * r
 
             g=cvm_overlay_find_glpyh(font,gi);
 
-            cvm_overlay_prepare_glyph_render_data(font,g);
+            cvm_overlay_prepare_glyph_render_data(font, g, render_batch);
 
             if(prev_gi && !FT_Get_Kerning(font->face,prev_gi,gi,0,&kern))
             {
@@ -766,7 +766,7 @@ char * overlay_text_multiline_find_offset(cvm_overlay_font * font,cvm_overlay_te
 
 
 
-cvm_overlay_glyph * overlay_get_glyph(cvm_overlay_font * font,const char * text)
+cvm_overlay_glyph * overlay_get_glyph(cvm_overlay_font * font, const char * text, struct cvm_overlay_render_batch * restrict render_batch)
 {
     uint32_t gi,incr;
     cvm_overlay_glyph * g;
@@ -779,7 +779,7 @@ cvm_overlay_glyph * overlay_get_glyph(cvm_overlay_font * font,const char * text)
 
         g=cvm_overlay_find_glpyh(font,gi);
 
-        cvm_overlay_prepare_glyph_render_data(font,g);
+        cvm_overlay_prepare_glyph_render_data(font, g, render_batch);
 
         if(text[incr])
         {
@@ -794,7 +794,7 @@ void overlay_text_centred_glyph_render(struct cvm_overlay_render_batch * restric
 {
     cvm_overlay_glyph * g;
 
-    g=overlay_get_glyph(font,icon_glyph);
+    g=overlay_get_glyph(font, icon_glyph, render_batch);
 
     if(!g || !g->tile)return;
 
@@ -810,7 +810,7 @@ void overlay_text_centred_glyph_box_constrained_render(struct cvm_overlay_render
 {
     cvm_overlay_glyph * g;
 
-    g=overlay_get_glyph(&theme->font,icon_glyph);
+    g=overlay_get_glyph(&theme->font, icon_glyph, render_batch);
 
     if(!g || !g->tile)return;
 

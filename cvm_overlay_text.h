@@ -44,7 +44,6 @@ cvm_overlay_glyph;///hmmm, glyph vs string based rendering... glyph has more pot
 typedef struct cvm_overlay_font
 {
     FT_Face face;
-    cvm_vk_image_atlas * backing_image_atlas;
 
     int16_t glyph_size;
 
@@ -81,8 +80,8 @@ cvm_overlay_text_block;
 void cvm_overlay_open_freetype(void);
 void cvm_overlay_close_freetype(void);
 
-void cvm_overlay_create_font(cvm_overlay_font * font, const FT_Library * freetype_library, cvm_vk_image_atlas * backing_image_atlas, char * filename, int pixel_size);
-void cvm_overlay_destroy_font(cvm_overlay_font * font);
+void cvm_overlay_create_font(cvm_overlay_font * font, const FT_Library * freetype_library, char * filename, int pixel_size);
+void cvm_overlay_destroy_font(cvm_overlay_font * font, cvm_vk_image_atlas * backing_image_atlas);/// atlas temporary var until atlas has better internl management
 
 
 ///some generic
@@ -153,7 +152,7 @@ static inline rectangle overlay_text_single_line_get_text_area(rectangle r,int16
     return r;
 }
 
-cvm_overlay_glyph * overlay_get_glyph(cvm_overlay_font * font,const char * text);///assumes a single glyph in text
+cvm_overlay_glyph * overlay_get_glyph(cvm_overlay_font * font,const char * text, struct cvm_overlay_render_batch * restrict render_batch);///assumes a single glyph in text
 
 void overlay_text_centred_glyph_render(struct cvm_overlay_render_batch * restrict render_batch,cvm_overlay_font * font,rectangle bounds,rectangle r,const char * icon_glyph,overlay_colour colour);
 void overlay_text_centred_glyph_box_constrained_render(struct cvm_overlay_render_batch * restrict render_batch,overlay_theme * theme,rectangle bounds,rectangle r,const char * icon_glyph,overlay_colour colour,rectangle box_r,uint32_t box_status);

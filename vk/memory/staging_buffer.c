@@ -151,7 +151,8 @@ cvm_vk_staging_buffer_allocation cvm_vk_staging_buffer_allocation_acquire(cvm_vk
 
         assert(required_space < staging_buffer->buffer_size);
 
-        if(required_space + high_priority * staging_buffer->reserved_high_priority_space <= staging_buffer->remaining_space)
+        /// check that the reserved high priority space will be preserved when processing low priority requests
+        if(required_space + (high_priority ? 0 : staging_buffer->reserved_high_priority_space) <= staging_buffer->remaining_space)
         {
             break;/// request will fit, we're done
         }
@@ -238,12 +239,12 @@ void cvm_vk_staging_buffer_allocation_flush(const cvm_vk_staging_buffer_ * stagi
     allocation->flushed = true;
 }
 
-void cvm_vk_staging_buffer_allocation_release(cvm_vk_staging_buffer_ * staging_buffer, cvm_vk_staging_buffer_allocation allocation, cvm_vk_timeline_semaphore_moment moment_of_last_use)
+void cvm_vk_staging_buffer_allocation_release(cvm_vk_staging_buffer_ * staging_buffer, cvm_vk_staging_buffer_allocation* allocation, cvm_vk_timeline_semaphore_moment moment_of_last_use)
 {
-    assert(allocation.flushed);
+    assert(allocation->flushed);
     mtx_lock(&staging_buffer->access_mutex);
 
-    cvm_vk_staging_buffer_segment_queue_get_ptr(&staging_buffer->segment_queue, allocation.segment_index)->moment_of_last_use=moment_of_last_use;
+    cvm_vk_staging_buffer_segment_queue_get_ptr(&staging_buffer->segment_queue, allocation->segment_index)->moment_of_last_use=moment_of_last_use;
 
     if(staging_buffer->threads_waiting_on_semaphore_setup)
     {

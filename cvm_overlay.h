@@ -121,10 +121,6 @@ struct cvm_overlay_theme_element_description
 
 struct overlay_theme
 {
-    cvm_vk_image_atlas * backing_image_atlas;
-    /// maybe wants to have the transparent one as well and have this be init specifically via an overlay renderer??
-    /// perhaps split the actual rendering part of the renderer away from the backing part (images and the font library) (`FT_Library overlay_freetype_library`)
-
     cvm_overlay_font font;
 
     int base_unit_w;
@@ -332,7 +328,7 @@ struct cvm_overlay_rendering_static_resources
 };
 
 #warning this should NOT require a shunt buffer
-void cvm_overlay_rendering_static_resources_initialise(struct cvm_overlay_rendering_static_resources * static_resources, const cvm_vk_device * device, uint32_t renderer_transient_count, cvm_vk_staging_shunt_buffer* shunt_buffer);
+void cvm_overlay_rendering_static_resources_initialise(struct cvm_overlay_rendering_static_resources * static_resources, const cvm_vk_device * device, uint32_t renderer_transient_count);
 void cvm_overlay_rendering_static_resources_terminate(struct cvm_overlay_rendering_static_resources * static_resources, const cvm_vk_device * device);
 
 typedef struct cvm_overlay_renderer
@@ -349,7 +345,7 @@ typedef struct cvm_overlay_renderer
     /// are separate shunt buffers even the best way to do this??
 //    cvm_overlay_element_render_data_stack element_render_stack;
     struct cvm_overlay_render_batch* render_batch;/// <- temporary, move elsewhere
-    cvm_vk_staging_shunt_buffer shunt_buffer;
+//    cvm_vk_shunt_buffer shunt_buffer;
 
     struct cvm_overlay_rendering_static_resources static_resources;
 
@@ -435,13 +431,26 @@ struct cvm_overlay_rendering_resources
 struct cvm_overlay_render_batch
 {
     /// preparation resources
-    cvm_overlay_element_render_data_stack render_elements;// essentailly overlay element instances
-    cvm_vk_staging_shunt_buffer upload_shunt_buffer;// used for putting data in atlases
+    struct cvm_overlay_element_render_data_stack render_elements;// essentailly overlay element instances
+
+    struct cvm_vk_shunt_buffer upload_shunt_buffer;// used for putting data in atlases
+
+    /// the atlases can be used for other purposes, but the shunt buffer and copy list must be kept in sync (ergo them going together here)
 
     /// need a good way to track use of tiles in atlas, can have usage mask (u8/u16) that can be reset en-masse?
+    ///     ^ or perhaps a linked list per usage frame (max N) that gets shuffled off all together to the LL of removable items
+    /// atlases are unowned and merely passed by reference
     cvm_vk_image_atlas* colour_atlas;
     cvm_vk_image_atlas* alpha_atlas;
+    /// separation of uploads and the image atlas itself in this way allows frames to be set up in advance (multiple render batches in flight)
+    /// i.e. not having the copy stack be part of the image atlas is a net positive
+
+    /// copies to perform from shunt buffer to the atlases
+    cvm_vk_buffer_image_copy_stack alpha_atlas_copy_actions;
+    cvm_vk_buffer_image_copy_stack colour_atlas_copy_actions;
     /// end of preparation resources
+
+
 
 
     /// all elemnts are tentative / subject to change/review
@@ -460,6 +469,11 @@ struct cvm_overlay_render_batch
 
     /// decriptor set (again, now has actually been written)
     /// (staging) buffer with offset of array of render elements/insances
+
+    cvm_vk_staging_buffer_allocation staging_buffer_allocation;
+
+    /// also record staging buffer itself here?
+    VkDeviceSize render_element_offset;
 };
 
 /// other data to be passed into rendering
@@ -497,6 +511,9 @@ void cvm_overlay_render(const struct cvm_vk_device* device, const struct cvm_ove
 
 
 
+
+
+/// overlay render helper functions follow
 
 
 

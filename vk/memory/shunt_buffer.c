@@ -19,7 +19,7 @@ along with cvm_shared.  If not, see <https://www.gnu.org/licenses/>.
 
 #include "cvm_shared.h"
 
-void cvm_vk_staging_shunt_buffer_initialise(cvm_vk_staging_shunt_buffer * buffer, VkDeviceSize alignment, VkDeviceSize max_size, bool multithreaded)
+void cvm_vk_shunt_buffer_initialise(struct cvm_vk_shunt_buffer * buffer, VkDeviceSize alignment, VkDeviceSize max_size, bool multithreaded)
 {
     assert((alignment & (alignment-1)) == 0);///alignment must be a power of 2
     buffer->alignment = alignment;
@@ -39,13 +39,13 @@ void cvm_vk_staging_shunt_buffer_initialise(cvm_vk_staging_shunt_buffer * buffer
     buffer->backing = malloc(buffer->size);
 }
 
-void cvm_vk_staging_shunt_buffer_terminate(cvm_vk_staging_shunt_buffer * buffer)
+void cvm_vk_shunt_buffer_terminate(struct cvm_vk_shunt_buffer * buffer)
 {
     free(buffer->backing);
 }
 
 
-void cvm_vk_staging_shunt_buffer_reset(cvm_vk_staging_shunt_buffer * buffer)
+void cvm_vk_shunt_buffer_reset(struct cvm_vk_shunt_buffer * buffer)
 {
     if(buffer->multithreaded)
     {
@@ -57,7 +57,7 @@ void cvm_vk_staging_shunt_buffer_reset(cvm_vk_staging_shunt_buffer * buffer)
     }
 }
 
-void * cvm_vk_staging_shunt_buffer_reserve_bytes(cvm_vk_staging_shunt_buffer * buffer, VkDeviceSize byte_count, VkDeviceSize * offset)
+void * cvm_vk_shunt_buffer_reserve_bytes(struct cvm_vk_shunt_buffer * buffer, VkDeviceSize byte_count, VkDeviceSize * offset)
 {
     uint_fast64_t current_offset;
     byte_count = cvm_vk_align(byte_count, buffer->alignment);
@@ -102,7 +102,7 @@ void * cvm_vk_staging_shunt_buffer_reserve_bytes(cvm_vk_staging_shunt_buffer * b
     return buffer->backing + *offset;
 }
 
-VkDeviceSize cvm_vk_staging_shunt_buffer_get_space_used(cvm_vk_staging_shunt_buffer * buffer)
+VkDeviceSize cvm_vk_shunt_buffer_get_space_used(struct cvm_vk_shunt_buffer * buffer)
 {
     if(buffer->multithreaded)
     {
@@ -114,9 +114,9 @@ VkDeviceSize cvm_vk_staging_shunt_buffer_get_space_used(cvm_vk_staging_shunt_buf
     }
 }
 
-void cvm_vk_staging_shunt_buffer_copy(cvm_vk_staging_shunt_buffer * buffer, void * dst)
+void cvm_vk_shunt_buffer_copy(struct cvm_vk_shunt_buffer * buffer, void * dst)
 {
-    memcpy(dst, buffer->backing, cvm_vk_staging_shunt_buffer_get_space_used(buffer));
+    memcpy(dst, buffer->backing, cvm_vk_shunt_buffer_get_space_used(buffer));
 }
 
 

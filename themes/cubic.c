@@ -110,7 +110,7 @@ along with cvm_shared.  If not, see <https://www.gnu.org/licenses/>.
 //}
 
 
-static void cubic_create_shape(overlay_theme * theme, cvm_vk_image_atlas_tile ** tile, uint16_t ** selection_grid, uint32_t r)///change ri & r0 as 16ths of a pixel??
+static void cubic_create_shape(overlay_theme * theme, cvm_vk_image_atlas_tile ** tile, uint16_t ** selection_grid, uint32_t r, struct cvm_overlay_render_batch * restrict render_batch)///change ri & r0 as 16ths of a pixel??
 {
     uint32_t i,rt,threshold,x,y,xc,yc,xm,ym,t,rm;
     uint8_t * data;
@@ -118,7 +118,8 @@ static void cubic_create_shape(overlay_theme * theme, cvm_vk_image_atlas_tile **
 
     assert(r<=40);///CUBIC OVERLAY ELEMENTS OF THIS SIZE NOT SUPPORTED
 
-    *tile = cvm_vk_acquire_image_atlas_tile_with_staging(theme->backing_image_atlas,r*2,r*2,(void**)&data);
+    *tile = cvm_vk_acquire_image_atlas_tile(render_batch->alpha_atlas, r*2,r*2);
+    data = cvm_vk_stage_image_atlas_upload(&render_batch->upload_shunt_buffer, &render_batch->alpha_atlas_copy_actions, *tile, r*2, r*2, render_batch->alpha_atlas->bytes_per_pixel);
 
     if(*tile)
     {
@@ -172,7 +173,7 @@ static void cubic_shaded_element_box_constrained_render(struct cvm_overlay_rende
 
     cubic=theme->other_data;
 
-    if(!cubic->foreground_image_tile)cubic_create_shape(theme,&cubic->foreground_image_tile,&cubic->foreground_selection_grid,cubic->foreground_r);
+    if(!cubic->foreground_image_tile)cubic_create_shape(theme, &cubic->foreground_image_tile, &cubic->foreground_selection_grid, cubic->foreground_r, render_batch);
     if(!cubic->foreground_image_tile)return;
 
     int16_t radius=cubic->foreground_r;
@@ -293,7 +294,7 @@ static void cubic_shaded_element_fading_box_constrained_render(struct cvm_overla
 
     cubic=theme->other_data;
 
-    if(!cubic->foreground_image_tile)cubic_create_shape(theme,&cubic->foreground_image_tile,&cubic->foreground_selection_grid,cubic->foreground_r);
+    if(!cubic->foreground_image_tile)cubic_create_shape(theme, &cubic->foreground_image_tile, &cubic->foreground_selection_grid, cubic->foreground_r, render_batch);
     if(!cubic->foreground_image_tile)return;
 
     int16_t radius=cubic->foreground_r;
@@ -413,7 +414,7 @@ static void cubic_fill_element_box_constrained_render(struct cvm_overlay_render_
 
     cubic=theme->other_data;
 
-    if(!cubic->foreground_image_tile)cubic_create_shape(theme,&cubic->foreground_image_tile,&cubic->foreground_selection_grid,cubic->foreground_r);
+    if(!cubic->foreground_image_tile)cubic_create_shape(theme, &cubic->foreground_image_tile, &cubic->foreground_selection_grid, cubic->foreground_r, render_batch);
     if(!cubic->foreground_image_tile)return;
 
     int radius=cubic->foreground_r;
@@ -513,7 +514,7 @@ static void cubic_fill_element_fading_box_constrained_render(struct cvm_overlay_
 
     cubic=theme->other_data;
 
-    if(!cubic->foreground_image_tile)cubic_create_shape(theme,&cubic->foreground_image_tile,&cubic->foreground_selection_grid,cubic->foreground_r);
+    if(!cubic->foreground_image_tile)cubic_create_shape(theme, &cubic->foreground_image_tile, &cubic->foreground_selection_grid, cubic->foreground_r, render_batch);
     if(!cubic->foreground_image_tile)return;
 
     int radius=cubic->foreground_r;
@@ -865,7 +866,7 @@ static void cubic_square_render(struct cvm_overlay_render_batch * restrict rende
 
     int radius=cubic->foreground_r;
 
-    if(!cubic->foreground_image_tile)cubic_create_shape(theme,&cubic->foreground_image_tile,&cubic->foreground_selection_grid,radius);
+    if(!cubic->foreground_image_tile)cubic_create_shape(theme, &cubic->foreground_image_tile, &cubic->foreground_selection_grid, radius, render_batch);
     if(!cubic->foreground_image_tile)return;
 
     int x_off=cubic->foreground_image_tile->x_pos<<2;
@@ -896,7 +897,7 @@ static void cubic_h_bar_render(struct cvm_overlay_render_batch * restrict render
 
     int radius=cubic->foreground_r;
 
-    if(!cubic->foreground_image_tile)cubic_create_shape(theme,&cubic->foreground_image_tile,&cubic->foreground_selection_grid,radius);
+    if(!cubic->foreground_image_tile)cubic_create_shape(theme, &cubic->foreground_image_tile, &cubic->foreground_selection_grid, radius, render_batch);
     if(!cubic->foreground_image_tile)return;
 
     int x_off=cubic->foreground_image_tile->x_pos<<2;
@@ -942,7 +943,7 @@ static void cubic_h_bar_slider_render(struct cvm_overlay_render_batch * restrict
 
     cubic=theme->other_data;
 
-    if(!cubic->internal_image_tile)cubic_create_shape(theme,&cubic->internal_image_tile,NULL,cubic->internal_r);
+    if(!cubic->internal_image_tile)cubic_create_shape(theme, &cubic->internal_image_tile, NULL, cubic->internal_r, render_batch);
     if(!cubic->internal_image_tile)return;
 
     r.x1+=cubic->foreground_r+cubic->foreground_offset_x * !(status&WIDGET_H_FIRST);
@@ -983,7 +984,7 @@ static void cubic_box_render(struct cvm_overlay_render_batch * restrict render_b
 
     int radius=cubic->foreground_r;
 
-    if(!cubic->foreground_image_tile)cubic_create_shape(theme,&cubic->foreground_image_tile,&cubic->foreground_selection_grid,radius);
+    if(!cubic->foreground_image_tile)cubic_create_shape(theme, &cubic->foreground_image_tile, &cubic->foreground_selection_grid, radius, render_batch);
     if(!cubic->foreground_image_tile)return;
 
     int x_off=cubic->foreground_image_tile->x_pos<<2;
@@ -1035,7 +1036,7 @@ static void cubic_panel_render(struct cvm_overlay_render_batch * restrict render
 
     int radius=cubic->background_r;
 
-    if(!cubic->background_image_tile)cubic_create_shape(theme,&cubic->background_image_tile,&cubic->background_selection_grid,radius);
+    if(!cubic->background_image_tile)cubic_create_shape(theme, &cubic->background_image_tile, &cubic->background_selection_grid, radius, render_batch);
     if(!cubic->background_image_tile)return;
 
     int x_off=cubic->background_image_tile->x_pos<<2;
@@ -1096,7 +1097,7 @@ static void cubic_square_box_constrained_render(struct cvm_overlay_render_batch 
 
     int radius=cubic->foreground_r;
 
-    if(!cubic->foreground_image_tile)cubic_create_shape(theme,&cubic->foreground_image_tile,&cubic->foreground_selection_grid,radius);
+    if(!cubic->foreground_image_tile)cubic_create_shape(theme, &cubic->foreground_image_tile, &cubic->foreground_selection_grid, radius, render_batch);
     if(!cubic->foreground_image_tile)return;
 
     int x_off=cubic->foreground_image_tile->x_pos<<2;
@@ -1128,7 +1129,7 @@ static void cubic_h_bar_box_constrained_render(struct cvm_overlay_render_batch *
 
     int radius=cubic->foreground_r;
 
-    if(!cubic->foreground_image_tile)cubic_create_shape(theme,&cubic->foreground_image_tile,&cubic->foreground_selection_grid,radius);
+    if(!cubic->foreground_image_tile)cubic_create_shape(theme, &cubic->foreground_image_tile, &cubic->foreground_selection_grid, radius, render_batch);
     if(!cubic->foreground_image_tile)return;
 
     int x_off=cubic->foreground_image_tile->x_pos<<2;
@@ -1162,7 +1163,7 @@ static void cubic_box_box_constrained_render(struct cvm_overlay_render_batch * r
 
     int radius=cubic->foreground_r;
 
-    if(!cubic->foreground_image_tile)cubic_create_shape(theme,&cubic->foreground_image_tile,&cubic->foreground_selection_grid,radius);
+    if(!cubic->foreground_image_tile)cubic_create_shape(theme, &cubic->foreground_image_tile, &cubic->foreground_selection_grid, radius, render_batch);
     if(!cubic->foreground_image_tile)return;
 
     int x_off=cubic->foreground_image_tile->x_pos<<2;
@@ -1206,7 +1207,7 @@ static void cubic_box_box_constrained_render(struct cvm_overlay_render_batch * r
     cubic_fill_element_box_constrained_render(render_batch,theme,bounds,r,colour,box_r,box_status);
 }
 
-overlay_theme * create_cubic_theme(cvm_vk_image_atlas * backing_image_atlas, const FT_Library * freetype_library)
+overlay_theme * create_cubic_theme(const FT_Library * freetype_library)
 {
     overlay_theme * theme;
     cubic_theme_data * cubic;
@@ -1219,8 +1220,6 @@ overlay_theme * create_cubic_theme(cvm_vk_image_atlas * backing_image_atlas, con
 
     theme=malloc(sizeof(overlay_theme));
     theme->other_data=cubic=malloc(sizeof(cubic_theme_data));
-
-    theme->backing_image_atlas=backing_image_atlas;
 
     theme->base_unit_w = 2 * (foreground_radius + foreground_offset_x);
     theme->base_unit_h = 2 * (foreground_radius + foreground_offset_y);
@@ -1311,27 +1310,27 @@ overlay_theme * create_cubic_theme(cvm_vk_image_atlas * backing_image_atlas, con
     cubic->internal_r = internal_radius;
     cubic->internal_d = 2 * internal_radius;
 
-    cvm_overlay_create_font(&theme->font, freetype_library, backing_image_atlas,"cvm_shared/resources/cvm_font_1.ttf",16);
+    cvm_overlay_create_font(&theme->font, freetype_library,"cvm_shared/resources/cvm_font_1.ttf",16);
 
     return theme;
 
 /// ↑←↓→ 🗙 🔄 💾 📁 📷 📄 🎵 ➕ ➖ 👻 🖋 🔓 🔗 🖼 ✂ 👁 ⚙
 }
 
-void destroy_cubic_theme(overlay_theme * theme)
+void destroy_cubic_theme(overlay_theme * theme, cvm_vk_image_atlas * backing_image_atlas)
 {
     cubic_theme_data * cubic;
     cubic=theme->other_data;
 
-    if(cubic->foreground_image_tile)cvm_vk_relinquish_image_atlas_tile(theme->backing_image_atlas,cubic->foreground_image_tile);
-    if(cubic->foreground_selection_grid)free(cubic->foreground_selection_grid);
+    if(cubic->foreground_image_tile) cvm_vk_relinquish_image_atlas_tile(backing_image_atlas,cubic->foreground_image_tile);
+    if(cubic->foreground_selection_grid) free(cubic->foreground_selection_grid);
 
-    if(cubic->background_image_tile)cvm_vk_relinquish_image_atlas_tile(theme->backing_image_atlas,cubic->background_image_tile);
-    if(cubic->background_selection_grid)free(cubic->background_selection_grid);
+    if(cubic->background_image_tile) cvm_vk_relinquish_image_atlas_tile(backing_image_atlas,cubic->background_image_tile);
+    if(cubic->background_selection_grid) free(cubic->background_selection_grid);
 
-    if(cubic->internal_image_tile)cvm_vk_relinquish_image_atlas_tile(theme->backing_image_atlas,cubic->internal_image_tile);
+    if(cubic->internal_image_tile) cvm_vk_relinquish_image_atlas_tile(backing_image_atlas,cubic->internal_image_tile);
 
-    cvm_overlay_destroy_font(&theme->font);
+    cvm_overlay_destroy_font(&theme->font, backing_image_atlas);
 
     free(theme->other_data);
 
