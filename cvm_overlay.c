@@ -447,16 +447,19 @@ static VkPipeline cvm_overlay_pipeline_create(const cvm_vk_device * device, cons
     return pipeline;
 }
 
-static void cvm_overlay_images_initialise(cvm_overlay_images * images, const cvm_vk_device * device,
-                                          uint32_t alpha_image_width , uint32_t alpha_image_height ,
-                                          uint32_t colour_image_width, uint32_t colour_image_height)
+//static void cvm_overlay_images_initialise(cvm_overlay_images * images, const cvm_vk_device * device,
+//                                          uint32_t alpha_image_width , uint32_t alpha_image_height ,
+//                                          uint32_t colour_image_width, uint32_t colour_image_height)
+VkResult cvm_overlay_image_atlases_initialise(struct cvm_overlay_image_atlases* image_atlases, const struct cvm_vk_device* device, uint32_t alpha_w, uint32_t alpha_h, uint32_t colour_w, uint32_t colour_h, bool multithreaded)
 {
-    VkResult created;
+    VkResult result;
+    VkImage images[2];
+    VkImageView views[2];
     /// images must be powers of 2
-    assert((alpha_image_width   & (alpha_image_width  -1)) == 0);
-    assert((alpha_image_height  & (alpha_image_height -1)) == 0);
-    assert((colour_image_width  & (colour_image_width -1)) == 0);
-    assert((colour_image_height & (colour_image_height-1)) == 0);
+    assert((alpha_w  & (alpha_w  -1)) == 0);
+    assert((alpha_h  & (alpha_h  -1)) == 0);
+    assert((colour_w & (colour_w -1)) == 0);
+    assert((colour_h & (colour_h -1)) == 0);
 
     VkImageCreateInfo image_creation_info[2]=
     {
@@ -468,9 +471,9 @@ static void cvm_overlay_images_initialise(cvm_overlay_images * images, const cvm
             .format=VK_FORMAT_R8_UNORM,
             .extent=(VkExtent3D)
             {
-                .width=alpha_image_width,
-                .height=alpha_image_height,
-                .depth=1
+                .width  = alpha_w,
+                .height = alpha_h,
+                .depth  = 1
             },
             .mipLevels=1,
             .arrayLayers=1,
@@ -490,9 +493,9 @@ static void cvm_overlay_images_initialise(cvm_overlay_images * images, const cvm
             .format=VK_FORMAT_R8G8B8A8_UNORM,
             .extent=(VkExtent3D)
             {
-                .width=colour_image_width,
-                .height=colour_image_height,
-                .depth=1
+                .width  = colour_w,
+                .height = colour_h,
+                .depth  = 1
             },
             .mipLevels=1,
             .arrayLayers=1,
@@ -506,25 +509,35 @@ static void cvm_overlay_images_initialise(cvm_overlay_images * images, const cvm
         }
     };
 
-    created = cvm_vk_create_images(device, image_creation_info, 2, &images->memory, images->images, images->views);
-    assert(created == VK_SUCCESS);
+    result = cvm_vk_create_images(device, image_creation_info, 2, &image_atlases->memory, images, views);
+    if(result != VK_SUCCESS)
+    {
+        return result;
+    }
 
-    cvm_vk_create_image_atlas(&images->alpha_atlas , images->images[0], images->views[0], sizeof(uint8_t)  , alpha_image_width , alpha_image_height , false);
-    cvm_vk_create_image_atlas(&images->colour_atlas, images->images[1], images->views[1], sizeof(uint8_t)*4, colour_image_width, colour_image_height, false);
+    cvm_vk_create_image_atlas(&image_atlases->alpha_atlas, images[0], views[0], sizeof(uint8_t), alpha_w, alpha_h, multithreaded);
+    image_atlases->alpha_image = images[0];
+    image_atlases->alpha_view = views[0];
+
+    cvm_vk_create_image_atlas(&image_atlases->colour_atlas, images[1], views[1], sizeof(uint8_t)*4, colour_w, colour_h, multithreaded);
+    image_atlases->colour_image = images[1];
+    image_atlases->colour_view = views[1];
+
+    return result;
 }
 
-static void cvm_overlay_images_terminate(const cvm_vk_device * device, cvm_overlay_images * images)
+void cvm_overlay_image_atlases_terminate(struct cvm_overlay_image_atlases* image_atlases, const struct cvm_vk_device* device)
 {
-    cvm_vk_destroy_image_atlas(&images->alpha_atlas);
-    cvm_vk_destroy_image_atlas(&images->colour_atlas);
+    cvm_vk_destroy_image_atlas(&image_atlases->alpha_atlas);
+    cvm_vk_destroy_image_atlas(&image_atlases->colour_atlas);
 
-    vkDestroyImageView(device->device, images->views[0], device->host_allocator);
-    vkDestroyImageView(device->device, images->views[1], device->host_allocator);
+    vkDestroyImageView(device->device, image_atlases->alpha_view, device->host_allocator);
+    vkDestroyImageView(device->device, image_atlases->colour_view, device->host_allocator);
 
-    vkDestroyImage(device->device, images->images[0], device->host_allocator);
-    vkDestroyImage(device->device, images->images[1], device->host_allocator);
+    vkDestroyImage(device->device, image_atlases->alpha_image, device->host_allocator);
+    vkDestroyImage(device->device, image_atlases->colour_image, device->host_allocator);
 
-    cvm_vk_free_memory(images->memory);
+    vkFreeMemory(device->device, image_atlases->memory, device->host_allocator);
 }
 
 
@@ -765,11 +778,11 @@ void cvm_overlay_rendering_static_resources_initialise(struct cvm_overlay_render
     cvm_vk_create_shader_stage_info(static_resources->pipeline_stages+0,"cvm_shared/shaders/overlay.vert.spv",VK_SHADER_STAGE_VERTEX_BIT);
     cvm_vk_create_shader_stage_info(static_resources->pipeline_stages+1,"cvm_shared/shaders/overlay.frag.spv",VK_SHADER_STAGE_FRAGMENT_BIT);
 
-    cvm_overlay_images_initialise(&static_resources->images, device, 1024, 1024, 1024, 1024);
+    cvm_overlay_image_atlases_initialise(&static_resources->image_atlases, device, 1024, 1024, 1024, 1024, false);
 }
 void cvm_overlay_rendering_static_resources_terminate(struct cvm_overlay_rendering_static_resources * static_resources, const cvm_vk_device * device)
 {
-    cvm_overlay_images_terminate(device, &static_resources->images);
+    cvm_overlay_image_atlases_terminate(&static_resources->image_atlases, device);
 
     cvm_vk_destroy_shader_stage_info(static_resources->pipeline_stages+0);
     cvm_vk_destroy_shader_stage_info(static_resources->pipeline_stages+1);
@@ -805,6 +818,7 @@ void cvm_overlay_render_batch_terminate(struct cvm_overlay_render_batch* batch)
 
 
 /// can actually easily sub in/out atlases, will just require re-filling them from cpu data (or can even manually copy over data between atlases, which would defragment in the process)
+#warning replace atlases with cvm_overlay_image_atlases
 void cvm_overlay_render_batch_build(struct cvm_overlay_render_batch* batch, widget * menu_widget, struct cvm_vk_image_atlas* colour_atlas, struct cvm_vk_image_atlas* alpha_atlas)
 {
     /// copy actions should be reset when copied, this must have been done before resetting the batch (overlay system relies on these entries having been staged and uploaded)
@@ -823,7 +837,7 @@ void cvm_overlay_render_batch_build(struct cvm_overlay_render_batch* batch, widg
     batch->screen_h = menu_widget->base.r.y2;
 }
 
-void cvm_overlay_render_batch_stage(const struct cvm_vk_device * device, struct cvm_overlay_render_batch* batch, struct cvm_vk_staging_buffer_* staging_buffer, const float* colour_array, VkDescriptorSet descriptor_set)
+void cvm_overlay_render_batch_stage(struct cvm_overlay_render_batch* batch, const struct cvm_vk_device * device, struct cvm_vk_staging_buffer_* staging_buffer, const float* colour_array, VkDescriptorSet descriptor_set)
 {
     VkDeviceSize upload_offset, elements_offset, uniform_offset, staging_space;
 
@@ -853,7 +867,7 @@ void cvm_overlay_render_batch_stage(const struct cvm_vk_device * device, struct 
 }
 
 ///copy staged data and apply barriers to atlas images
-void cvm_overlay_render_batch_prepare_for_rendering(struct cvm_overlay_render_batch* batch, VkCommandBuffer command_buffer)
+void cvm_overlay_render_batch_upload(struct cvm_overlay_render_batch* batch, VkCommandBuffer command_buffer)
 {
     const VkBuffer staging_buffer = batch->staging_buffer_allocation.parent->buffer;
     cvm_vk_image_atlas_submit_all_pending_copy_actions(batch->colour_atlas, command_buffer, staging_buffer, batch->upload_offset, &batch->colour_atlas_copy_actions);
@@ -884,7 +898,7 @@ void cvm_overlay_render_batch_render(struct cvm_overlay_render_batch* batch, VkP
 }
 
 
-void cvm_overlay_render_batch_complete(struct cvm_overlay_render_batch* batch, cvm_vk_timeline_semaphore_moment completion_moment)
+void cvm_overlay_render_batch_finish(struct cvm_overlay_render_batch* batch, cvm_vk_timeline_semaphore_moment completion_moment)
 {
     cvm_vk_staging_buffer_allocation_release(&batch->staging_buffer_allocation, completion_moment);
 }
@@ -972,7 +986,7 @@ cvm_vk_timeline_semaphore_moment cvm_overlay_render_to_target(const cvm_vk_devic
     render_batch = renderer->render_batch;
 
     /// setup/reset the render batch
-    cvm_overlay_render_batch_build(render_batch, menu_widget, &renderer->static_resources.images.colour_atlas, &renderer->static_resources.images.alpha_atlas);
+    cvm_overlay_render_batch_build(render_batch, menu_widget, &renderer->static_resources.image_atlases.colour_atlas, &renderer->static_resources.image_atlases.alpha_atlas);
 
 
 
@@ -1001,8 +1015,8 @@ cvm_vk_timeline_semaphore_moment cvm_overlay_render_to_target(const cvm_vk_devic
 
     ///this uses the shunt buffer!
 
-    cvm_overlay_render_batch_stage(device, render_batch, staging_buffer, overlay_colours, transient_resources->descriptor_set);
-    cvm_overlay_render_batch_prepare_for_rendering(render_batch, cb.buffer);
+    cvm_overlay_render_batch_stage(render_batch, device, staging_buffer, overlay_colours, transient_resources->descriptor_set);
+    cvm_overlay_render_batch_upload(render_batch, cb.buffer);
 
 
 
@@ -1034,7 +1048,7 @@ cvm_vk_timeline_semaphore_moment cvm_overlay_render_to_target(const cvm_vk_devic
 
     completion_moment = cvm_vk_command_pool_submit_command_buffer(&transient_resources->command_pool, device, &cb, VK_PIPELINE_STAGE_2_COLOR_ATTACHMENT_OUTPUT_BIT);
 
-    cvm_overlay_render_batch_complete(render_batch, completion_moment);
+    cvm_overlay_render_batch_finish(render_batch, completion_moment);
 
     cvm_overlay_target_resources_release(target_resources, completion_moment);
     cvm_overlay_frame_resources_release(frame_resources, completion_moment);

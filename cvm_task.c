@@ -255,7 +255,16 @@ void cvm_task_system_initialise(cvm_task_system * task_system, uint32_t worker_t
     }
 }
 
-#warning can't end the task system from inside the task system, would be good to split this into 2 functions such that we can start the end and then wait on it to complete
+
+void cvm_task_system_begin_shutdown(cvm_task_system * task_system)
+{
+    mtx_lock(&task_system->worker_thread_mutex);
+    task_system->shutdown_initiated=true;
+    cnd_signal(&task_system->worker_thread_condition);/// ensure at least one worker is awake to finalise shutdown
+    mtx_unlock(&task_system->worker_thread_mutex);
+}
+/// ^ this is also necessary/useful for queues i believe,
+///     ^ have to wait till all tasks that would use a queue have completed before attempting to terminate the queue, best/safest way to do this is to have the queue outlive the task system
 
 #warning having arbitrary threads be able to do task work without needing to be started by the task system would also be good, does require adjustment of thread count inside thread mutex
 
@@ -264,8 +273,7 @@ void cvm_task_system_terminate(cvm_task_system * task_system)
     uint32_t i;
 
     mtx_lock(&task_system->worker_thread_mutex);
-    task_system->shutdown_initiated=true;
-    cnd_signal(&task_system->worker_thread_condition);/// ensure at least one worker is awake to finalise shutdown
+    assert(task_system->shutdown_initiated);/// this will finalise shutdown of the task system, shutdown must have been initiated earlier
     do
     {
         cnd_wait(&task_system->worker_thread_condition, &task_system->worker_thread_mutex);

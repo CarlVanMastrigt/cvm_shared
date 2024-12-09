@@ -49,7 +49,9 @@ VkResult cvm_vk_staging_buffer_initialise(struct cvm_vk_staging_buffer_ * stagin
         staging_buffer->usage = usage;
         staging_buffer->alignment = alignment;
 
-        staging_buffer->threads_waiting_on_semaphore_setup=false;
+        staging_buffer->threads_waiting_on_semaphore_setup = false;
+
+        staging_buffer->terminating = false;
 
         staging_buffer->buffer_size = buffer_size;
         staging_buffer->reserved_high_priority_space = reserved_high_priority_space;
@@ -65,23 +67,36 @@ VkResult cvm_vk_staging_buffer_initialise(struct cvm_vk_staging_buffer_ * stagin
     return result;
 }
 
+/// cannot acquire allocations after this has been called
 void cvm_vk_staging_buffer_terminate(struct cvm_vk_staging_buffer_ * staging_buffer, cvm_vk_device * device)
 {
     struct cvm_vk_staging_buffer_segment * oldest_active_segment;
 
+    mtx_lock(&staging_buffer->access_mutex);
+    staging_buffer->terminating = true;
     /// wait for all memory uses to complete, must be externally synchronised to ensure buffer is not in use elsewhere
     while((oldest_active_segment = cvm_vk_staging_buffer_segment_queue_dequeue_ptr(&staging_buffer->segment_queue)))
     {
-        assert(oldest_active_segment->moment_of_last_use.semaphore != VK_NULL_HANDLE);///cant try to terminate while still in use
-        assert(oldest_active_segment->size);///segment must occupy space
+        /// this allows cleanup to be initiated while dangling allocations have been made
+        if (oldest_active_segment->moment_of_last_use.semaphore == VK_NULL_HANDLE)/// semaphore not actually set up yet, this segment has been reserved but not completed
+        {
+            staging_buffer->threads_waiting_on_semaphore_setup = true;
+            cnd_wait(&staging_buffer->setup_stall_condition, &staging_buffer->access_mutex);
+        }
+        else
+        {
+            assert(oldest_active_segment->size);///segment must occupy space
 
-        cvm_vk_timeline_semaphore_moment_wait(device,&oldest_active_segment->moment_of_last_use);
+            cvm_vk_timeline_semaphore_moment_wait(device,&oldest_active_segment->moment_of_last_use);
 
-        /// this checks that the start of this segment is the end of the available space
-        assert(oldest_active_segment->offset == (staging_buffer->current_offset+staging_buffer->remaining_space) % staging_buffer->buffer_size);/// out of order free for some reason, or offset mismatch
+            /// this checks that the start of this segment is the end of the available space
+            assert(oldest_active_segment->offset == (staging_buffer->current_offset+staging_buffer->remaining_space) % staging_buffer->buffer_size);/// out of order free for some reason, or offset mismatch
 
-        staging_buffer->remaining_space += oldest_active_segment->size;///relinquish this segments space space
+            staging_buffer->remaining_space += oldest_active_segment->size;///relinquish this segments space space
+        }
     }
+
+    mtx_unlock(&staging_buffer->access_mutex);
 
     assert(staging_buffer->remaining_space==staging_buffer->buffer_size);
 
@@ -141,6 +156,8 @@ struct cvm_vk_staging_buffer_allocation cvm_vk_staging_buffer_allocation_acquire
 
     while(true)
     {
+        assert(!staging_buffer->terminating);
+        /// try to free up space
         cvm_vk_staging_buffer_query_allocations(staging_buffer,device);
 
         wrap = staging_buffer->current_offset+requested_space > staging_buffer->buffer_size;

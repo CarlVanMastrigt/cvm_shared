@@ -208,18 +208,133 @@ struct overlay_theme
 
 
 
-typedef struct cvm_overlay_images
+
+
+
+
+
+
+
+
+struct cvm_overlay_image_atlases
 {
+    /// shared by colour atlas and
     VkDeviceMemory memory;
 
-    /// alpha - colour
-    VkImage images[2];
-    VkImageView views[2];
-
+    VkImage alpha_image;
+    VkImageView alpha_view;
     cvm_vk_image_atlas alpha_atlas;
+
+    VkImage colour_image;
+    VkImageView colour_view;
     cvm_vk_image_atlas colour_atlas;
-}
-cvm_overlay_images;
+};
+
+VkResult cvm_overlay_image_atlases_initialise(struct cvm_overlay_image_atlases* image_atlases, const struct cvm_vk_device* device, uint32_t alpha_w, uint32_t alpha_h, uint32_t colour_w, uint32_t colour_h, bool multithreaded);
+void cvm_overlay_image_atlases_terminate(struct cvm_overlay_image_atlases* image_atlases, const struct cvm_vk_device* device);
+
+struct cvm_overlay_rendering_resources
+{
+    /// held reference
+//    struct cvm_overlay_image_atlases* image_atlases;
+    /// possibility for external management would be nice, so instead pass in images in a (semi?) generalised fashion -- just view to bind?
+
+    /// above might be worth separating out, is required for knowing where to upload image elements in prepartory rendering stage
+
+    uint32_t descriptor_sets_available;// debug, used to ensure all descriptor sets get used
+
+    // dont manage descripror pool? would require another stage to allocate it... probably not worthwhile
+    VkDescriptorPool descriptor_pool;
+
+    /// combine images (to allow them to be dynamic) and
+    VkDescriptorSetLayout descriptor_set_layout;
+
+    /// for creating pipelines
+    VkPipelineLayout pipeline_layout;
+    VkPipelineShaderStageCreateInfo vertex_pipeline_stage;
+    VkPipelineShaderStageCreateInfo fragment_pipeline_stage;
+};
+
+/// data to be passed form setup stage to rendering batch/packet
+/// used both in setup/prep and actual_render functions
+///     ^ actually... aside from the push constants (which COULD be moved to uniform) this is all only used by the prep stage!
+
+struct cvm_overlay_render_batch
+{
+    /// preparation resources
+    struct cvm_overlay_element_render_data_stack render_elements;// essentailly overlay element instances
+
+    struct cvm_vk_shunt_buffer upload_shunt_buffer;// used for putting data in atlases
+
+    /// the atlases can be used for other purposes, but the shunt buffer and copy list must be kept in sync (ergo them going together here)
+
+    /// need a good way to track use of tiles in atlas, can have usage mask (u8/u16) that can be reset en-masse?
+    ///     ^ or perhaps a linked list per usage frame (max N) that gets shuffled off all together to the LL of removable items
+    /// atlases are unowned and merely passed by reference
+    cvm_vk_image_atlas* colour_atlas;// -- unowned
+    cvm_vk_image_atlas* alpha_atlas;// -- unowned
+    /// separation of uploads and the image atlas itself in this way allows frames to be set up in advance (multiple render batches in flight)
+    /// i.e. not having the copy stack be part of the image atlas is a net positive
+
+    /// copies to perform from shunt buffer to the atlases
+    cvm_vk_buffer_image_copy_stack alpha_atlas_copy_actions;
+    cvm_vk_buffer_image_copy_stack colour_atlas_copy_actions;
+
+
+    /// following are copies or transient data used only within the stages of overlay batch rendering
+
+    struct cvm_vk_staging_buffer_allocation staging_buffer_allocation;
+
+    /// also record staging buffer itself here?
+    VkDeviceSize element_offset;
+    VkDeviceSize upload_offset;
+
+    /// set and then used in rendering, copied here just to prevent passing it around
+    VkDescriptorSet descriptor_set;// -- unowned
+
+    uint32_t screen_w;
+    uint32_t screen_h;
+};
+
+
+void cvm_overlay_rendering_resources_initialise(struct cvm_overlay_rendering_resources* rendering_resources, const struct cvm_vk_device* device, uint32_t active_render_count);
+void cvm_overlay_rendering_resources_terminate (struct cvm_overlay_rendering_resources* rendering_resources, const struct cvm_vk_device* device);
+
+/// VK types returned by these can/should be destroyed as normal
+VkDescriptorSet cvm_overlay_descriptor_set_create(const struct cvm_vk_device* device, const struct cvm_overlay_rendering_resources* rendering_resources);
+VkPipeline cvm_overlay_render_pipeline_create(const struct cvm_vk_device* device, const struct cvm_overlay_rendering_resources* rendering_resources, VkRenderPass render_pass, VkExtent2D extent, uint32_t subpass);
+
+/// there are 5 stages to rendering, they must be externally synchronised both on cpu and GPU (submitting in order to the same command buffer is enough to ensure GPU ordering)
+
+/// `menu_widget` must have been organised for an `extent` the same as the render_pass & pipeline this batch will be used with
+void cvm_overlay_render_batch_build(struct cvm_overlay_render_batch* batch, widget * menu_widget, struct cvm_vk_image_atlas* colour_atlas, struct cvm_vk_image_atlas* alpha_atlas);
+
+/// `descriptor_set` must have been created with `cvm_overlay_descriptor_set_create`
+void cvm_overlay_render_batch_stage(struct cvm_overlay_render_batch* batch, const struct cvm_vk_device * device, struct cvm_vk_staging_buffer_* staging_buffer, const float* colour_array, VkDescriptorSet descriptor_set);
+
+/// upload also transitions the rendering resources so must be called after all changes to image atlases (for example if some parts of the atlas are rendered to)
+void cvm_overlay_render_batch_upload(struct cvm_overlay_render_batch* batch, VkCommandBuffer command_buffer);
+
+/// `pipeline` must have been created with `cvm_overlay_render_pipeline_create` and be called inside the render pass and subpass
+void cvm_overlay_render_batch_render(struct cvm_overlay_render_batch* batch, VkPipelineLayout pipeline_layout, VkCommandBuffer command_buffer, VkPipeline pipeline);
+
+/// used to schedule the release of resources used/held by this batch, must ensure completion moment occurs after `render` has completed
+void cvm_overlay_render_batch_finish(struct cvm_overlay_render_batch* batch, cvm_vk_timeline_semaphore_moment completion_moment);
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 
 /// target information and synchronization requirements
@@ -310,7 +425,7 @@ CVM_QUEUE(struct cvm_overlay_transient_resources*,cvm_overlay_transient_resource
 
 struct cvm_overlay_rendering_static_resources
 {
-    cvm_overlay_images images;
+    struct cvm_overlay_image_atlases image_atlases;
 
     VkDescriptorPool descriptor_pool;
 
@@ -378,133 +493,6 @@ cvm_vk_timeline_semaphore_moment cvm_overlay_render_to_presentable_image(const c
 
 
 
-struct cvm_overlay_image_atlases
-{
-    /// shared by colour atlas and
-    VkDeviceMemory image_memory;
-
-    VkImage alpha_image;
-    VkImageView alpha_image_view;
-    cvm_vk_image_atlas alpha_image_atlas;
-
-    VkImage colour_image;
-    VkImageView colour_image_view;
-    cvm_vk_image_atlas colour_image_atlas;
-};
-
-void cvm_overlay_image_atlases_initialise(struct cvm_overlay_image_atlases* image_atlases, const struct cvm_vk_device* device, uint32_t alpha_w, uint32_t alpha_h, uint32_t colour_w, uint32_t colour_h);
-void cvm_overlay_image_atlases_terminate (struct cvm_overlay_image_atlases* image_atlases, const struct cvm_vk_device* device);
-
-struct cvm_overlay_rendering_resources
-{
-    /// held reference
-//    struct cvm_overlay_image_atlases* image_atlases;
-    /// possibility for external management would be nice, so instead pass in images in a (semi?) generalised fashion -- just view to bind?
-
-    /// above might be worth separating out, is required for knowing where to upload image elements in prepartory rendering stage
-
-    uint32_t descriptor_sets_available;// debug, used to ensure all descriptor sets get used
-
-    // dont manage descripror pool? would require another stage to allocate it... probably not worthwhile
-    VkDescriptorPool descriptor_pool;
-
-    /// combine images (to allow them to be dynamic) and
-    VkDescriptorSetLayout descriptor_set_layout;
-
-    /// for creating pipelines
-    VkPipelineLayout pipeline_layout;
-    VkPipelineShaderStageCreateInfo vertex_pipeline_stage;
-    VkPipelineShaderStageCreateInfo fragment_pipeline_stage;
-};
-
-/// data to be passed form setup stage to rendering batch/packet
-/// used both in setup/prep and actual_render functions
-///     ^ actually... aside from the push constants (which COULD be moved to uniform) this is all only used by the prep stage!
-
-struct cvm_overlay_render_batch
-{
-    /// preparation resources
-    struct cvm_overlay_element_render_data_stack render_elements;// essentailly overlay element instances
-
-    struct cvm_vk_shunt_buffer upload_shunt_buffer;// used for putting data in atlases
-
-    /// the atlases can be used for other purposes, but the shunt buffer and copy list must be kept in sync (ergo them going together here)
-
-    /// need a good way to track use of tiles in atlas, can have usage mask (u8/u16) that can be reset en-masse?
-    ///     ^ or perhaps a linked list per usage frame (max N) that gets shuffled off all together to the LL of removable items
-    /// atlases are unowned and merely passed by reference
-    cvm_vk_image_atlas* colour_atlas;
-    cvm_vk_image_atlas* alpha_atlas;
-    /// separation of uploads and the image atlas itself in this way allows frames to be set up in advance (multiple render batches in flight)
-    /// i.e. not having the copy stack be part of the image atlas is a net positive
-
-    /// copies to perform from shunt buffer to the atlases
-    cvm_vk_buffer_image_copy_stack alpha_atlas_copy_actions;
-    cvm_vk_buffer_image_copy_stack colour_atlas_copy_actions;
-    /// end of preparation resources
-
-
-
-
-    /// all elemnts are tentative / subject to change/review
-
-    /// shunt buffer of deltas required by overlay changes (e.g. image data to blit into atlas)
-    ///     ^ list of copy ops to blit into textures and similar
-    /// array/list/stack of render elements
-    /// image views to both render and upload to (write to descriptor set for example)
-    /// active colour array (or pointer to it)
-    /// screen res used
-
-    /// descripror set to write changes to
-    //      ^ provided extrenally
-
-    /// if above is input to prep stage the foollowing is generated from it and *actually* used in rendering
-
-    /// (staging) buffer with offset of array of render elements/insances
-
-    struct cvm_vk_staging_buffer_allocation staging_buffer_allocation;
-
-    /// also record staging buffer itself here?
-    VkDeviceSize element_offset;
-    VkDeviceSize upload_offset;
-
-    /// set and then used in rendering, copied here just to prevent passing it around
-    VkDescriptorSet descriptor_set;
-
-    uint32_t screen_w;
-    uint32_t screen_h;
-};
-
-/// other data to be passed into rendering
-
-
-
-/// command buffer
-/// descriptor set
-/// staging buffer to load all this shit into
-
-
-
-// frame_cycle_count informs how many descriptor sets can be created
-void cvm_overlay_rendering_resources_initialise(struct cvm_overlay_rendering_resources* rendering_resources, const struct cvm_vk_device* device, uint32_t active_render_count);
-void cvm_overlay_rendering_resources_terminate (struct cvm_overlay_rendering_resources* rendering_resources, const struct cvm_vk_device* device);
-
-/// theser can be destroyed as normal
-/// images and colour data
-VkDescriptorSet cvm_overlay_descriptor_set_create(const struct cvm_vk_device* device, const struct cvm_overlay_rendering_resources* rendering_resources);
-VkPipeline cvm_overlay_render_pipeline_create(const struct cvm_vk_device* device, const struct cvm_overlay_rendering_resources* rendering_resources, VkRenderPass render_pass, VkExtent2D extent, uint32_t subpass);
-
-
-/// need a setup/prep stage (outside/before render pass) to upload all relevant data (and potentially update/write vulkan objects like descriptor sets)
-/// ^ this will need to be "manually" synchonized with rendering (b/c it could be on another queue entirely or on the same command bffer as rendering)
-
-/// pass in colour set?
-/// move colour set and image atlas views to a struct?
-/// need a command buffer, and some other config/fixed data
-void cvm_overlay_render(const struct cvm_vk_device* device, const struct cvm_overlay_rendering_resources* rendering_resources);
-
-
-// by requiring input of a particular type set we can communicate what resources need to be initialised
 
 
 

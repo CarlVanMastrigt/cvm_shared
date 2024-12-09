@@ -76,6 +76,10 @@ struct cvm_task_system
 
 void cvm_task_system_initialise(cvm_task_system * task_system, uint32_t worker_thread_count, size_t total_task_exponent, size_t total_successor_exponent);
 
+/// invalid to add tasks *that don't depend on other tasks* after this has been called
+/// this CAN be called inside a task!
+void cvm_task_system_begin_shutdown(cvm_task_system * task_system);
+
 /// any outstanding tasks will be executed before this returns
 /// as such any task still in flight must not have dependencies that would only be satisfied after this function has returned
 void cvm_task_system_terminate(cvm_task_system * task_system);

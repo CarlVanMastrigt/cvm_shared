@@ -56,7 +56,9 @@ struct cvm_vk_staging_buffer_
     bool mapping_coherent;
 
     bool threads_waiting_on_semaphore_setup;
-    /// separate requests for hhigh prio from requests for low priority?
+
+    bool terminating;///debug
+    /// separate requests for high prio from requests for low priority?
 
     char * mapping;/// mapping address
     VkDeviceSize alignment;
