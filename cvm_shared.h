@@ -104,6 +104,8 @@ static inline uint32_t cvm_lbs_32(uint32_t v){ return __builtin_ctz(v); }
 
 #include "cvm_debug_render.h"
 
+#include "cvm_independent_overlay.h"
+
 
 static inline char * cvm_strdup(const char * in)
 {
