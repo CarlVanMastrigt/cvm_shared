@@ -19,133 +19,95 @@ along with cvm_shared.  If not, see <https://www.gnu.org/licenses/>.
 
 #include "cvm_shared.h"
 
-static VkDescriptorPool cvm_overlay_descriptor_pool_create(const cvm_vk_device * device, uint32_t frame_transient_count)
+
+
+
+struct cvm_overlay_frame_resources
 {
-    #warning move back to base overlay (and make cleaner, i.e. handle errors)
+    #warning does this require a last use moment!?
+    /// copy of target image view, used as key to the framebuffer cache
+    VkImageView image_view;
+    cvm_vk_resource_identifier image_view_unique_identifier;
 
-    VkDescriptorPool pool=VK_NULL_HANDLE;
-    VkResult result;
+    /// data to cache
+    VkFramebuffer framebuffer;
+};
 
-    VkDescriptorPoolCreateInfo create_info =
-    {
-        .sType=VK_STRUCTURE_TYPE_DESCRIPTOR_POOL_CREATE_INFO,
-        .pNext=NULL,
-        .flags=0,///by not specifying individual free must reset whole pool (which is fine)
-        .maxSets=frame_transient_count+1,
-        .poolSizeCount=2,
-        .pPoolSizes=(VkDescriptorPoolSize[2])
-        {
-            {
-                .type=VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER,///VK_DESCRIPTOR_TYPE_UNIFORM_TEXEL_BUFFER probably preferable here...
-                .descriptorCount=frame_transient_count
-            },
-            {
-                .type=VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER,
-                .descriptorCount=2*frame_transient_count
-            },
-        }
-    };
+#define CVM_CACHE_CMP( entry , key ) (entry->image_view_unique_identifier == key->image_view_unique_identifier) && (entry->image_view == key->image_view)
+CVM_CACHE(struct cvm_overlay_frame_resources, struct cvm_overlay_target*, cvm_overlay_frame_resources)
+#undef CVM_CACHE_CMP
 
-    result = vkCreateDescriptorPool(device->device, &create_info, device->host_allocator, &pool);
-    assert(result == VK_SUCCESS);
-
-    return pool;
-}
-
-static VkDescriptorSetLayout cvm_overlay_descriptor_set_layout_create(const cvm_vk_device * device)
+/// needs a better name
+struct cvm_overlay_target_resources
 {
-    #warning move back to base overlay (and make cleaner, i.e. handle errors)
-    VkDescriptorSetLayout set_layout = VK_NULL_HANDLE;
-    VkResult result;
+    /// used for finding extant resources in cache
+    VkExtent2D extent;
+    VkFormat format;
+    VkColorSpaceKHR color_space;
+    VkImageLayout initial_layout;
+    VkImageLayout final_layout;
+    bool clear_image;
 
-    VkDescriptorSetLayoutCreateInfo create_info =
-    {
-        .sType=VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO,
-        .pNext=NULL,
-        .flags=0,
-        .bindingCount=2,
-        .pBindings=(VkDescriptorSetLayoutBinding[2])
-        {
-            {
-                .binding=0,
-                .descriptorType=VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER,///VK_DESCRIPTOR_TYPE_UNIFORM_TEXEL_BUFFER probably preferable here...
-                .descriptorCount=2,
-                .stageFlags=VK_SHADER_STAGE_FRAGMENT_BIT,
-                .pImmutableSamplers=(VkSampler[2]) /// also test w/ null & setting samplers directly
-                {
-                    device->defaults.fetch_sampler,
-                    device->defaults.fetch_sampler
-                },
-            },
-            {
-                .binding=1,
-                .descriptorType=VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER,///VK_DESCRIPTOR_TYPE_UNIFORM_TEXEL_BUFFER probably preferable here...
-                .descriptorCount=1,
-                .stageFlags=VK_SHADER_STAGE_FRAGMENT_BIT,
-                .pImmutableSamplers=NULL,
-            }
-        },
-    };
+    /// data to cache
+    VkRenderPass render_pass;
+    VkPipeline pipeline;
 
-    result = vkCreateDescriptorSetLayout(device->device, &create_info, device->host_allocator, &set_layout);
-    assert(result == VK_SUCCESS);
+    /// rely on all frame resources being deleted to ensure not in use
+    cvm_overlay_frame_resources_cache frame_resources;
 
-    return set_layout;
-}
+    /// moment when this cache entry is no longer in use and can thus be evicted
+    cvm_vk_timeline_semaphore_moment last_use_moment;
+};
 
-static VkDescriptorSet cvm_overlay_descriptor_set_allocate(const cvm_vk_device * device, VkDescriptorPool pool, VkDescriptorSetLayout set_layout)
+CVM_QUEUE(struct cvm_overlay_target_resources, cvm_overlay_target_resources, 8)
+/// queue as is done above might not be best if it's desirable to maintain multiple targets as renderable
+
+/// resources used in a per cycle/frame fashion
+struct cvm_overlay_transient_resources
 {
-    #warning move back to base overlay (and make cleaner, i.e. handle errors)
-    VkDescriptorSet set = VK_NULL_HANDLE;
-    VkResult result;
+    cvm_vk_command_pool command_pool;
 
-    VkDescriptorSetAllocateInfo allocate_info=
-    {
-        .sType=VK_STRUCTURE_TYPE_DESCRIPTOR_SET_ALLOCATE_INFO,
-        .pNext=NULL,
-        .descriptorPool=pool,
-        .descriptorSetCount=1,
-        .pSetLayouts=&set_layout
-    };
+    VkDescriptorSet descriptor_set;
 
-    result = vkAllocateDescriptorSets(device->device, &allocate_info, &set);
-    assert(result == VK_SUCCESS);
+    cvm_vk_timeline_semaphore_moment last_use_moment;
+};
 
-    return set;
-}
+CVM_QUEUE(struct cvm_overlay_transient_resources*,cvm_overlay_transient_resources,8)
 
-static VkPipelineLayout cvm_overlay_pipeline_layout_create(const cvm_vk_device * device, VkDescriptorSetLayout descriptor_set_layout)
+/// fixed sized queue of these?
+/// queue init at runtime? (custom size)
+/// make cache init at runtime too? (not great but w/e)
+
+struct cvm_overlay_renderer
 {
-    #warning move back to base overlay (and make cleaner, i.e. handle errors)
-    VkResult created;
-    VkPipelineLayout pipeline_layout=VK_NULL_HANDLE;
+    /// for uploading to images, is NOT locally owned
+    struct cvm_vk_staging_buffer_ * staging_buffer;
 
-    VkPipelineLayoutCreateInfo create_info=
-    {
-        .sType=VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO,
-        .pNext=NULL,
-        .flags=0,
-        .setLayoutCount=1,
-        .pSetLayouts=(VkDescriptorSetLayout[1])
-        {
-            descriptor_set_layout,
-        },
-        .pushConstantRangeCount=1,
-        .pPushConstantRanges=(VkPushConstantRange[1])
-        {
-            {
-                .stageFlags=VK_SHADER_STAGE_VERTEX_BIT,
-                .offset=0,
-                .size=sizeof(float)*2,
-            }
-        }
-    };
 
-    created = vkCreatePipelineLayout(device->device, &create_info, device->host_allocator, &pipeline_layout);
-    assert(created == VK_SUCCESS);
+    uint32_t transient_count;
+    uint32_t transient_count_initialised;
+    struct cvm_overlay_transient_resources* transient_resources_backing;
+    cvm_overlay_transient_resources_queue transient_resources_queue;
 
-    return pipeline_layout;
-}
+    struct cvm_overlay_render_batch render_batch;
+
+    struct cvm_overlay_rendering_resources rendering_resources;
+
+    cvm_overlay_target_resources_queue target_resources;
+};
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 static VkRenderPass cvm_overlay_render_pass_create(const cvm_vk_device * device,VkFormat target_format, VkImageLayout initial_layout, VkImageLayout final_layout, bool clear)
 {
@@ -248,156 +210,7 @@ static VkFramebuffer cvm_overlay_framebuffer_create(const cvm_vk_device * device
     return framebuffer;
 }
 
-static VkPipeline cvm_overlay_pipeline_create(const cvm_vk_device * device, const VkPipelineShaderStageCreateInfo * stages, VkPipelineLayout pipeline_layout, VkRenderPass render_pass, VkExtent2D extent)
-{
-    #warning move back to base overlay
-    VkResult created;
-    VkPipeline pipeline;
 
-    VkGraphicsPipelineCreateInfo create_info=
-    {
-        .sType=VK_STRUCTURE_TYPE_GRAPHICS_PIPELINE_CREATE_INFO,
-        .pNext=NULL,
-        .flags=0,
-        .stageCount=2,
-        .pStages=stages,
-        .pVertexInputState=&(VkPipelineVertexInputStateCreateInfo)
-        {
-            .sType=VK_STRUCTURE_TYPE_PIPELINE_VERTEX_INPUT_STATE_CREATE_INFO,
-            .pNext=NULL,
-            .flags=0,
-            .vertexBindingDescriptionCount=1,
-            .pVertexBindingDescriptions= (VkVertexInputBindingDescription[1])
-            {
-                {
-                    .binding=0,
-                    .stride=sizeof(cvm_overlay_element_render_data),
-                    .inputRate=VK_VERTEX_INPUT_RATE_INSTANCE
-                }
-            },
-            .vertexAttributeDescriptionCount=3,
-            .pVertexAttributeDescriptions=(VkVertexInputAttributeDescription[3])
-            {
-                {
-                    .location=0,
-                    .binding=0,
-                    .format=VK_FORMAT_R16G16B16A16_UINT,
-                    .offset=offsetof(cvm_overlay_element_render_data,data0)
-                },
-                {
-                    .location=1,
-                    .binding=0,
-                    .format=VK_FORMAT_R32G32_UINT,
-                    .offset=offsetof(cvm_overlay_element_render_data,data1)
-                },
-                {
-                    .location=2,
-                    .binding=0,
-                    .format=VK_FORMAT_R16G16B16A16_UINT,
-                    .offset=offsetof(cvm_overlay_element_render_data,data2)
-                }
-            }
-        },
-        .pInputAssemblyState=&(VkPipelineInputAssemblyStateCreateInfo)
-        {
-            .sType=VK_STRUCTURE_TYPE_PIPELINE_INPUT_ASSEMBLY_STATE_CREATE_INFO,
-            .pNext=NULL,
-            .flags=0,
-            .topology=VK_PRIMITIVE_TOPOLOGY_TRIANGLE_STRIP,///not the default
-            .primitiveRestartEnable=VK_FALSE
-        },
-        .pTessellationState=NULL,///not needed (yet)
-        .pViewportState=&(VkPipelineViewportStateCreateInfo)
-        {
-            .sType=VK_STRUCTURE_TYPE_PIPELINE_VIEWPORT_STATE_CREATE_INFO,
-            .pNext=NULL,
-            .flags=0,
-            .viewportCount=1,
-            .pViewports=(VkViewport[1])
-            {
-                {
-                .x=0.0,
-                .y=0.0,
-                .width=(float)extent.width,
-                .height=(float)extent.height,
-                .minDepth=0.0,
-                .maxDepth=1.0,
-                },
-            },
-            .scissorCount=1,
-            .pScissors= (VkRect2D[1])
-            {
-                {
-                    .offset=(VkOffset2D){.x=0,.y=0},
-                    .extent=extent,
-                },
-            },
-        },
-        .pRasterizationState=&(VkPipelineRasterizationStateCreateInfo)
-        {
-            .sType=VK_STRUCTURE_TYPE_PIPELINE_RASTERIZATION_STATE_CREATE_INFO,
-            .pNext=NULL,
-            .flags=0,
-            .depthClampEnable=VK_FALSE,
-            .rasterizerDiscardEnable=VK_FALSE,
-            .polygonMode=VK_POLYGON_MODE_FILL,
-            .cullMode=VK_CULL_MODE_NONE,
-            .frontFace=VK_FRONT_FACE_COUNTER_CLOCKWISE,
-            .depthBiasEnable=VK_FALSE,
-            .depthBiasConstantFactor=0.0,
-            .depthBiasClamp=0.0,
-            .depthBiasSlopeFactor=0.0,
-            .lineWidth=1.0
-        },
-        .pMultisampleState=&(VkPipelineMultisampleStateCreateInfo)
-        {
-            .sType=VK_STRUCTURE_TYPE_PIPELINE_MULTISAMPLE_STATE_CREATE_INFO,
-            .pNext=NULL,
-            .flags=0,
-            .rasterizationSamples=VK_SAMPLE_COUNT_1_BIT,
-            .sampleShadingEnable=VK_FALSE,
-            .minSampleShading=1.0,
-            .pSampleMask=NULL,
-            .alphaToCoverageEnable=VK_FALSE,
-            .alphaToOneEnable=VK_FALSE
-        },
-        .pDepthStencilState=NULL,
-        .pColorBlendState=&(VkPipelineColorBlendStateCreateInfo)
-        {
-            .sType=VK_STRUCTURE_TYPE_PIPELINE_COLOR_BLEND_STATE_CREATE_INFO,
-            .pNext=NULL,
-            .flags=0,
-            .logicOpEnable=VK_FALSE,
-            .logicOp=VK_LOGIC_OP_COPY,
-            .attachmentCount=1,///must equal colorAttachmentCount in subpass
-            .pAttachments= (VkPipelineColorBlendAttachmentState[1])
-            {
-                {
-                    .blendEnable=VK_TRUE,
-                    .srcColorBlendFactor=VK_BLEND_FACTOR_SRC_ALPHA,
-                    .dstColorBlendFactor=VK_BLEND_FACTOR_ONE_MINUS_SRC_ALPHA,
-                    .colorBlendOp=VK_BLEND_OP_ADD,
-                    .srcAlphaBlendFactor=VK_BLEND_FACTOR_ZERO,
-                    .dstAlphaBlendFactor=VK_BLEND_FACTOR_ZERO,
-                    .alphaBlendOp=VK_BLEND_OP_ADD,
-                    .colorWriteMask=VK_COLOR_COMPONENT_R_BIT|VK_COLOR_COMPONENT_G_BIT|VK_COLOR_COMPONENT_B_BIT|VK_COLOR_COMPONENT_A_BIT
-                },
-            },
-            .blendConstants={0.0,0.0,0.0,0.0},
-        },
-        .pDynamicState=NULL,
-        .layout=pipeline_layout,
-        .renderPass=render_pass,
-        .subpass=0,
-        .basePipelineHandle=VK_NULL_HANDLE,
-        .basePipelineIndex=-1
-    };
-
-    created=vkCreateGraphicsPipelines(device->device, VK_NULL_HANDLE, 1, &create_info, device->host_allocator, &pipeline);
-    assert(created == VK_SUCCESS);
-
-    return pipeline;
-}
 
 
 
@@ -442,7 +255,7 @@ static inline void cvm_overlay_frame_resources_release(struct cvm_overlay_frame_
 
 
 static inline void cvm_overlay_target_resources_initialise(struct cvm_overlay_target_resources* target_resources, const cvm_vk_device* device,
-    const struct cvm_overlay_rendering_static_resources * static_resources, const struct cvm_overlay_target * target)
+    const struct cvm_overlay_rendering_resources* rendering_resources, const struct cvm_overlay_target * target)
 {
     /// set cache key information
     target_resources->extent = target->extent;
@@ -453,7 +266,7 @@ static inline void cvm_overlay_target_resources_initialise(struct cvm_overlay_ta
     target_resources->clear_image = target->clear_image;
 
     target_resources->render_pass = cvm_overlay_render_pass_create(device, target->format, target->initial_layout, target->final_layout, target->clear_image);
-    target_resources->pipeline = cvm_overlay_pipeline_create(device, static_resources->pipeline_stages, static_resources->pipeline_layout, target_resources->render_pass, target->extent);
+    target_resources->pipeline = cvm_overlay_render_pipeline_create(device, rendering_resources, target_resources->render_pass, target->extent, 0);/// subpass=0, b/c is only subpass
 
     cvm_overlay_frame_resources_cache_initialise(&target_resources->frame_resources, 8);
 
@@ -517,7 +330,7 @@ static inline struct cvm_overlay_target_resources* cvm_overlay_target_resources_
     {
         target_resources = cvm_overlay_target_resources_queue_new(&renderer->target_resources);
 
-        cvm_overlay_target_resources_initialise(target_resources, device, &renderer->static_resources, target);
+        cvm_overlay_target_resources_initialise(target_resources, device, &renderer->rendering_resources, target);
     }
 
     cvm_overlay_target_resources_prune(renderer, device);
@@ -584,7 +397,7 @@ static inline void cvm_overlay_transient_resources_initialise(struct cvm_overlay
     transient_resources->last_use_moment = CVM_VK_TIMELINE_SEMAPHORE_MOMENT_NULL;
 
     cvm_vk_command_pool_initialise(&transient_resources->command_pool, device, device->graphics_queue_family_index, 0);
-    transient_resources->descriptor_set = cvm_overlay_descriptor_set_allocate(device, renderer->static_resources.descriptor_pool, renderer->static_resources.descriptor_set_layout);
+    transient_resources->descriptor_set = cvm_overlay_descriptor_set_create(device, &renderer->rendering_resources);
 }
 
 static inline void cvm_overlay_transient_resources_terminate(struct cvm_overlay_transient_resources* transient_resources, const cvm_vk_device* device)
@@ -628,55 +441,33 @@ static inline void cvm_overlay_transient_resources_release(cvm_overlay_renderer 
 }
 
 
-void cvm_overlay_rendering_static_resources_initialise(struct cvm_overlay_rendering_static_resources * static_resources, const cvm_vk_device * device, uint32_t renderer_transient_count)
+
+
+
+
+
+struct cvm_overlay_renderer* cvm_overlay_renderer_create(struct cvm_vk_device * device, struct cvm_vk_staging_buffer_ * staging_buffer, uint32_t active_render_count)
 {
-    static_resources->descriptor_pool = cvm_overlay_descriptor_pool_create(device, renderer_transient_count);
-    static_resources->descriptor_set_layout = cvm_overlay_descriptor_set_layout_create(device);
+    cvm_overlay_renderer * renderer;
+    renderer = malloc(sizeof(struct cvm_overlay_renderer));
 
-    static_resources->pipeline_layout = cvm_overlay_pipeline_layout_create(device, static_resources->descriptor_set_layout);
-    cvm_vk_create_shader_stage_info(static_resources->pipeline_stages+0,"cvm_shared/shaders/overlay.vert.spv",VK_SHADER_STAGE_VERTEX_BIT);
-    cvm_vk_create_shader_stage_info(static_resources->pipeline_stages+1,"cvm_shared/shaders/overlay.frag.spv",VK_SHADER_STAGE_FRAGMENT_BIT);
+    cvm_overlay_rendering_resources_initialise(&renderer->rendering_resources, device, active_render_count);
 
-    cvm_overlay_image_atlases_initialise(&static_resources->image_atlases, device, 1024, 1024, 1024, 1024, false);
-}
-void cvm_overlay_rendering_static_resources_terminate(struct cvm_overlay_rendering_static_resources * static_resources, const cvm_vk_device * device)
-{
-    cvm_overlay_image_atlases_terminate(&static_resources->image_atlases, device);
+    cvm_overlay_render_batch_initialise(&renderer->render_batch, device, 1<<18);
 
-    cvm_vk_destroy_shader_stage_info(static_resources->pipeline_stages+0);
-    cvm_vk_destroy_shader_stage_info(static_resources->pipeline_stages+1);
-
-    vkDestroyPipelineLayout(device->device, static_resources->pipeline_layout, device->host_allocator);
-
-    vkDestroyDescriptorPool(device->device, static_resources->descriptor_pool, device->host_allocator);
-    vkDestroyDescriptorSetLayout(device->device, static_resources->descriptor_set_layout, device->host_allocator);
-}
-
-
-
-
-
-void cvm_overlay_renderer_initialise(cvm_overlay_renderer * renderer, cvm_vk_device * device, struct cvm_vk_staging_buffer_ * staging_buffer, uint32_t renderer_cycle_count)
-{
-    renderer->transient_count = renderer_cycle_count;
+    renderer->transient_count = active_render_count;
     renderer->transient_count_initialised = 0;
-    renderer->transient_resources_backing = malloc(sizeof(struct cvm_overlay_transient_resources) * renderer_cycle_count);
+    renderer->transient_resources_backing = malloc(sizeof(struct cvm_overlay_transient_resources) * active_render_count);
     cvm_overlay_transient_resources_queue_initialise(&renderer->transient_resources_queue);
+
     renderer->staging_buffer = staging_buffer;
 
-//    cvm_vk_shunt_buffer_initialise(&renderer->shunt_buffer, staging_buffer->alignment, 1<<18, false);
-
-    cvm_overlay_rendering_static_resources_initialise(&renderer->static_resources, device, renderer_cycle_count);
-
-
-    renderer->render_batch = malloc(sizeof(struct cvm_overlay_render_batch));
-    cvm_overlay_render_batch_initialise(renderer->render_batch, device, 1<<18);
-
-
     cvm_overlay_target_resources_queue_initialise(&renderer->target_resources);
+
+    return renderer;
 }
 
-void cvm_overlay_renderer_terminate(cvm_overlay_renderer * renderer, cvm_vk_device * device)
+void cvm_overlay_renderer_destroy(struct cvm_overlay_renderer * renderer, struct cvm_vk_device * device)
 {
     struct cvm_overlay_target_resources * target_resources;
     uint32_t i;
@@ -688,17 +479,21 @@ void cvm_overlay_renderer_terminate(cvm_overlay_renderer * renderer, cvm_vk_devi
     free(renderer->transient_resources_backing);
     cvm_overlay_transient_resources_queue_terminate(&renderer->transient_resources_queue);
 
-    cvm_overlay_rendering_static_resources_terminate(&renderer->static_resources, device);
-
-
-    cvm_overlay_render_batch_terminate(renderer->render_batch);
-    free(renderer->render_batch);
 
     while((target_resources = cvm_overlay_target_resources_queue_dequeue_ptr(&renderer->target_resources)))
     {
         cvm_overlay_target_resources_terminate(target_resources, device);
     }
     cvm_overlay_target_resources_queue_terminate(&renderer->target_resources);
+
+
+
+    cvm_overlay_render_batch_terminate(&renderer->render_batch);
+
+    cvm_overlay_rendering_resources_terminate(&renderer->rendering_resources, device);
+
+
+    free(renderer);
 }
 
 
@@ -706,9 +501,7 @@ void cvm_overlay_renderer_terminate(cvm_overlay_renderer * renderer, cvm_vk_devi
 
 
 
-
-
-cvm_vk_timeline_semaphore_moment cvm_overlay_render_to_target(const cvm_vk_device * device, cvm_overlay_renderer * renderer, widget * menu_widget, const struct cvm_overlay_target* target)
+cvm_vk_timeline_semaphore_moment cvm_overlay_render_to_target(const cvm_vk_device * device, cvm_overlay_renderer * renderer, struct cvm_overlay_image_atlases* image_atlases, widget * menu_widget, const struct cvm_overlay_target* target)
 {
     cvm_vk_command_buffer cb;
     cvm_vk_timeline_semaphore_moment completion_moment;
@@ -725,10 +518,10 @@ cvm_vk_timeline_semaphore_moment cvm_overlay_render_to_target(const cvm_vk_devic
 
     staging_buffer = renderer->staging_buffer;
 
-    render_batch = renderer->render_batch;
+    render_batch = &renderer->render_batch;
 
     /// setup/reset the render batch
-    cvm_overlay_render_batch_build(render_batch, menu_widget, &renderer->static_resources.image_atlases.colour_atlas, &renderer->static_resources.image_atlases.alpha_atlas);
+    cvm_overlay_render_batch_build(render_batch, menu_widget, image_atlases, target->extent);
 
 
 
@@ -783,7 +576,7 @@ cvm_vk_timeline_semaphore_moment cvm_overlay_render_to_target(const cvm_vk_devic
 
     vkCmdBeginRenderPass(cb.buffer,&render_pass_begin_info,VK_SUBPASS_CONTENTS_INLINE);///================
 
-    cvm_overlay_render_batch_render(render_batch, renderer->static_resources.pipeline_layout, cb.buffer, target_resources->pipeline);
+    cvm_overlay_render_batch_render(render_batch, &renderer->rendering_resources, target_resources->pipeline, cb.buffer);
 
     vkCmdEndRenderPass(cb.buffer);///================
 
@@ -802,7 +595,7 @@ cvm_vk_timeline_semaphore_moment cvm_overlay_render_to_target(const cvm_vk_devic
 }
 
 
-cvm_vk_timeline_semaphore_moment cvm_overlay_render_to_presentable_image(const cvm_vk_device * device, cvm_overlay_renderer * renderer, widget * menu_widget, cvm_vk_swapchain_presentable_image * presentable_image, bool last_use)
+cvm_vk_timeline_semaphore_moment cvm_overlay_render_to_presentable_image(const cvm_vk_device * device, cvm_overlay_renderer * renderer, struct cvm_overlay_image_atlases* image_atlases, widget * menu_widget, cvm_vk_swapchain_presentable_image * presentable_image, bool last_use)
 {
     uint32_t overlay_queue_family_index;
     cvm_vk_timeline_semaphore_moment completion_moment;
@@ -886,7 +679,7 @@ cvm_vk_timeline_semaphore_moment cvm_overlay_render_to_presentable_image(const c
         }
     }
 
-    completion_moment = cvm_overlay_render_to_target(device, renderer, menu_widget, &target);
+    completion_moment = cvm_overlay_render_to_target(device, renderer, image_atlases, menu_widget, &target);
 
     presentable_image->last_use_moment = completion_moment;
     presentable_image->layout = target.final_layout;
@@ -894,3 +687,5 @@ cvm_vk_timeline_semaphore_moment cvm_overlay_render_to_presentable_image(const c
 
     return completion_moment;
 }
+
+

@@ -233,21 +233,15 @@ struct cvm_overlay_image_atlases
 VkResult cvm_overlay_image_atlases_initialise(struct cvm_overlay_image_atlases* image_atlases, const struct cvm_vk_device* device, uint32_t alpha_w, uint32_t alpha_h, uint32_t colour_w, uint32_t colour_h, bool multithreaded);
 void cvm_overlay_image_atlases_terminate(struct cvm_overlay_image_atlases* image_atlases, const struct cvm_vk_device* device);
 
+
+
+
+/// static resources? base resources?
 struct cvm_overlay_rendering_resources
 {
-    /// held reference
-//    struct cvm_overlay_image_atlases* image_atlases;
-    /// possibility for external management would be nice, so instead pass in images in a (semi?) generalised fashion -- just view to bind?
-
-    /// above might be worth separating out, is required for knowing where to upload image elements in prepartory rendering stage
-
-    uint32_t descriptor_sets_available;// debug, used to ensure all descriptor sets get used
-
-    // dont manage descripror pool? would require another stage to allocate it... probably not worthwhile
-    VkDescriptorPool descriptor_pool;
-
-    /// combine images (to allow them to be dynamic) and
     VkDescriptorSetLayout descriptor_set_layout;
+
+    VkDescriptorPool descriptor_pool;
 
     /// for creating pipelines
     VkPipelineLayout pipeline_layout;
@@ -292,22 +286,30 @@ struct cvm_overlay_render_batch
     /// set and then used in rendering, copied here just to prevent passing it around
     VkDescriptorSet descriptor_set;// -- unowned
 
-    uint32_t screen_w;
-    uint32_t screen_h;
+    VkExtent2D target_extent;
 };
 
 /// this could reasonably also create the descriptor sets which could then simply be accessed/acquired later
 void cvm_overlay_rendering_resources_initialise(struct cvm_overlay_rendering_resources* rendering_resources, const struct cvm_vk_device* device, uint32_t active_render_count);
 void cvm_overlay_rendering_resources_terminate (struct cvm_overlay_rendering_resources* rendering_resources, const struct cvm_vk_device* device);
 
-/// VK types returned by these can/should be destroyed as normal
+
 VkDescriptorSet cvm_overlay_descriptor_set_create(const struct cvm_vk_device* device, const struct cvm_overlay_rendering_resources* rendering_resources);
+/// not sure if we should be releasing as its not strictly necessary
+
+/// VK types returned by these can/should be destroyed as normal
 VkPipeline cvm_overlay_render_pipeline_create(const struct cvm_vk_device* device, const struct cvm_overlay_rendering_resources* rendering_resources, VkRenderPass render_pass, VkExtent2D extent, uint32_t subpass);
+
+
 
 /// there are 6 stages to rendering the overlay, they must be externally synchronised both on cpu and GPU (submitting in order to the same command buffer is enough to ensure GPU ordering)
 
+
+
 /// `menu_widget` must have been organised for an `extent` the same as the render_pass & pipeline this batch will be used with
-void cvm_overlay_render_batch_build(struct cvm_overlay_render_batch* batch, widget * menu_widget, struct cvm_vk_image_atlas* colour_atlas, struct cvm_vk_image_atlas* alpha_atlas);
+#warning take combined atlas struct as param
+/// we should know resolution of presentable image/target/viewport of pipeline to be used here, and organise menu widget accordingly
+void cvm_overlay_render_batch_build(struct cvm_overlay_render_batch* batch, widget * menu_widget, struct cvm_overlay_image_atlases* image_atlases, VkExtent2D target_extent);
 
 /// `descriptor_set` must have been created with `cvm_overlay_descriptor_set_create`
 void cvm_overlay_render_batch_stage(struct cvm_overlay_render_batch* batch, const struct cvm_vk_device * device, struct cvm_vk_staging_buffer_* staging_buffer, const float* colour_array, VkDescriptorSet descriptor_set);
@@ -318,8 +320,8 @@ void cvm_overlay_render_batch_upload(struct cvm_overlay_render_batch* batch, VkC
 /// transitions the rendering resources so must be called after all changes to image atlases (for example if some parts of the atlas are rendered to)
 void cvm_overlay_render_batch_ready(struct cvm_overlay_render_batch* batch, VkCommandBuffer command_buffer);
 
-/// `pipeline` must have been created with `cvm_overlay_render_pipeline_create` and be called inside the render pass and subpass
-void cvm_overlay_render_batch_render(struct cvm_overlay_render_batch* batch, VkPipelineLayout pipeline_layout, VkCommandBuffer command_buffer, VkPipeline pipeline);
+/// `pipeline` must have been created with `cvm_overlay_render_pipeline_create` and be called inside the render pass and subpass used to create it, must also have the same extent as what was passed to batch_build
+void cvm_overlay_render_batch_render(struct cvm_overlay_render_batch* batch, struct cvm_overlay_rendering_resources* rendering_resources, VkPipeline pipeline, VkCommandBuffer command_buffer);
 
 /// used to schedule the release of resources used/held by this batch, must ensure completion moment occurs after `render` has completed
 void cvm_overlay_render_batch_finish(struct cvm_overlay_render_batch* batch, cvm_vk_timeline_semaphore_moment completion_moment);
