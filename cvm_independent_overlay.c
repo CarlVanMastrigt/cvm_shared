@@ -50,7 +50,7 @@ struct cvm_overlay_target_resources
 
     /// data to cache
     VkRenderPass render_pass;
-    VkPipeline pipeline;
+    struct cvm_overlay_pipeline pipeline_;
 
     /// rely on all frame resources being deleted to ensure not in use
     cvm_overlay_frame_resources_cache frame_resources;
@@ -266,7 +266,7 @@ static inline void cvm_overlay_target_resources_initialise(struct cvm_overlay_ta
     target_resources->clear_image = target->clear_image;
 
     target_resources->render_pass = cvm_overlay_render_pass_create(device, target->format, target->initial_layout, target->final_layout, target->clear_image);
-    target_resources->pipeline = cvm_overlay_render_pipeline_create(device, rendering_resources, target_resources->render_pass, target->extent, 0);/// subpass=0, b/c is only subpass
+    cvm_overlay_render_pipeline_initialise(&target_resources->pipeline_, device, rendering_resources, target_resources->render_pass, target->extent, 0);/// subpass=0, b/c is only subpass
 
     cvm_overlay_frame_resources_cache_initialise(&target_resources->frame_resources, 8);
 
@@ -287,7 +287,7 @@ static inline void cvm_overlay_target_resources_terminate(struct cvm_overlay_tar
     cvm_overlay_frame_resources_cache_terminate(&target_resources->frame_resources);
 
     vkDestroyRenderPass(device->device, target_resources->render_pass, device->host_allocator);
-    vkDestroyPipeline(device->device, target_resources->pipeline, device->host_allocator);
+    cvm_overlay_render_pipeline_terminate(&target_resources->pipeline_, device);
 }
 
 static inline bool cvm_overlay_target_resources_compatible_with_target(const struct cvm_overlay_target_resources* target_resources, const struct cvm_overlay_target * target)
@@ -394,10 +394,11 @@ static inline void cvm_overlay_add_target_release_instructions(cvm_vk_command_bu
 
 static inline void cvm_overlay_transient_resources_initialise(struct cvm_overlay_transient_resources* transient_resources, const cvm_vk_device* device, const cvm_overlay_renderer * renderer)
 {
+    VkResult result;
     transient_resources->last_use_moment = CVM_VK_TIMELINE_SEMAPHORE_MOMENT_NULL;
 
     cvm_vk_command_pool_initialise(&transient_resources->command_pool, device, device->graphics_queue_family_index, 0);
-    transient_resources->descriptor_set = cvm_overlay_descriptor_set_create(device, &renderer->rendering_resources);
+    result = cvm_overlay_descriptor_set_fetch(device, &renderer->rendering_resources, &transient_resources->descriptor_set);
 }
 
 static inline void cvm_overlay_transient_resources_terminate(struct cvm_overlay_transient_resources* transient_resources, const cvm_vk_device* device)
@@ -576,7 +577,7 @@ cvm_vk_timeline_semaphore_moment cvm_overlay_render_to_target(const cvm_vk_devic
 
     vkCmdBeginRenderPass(cb.buffer,&render_pass_begin_info,VK_SUBPASS_CONTENTS_INLINE);///================
 
-    cvm_overlay_render_batch_render(render_batch, &renderer->rendering_resources, target_resources->pipeline, cb.buffer);
+    cvm_overlay_render_batch_render(render_batch, &renderer->rendering_resources, &target_resources->pipeline_, cb.buffer);
 
     vkCmdEndRenderPass(cb.buffer);///================
 

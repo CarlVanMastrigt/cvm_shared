@@ -48,8 +48,8 @@ void create_debug_render_data(VkDescriptorSetLayout * descriptor_set_layout)
 
     cvm_vk_create_pipeline_layout(&debug_pipeline_layout,&pipeline_layout_create_info);
 
-    cvm_vk_create_shader_stage_info(&debug_vert_stage,"cvm_shared/shaders/debug/line.vert.spv",VK_SHADER_STAGE_VERTEX_BIT);
-    cvm_vk_create_shader_stage_info(&debug_frag_stage,"cvm_shared/shaders/debug/line.frag.spv",VK_SHADER_STAGE_FRAGMENT_BIT);
+    cvm_vk_create_shader_stage_info(&debug_vert_stage,"shaders/debug/line.vert.spv",VK_SHADER_STAGE_VERTEX_BIT);
+    cvm_vk_create_shader_stage_info(&debug_frag_stage,"shaders/debug/line.frag.spv",VK_SHADER_STAGE_FRAGMENT_BIT);
 }
 
 void destroy_debug_render_data(void)

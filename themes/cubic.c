@@ -1310,7 +1310,7 @@ overlay_theme * create_cubic_theme(const FT_Library * freetype_library)
     cubic->internal_r = internal_radius;
     cubic->internal_d = 2 * internal_radius;
 
-    cvm_overlay_create_font(&theme->font, freetype_library,"cvm_shared/resources/cvm_font_1.ttf",16);
+    cvm_overlay_create_font(&theme->font, freetype_library,"resources/cvm_font_1.ttf",16);
 
     return theme;
 

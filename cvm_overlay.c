@@ -141,8 +141,8 @@ void cvm_overlay_rendering_resources_initialise(struct cvm_overlay_rendering_res
 
     rendering_resources->pipeline_layout = cvm_overlay_pipeline_layout_create(device, rendering_resources->descriptor_set_layout);
 
-    cvm_vk_create_shader_stage_info(&rendering_resources->vertex_pipeline_stage,"cvm_shared/shaders/overlay.vert.spv",VK_SHADER_STAGE_VERTEX_BIT);
-    cvm_vk_create_shader_stage_info(&rendering_resources->fragment_pipeline_stage,"cvm_shared/shaders/overlay.frag.spv",VK_SHADER_STAGE_FRAGMENT_BIT);
+    cvm_vk_create_shader_stage_info(&rendering_resources->vertex_pipeline_stage,"shaders/overlay.vert.spv",VK_SHADER_STAGE_VERTEX_BIT);
+    cvm_vk_create_shader_stage_info(&rendering_resources->fragment_pipeline_stage,"shaders/overlay.frag.spv",VK_SHADER_STAGE_FRAGMENT_BIT);
 }
 
 void cvm_overlay_rendering_resources_terminate(struct cvm_overlay_rendering_resources* rendering_resources, const struct cvm_vk_device* device)
@@ -160,12 +160,8 @@ void cvm_overlay_rendering_resources_terminate(struct cvm_overlay_rendering_reso
 
 
 
-VkDescriptorSet cvm_overlay_descriptor_set_create(const struct cvm_vk_device* device, const struct cvm_overlay_rendering_resources* rendering_resources)
+VkResult cvm_overlay_descriptor_set_fetch(const struct cvm_vk_device* device, const struct cvm_overlay_rendering_resources* rendering_resources, VkDescriptorSet* set)
 {
-    #warning move back to base overlay (and make cleaner, i.e. handle errors) or make this acquire and move it to where the pool is allocated!
-    VkDescriptorSet set = VK_NULL_HANDLE;
-    VkResult result;
-
     VkDescriptorSetAllocateInfo allocate_info=
     {
         .sType=VK_STRUCTURE_TYPE_DESCRIPTOR_SET_ALLOCATE_INFO,
@@ -175,18 +171,13 @@ VkDescriptorSet cvm_overlay_descriptor_set_create(const struct cvm_vk_device* de
         .pSetLayouts=&rendering_resources->descriptor_set_layout,
     };
 
-    result = vkAllocateDescriptorSets(device->device, &allocate_info, &set);
-    assert(result == VK_SUCCESS);
-
-    return set;
+    return vkAllocateDescriptorSets(device->device, &allocate_info, set);
 }
 
 
-VkPipeline cvm_overlay_render_pipeline_create(const struct cvm_vk_device* device, const struct cvm_overlay_rendering_resources* rendering_resources, VkRenderPass render_pass, VkExtent2D extent, uint32_t subpass)
+VkResult cvm_overlay_render_pipeline_initialise(struct cvm_overlay_pipeline* pipeline, const struct cvm_vk_device* device, const struct cvm_overlay_rendering_resources* rendering_resources, VkRenderPass render_pass, VkExtent2D extent, uint32_t subpass)
 {
-    #warning make cleaner (i.e. handle errors)
-    VkResult created;
-    VkPipeline pipeline;
+    VkResult result;
 
     VkGraphicsPipelineCreateInfo create_info=
     {
@@ -331,12 +322,19 @@ VkPipeline cvm_overlay_render_pipeline_create(const struct cvm_vk_device* device
         .basePipelineIndex=-1
     };
 
-    created=vkCreateGraphicsPipelines(device->device, VK_NULL_HANDLE, 1, &create_info, device->host_allocator, &pipeline);
-    assert(created == VK_SUCCESS);
+    result = vkCreateGraphicsPipelines(device->device, VK_NULL_HANDLE, 1, &create_info, device->host_allocator, &pipeline->pipeline);
+    if(result == VK_SUCCESS)
+    {
+        pipeline->extent = extent;
+    }
 
-    return pipeline;
+    return result;
 }
 
+void cvm_overlay_render_pipeline_terminate(struct cvm_overlay_pipeline* pipeline, const struct cvm_vk_device* device)
+{
+    vkDestroyPipeline(device->device, pipeline->pipeline, device->host_allocator);
+}
 
 
 
@@ -393,9 +391,6 @@ static void cvm_overlay_descriptor_set_write(const cvm_vk_device * device, VkDes
 
     vkUpdateDescriptorSets(device->device, 2, writes, 0, NULL);
 }
-
-
-
 
 
 VkResult cvm_overlay_image_atlases_initialise(struct cvm_overlay_image_atlases* image_atlases, const struct cvm_vk_device* device, uint32_t alpha_w, uint32_t alpha_h, uint32_t colour_w, uint32_t colour_h, bool multithreaded)
@@ -533,7 +528,6 @@ void cvm_overlay_render_batch_build(struct cvm_overlay_render_batch* batch, widg
     {
         fprintf(stderr, "overlay rendering expects the menu widget to start at 0,0");
         /// ^ could fix this by having scissor rect be the mechanism for drawing a subsection of the target rather than the viewport
-        #warning fuck it, is it time to just fucking use mutable pipeline parts? (set viewport on rendering and have pipeline be completely static)
     }
 
     if(menu_widget->base.r.x2 != target_extent.width || menu_widget->base.r.y2 != target_extent.height)
@@ -577,7 +571,7 @@ void cvm_overlay_render_batch_stage(struct cvm_overlay_render_batch* batch, cons
     batch->descriptor_set = descriptor_set;
 }
 
-///copy staged data and apply barriers to atlas images
+/// `var` copy staged data and apply barriers to atlas images
 void cvm_overlay_render_batch_upload(struct cvm_overlay_render_batch* batch, VkCommandBuffer command_buffer)
 {
     const VkBuffer staging_buffer = batch->staging_buffer_allocation.parent->buffer;
@@ -598,20 +592,22 @@ pipeline_layout: completely static, singular
 pipeline: changes with target, singular
 descriptor set (from batch): must come from managed per-frame resources, dynamic and numerous
 */
-void cvm_overlay_render_batch_render(struct cvm_overlay_render_batch* batch, struct cvm_overlay_rendering_resources* rendering_resources, VkPipeline pipeline, VkCommandBuffer command_buffer)
+void cvm_overlay_render_batch_render(struct cvm_overlay_render_batch* batch, struct cvm_overlay_rendering_resources* rendering_resources, struct cvm_overlay_pipeline* pipeline, VkCommandBuffer command_buffer)
 {
-    #warning NOPE screen dim NEEDS to be the size of the viewport, the value set in the pipeline!
+    if(pipeline->extent.width != batch->target_extent.width || pipeline->extent.height != batch->target_extent.height)
+    {
+        fprintf(stderr, "overlay pipeline must be built with the same extent as the batch");
+    }
     /// replace pipeline with a struct and manage it "internally" ??
     ///    ^ no, it actually needs to be the size of the screen, b/c these should actually match!
     ///         ^ if they do match, then why are the rendering glitches more prevalent now? -- is there a bug in my base implementation?
 
-    #warning can get screen dimensions from batch OR assert the ones in the batch are correct
     float push_constants[2]={2.0/(float)batch->target_extent.width, 2.0/(float)batch->target_extent.height};
     vkCmdPushConstants(command_buffer, rendering_resources->pipeline_layout, VK_SHADER_STAGE_VERTEX_BIT, 0, sizeof(float) * 2, push_constants);
     /// set index (firstSet) is defined in pipeline creation (index in array)
     vkCmdBindDescriptorSets(command_buffer, VK_PIPELINE_BIND_POINT_GRAPHICS, rendering_resources->pipeline_layout, 0, 1, &batch->descriptor_set, 0, NULL);
 
-    vkCmdBindPipeline(command_buffer,VK_PIPELINE_BIND_POINT_GRAPHICS, pipeline);
+    vkCmdBindPipeline(command_buffer,VK_PIPELINE_BIND_POINT_GRAPHICS, pipeline->pipeline);
     vkCmdBindVertexBuffers(command_buffer, 0, 1, &batch->staging_buffer_allocation.parent->buffer, &batch->element_offset);///little bit of hacky stuff to create lvalue
     vkCmdDraw(command_buffer, 4, batch->render_elements.count, 0, 0);
 }
@@ -621,22 +617,6 @@ void cvm_overlay_render_batch_finish(struct cvm_overlay_render_batch* batch, cvm
 {
     cvm_vk_staging_buffer_allocation_release(&batch->staging_buffer_allocation, completion_moment);
 }
-
-/**
-render batch has 6 stages:
-build: fill out element buffer and figure out what to upload, no real vulkan/GPU stuff
-stage: all stuff prior to rendering ops, get space in staging buffer (this wants to happen as close to rendering as possible) and upload all required data into this staging buffer space
-        ^ requires command buffer (but could be split into commabd buffer and non command buffer parts)
-render: simple, bind resources and submit the render ops
-complete: provide a completion moment to resources as necessary
-
-might be good to track this with an enum of state/stage
-*/
-
-
-
-
-
 
 
 
