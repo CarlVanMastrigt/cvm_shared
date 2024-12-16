@@ -174,6 +174,12 @@ struct cvm_vk_defaults
     VkSampler fetch_sampler;
 };
 
+struct cvm_vk_pipeline_cache
+{
+    VkPipelineCache cache;
+    void* data;
+};
+
 struct cvm_vk_device
 {
     const VkAllocationCallbacks* host_allocator;
@@ -205,6 +211,8 @@ struct cvm_vk_device
 
     uint32_t fallback_present_queue_family_index;
     #warning remove present, this should be per swapchain image
+
+    struct cvm_vk_pipeline_cache pipeline_cache;
 
     struct cvm_vk_defaults defaults;
 
@@ -256,8 +264,8 @@ void cvm_vk_destroy_pipeline_layout(VkPipelineLayout pipeline_layout);
 void cvm_vk_create_graphics_pipeline(VkPipeline * pipeline,VkGraphicsPipelineCreateInfo * info);
 void cvm_vk_destroy_pipeline(VkPipeline pipeline);
 
-void cvm_vk_create_shader_stage_info(VkPipelineShaderStageCreateInfo * stage_info,const char * filename,VkShaderStageFlagBits stage);
-void cvm_vk_destroy_shader_stage_info(VkPipelineShaderStageCreateInfo * stage_info);
+void cvm_vk_create_shader_stage_info(VkPipelineShaderStageCreateInfo * stage_info,const struct cvm_vk_device* device,const char * filename,VkShaderStageFlagBits stage);
+void cvm_vk_destroy_shader_stage_info(VkPipelineShaderStageCreateInfo * stage_info,const struct cvm_vk_device* device);
 
 void cvm_vk_create_descriptor_set_layout(VkDescriptorSetLayout * descriptor_set_layout,VkDescriptorSetLayoutCreateInfo * info);
 void cvm_vk_destroy_descriptor_set_layout(VkDescriptorSetLayout descriptor_set_layout);

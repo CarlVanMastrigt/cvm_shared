@@ -18,6 +18,9 @@ along with cvm_shared.  If not, see <https://www.gnu.org/licenses/>.
 */
 
 #include "cvm_shared.h"
+#include <stdio.h>
+#include <stdlib.h>
+#include <vulkan/vulkan_core.h>
 
 
 static cvm_vk_device cvm_vk_;
@@ -875,6 +878,95 @@ static inline void cvm_vk_defaults_terminate(struct cvm_vk_defaults* defaults, c
     vkDestroySampler(device->device, defaults->fetch_sampler, device->host_allocator);
 }
 
+
+static inline VkResult cvm_vk_pipeline_cache_initialise(struct cvm_vk_pipeline_cache* pipeline_cache, const cvm_vk_device * device, const char* cache_file_name)
+{
+    VkResult result;
+    FILE * cache_file;
+    size_t cache_size;
+    void* cache_data;
+
+    if(cache_file_name==NULL)
+    {
+        cache_file_name = "pipeline_cache";
+    }
+
+    cache_file = fopen(cache_file_name,"rb");
+
+    if(cache_file)
+    {
+        #warning potentially unsafe, instead consider writing and ten reading buffer size!
+        fseek(cache_file, 0, SEEK_END);
+        cache_size = ftell(cache_file);
+        cache_data = malloc(cache_size);
+        rewind(cache_file);
+        fread(cache_data, 1, cache_size, cache_file);
+        fclose(cache_file);
+    }
+    else
+    {
+        cache_size = 0;
+        cache_data = NULL;
+    }
+
+    /// load from file??
+    cache_size = 0;
+
+    VkPipelineCacheCreateInfo create_info =
+    {
+        .sType = VK_STRUCTURE_TYPE_PIPELINE_CACHE_CREATE_INFO,
+        .pNext = NULL,
+        .flags = 0,
+        .initialDataSize = cache_size,
+        .pInitialData =  cache_data,
+    };
+
+    // use "default" value on failure
+    pipeline_cache->cache = VK_NULL_HANDLE;
+
+    result = vkCreatePipelineCache(device->device, &create_info, device->host_allocator, &pipeline_cache->cache);
+
+    free(cache_data);
+
+    return result;
+}
+
+static inline void cvm_vk_pipeline_cache_terminate(struct cvm_vk_pipeline_cache* pipeline_cache, const cvm_vk_device * device, const char* cache_file_name)
+{
+    VkResult result;
+    FILE * cache_file;
+    size_t cache_size;
+    void* cache_data;
+
+    if(cache_file_name==NULL)
+    {
+        cache_file_name = "pipeline_cache";
+    }
+
+    result = vkGetPipelineCacheData(device->device, device->pipeline_cache.cache, &cache_size, NULL);
+    if(cache_size > 0 && result == VK_SUCCESS)
+    {
+        cache_data = malloc(cache_size);
+
+        result = vkGetPipelineCacheData(device->device, device->pipeline_cache.cache, &cache_size, cache_data);
+
+        cache_file = fopen(cache_file_name,"wb");
+
+        if(cache_file && result == VK_SUCCESS)
+        {
+            fwrite(cache_data, 1, cache_size, cache_file);
+        }
+
+        free(cache_data);
+    }
+
+    if(pipeline_cache->cache != VK_NULL_HANDLE)
+    {
+        vkDestroyPipelineCache(device->device, device->pipeline_cache.cache, device->host_allocator);
+    }
+}
+
+
 int cvm_vk_device_initialise(cvm_vk_device * device, const cvm_vk_device_setup * external_device_setup)
 {
     cvm_vk_device_setup device_setup;
@@ -888,10 +980,12 @@ int cvm_vk_device_initialise(cvm_vk_device * device, const cvm_vk_device_setup *
 
     cvm_vk_create_logical_device(device, &device_setup);
 
-    #warning make these init discrete PARTS of the device struct ??
+    #warning generally could do with cleanup, perhaps separating logical and physical devices?
 
     device->resource_identifier_monotonic = malloc(sizeof(atomic_uint_least64_t));
     atomic_init(device->resource_identifier_monotonic, 1);/// nonzero for debugging zero is invalid while testing
+
+    cvm_vk_pipeline_cache_initialise(&device->pipeline_cache, device, NULL);
 
     cvm_vk_create_transfer_chain();///make conditional on separate transfer queue?
 
@@ -911,6 +1005,8 @@ void cvm_vk_device_terminate(cvm_vk_device * device)
 
     cvm_vk_destroy_defaults_old();
     cvm_vk_defaults_terminate(&device->defaults, device);
+
+    cvm_vk_pipeline_cache_terminate(&device->pipeline_cache, device, NULL);
 
     cvm_vk_destroy_transfer_chain();///make conditional on separate transfer queue?
 
@@ -1053,15 +1149,25 @@ void cvm_vk_destroy_pipeline(VkPipeline pipeline)
 
 
 ///return VkPipelineShaderStageCreateInfo, but hold on to VkShaderModule (passed by ptr) for deletion at program cleanup ( that module can be kept inside the creation info! )
-void cvm_vk_create_shader_stage_info(VkPipelineShaderStageCreateInfo * stage_info,const char * filename,VkShaderStageFlagBits stage)
+void cvm_vk_create_shader_stage_info(VkPipelineShaderStageCreateInfo * stage_info, const struct cvm_vk_device* device, const char * filename,VkShaderStageFlagBits stage)
 {
+    if(device==NULL) device = &cvm_vk_;
     static char * entrypoint="main";
+
+    *stage_info=(VkPipelineShaderStageCreateInfo)
+    {
+        .sType=VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO,
+        .pNext=NULL,
+        .flags=0,///not supported
+        .stage=stage,
+        .module=VK_NULL_HANDLE,// set later
+        .pName=entrypoint,///always use main as entrypoint, use a static string such that this address is still valid after function return
+        .pSpecializationInfo=NULL
+    };
 
     FILE * f;
     size_t length;
     char * data_buffer;
-
-    VkShaderModule shader_module;
 
     f=fopen(filename,"rb");
 
@@ -1085,29 +1191,19 @@ void cvm_vk_create_shader_stage_info(VkPipelineShaderStageCreateInfo * stage_inf
             .pCode=(uint32_t*)data_buffer
         };
 
-        VkResult r= vkCreateShaderModule(cvm_vk_.device,&shader_module_create_info, cvm_vk_.host_allocator,&shader_module);
+        VkResult r= vkCreateShaderModule(device->device, &shader_module_create_info, device->host_allocator, &stage_info->module);
         assert(r==VK_SUCCESS || !fprintf(stderr,"ERROR CREATING SHADER MODULE FROM FILE: %s\n",filename));
 
         free(data_buffer);
     }
-
-    *stage_info=(VkPipelineShaderStageCreateInfo)
-    {
-        .sType=VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO,
-        .pNext=NULL,
-        .flags=0,///not supported
-        .stage=stage,
-        .module=shader_module,
-        .pName=entrypoint,///always use main as entrypoint, use a static string such that this address is still valid after function return
-        .pSpecializationInfo=NULL
-    };
 }
 
-void cvm_vk_destroy_shader_stage_info(VkPipelineShaderStageCreateInfo * stage_info)
+
+void cvm_vk_destroy_shader_stage_info(VkPipelineShaderStageCreateInfo * stage_info, const struct cvm_vk_device* device)
 {
-    vkDestroyShaderModule(cvm_vk_.device,stage_info->module,NULL);
+    if(device==NULL) device = &cvm_vk_;
+    vkDestroyShaderModule(device->device, stage_info->module, device->host_allocator);
 }
-
 
 
 void cvm_vk_create_descriptor_set_layout(VkDescriptorSetLayout * descriptor_set_layout,VkDescriptorSetLayoutCreateInfo * info)

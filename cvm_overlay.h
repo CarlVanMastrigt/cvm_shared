@@ -295,7 +295,7 @@ struct cvm_overlay_render_batch
 };
 
 /// this could reasonably also create the descriptor sets which could then simply be accessed/acquired later
-void cvm_overlay_rendering_resources_initialise(struct cvm_overlay_rendering_resources* rendering_resources, const struct cvm_vk_device* device, uint32_t active_render_count);
+VkResult cvm_overlay_rendering_resources_initialise(struct cvm_overlay_rendering_resources* rendering_resources, const struct cvm_vk_device* device, uint32_t active_render_count);
 void cvm_overlay_rendering_resources_terminate (struct cvm_overlay_rendering_resources* rendering_resources, const struct cvm_vk_device* device);
 
 VkResult cvm_overlay_descriptor_set_fetch(const struct cvm_vk_device* device, const struct cvm_overlay_rendering_resources* rendering_resources, VkDescriptorSet* set);

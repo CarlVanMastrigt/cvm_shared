@@ -18,17 +18,13 @@ along with cvm_shared.  If not, see <https://www.gnu.org/licenses/>.
 */
 
 #include "cvm_shared.h"
+#include <assert.h>
+#include <vulkan/vulkan_core.h>
 
 
-
-
-
-static VkDescriptorPool cvm_overlay_descriptor_pool_create(const cvm_vk_device * device, uint32_t active_render_count)
+static VkResult cvm_overlay_descriptor_pool_create(VkDescriptorPool* pool, const cvm_vk_device * device, uint32_t active_render_count)
 {
-    #warning make cleaner (i.e. handle errors)
-
-    VkDescriptorPool pool=VK_NULL_HANDLE;
-    VkResult result;
+    *pool = VK_NULL_HANDLE;
 
     VkDescriptorPoolCreateInfo create_info =
     {
@@ -36,7 +32,6 @@ static VkDescriptorPool cvm_overlay_descriptor_pool_create(const cvm_vk_device *
         .pNext=NULL,
         .flags=0,///by not specifying individual free must reset whole pool (which is fine)
         .maxSets=active_render_count,
-        #warning ^ +1 ??
         .poolSizeCount=2,
         .pPoolSizes=(VkDescriptorPoolSize[2])
         {
@@ -51,18 +46,12 @@ static VkDescriptorPool cvm_overlay_descriptor_pool_create(const cvm_vk_device *
         }
     };
 
-    result = vkCreateDescriptorPool(device->device, &create_info, device->host_allocator, &pool);
-    assert(result == VK_SUCCESS);
-
-    return pool;
+    return vkCreateDescriptorPool(device->device, &create_info, device->host_allocator, pool);
 }
 
-static VkDescriptorSetLayout cvm_overlay_descriptor_set_layout_create(const cvm_vk_device * device)
+static VkResult cvm_overlay_descriptor_set_layout_create(VkDescriptorSetLayout* set_layout, const cvm_vk_device * device)
 {
-    #warning make cleaner (i.e. handle errors)
-
-    VkDescriptorSetLayout set_layout = VK_NULL_HANDLE;
-    VkResult result;
+    *set_layout = VK_NULL_HANDLE;
 
     VkDescriptorSetLayoutCreateInfo create_info =
     {
@@ -93,19 +82,13 @@ static VkDescriptorSetLayout cvm_overlay_descriptor_set_layout_create(const cvm_
         },
     };
 
-    result = vkCreateDescriptorSetLayout(device->device, &create_info, device->host_allocator, &set_layout);
-    assert(result == VK_SUCCESS);
-
-    return set_layout;
+    return vkCreateDescriptorSetLayout(device->device, &create_info, device->host_allocator, set_layout);
 }
 
-static VkPipelineLayout cvm_overlay_pipeline_layout_create(const cvm_vk_device * device, VkDescriptorSetLayout descriptor_set_layout)
+static VkResult cvm_overlay_pipeline_layout_create(VkPipelineLayout* pipeline_layout, const cvm_vk_device * device, VkDescriptorSetLayout descriptor_set_layout)
 {
-    #warning make cleaner (i.e. handle errors)
-
-    VkResult created;
-    VkPipelineLayout pipeline_layout=VK_NULL_HANDLE;
-
+    *pipeline_layout = VK_NULL_HANDLE;
+    
     VkPipelineLayoutCreateInfo create_info=
     {
         .sType=VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO,
@@ -127,28 +110,33 @@ static VkPipelineLayout cvm_overlay_pipeline_layout_create(const cvm_vk_device *
         }
     };
 
-    created = vkCreatePipelineLayout(device->device, &create_info, device->host_allocator, &pipeline_layout);
-    assert(created == VK_SUCCESS);
-
-    return pipeline_layout;
+    return vkCreatePipelineLayout(device->device, &create_info, device->host_allocator, pipeline_layout);
 }
 
 
-void cvm_overlay_rendering_resources_initialise(struct cvm_overlay_rendering_resources* rendering_resources, const struct cvm_vk_device* device, uint32_t active_render_count)
+VkResult cvm_overlay_rendering_resources_initialise(struct cvm_overlay_rendering_resources* rendering_resources, const struct cvm_vk_device* device, uint32_t active_render_count)
 {
-    rendering_resources->descriptor_pool = cvm_overlay_descriptor_pool_create(device, active_render_count);
-    rendering_resources->descriptor_set_layout = cvm_overlay_descriptor_set_layout_create(device);
+    VkResult result = VK_SUCCESS;
 
-    rendering_resources->pipeline_layout = cvm_overlay_pipeline_layout_create(device, rendering_resources->descriptor_set_layout);
+    result = cvm_overlay_descriptor_pool_create(&rendering_resources->descriptor_pool, device, active_render_count);
+    assert(result == VK_SUCCESS);
 
-    cvm_vk_create_shader_stage_info(&rendering_resources->vertex_pipeline_stage,"shaders/overlay.vert.spv",VK_SHADER_STAGE_VERTEX_BIT);
-    cvm_vk_create_shader_stage_info(&rendering_resources->fragment_pipeline_stage,"shaders/overlay.frag.spv",VK_SHADER_STAGE_FRAGMENT_BIT);
+    result = cvm_overlay_descriptor_set_layout_create(&rendering_resources->descriptor_set_layout, device);
+    assert(result == VK_SUCCESS);
+    
+    result = cvm_overlay_pipeline_layout_create(&rendering_resources->pipeline_layout, device, rendering_resources->descriptor_set_layout);
+    assert(result == VK_SUCCESS);
+
+    cvm_vk_create_shader_stage_info(&rendering_resources->vertex_pipeline_stage,  device, "shaders/overlay.vert.spv",VK_SHADER_STAGE_VERTEX_BIT);
+    cvm_vk_create_shader_stage_info(&rendering_resources->fragment_pipeline_stage,device, "shaders/overlay.frag.spv",VK_SHADER_STAGE_FRAGMENT_BIT);
+
+    return result;
 }
 
 void cvm_overlay_rendering_resources_terminate(struct cvm_overlay_rendering_resources* rendering_resources, const struct cvm_vk_device* device)
 {
-    cvm_vk_destroy_shader_stage_info(&rendering_resources->vertex_pipeline_stage);
-    cvm_vk_destroy_shader_stage_info(&rendering_resources->fragment_pipeline_stage);
+    cvm_vk_destroy_shader_stage_info(&rendering_resources->vertex_pipeline_stage  , device);
+    cvm_vk_destroy_shader_stage_info(&rendering_resources->fragment_pipeline_stage, device);
 
     vkDestroyPipelineLayout(device->device, rendering_resources->pipeline_layout, device->host_allocator);
 
@@ -177,8 +165,6 @@ VkResult cvm_overlay_descriptor_set_fetch(const struct cvm_vk_device* device, co
 
 VkResult cvm_overlay_render_pipeline_initialise(struct cvm_overlay_pipeline* pipeline, const struct cvm_vk_device* device, const struct cvm_overlay_rendering_resources* rendering_resources, VkRenderPass render_pass, VkExtent2D extent, uint32_t subpass)
 {
-    VkResult result;
-
     VkGraphicsPipelineCreateInfo create_info=
     {
         .sType=VK_STRUCTURE_TYPE_GRAPHICS_PIPELINE_CREATE_INFO,
@@ -322,13 +308,10 @@ VkResult cvm_overlay_render_pipeline_initialise(struct cvm_overlay_pipeline* pip
         .basePipelineIndex=-1
     };
 
-    result = vkCreateGraphicsPipelines(device->device, VK_NULL_HANDLE, 1, &create_info, device->host_allocator, &pipeline->pipeline);
-    if(result == VK_SUCCESS)
-    {
-        pipeline->extent = extent;
-    }
+    pipeline->extent = extent;
+    pipeline->pipeline = VK_NULL_HANDLE;
 
-    return result;
+    return vkCreateGraphicsPipelines(device->device, device->pipeline_cache.cache, 1, &create_info, device->host_allocator, &pipeline->pipeline);
 }
 
 void cvm_overlay_render_pipeline_terminate(struct cvm_overlay_pipeline* pipeline, const struct cvm_vk_device* device)
