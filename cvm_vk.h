@@ -146,6 +146,8 @@ typedef struct cvm_vk_device_setup
     uint32_t desired_transfer_queues;
     uint32_t desired_async_compute_queues;
     ///remove above and default to having just 2 (if possible) : low priority and high priority?
+
+    const char* pipeline_cache_file_name;
 }
 cvm_vk_device_setup;
 
@@ -178,6 +180,7 @@ struct cvm_vk_pipeline_cache
 {
     VkPipelineCache cache;
     void* data;
+    char* file_name;
 };
 
 struct cvm_vk_device

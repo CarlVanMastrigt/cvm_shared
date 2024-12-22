@@ -18,9 +18,6 @@ along with cvm_shared.  If not, see <https://www.gnu.org/licenses/>.
 */
 
 #include "cvm_shared.h"
-#include <stdio.h>
-#include <stdlib.h>
-#include <vulkan/vulkan_core.h>
 
 
 static cvm_vk_device cvm_vk_;
@@ -136,8 +133,8 @@ VkResult cvm_vk_instance_initialise_for_SDL(struct cvm_vk_instance* instance, co
 //    const char * validation = "VK_LAYER_KHRONOS_validation";
     VkResult result = VK_SUCCESS;
 
-    internal_setup.layer_names=setup->layer_names;
-    internal_setup.layer_count=setup->layer_count;
+    internal_setup.layer_names = setup->layer_names;
+    internal_setup.layer_count = setup->layer_count;
     internal_setup.host_allocator = setup->host_allocator;
     internal_setup.application_name = setup->application_name;
     internal_setup.application_version = setup->application_version;
@@ -302,7 +299,7 @@ static void cvm_vk_internal_device_setup_init(cvm_vk_device_setup * internal, co
 {
     const cvm_vk_device_setup empty_device_setup = {0};// does this actually need to be static?? what terrible code is this??
 
-    const internal_feature_count = 3;
+    const uint32_t internal_feature_count = 3;
     VkStructureType feature_struct_types[4] =
     {
         VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_VULKAN_1_1_FEATURES,
@@ -366,6 +363,9 @@ static void cvm_vk_internal_device_setup_init(cvm_vk_device_setup * internal, co
     internal->desired_async_compute_queues = CVM_CLAMP(external->desired_async_compute_queues,1,8);
 
     internal->instance = external->instance;
+
+
+    internal->pipeline_cache_file_name = external->pipeline_cache_file_name;
 }
 
 static void cvm_vk_internal_device_setup_destroy(cvm_vk_device_setup * setup)
@@ -879,38 +879,63 @@ static inline void cvm_vk_defaults_terminate(struct cvm_vk_defaults* defaults, c
 }
 
 
-static inline VkResult cvm_vk_pipeline_cache_initialise(struct cvm_vk_pipeline_cache* pipeline_cache, const cvm_vk_device * device, const char* cache_file_name)
+static inline void cvm_vk_pipeline_cache_initialise(struct cvm_vk_pipeline_cache* pipeline_cache, const cvm_vk_device * device, const char* cache_file_name)
 {
     VkResult result;
     FILE * cache_file;
     size_t cache_size;
+    size_t count;
+    uint64_t cache_size_disk;
     void* cache_data;
+    bool success;
 
-    if(cache_file_name==NULL)
+    // use "default" value on failure
+    pipeline_cache->cache = VK_NULL_HANDLE;
+    pipeline_cache->file_name = NULL;
+
+    if(cache_file_name == NULL)
     {
-        cache_file_name = "pipeline_cache";
+        fprintf(stderr, "no pipeline cache file provided, consider using one to improve startup performance\n");
+        return;
     }
+
+    pipeline_cache->file_name = strdup(cache_file_name);
 
     cache_file = fopen(cache_file_name,"rb");
 
+    cache_size = 0;
+    cache_data = NULL;
+
     if(cache_file)
     {
-        #warning potentially unsafe, instead consider writing and ten reading buffer size!
-        fseek(cache_file, 0, SEEK_END);
-        cache_size = ftell(cache_file);
-        cache_data = malloc(cache_size);
-        rewind(cache_file);
-        fread(cache_data, 1, cache_size, cache_file);
+        #warning also write identifier to know whether to ignore
+        success = false;
+        count = fread(&cache_size_disk, sizeof(uint64_t), 1, cache_file);
+        /// could/should also read/write identifier/version here...
+        if(count == 1)
+        {
+            cache_size = cache_size_disk;
+            cache_data = malloc(cache_size);
+            count = fread(cache_data, 1, cache_size, cache_file);
+
+            if(count != cache_size)
+            {
+                /// couldn't read whole cache so invalidate it
+                cache_size = 0;
+            }
+            else
+            {
+                success = true;
+            }
+        }
+
+        if(!success)
+        {
+            fprintf(stderr, "cound not read pipeline cache file %s, it appeared to be corrupted\n", pipeline_cache->file_name);
+        }
+
         fclose(cache_file);
     }
-    else
-    {
-        cache_size = 0;
-        cache_data = NULL;
-    }
-
-    /// load from file??
-    cache_size = 0;
 
     VkPipelineCacheCreateInfo create_info =
     {
@@ -921,49 +946,61 @@ static inline VkResult cvm_vk_pipeline_cache_initialise(struct cvm_vk_pipeline_c
         .pInitialData =  cache_data,
     };
 
-    // use "default" value on failure
-    pipeline_cache->cache = VK_NULL_HANDLE;
-
     result = vkCreatePipelineCache(device->device, &create_info, device->host_allocator, &pipeline_cache->cache);
 
     free(cache_data);
-
-    return result;
 }
 
-static inline void cvm_vk_pipeline_cache_terminate(struct cvm_vk_pipeline_cache* pipeline_cache, const cvm_vk_device * device, const char* cache_file_name)
+static inline void cvm_vk_pipeline_cache_terminate(struct cvm_vk_pipeline_cache* pipeline_cache, const cvm_vk_device * device)
 {
     VkResult result;
     FILE * cache_file;
     size_t cache_size;
+    size_t count;
     void* cache_data;
+    uint64_t cache_size_disk;
 
-    if(cache_file_name==NULL)
+    if(pipeline_cache->file_name && pipeline_cache->cache != VK_NULL_HANDLE)
     {
-        cache_file_name = "pipeline_cache";
-    }
+        result = vkGetPipelineCacheData(device->device, device->pipeline_cache.cache, &cache_size, NULL);
 
-    result = vkGetPipelineCacheData(device->device, device->pipeline_cache.cache, &cache_size, NULL);
-    if(cache_size > 0 && result == VK_SUCCESS)
-    {
-        cache_data = malloc(cache_size);
-
-        result = vkGetPipelineCacheData(device->device, device->pipeline_cache.cache, &cache_size, cache_data);
-
-        cache_file = fopen(cache_file_name,"wb");
-
-        if(cache_file && result == VK_SUCCESS)
+        if(result == VK_SUCCESS && cache_size)
         {
-            fwrite(cache_data, 1, cache_size, cache_file);
-        }
+            cache_data = malloc(cache_size);
 
-        free(cache_data);
+            result = vkGetPipelineCacheData(device->device, device->pipeline_cache.cache, &cache_size, cache_data);
+
+            cache_file = fopen(pipeline_cache->file_name,"wb");
+
+            if(cache_file && result == VK_SUCCESS)
+            {
+                cache_size_disk = cache_size;
+                count = fwrite(&cache_size_disk, sizeof(uint64_t), 1, cache_file);
+                if(count == 1)
+                {
+                    count = fwrite(cache_data, 1, cache_size, cache_file);
+                }
+
+                fclose(cache_file);
+
+                if(count != cache_size)
+                {
+                    fprintf(stderr, "cound not write pipeline cache file %s", pipeline_cache->file_name);
+                    remove(pipeline_cache->file_name);
+                }
+            }
+
+            free(cache_data);
+        }
     }
 
     if(pipeline_cache->cache != VK_NULL_HANDLE)
     {
         vkDestroyPipelineCache(device->device, device->pipeline_cache.cache, device->host_allocator);
     }
+
+    // filename owned (created with strdup) so free
+    free(pipeline_cache->file_name);
 }
 
 
@@ -985,7 +1022,7 @@ int cvm_vk_device_initialise(cvm_vk_device * device, const cvm_vk_device_setup *
     device->resource_identifier_monotonic = malloc(sizeof(atomic_uint_least64_t));
     atomic_init(device->resource_identifier_monotonic, 1);/// nonzero for debugging zero is invalid while testing
 
-    cvm_vk_pipeline_cache_initialise(&device->pipeline_cache, device, NULL);
+    cvm_vk_pipeline_cache_initialise(&device->pipeline_cache, device, device_setup.pipeline_cache_file_name);
 
     cvm_vk_create_transfer_chain();///make conditional on separate transfer queue?
 
@@ -1006,7 +1043,7 @@ void cvm_vk_device_terminate(cvm_vk_device * device)
     cvm_vk_destroy_defaults_old();
     cvm_vk_defaults_terminate(&device->defaults, device);
 
-    cvm_vk_pipeline_cache_terminate(&device->pipeline_cache, device, NULL);
+    cvm_vk_pipeline_cache_terminate(&device->pipeline_cache, device);
 
     cvm_vk_destroy_transfer_chain();///make conditional on separate transfer queue?
 
@@ -1014,25 +1051,6 @@ void cvm_vk_device_terminate(cvm_vk_device * device)
 
     free(device->resource_identifier_monotonic);
 }
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 
 
 
