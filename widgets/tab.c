@@ -217,12 +217,12 @@ static widget_behaviour_function_set tab_folder_behaviour_functions=
 
 static void tab_folder_widget_render(overlay_theme * theme,widget * w,int16_t x_off,int16_t y_off,struct cvm_overlay_render_batch * restrict render_batch,rectangle bounds)
 {
-    if(w->tab_folder.current_tab_page)render_widget(w->tab_folder.current_tab_page,x_off+w->base.r.x1,y_off+w->base.r.y1,render_batch,bounds);
+    if(w->tab_folder.current_tab_page)render_widget(w->tab_folder.current_tab_page, theme, x_off + w->base.r.x1, y_off + w->base.r.y1, render_batch, bounds);
 }
 
 static widget * tab_folder_widget_select(overlay_theme * theme,widget * w,int16_t x_in,int16_t y_in)
 {
-    if(w->tab_folder.current_tab_page)return select_widget(w->tab_folder.current_tab_page,x_in-w->base.r.x1,y_in-w->base.r.y1);
+    if(w->tab_folder.current_tab_page)return select_widget(w->tab_folder.current_tab_page, theme, x_in - w->base.r.x1, y_in - w->base.r.y1);
     return NULL;
 }
 
@@ -234,7 +234,7 @@ static void tab_folder_widget_min_w(overlay_theme * theme,widget * w)
 
     while(current)
     {
-        set_widget_minimum_width(current,w->base.status&WIDGET_POS_FLAGS_H);
+        set_widget_minimum_width(current, theme, w->base.status&WIDGET_POS_FLAGS_H);
         if(current->base.min_w > w->base.min_w) w->base.min_w = current->base.min_w;
         current=current->base.prev;
     }
@@ -263,7 +263,7 @@ static void tab_folder_widget_min_h(overlay_theme * theme,widget * w)
 
     while(current)
     {
-        set_widget_minimum_height(current,w->base.status&WIDGET_POS_FLAGS_V);
+        set_widget_minimum_height(current, theme, w->base.status&WIDGET_POS_FLAGS_V);
         if(current->base.min_h > w->base.min_h) w->base.min_h = current->base.min_h;
         current=current->base.prev;
     }
@@ -271,24 +271,24 @@ static void tab_folder_widget_min_h(overlay_theme * theme,widget * w)
 
 static void tab_folder_widget_set_w(overlay_theme * theme,widget * w)
 {
-    widget * current=w->tab_folder.last;
+    widget * current = w->tab_folder.last;
 
     while(current)
     {
-        organise_widget_horizontally(current,0,w->base.r.x2-w->base.r.x1);
-        current=current->base.prev;
+        organise_widget_horizontally(current, theme, 0, w->base.r.x2 - w->base.r.x1);
+        current = current->base.prev;
     }
 }
 
 static void tab_folder_widget_set_h(overlay_theme * theme,widget * w)
 {
-    widget * current=w->tab_folder.last;
+    widget * current = w->tab_folder.last;
 
     while(current)
     {
-        organise_widget_vertically(current,0,w->base.r.y2-w->base.r.y1);
+        organise_widget_vertically(current, theme, 0, w->base.r.y2 - w->base.r.y1);
 
-        current=current->base.prev;
+        current = current->base.prev;
     }
 }
 
@@ -306,9 +306,9 @@ static widget_appearence_function_set tab_folder_appearence_functions=
 
 widget * create_tab_folder(widget ** button_box,widget_layout button_box_layout)
 {
-    widget * w=create_widget(sizeof(widget_tab_folder));
+    widget * w = create_widget(sizeof(widget_tab_folder));
 
-    *button_box=w->tab_folder.tab_button_container=create_contiguous_box(button_box_layout,0);
+    *button_box = w->tab_folder.tab_button_container = create_contiguous_box(button_box_layout, 0);
 
     w->tab_folder.current_tab_page=NULL;
     w->tab_folder.last=NULL;

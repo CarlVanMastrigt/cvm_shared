@@ -218,7 +218,9 @@ static bool text_bar_widget_key_down(overlay_theme * theme,widget * w,SDL_Keycod
         break;
 
     case SDLK_ESCAPE:
-        set_currently_active_widget(NULL);
+        widget* root_widget = find_root_widget(w);
+        assert(root_widget);
+        set_currently_active_widget(root_widget, NULL);
         break;
 
         default:;

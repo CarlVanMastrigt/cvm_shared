@@ -38,7 +38,6 @@ along with cvm_shared.  If not, see <https://www.gnu.org/licenses/>.
 #include <immintrin.h>
 
 #include <SDL2/SDL.h>
-#include <SDL2/SDL_image.h>
 #include <SDL2/SDL_vulkan.h>
 
 #include <ft2build.h>

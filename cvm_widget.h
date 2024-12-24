@@ -32,7 +32,7 @@ along with cvm_shared.  If not, see <https://www.gnu.org/licenses/>.
 #define WIDGET_ACTIVE               0x00000001
 #define WIDGET_REQUIRES_RENDERING   0x00000002 /** used to specify completely transparent widgets overlaid over more complex game elements */
 #define WIDGET_CLOSE_POPUP_TREE     0x00000004 /** does not collapse parent popup hierarchy upon interaction (e.g. toggle buttons, popup triggering buttons, enterboxes, scrollbars and slider_bars)  */
-#define WIDGET_IS_MENU              0x00000010 /** used for testing find_toplevel_ancestor worked (is parent-child structure correct) */
+#define WIDGET_IS_ROOT              0x00000010 /** used for validation in various places*/
 #define WIDGET_IS_AUTO_CLOSE_POPUP  0x00000020
 #define WIDGET_IS_CONTIGUOUS_BOX    0x00000040
 #define WIDGET_DO_NOT_DELETE        0x00000080 /** must only be deleted by specialised method, which will set this to false before executing*/
@@ -63,6 +63,34 @@ typedef struct widget_appearence_function_set
 }
 widget_appearence_function_set;
 
+// // consider moving this somewhere more generic
+// // probably needs review before use
+// enum cvm_widget_command
+// {
+//     /// these apply to text (cut copy) or generally (arrow keys &c.)
+//     CVM_TEXT_COMMAND_NONE = 0,
+//     CVM_TEXT_COMMAND_COPY,
+//     CVM_TEXT_COMMAND_CUT,
+//     CVM_TEXT_COMMAND_PASTE,
+//     CVM_TEXT_COMMAND_LEFT,
+//     CVM_TEXT_COMMAND_RIGHT,
+//     CVM_TEXT_COMMAND_UP,
+//     CVM_TEXT_COMMAND_DOWN,
+//     CVM_TEXT_COMMAND_SELECT_ALL,
+// };
+
+// enum cvm_widget_modifier
+// {
+//     CVM_TEXT_COMMAND_MODIFIER_NONE = 0,
+//     // modifiers to text caret move, are mutually exclusive
+//     CVM_TEXT_COMMAND_MODIFIER_WORD = 0x01,
+//     CVM_TEXT_COMMAND_MODIFIER_LINE = 0x02,
+//     // CVM_TEXT_COMMAND_MODIFIER_ALL  = 0x04,
+//     // post text caret move action, are mutually exclusive
+//     CVM_TEXT_COMMAND_MODIFIER_SELECT = 0x10,
+//     CVM_TEXT_COMMAND_MODIFIER_ERASE  = 0x20,
+// };
+
 typedef struct widget_behaviour_function_set
 {
     void    (*const l_click)    (overlay_theme*,widget*,int,int);
@@ -73,6 +101,7 @@ typedef struct widget_behaviour_function_set
     bool    (*const key_down)   (overlay_theme*,widget*,SDL_Keycode,SDL_Keymod);
     bool    (*const text_input) (overlay_theme*,widget*,char*);
     bool    (*const text_edit)  (overlay_theme*,widget*,char*,int,int);
+    /// rename click_away to lose_focus? or something?
     void    (*const click_away) (overlay_theme*,widget*);
 
     void    (*const add_child)      (widget*,widget*);
@@ -131,13 +160,12 @@ typedef struct widget_base
 
     widget_appearence_function_set * appearence_functions;
     widget_behaviour_function_set * behaviour_functions;
-
-    uint32_t last_click_time;
 }
 widget_base;
 
 
 #include "widgets/container.h"
+#include "widgets/root.h"
 #include "widgets/box.h"
 #include "widgets/button.h"
 #include "widgets/enterbox.h"
@@ -168,6 +196,7 @@ union widget
     widget_text_bar             text_bar;
 
     widget_container            container;
+    widget_root                 root;
     widget_contiguous_box       contiguous_box;
     widget_panel                panel;
     widget_resize_constraint    resize_constraint;
@@ -183,28 +212,25 @@ widget * create_widget(size_t size);
 
 
 
-bool widget_active(widget * w);
-widget * create_widget_menu(void);
 
-void organise_menu_widget(widget * menu_widget,int screen_width,int screen_height);
+void organise_root_widget(widget * menu_widget,int screen_width,int screen_height);
 
 
 
 void organise_toplevel_widget(widget * w);
 void move_toplevel_widget_to_front(widget * target);
-void add_widget_to_widgets_menu(widget * w,widget * to_add);
 
 void adjust_coordinates_to_widget_local(widget * w,int * x,int * y);
 void get_widgets_global_coordinates(widget * w,int * x,int * y);
 
 
 
-void render_widget(widget * w,int x_off,int y_off,struct cvm_overlay_render_batch * restrict render_batch,rectangle bounds);
-widget * select_widget(widget * w,int x_in,int y_in);
-int16_t set_widget_minimum_width(widget * w,uint32_t pos_flags);
-int16_t set_widget_minimum_height(widget * w,uint32_t pos_flags);
-int16_t organise_widget_horizontally(widget * w,int16_t x_pos,int16_t width);
-int16_t organise_widget_vertically(widget * w,int16_t y_pos,int16_t height);
+void render_widget(widget * w,overlay_theme* theme,int x_off,int y_off,struct cvm_overlay_render_batch * restrict render_batch,rectangle bounds);
+widget * select_widget(widget * w, overlay_theme* theme, int x_in, int y_in);
+int16_t set_widget_minimum_width(widget * w, overlay_theme* theme, uint32_t pos_flags);
+int16_t set_widget_minimum_height(widget * w, overlay_theme* theme, uint32_t pos_flags);
+int16_t organise_widget_horizontally(widget * w, overlay_theme* theme, int16_t x_pos, int16_t width);
+int16_t organise_widget_vertically(widget * w, overlay_theme* theme, int16_t y_pos, int16_t height);
 
 
 
@@ -248,15 +274,15 @@ void        blank_widget_delete         (widget * w);
 //
 //void switch_currently_active_menu(menu_header * mh,int new_current_menu);
 
-void render_widget_overlay(struct cvm_overlay_render_batch * restrict render_batch, widget * menu_widget);
+void render_widget_overlay(struct cvm_overlay_render_batch * restrict render_batch, widget * root_widget);
 
-bool handle_widget_overlay_left_click(widget * menu_widget,int x_in,int y_in);
-bool handle_widget_overlay_left_release(widget * menu_widget,int x_in,int y_in);
-bool handle_widget_overlay_movement(widget * menu_widget,int x_in,int y_in);
-bool handle_widget_overlay_wheel(widget * menu_widget,int x_in,int y_in,int delta);
-bool handle_widget_overlay_keyboard(widget * menu_widget,SDL_Keycode keycode,SDL_Keymod mod);
-bool handle_widget_overlay_text_input(widget * menu_widget,char * text);
-bool handle_widget_overlay_text_edit(widget * menu_widget,char * text,int start,int length);
+bool handle_widget_overlay_left_click(widget* root_widget,int x_in,int y_in);
+bool handle_widget_overlay_left_release(widget* root_widget,int x_in,int y_in);
+bool handle_widget_overlay_movement(widget* root_widget,int x_in,int y_in);
+bool handle_widget_overlay_wheel(widget* root_widget,int x_in,int y_in,int delta);
+bool handle_widget_overlay_keyboard(widget* root_widget,SDL_Keycode keycode,SDL_Keymod mod);
+bool handle_widget_overlay_text_input(widget* root_widget,char * text);
+bool handle_widget_overlay_text_edit(widget* root_widget,char * text,int start,int length);
 
 widget * add_child_to_parent(widget * parent,widget * child);
 void remove_child_from_parent(widget * child);
@@ -265,23 +291,20 @@ void delete_widget(widget * w);
 
 
 
-
-
-void set_current_overlay_theme(overlay_theme * theme);
-overlay_theme * get_current_overlay_theme(void);
-
-void set_only_interactable_widget(widget * w);
-void set_currently_active_widget(widget * w);
-//void set_potential_interaction_widget(widget * w);
+// the separation of these can be avoided if ROOT is required to be provided
+void set_currently_active_widget(widget * root_widget, widget * w);
+void set_only_interactable_widget(widget * root_widget, widget * w);
 
 bool is_currently_active_widget(widget * w);
-bool is_potential_interaction_widget(widget * w);
 //bool test_currently_active_widget_key_input(void);
-
-void find_potential_interaction_widget(widget * menu_widget,int mouse_x,int mouse_y);
 
 void set_overlay_double_click_time(uint32_t t);
 bool check_widget_double_clicked(widget * w);
+
+bool widget_active(widget * w);
+
+widget* find_root_widget(widget* w);
+overlay_theme* get_widget_theme(widget* w);
 
 #endif
 

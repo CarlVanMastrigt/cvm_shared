@@ -516,7 +516,7 @@ void cvm_overlay_render_batch_build(struct cvm_overlay_render_batch* batch, widg
     if(menu_widget->base.r.x2 != target_extent.width || menu_widget->base.r.y2 != target_extent.height)
     {
 //        clock_gettime(CLOCK_REALTIME,&ts1);
-        organise_menu_widget(menu_widget, target_extent.width, target_extent.height);
+        organise_root_widget(menu_widget, target_extent.width, target_extent.height);
 //        clock_gettime(CLOCK_REALTIME,&ts2);
 //        ns=(ts2.tv_sec-ts1.tv_sec)*1000000000 + ts2.tv_nsec-ts1.tv_nsec;
 //        printf("re-organise: %llu\n",ns);

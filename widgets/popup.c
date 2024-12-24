@@ -27,34 +27,36 @@ static widget * new_auto_close_popup=NULL;
 
 static void popup_widget_render(overlay_theme * theme,widget * w,int16_t x_off,int16_t y_off,struct cvm_overlay_render_batch * restrict render_batch,rectangle bounds)
 {
-	render_widget(w->popup.contents,x_off+w->base.r.x1,y_off+w->base.r.y1,render_batch,bounds);
+	render_widget(w->popup.contents, theme, x_off + w->base.r.x1, y_off + w->base.r.y1, render_batch, bounds);
 }
 
 static widget * popup_widget_select(overlay_theme * theme,widget * w,int16_t x_in,int16_t y_in)
 {
-	return select_widget(w->popup.contents,x_in-w->base.r.x1,y_in-w->base.r.y1);
+	return select_widget(w->popup.contents, theme, x_in - w->base.r.x1 , y_in - w->base.r.y1);
 }
 
 static void popup_widget_min_w(overlay_theme * theme,widget * w)
 {
-    w->base.min_w=set_widget_minimum_width(w->popup.contents,0);
+    w->base.min_w=set_widget_minimum_width(w->popup.contents, theme, 0);
 }
 
 static void popup_widget_min_h(overlay_theme * theme,widget * w)
 {
-    w->base.min_h=set_widget_minimum_height(w->popup.contents,0);
+    w->base.min_h=set_widget_minimum_height(w->popup.contents, theme, 0);
 }
 
 static void popup_widget_set_w(overlay_theme * theme,widget * w)
 {
-    organise_widget_horizontally(w->popup.contents,0,w->base.min_w);
+    organise_widget_horizontally(w->popup.contents, theme, 0, w->base.min_w);
 }
 
 static void popup_widget_set_h(overlay_theme * theme,widget * w)
 {
+    /// all this is done in set_w because that should happen after the aligned widget has been assessed
+    #warning better to make alignment a post processing step affecting only toplevel widgets!
     #warning make int16_t
     int delta_x,delta_y,width,height,max;
-    organise_widget_vertically(w->popup.contents,0,w->base.min_h);
+    organise_widget_vertically(w->popup.contents, theme, 0, w->base.min_h);
 
     widget *contained,*external,*internal;
     contained=w->popup.contents;
@@ -86,7 +88,7 @@ static void popup_widget_set_h(overlay_theme * theme,widget * w)
         if(delta_y > max)delta_y=max;
         if(delta_y < 0)delta_y=0;
 
-        contained->base.r=rectangle_add_offset(contained->base.r,delta_x,delta_y);
+        contained->base.r=rectangle_add_offset(contained->base.r, delta_x, delta_y);
     }
 }
 
@@ -182,14 +184,20 @@ void set_popup_trigger_widget(widget * popup,widget * trigger_widget)
 
 void toggle_exclusive_popup(widget * popup)
 {
+    widget* root_widget = find_root_widget(popup);
+    assert(root_widget);
+
     popup->base.status^=WIDGET_ACTIVE;
     if(widget_active(popup))
     {
         organise_toplevel_widget(popup);
         move_toplevel_widget_to_front(popup);
-        set_only_interactable_widget(popup);
+        set_only_interactable_widget(root_widget, popup);
     }
-    else set_only_interactable_widget(NULL);
+    else
+    {
+        set_only_interactable_widget(root_widget, NULL);
+    }
 }
 
 

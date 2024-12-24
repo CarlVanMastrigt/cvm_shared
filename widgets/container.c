@@ -111,7 +111,7 @@ void container_widget_render(overlay_theme * theme,widget * w,int16_t x_off,int1
 
     while(current)
     {
-        render_widget(current, x_off, y_off, render_batch, bounds);
+        render_widget(current, theme, x_off, y_off, render_batch, bounds);
 
         current=current->base.next;
     }
@@ -127,7 +127,7 @@ widget * container_widget_select(overlay_theme * theme,widget * w,int16_t x_in,i
 
     while(current)
     {
-        tmp=select_widget(current,x_in,y_in);
+        tmp=select_widget(current, theme, x_in, y_in);
 
         if(tmp) return tmp;
 
@@ -149,7 +149,7 @@ static void container_widget_min_w(overlay_theme * theme,widget * w)
     {
         if(widget_active(current))
         {
-            set_widget_minimum_width(current,pos_flags);
+            set_widget_minimum_width(current, theme, pos_flags);
 
             if(w->base.min_w<current->base.min_w)w->base.min_w=current->base.min_w;
         }
@@ -170,7 +170,7 @@ static void container_widget_min_h(overlay_theme * theme,widget * w)
     {
         if(widget_active(current))
         {
-            set_widget_minimum_height(current,pos_flags);
+            set_widget_minimum_height(current, theme, pos_flags);
 
             if(w->base.min_h<current->base.min_h)w->base.min_h=current->base.min_h;
         }
@@ -185,7 +185,7 @@ static void container_widget_set_w(overlay_theme * theme,widget * w)
 
     while(current)
     {
-        if(widget_active(current)) organise_widget_horizontally(current,0,w->base.r.x2-w->base.r.x1);
+        if(widget_active(current)) organise_widget_horizontally(current, theme, 0, w->base.r.x2 - w->base.r.x1);
 
         current=current->base.next;
     }
@@ -197,7 +197,7 @@ static void container_widget_set_h(overlay_theme * theme,widget * w)
 
     while(current)
     {
-        if(widget_active(current)) organise_widget_vertically(current,0,w->base.r.y2-w->base.r.y1);
+        if(widget_active(current)) organise_widget_vertically(current, theme, 0, w->base.r.y2 - w->base.r.y1);
 
         current=current->base.next;
     }

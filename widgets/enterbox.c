@@ -166,6 +166,7 @@ static bool enterbox_widget_scroll(overlay_theme * theme,widget * w,int delta)
 
 static bool enterbox_widget_key_down(overlay_theme * theme,widget * w,SDL_Keycode keycode,SDL_Keymod mod)
 {
+    widget* root_widget;
     char *s_begin,*s_end,*s;
 
     if(w->enterbox.selection_end > w->enterbox.selection_begin) s_begin=w->enterbox.selection_begin, s_end=w->enterbox.selection_end;
@@ -304,12 +305,16 @@ static bool enterbox_widget_key_down(overlay_theme * theme,widget * w,SDL_Keycod
         {
             w->enterbox.activation_func(w);
         }
-        set_currently_active_widget(NULL);
+        root_widget = find_root_widget(w);
+        assert(root_widget);
+        set_currently_active_widget(root_widget, NULL);
         break;
 
     case SDLK_ESCAPE:
         #warning probably dont want escape to ever activate, or at least not most of the time, ay wat to accomplish this, should it be the same as clicking away?
-        set_currently_active_widget(NULL);
+        root_widget = find_root_widget(w);
+        assert(root_widget);
+        set_currently_active_widget(root_widget, NULL);
         break;
 
         default:;

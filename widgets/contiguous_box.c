@@ -76,7 +76,7 @@ static void all_visible_contiguous_box_widget_render(overlay_theme * theme,widge
     x_off += w->base.r.x1;
     y_off += w->base.r.y1;
 
-    render_widget(w->contiguous_box.contained_box, x_off, y_off, render_batch, bounds);
+    render_widget(w->contiguous_box.contained_box, theme, x_off, y_off, render_batch, bounds);
 }
 
 static void some_visible_contiguous_box_widget_render(overlay_theme * theme,widget * w,int16_t x_off,int16_t y_off,struct cvm_overlay_render_batch * restrict render_batch,rectangle bounds)
@@ -109,7 +109,7 @@ static widget * contiguous_box_widget_select(overlay_theme * theme,widget * w,in
         x_in-=w->base.r.x1;
         y_in-=w->base.r.y1;
 
-        tmp=select_widget(w->contiguous_box.contained_box,x_in,y_in);
+        tmp=select_widget(w->contiguous_box.contained_box, theme, x_in, y_in);
         if(tmp)return tmp;
 
         return w;
@@ -126,24 +126,24 @@ static widget * contiguous_box_widget_select(overlay_theme * theme,widget * w,in
 
 static void all_visible_contiguous_box_widget_min_w(overlay_theme * theme,widget * w)
 {
-    w->base.min_w = set_widget_minimum_width(w->contiguous_box.contained_box,0);//+2*theme->contiguous_all_box_x_offset;
+    w->base.min_w = set_widget_minimum_width(w->contiguous_box.contained_box, theme, 0);//+2*theme->contiguous_all_box_x_offset;
 }
 
 static void all_visible_contiguous_box_widget_min_h(overlay_theme * theme,widget * w)
 {
-    w->base.min_h = set_widget_minimum_height(w->contiguous_box.contained_box,0);//+2*theme->contiguous_all_box_y_offset;
+    w->base.min_h = set_widget_minimum_height(w->contiguous_box.contained_box, theme, 0);//+2*theme->contiguous_all_box_y_offset;
 }
 
 static void all_visible_contiguous_box_widget_set_w(overlay_theme * theme,widget * w)
 {
     //organise_widget_horizontally(w->contiguous_box.contained_box,theme->contiguous_all_box_x_offset,w->base.r.x2-w->base.r.x1-2*theme->contiguous_all_box_x_offset);
-    organise_widget_horizontally(w->contiguous_box.contained_box,0,w->base.r.x2-w->base.r.x1);
+    organise_widget_horizontally(w->contiguous_box.contained_box, theme, 0, w->base.r.x2 - w->base.r.x1);
 }
 
 static void all_visible_contiguous_box_widget_set_h(overlay_theme * theme,widget * w)
 {
     //organise_widget_vertically(w->contiguous_box.contained_box,theme->contiguous_all_box_y_offset,w->base.r.y2-w->base.r.y1-2*theme->contiguous_all_box_y_offset);
-    organise_widget_vertically(w->contiguous_box.contained_box,0,w->base.r.y2-w->base.r.y1);
+    organise_widget_vertically(w->contiguous_box.contained_box, theme, 0, w->base.r.y2 - w->base.r.y1);
 }
 
 static widget_appearence_function_set all_visible_contiguous_box_functions=

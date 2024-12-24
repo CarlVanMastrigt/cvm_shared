@@ -109,7 +109,9 @@ static bool textbox_widget_key_down(overlay_theme * theme,widget * w,SDL_Keycode
         break;
 
     case SDLK_ESCAPE:
-        set_currently_active_widget(NULL);
+        widget* root_widget = find_root_widget(w);
+        assert(root_widget);
+        set_currently_active_widget(root_widget, NULL);
         break;
 
         default:;
@@ -253,9 +255,9 @@ void change_textbox_text(widget * w,char * new_text,bool owns_new_text)///use re
 
     if(w->textbox.min_visible_lines)
     {
-        overlay_theme * ot=get_current_overlay_theme();
-        textbox_widget_min_h(ot,w);
-        textbox_widget_set_h(ot,w);
+        overlay_theme * theme = get_widget_theme(w);
+        textbox_widget_min_h(theme, w);
+        textbox_widget_set_h(theme, w);
     }
     else
     {

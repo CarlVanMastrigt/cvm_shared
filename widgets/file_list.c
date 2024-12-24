@@ -28,6 +28,7 @@ along with cvm_shared.  If not, see <https://www.gnu.org/licenses/>.
 
 ///implement basics of dirent for windows?
 
+#warning make these a part of some genericized set, 
 static widget * error_dialogue_widget=NULL;///singleton, deleted when no more menu widgets exist
 static widget * error_dialogue_message_text_bar=NULL;
 static widget * error_dialogue_cancel_button=NULL;
@@ -458,17 +459,6 @@ static void file_list_enter_selected_directory(widget * w)
     file_list_widget_load_directory_entries(w);
 }
 
-///requires that file_list_widget_set_error_information has already been called
-//static void file_list_widget_activate_error_dialogue(widget * w)
-//{
-//    error_dialogue_cancel_button->button.data=w;
-//    error_dialogue_force_button->button.data=w;
-//
-//    add_widget_to_widgets_menu(w,error_dialogue_widget);
-//    organise_toplevel_widget(error_dialogue_widget);
-//    set_only_interactable_widget(error_dialogue_widget);
-//}
-
 static void file_list_widget_sucessful_action_cleanup(widget * w)
 {
     w->file_list.selected_entry_index=-1;
@@ -478,8 +468,10 @@ static void file_list_widget_sucessful_action_cleanup(widget * w)
     error_dialogue_force_button->button.data=NULL;
 
     ///error dialogue will not always be triggered so these are not strictly necessary, but they will work anyway and when they might cause issue that is likely an invalid state
+    widget* root_widget = find_root_widget(w);
+    assert(root_widget);
+    set_only_interactable_widget(root_widget, NULL);
     remove_child_from_parent(error_dialogue_widget);
-    set_only_interactable_widget(NULL);
 
     w->file_list.offset=0;
     ///do any other required cleanup
@@ -517,9 +509,12 @@ static void file_list_widget_perform_action(widget * w)
 
                     set_popup_alignment_widgets(error_dialogue_widget,NULL,w->file_list.parent_widget ? w->file_list.parent_widget : w);///passing null as internal will use the contailed widget (the panel)
 
-                    add_widget_to_widgets_menu(w,error_dialogue_widget);
+                    #warning this approach to substituting in widgets NEEDS TO GO!
+                    widget* root_widget = find_root_widget(w);
+                    assert(root_widget);
+                    add_child_to_parent(root_widget, error_dialogue_widget);
+                    set_only_interactable_widget(root_widget, error_dialogue_widget);
                     organise_toplevel_widget(error_dialogue_widget);
-                    set_only_interactable_widget(error_dialogue_widget);
                 }
             }
         }
@@ -643,7 +638,9 @@ static bool file_list_widget_key_down(overlay_theme * theme,widget * w,SDL_Keyco
 
 
     case SDLK_ESCAPE:
-        set_currently_active_widget(NULL);
+        widget* root_widget = find_root_widget(w);
+        assert(root_widget);
+        set_currently_active_widget(root_widget, NULL);
         file_list_widget_deselect_entry(w);///not sure is desirable but w/e
         break;
 
@@ -1001,8 +998,10 @@ static void file_list_widget_error_cancel_button_function(widget * w)
     error_dialogue_cancel_button->button.data=NULL;
     error_dialogue_force_button->button.data=NULL;
 
+    widget* root_widget = find_root_widget(w);
+    assert(root_widget);
+    set_only_interactable_widget(root_widget, NULL);
     remove_child_from_parent(error_dialogue_widget);
-    set_only_interactable_widget(NULL);
 }
 
 static void file_list_widget_error_force_button_function(widget * w)

@@ -26,7 +26,9 @@ static void anchor_widget_left_click(overlay_theme * theme,widget * w,int x,int 
         if(check_widget_double_clicked(w))
         {
             toggle_resize_constraint_maximize(w->anchor.constraint);
-            set_currently_active_widget(NULL);
+            widget* root_widget = find_root_widget(w);
+            assert(root_widget);
+            set_currently_active_widget(root_widget, NULL);
         }
         else
         {
