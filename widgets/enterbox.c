@@ -305,16 +305,12 @@ static bool enterbox_widget_key_down(overlay_theme * theme,widget * w,SDL_Keycod
         {
             w->enterbox.activation_func(w);
         }
-        root_widget = find_root_widget(w);
-        assert(root_widget);
-        set_currently_active_widget(root_widget, NULL);
+        set_currently_active_widget_(w->base.context, NULL);
         break;
 
     case SDLK_ESCAPE:
-        #warning probably dont want escape to ever activate, or at least not most of the time, ay wat to accomplish this, should it be the same as clicking away?
-        root_widget = find_root_widget(w);
-        assert(root_widget);
-        set_currently_active_widget(root_widget, NULL);
+        #warning probably dont want escape to ever activate, or at least not most of the time, any way to accomplish this? should it be the same as clicking away?
+        set_currently_active_widget_(w->base.context, NULL);
         break;
 
         default:;

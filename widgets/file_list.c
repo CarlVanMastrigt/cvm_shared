@@ -468,9 +468,7 @@ static void file_list_widget_sucessful_action_cleanup(widget * w)
     error_dialogue_force_button->button.data=NULL;
 
     ///error dialogue will not always be triggered so these are not strictly necessary, but they will work anyway and when they might cause issue that is likely an invalid state
-    widget* root_widget = find_root_widget(w);
-    assert(root_widget);
-    set_only_interactable_widget(root_widget, NULL);
+    set_only_interactable_widget_(w->base.context, NULL);
     remove_child_from_parent(error_dialogue_widget);
 
     w->file_list.offset=0;
@@ -513,7 +511,7 @@ static void file_list_widget_perform_action(widget * w)
                     widget* root_widget = find_root_widget(w);
                     assert(root_widget);
                     add_child_to_parent(root_widget, error_dialogue_widget);
-                    set_only_interactable_widget(root_widget, error_dialogue_widget);
+                    set_only_interactable_widget_(w->base.context, error_dialogue_widget);
                     organise_toplevel_widget(error_dialogue_widget);
                 }
             }
@@ -615,7 +613,6 @@ static bool file_list_widget_key_down(overlay_theme * theme,widget * w,SDL_Keyco
         file_list_widget_set_selected_entry(w,0,true);
         break;
 
-
     case SDLK_KP_2:/// keypad/numpad down
         if(mod&KMOD_NUM)break;
     case SDLK_DOWN:
@@ -636,11 +633,8 @@ static bool file_list_widget_key_down(overlay_theme * theme,widget * w,SDL_Keyco
         file_list_widget_set_selected_entry(w,w->file_list.valid_entry_count-1,true);
         break;
 
-
     case SDLK_ESCAPE:
-        widget* root_widget = find_root_widget(w);
-        assert(root_widget);
-        set_currently_active_widget(root_widget, NULL);
+        set_currently_active_widget_(w->base.context, NULL);
         file_list_widget_deselect_entry(w);///not sure is desirable but w/e
         break;
 
@@ -998,9 +992,7 @@ static void file_list_widget_error_cancel_button_function(widget * w)
     error_dialogue_cancel_button->button.data=NULL;
     error_dialogue_force_button->button.data=NULL;
 
-    widget* root_widget = find_root_widget(w);
-    assert(root_widget);
-    set_only_interactable_widget(root_widget, NULL);
+    set_only_interactable_widget_(w->base.context, NULL);
     remove_child_from_parent(error_dialogue_widget);
 }
 

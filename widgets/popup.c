@@ -184,23 +184,18 @@ void set_popup_trigger_widget(widget * popup,widget * trigger_widget)
 
 void toggle_exclusive_popup(widget * popup)
 {
-    widget* root_widget = find_root_widget(popup);
-    assert(root_widget);
-
     popup->base.status^=WIDGET_ACTIVE;
     if(widget_active(popup))
     {
         organise_toplevel_widget(popup);
         move_toplevel_widget_to_front(popup);
-        set_only_interactable_widget(root_widget, popup);
+        set_only_interactable_widget_(popup->base.context, popup);
     }
     else
     {
-        set_only_interactable_widget(root_widget, NULL);
+        set_only_interactable_widget_(popup->base.context, NULL);
     }
 }
-
-
 
 
 void toggle_auto_close_popup(widget * popup)

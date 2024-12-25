@@ -26,8 +26,6 @@ along with cvm_shared.  If not, see <https://www.gnu.org/licenses/>.
 
 
 
-
-
 #define BLANK_WIDGET_STATUS         0x00000000
 #define WIDGET_ACTIVE               0x00000001
 #define WIDGET_REQUIRES_RENDERING   0x00000002 /** used to specify completely transparent widgets overlaid over more complex game elements */
@@ -191,7 +189,6 @@ widget_base;
 
 
 #include "widgets/container.h"
-#include "widgets/root.h"
 #include "widgets/box.h"
 #include "widgets/button.h"
 #include "widgets/enterbox.h"
@@ -222,7 +219,6 @@ union widget
     widget_text_bar             text_bar;
 
     widget_container            container;
-    widget_root                 root;
     widget_contiguous_box       contiguous_box;
     widget_panel                panel;
     widget_resize_constraint    resize_constraint;
@@ -310,7 +306,7 @@ bool handle_widget_overlay_keyboard(widget* root_widget,SDL_Keycode keycode,SDL_
 bool handle_widget_overlay_text_input(widget* root_widget,char * text);
 bool handle_widget_overlay_text_edit(widget* root_widget,char * text,int start,int length);
 
-widget * add_child_to_parent(widget * parent,widget * child);
+widget* add_child_to_parent(widget * parent,widget * child);
 void remove_child_from_parent(widget * child);
 void delete_widget(widget * w);
 
@@ -318,8 +314,8 @@ void delete_widget(widget * w);
 
 
 // the separation of these can be avoided if ROOT is required to be provided
-void set_currently_active_widget(widget * root_widget, widget * w);
-void set_only_interactable_widget(widget * root_widget, widget * w);
+void set_currently_active_widget_(struct widget_context* context, widget * w);
+void set_only_interactable_widget_(struct widget_context* context, widget * w);
 
 bool is_currently_active_widget(widget * w);
 //bool test_currently_active_widget_key_input(void);
@@ -330,7 +326,9 @@ bool check_widget_double_clicked(widget * w);
 bool widget_active(widget * w);
 
 widget* find_root_widget(widget* w);
-overlay_theme* get_widget_theme(widget* w);
+
+
+widget* create_root_widget(struct widget_context* context, overlay_theme* theme);
 
 #endif
 

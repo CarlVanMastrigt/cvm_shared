@@ -111,7 +111,7 @@ static bool textbox_widget_key_down(overlay_theme * theme,widget * w,SDL_Keycode
     case SDLK_ESCAPE:
         widget* root_widget = find_root_widget(w);
         assert(root_widget);
-        set_currently_active_widget(root_widget, NULL);
+        set_currently_active_widget_(w->base.context, NULL);
         break;
 
         default:;
@@ -239,8 +239,6 @@ static widget_appearence_function_set textbox_appearence_functions=
 
 
 
-
-
 void change_textbox_text(widget * w,char * new_text,bool owns_new_text)///use responsibly, potentially need to reorganise widgets function as part of (or after) calling this
 {
     free(w->textbox.text);
@@ -255,9 +253,8 @@ void change_textbox_text(widget * w,char * new_text,bool owns_new_text)///use re
 
     if(w->textbox.min_visible_lines)
     {
-        overlay_theme * theme = get_widget_theme(w);
-        textbox_widget_min_h(theme, w);
-        textbox_widget_set_h(theme, w);
+        textbox_widget_min_h(w->base.context->theme, w);
+        textbox_widget_set_h(w->base.context->theme, w);
     }
     else
     {
