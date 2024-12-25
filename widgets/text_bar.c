@@ -364,9 +364,9 @@ static widget_appearence_function_set text_bar_appearence_functions=
 
 
 ///static provably isnt best name, or want to add another variant for when text references string that is modified externally
-widget * create_static_text_bar(char * text)
+widget * create_static_text_bar(struct widget_context* context, char * text)
 {
-	widget * w=create_widget(sizeof(widget_text_bar));
+	widget * w=create_widget(context, sizeof(widget_text_bar));
 
 	w->base.appearence_functions=&text_bar_appearence_functions;
 	w->base.behaviour_functions=&text_bar_behaviour_functions;
@@ -395,9 +395,9 @@ widget * create_static_text_bar(char * text)
 	return w;
 }
 
-widget * create_dynamic_text_bar(int min_glyph_render_count,widget_text_alignment text_alignment,bool allow_selection)
+widget * create_dynamic_text_bar(struct widget_context* context, int min_glyph_render_count,widget_text_alignment text_alignment,bool allow_selection)
 {
-	widget * w=create_widget(sizeof(widget_text_bar));
+	widget * w=create_widget(context, sizeof(widget_text_bar));
 
 	w->base.appearence_functions=&text_bar_appearence_functions;
 	w->base.behaviour_functions=&text_bar_behaviour_functions;

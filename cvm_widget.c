@@ -23,6 +23,28 @@ along with cvm_shared.  If not, see <https://www.gnu.org/licenses/>.
 #include <stdio.h>
 
 
+void widget_context_initialise(struct widget_context* context, overlay_theme* theme)
+{
+    context->theme = theme;
+    context->registered_widget_count = 0;
+
+    context->double_click_time =  400;//?
+
+    context->currently_active_widget  = NULL;
+    context->only_interactable_widget = NULL;
+
+    context->previously_clicked_widget = NULL;
+}
+
+void widget_context_terminate(struct widget_context* context)
+{
+    // should delete/unregister all widgets before terminating context 
+    assert(context->registered_widget_count == 0);
+
+    assert(context->currently_active_widget == NULL);
+    assert(context->currently_active_widget == NULL);
+}
+
 /// one level below root
 static widget* get_widgets_toplevel_ancestor(widget * w)
 {
@@ -192,24 +214,23 @@ static widget_behaviour_function_set base_behaviour_functions =
     .wid_delete     =   base_widget_delete
 };
 
-widget * create_widget(size_t size)
+widget * create_widget(struct widget_context* context, size_t size)
 {
-    widget * w=malloc(size);
+    widget * w = malloc(size);
 
-    w->base.status=WIDGET_ACTIVE;
-
-    w->base.next=NULL;
-    w->base.prev=NULL;
-
-    w->base.parent=NULL;
-
-    w->base.r=rectangle_ini(0,0,0,0);
-
-    w->base.min_w=0;
-    w->base.min_h=0;
-
-    w->base.appearence_functions=&base_appearence_functions;
-    w->base.behaviour_functions=&base_behaviour_functions;
+    w->base = (widget_base)
+    {
+        .context = context,
+        .status = WIDGET_ACTIVE,
+        .min_w = 0,
+        .min_h = 0,
+        .r = rectangle_ini(0,0,0,0),
+        .parent = NULL,
+        .next = NULL,
+        .prev = NULL,
+        .appearence_functions = &base_appearence_functions,
+        .behaviour_functions = &base_behaviour_functions,
+    };
 
     return w;
 }

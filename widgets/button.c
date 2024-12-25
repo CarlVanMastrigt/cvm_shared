@@ -103,9 +103,9 @@ static widget_behaviour_function_set button_behaviour_functions=
 
 
 
-widget * create_button(void * data,widget_function func,bool free_data)
+widget * create_button(struct widget_context* context, void * data,widget_function func,bool free_data)
 {
-    widget * w=create_widget(sizeof(widget_button));
+    widget * w=create_widget(context, sizeof(widget_button));
 
     w->base.behaviour_functions=&button_behaviour_functions;
 
@@ -207,9 +207,9 @@ static widget_appearence_function_set text_button_appearence_functions=
     .set_h  =   blank_widget_set_h
 };
 
-widget * create_text_button(char * text,void * data,bool free_data,widget_function func)
+widget * create_text_button(struct widget_context* context, char * text,void * data,bool free_data,widget_function func)
 {
-    widget * button=create_button(data,func,free_data);
+    widget * button=create_button(context, data, func, free_data);
 
     if(text)button->button.text=cvm_strdup(text);
 
@@ -218,9 +218,9 @@ widget * create_text_button(char * text,void * data,bool free_data,widget_functi
     return button;
 }
 
-widget * create_text_toggle_button(char * positive_text,char * negative_text,void * data,widget_function func,widget_button_toggle_status_func toggle_status)
+widget * create_text_toggle_button(struct widget_context* context, char * positive_text,char * negative_text,void * data,widget_function func,widget_button_toggle_status_func toggle_status)
 {
-    widget * w=create_button(data,func,false);
+    widget * w=create_button(context, data, func, false);
 
     w->base.appearence_functions=&text_button_appearence_functions;
 
@@ -240,9 +240,9 @@ widget * create_text_toggle_button(char * positive_text,char * negative_text,voi
     return w;
 }
 
-widget * create_text_highlight_toggle_button(char * text,void * data,bool free_data,widget_function func,widget_button_toggle_status_func toggle_status)
+widget * create_text_highlight_toggle_button(struct widget_context* context, char * text,void * data,bool free_data,widget_function func,widget_button_toggle_status_func toggle_status)
 {
-    widget * w=create_button(data,func,free_data);
+    widget * w=create_button(context, data, func, free_data);
 
     if(text)w->button.text=cvm_strdup(text);
 
@@ -309,9 +309,9 @@ static widget_appearence_function_set contiguous_text_button_appearence_function
     .set_h  =   blank_widget_set_h
 };
 
-widget * create_contiguous_text_button(char * text,void * data,bool free_data,widget_function func)
+widget * create_contiguous_text_button(struct widget_context* context, char * text,void * data,bool free_data,widget_function func)
 {
-    widget * w=create_button(data,func,free_data);
+    widget * w=create_button(context, data, func, free_data);
 
     if(text)w->button.text=cvm_strdup(text);
 
@@ -320,9 +320,9 @@ widget * create_contiguous_text_button(char * text,void * data,bool free_data,wi
     return w;
 }
 
-widget * create_contiguous_text_highlight_toggle_button(char * text,void * data,bool free_data,widget_function func,widget_button_toggle_status_func toggle_status)
+widget * create_contiguous_text_highlight_toggle_button(struct widget_context* context, char * text,void * data,bool free_data,widget_function func,widget_button_toggle_status_func toggle_status)
 {
-    widget * w=create_button(data,func,free_data);
+    widget * w=create_button(context, data, func, free_data);
 
     if(text)w->button.text=cvm_strdup(text);
 
@@ -386,9 +386,9 @@ static widget_appearence_function_set icon_button_appearence_functions=
     .set_h  =   blank_widget_set_h
 };
 
-widget * create_icon_button(char * icon_name,void * data,bool free_data,widget_function func)
+widget * create_icon_button(struct widget_context* context, char * icon_name,void * data,bool free_data,widget_function func)
 {
-    widget * button=create_button(data,func,free_data);
+    widget * button=create_button(context, data, func, free_data);
 
     if(icon_name)button->button.text=cvm_strdup(icon_name);
 
@@ -397,9 +397,9 @@ widget * create_icon_button(char * icon_name,void * data,bool free_data,widget_f
 	return button;
 }
 
-widget * create_icon_toggle_button(char * positive_icon,char * negative_icon,void * data,bool free_data,widget_function func,widget_button_toggle_status_func toggle_status)
+widget * create_icon_toggle_button(struct widget_context* context, char * positive_icon,char * negative_icon,void * data,bool free_data,widget_function func,widget_button_toggle_status_func toggle_status)
 {
-    widget * w=create_button(data,func,free_data);
+    widget * w=create_button(context, data, func, free_data);
 
     w->base.appearence_functions=&icon_button_appearence_functions;
 

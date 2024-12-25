@@ -60,7 +60,7 @@ typedef struct widget_resize_constraint
 widget_resize_constraint;
 
 
-widget * create_resize_constraint(uint16_t alignment_data,bool maximizable);
+widget * create_resize_constraint(struct widget_context* context, uint16_t alignment_data,bool maximizable);
 
 void toggle_resize_constraint_maximize(widget * w);
 

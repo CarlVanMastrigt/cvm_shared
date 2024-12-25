@@ -485,9 +485,9 @@ static widget_appearence_function_set enterbox_appearence_functions=
     .set_h  =   blank_widget_set_h
 };
 
-widget * create_enterbox(uint32_t max_strlen,uint32_t max_glyphs,uint32_t min_glyphs_visible,char * initial_text,widget_function activation_func,widget_function update_contents_func,widget_function upon_input_func,void * data,bool free_data,bool activate_upon_deselect)
+widget * create_enterbox(struct widget_context* context, uint32_t max_strlen,uint32_t max_glyphs,uint32_t min_glyphs_visible,char * initial_text,widget_function activation_func,widget_function update_contents_func,widget_function upon_input_func,void * data,bool free_data,bool activate_upon_deselect)
 {
-	widget * w=create_widget(sizeof(widget_enterbox));
+	widget * w=create_widget(context, sizeof(widget_enterbox));
 
 	w->enterbox.data=data;
 	w->enterbox.activation_func=activation_func;

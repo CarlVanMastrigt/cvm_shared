@@ -502,7 +502,7 @@ void cvm_overlay_renderer_destroy(struct cvm_overlay_renderer * renderer, struct
 
 
 
-cvm_vk_timeline_semaphore_moment cvm_overlay_render_to_target(const cvm_vk_device * device, cvm_overlay_renderer * renderer, struct cvm_overlay_image_atlases* image_atlases, widget * menu_widget, const struct cvm_overlay_target* target)
+cvm_vk_timeline_semaphore_moment cvm_overlay_render_to_target(const cvm_vk_device * device, cvm_overlay_renderer * renderer, struct cvm_overlay_image_atlases* image_atlases, widget* root_widget, const struct cvm_overlay_target* target)
 {
     cvm_vk_command_buffer cb;
     cvm_vk_timeline_semaphore_moment completion_moment;
@@ -522,7 +522,7 @@ cvm_vk_timeline_semaphore_moment cvm_overlay_render_to_target(const cvm_vk_devic
     render_batch = &renderer->render_batch;
 
     /// setup/reset the render batch
-    cvm_overlay_render_batch_build(render_batch, menu_widget, image_atlases, target->extent);
+    cvm_overlay_render_batch_build(render_batch, root_widget, image_atlases, target->extent);
 
 
 
@@ -596,7 +596,7 @@ cvm_vk_timeline_semaphore_moment cvm_overlay_render_to_target(const cvm_vk_devic
 }
 
 
-cvm_vk_timeline_semaphore_moment cvm_overlay_render_to_presentable_image(const cvm_vk_device * device, cvm_overlay_renderer * renderer, struct cvm_overlay_image_atlases* image_atlases, widget * menu_widget, cvm_vk_swapchain_presentable_image * presentable_image, bool last_use)
+cvm_vk_timeline_semaphore_moment cvm_overlay_render_to_presentable_image(const cvm_vk_device * device, cvm_overlay_renderer * renderer, struct cvm_overlay_image_atlases* image_atlases, widget* root_widget, cvm_vk_swapchain_presentable_image * presentable_image, bool last_use)
 {
     uint32_t overlay_queue_family_index;
     cvm_vk_timeline_semaphore_moment completion_moment;
@@ -680,7 +680,7 @@ cvm_vk_timeline_semaphore_moment cvm_overlay_render_to_presentable_image(const c
         }
     }
 
-    completion_moment = cvm_overlay_render_to_target(device, renderer, image_atlases, menu_widget, &target);
+    completion_moment = cvm_overlay_render_to_target(device, renderer, image_atlases, root_widget, &target);
 
     presentable_image->last_use_moment = completion_moment;
     presentable_image->layout = target.final_layout;

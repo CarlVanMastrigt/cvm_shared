@@ -143,9 +143,9 @@ static widget_appearence_function_set text_anchor_appearence_functions=
     .set_h  =   blank_widget_set_h
 };
 
-widget * create_anchor(widget * constraint,char * title)
+widget * create_anchor(struct widget_context* context, widget* constraint, char* title)
 {
-    widget * w=create_widget(sizeof(widget_anchor));
+    widget * w=create_widget(context, sizeof(widget_anchor));
 
     w->base.behaviour_functions=&anchor_behaviour_functions;
     w->base.appearence_functions=&text_anchor_appearence_functions;

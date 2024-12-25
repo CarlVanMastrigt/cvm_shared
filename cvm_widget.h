@@ -48,8 +48,6 @@ along with cvm_shared.  If not, see <https://www.gnu.org/licenses/>.
 #define WIDGET_POS_FLAGS        0xF0000000
 
 
-//typedef union widget widget;
-
 typedef void(*widget_function)(widget*);
 
 typedef struct widget_appearence_function_set
@@ -144,8 +142,36 @@ typedef enum
 }
 widget_relative_positioning;
 
+
+struct widget_context
+{
+    overlay_theme* theme;
+    /// put settings here?? make it a pointer!
+
+    uint32_t registered_widget_count;//for debug
+
+
+    uint32_t double_click_time;//move to settings
+
+
+    widget* currently_active_widget;// needs better name selected_widget? even just active_widget?
+    widget* only_interactable_widget;
+
+    /// used for double click detection
+    widget* previously_clicked_widget;
+    uint32_t previously_clicked_time;
+    bool within_double_click_time;
+};
+
+void widget_context_initialise(struct widget_context* context, overlay_theme* theme);
+void widget_context_terminate(struct widget_context* context);
+
+
+
 typedef struct widget_base
 {
+    struct widget_context* context;
+
     uint32_t status;
 
     int16_t min_w;
@@ -153,10 +179,10 @@ typedef struct widget_base
 
     rectangle r;
 
+    widget * parent;
+
     widget * next;
     widget * prev;
-
-    widget * parent;
 
     widget_appearence_function_set * appearence_functions;
     widget_behaviour_function_set * behaviour_functions;
@@ -207,13 +233,13 @@ union widget
 };
 
 
-widget * create_widget(size_t size);
+widget * create_widget(struct widget_context* context, size_t size);
 
 
 
 
 
-void organise_root_widget(widget * menu_widget,int screen_width,int screen_height);
+void organise_root_widget(widget* root_widget,int screen_width,int screen_height);
 
 
 

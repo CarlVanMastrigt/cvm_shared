@@ -122,9 +122,9 @@ static widget_appearence_function_set panel_appearence_functions=
 };
 
 
-widget * create_panel(void)
+widget * create_panel(struct widget_context* context)
 {
-    widget * w=create_widget(sizeof(widget_panel));
+    widget * w=create_widget(context, sizeof(widget_panel));
 
     w->base.appearence_functions=&panel_appearence_functions;
     w->base.behaviour_functions=&panel_behaviour_functions;

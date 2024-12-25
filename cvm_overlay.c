@@ -494,7 +494,7 @@ void cvm_overlay_render_batch_terminate(struct cvm_overlay_render_batch* batch)
 
 /// can actually easily sub in/out atlases, will just require re-filling them from cpu data (or can even manually copy over data between atlases, which would defragment in the process)
 #warning replace atlases with cvm_overlay_image_atlases
-void cvm_overlay_render_batch_build(struct cvm_overlay_render_batch* batch, widget * menu_widget, struct cvm_overlay_image_atlases* image_atlases, VkExtent2D target_extent)
+void cvm_overlay_render_batch_build(struct cvm_overlay_render_batch* batch, widget* root_widget, struct cvm_overlay_image_atlases* image_atlases, VkExtent2D target_extent)
 {
     /// copy actions should be reset when copied, this must have been done before resetting the batch (overlay system relies on these entries having been staged and uploaded)
     assert(batch->alpha_atlas_copy_actions.count == 0);
@@ -507,22 +507,22 @@ void cvm_overlay_render_batch_build(struct cvm_overlay_render_batch* batch, widg
     batch->alpha_atlas  = &image_atlases->alpha_atlas;
 
     batch->target_extent = target_extent;
-    if(menu_widget->base.r.x1 != 0 || menu_widget->base.r.y1 != 0)
+    if(root_widget->base.r.x1 != 0 || root_widget->base.r.y1 != 0)
     {
         fprintf(stderr, "overlay rendering expects the menu widget to start at 0,0");
         /// ^ could fix this by having scissor rect be the mechanism for drawing a subsection of the target rather than the viewport
     }
 
-    if(menu_widget->base.r.x2 != target_extent.width || menu_widget->base.r.y2 != target_extent.height)
+    if(root_widget->base.r.x2 != target_extent.width || root_widget->base.r.y2 != target_extent.height)
     {
 //        clock_gettime(CLOCK_REALTIME,&ts1);
-        organise_root_widget(menu_widget, target_extent.width, target_extent.height);
+        organise_root_widget(root_widget, target_extent.width, target_extent.height);
 //        clock_gettime(CLOCK_REALTIME,&ts2);
 //        ns=(ts2.tv_sec-ts1.tv_sec)*1000000000 + ts2.tv_nsec-ts1.tv_nsec;
 //        printf("re-organise: %llu\n",ns);
     }
 
-    render_widget_overlay(batch, menu_widget);
+    render_widget_overlay(batch, root_widget);
 }
 
 void cvm_overlay_render_batch_stage(struct cvm_overlay_render_batch* batch, const struct cvm_vk_device * device, struct cvm_vk_staging_buffer_* staging_buffer, const float* colour_array, VkDescriptorSet descriptor_set)

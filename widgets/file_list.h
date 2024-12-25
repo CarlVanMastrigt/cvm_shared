@@ -118,18 +118,18 @@ typedef struct widget_file_list
 widget_file_list;
 
 ///initial directory can be null, must handle this case
-widget * create_file_list(int16_t min_visible_rows,int16_t min_visible_glyphs,const char * initial_directory,const char *const * error_messages,uint16_t error_count);
+widget * create_file_list(struct widget_context* context, int16_t min_visible_rows,int16_t min_visible_glyphs,const char * initial_directory,const char *const * error_messages,uint16_t error_count);
 
 ///hmm, allowing tabs to perform action may be a good idea if wanting unified save/load widget spread across tabs
 void file_list_widget_set_action_information(const file_list_type * supported_types,uint32_t type_count,void * data,file_list_widget_action action,bool hide_misc_files,bool allow_selecting_folder);
 
 
-widget * create_file_list_widget_directory_text_bar(widget * file_list,uint32_t min_glyphs_visible);
-widget * create_file_list_widget_enterbox(widget * file_list,uint32_t min_glyphs_visible);
+widget * create_file_list_widget_directory_text_bar(struct widget_context* context, widget * file_list,uint32_t min_glyphs_visible);
+widget * create_file_list_widget_enterbox(struct widget_context* context, widget * file_list,uint32_t min_glyphs_visible);
 
-widget * create_file_list_widget_refresh_button(widget * file_list);
-widget * create_file_list_widget_up_button(widget * file_list);
-widget * create_file_list_widget_home_button(widget * file_list);
+widget * create_file_list_widget_refresh_button(struct widget_context* context, widget * file_list);
+widget * create_file_list_widget_up_button(struct widget_context* context, widget * file_list);
+widget * create_file_list_widget_home_button(struct widget_context* context, widget * file_list);
 
 
 const char * file_list_widget_get_selected_filepath(widget * w);///e.g. for delete function
@@ -137,7 +137,7 @@ const char * file_list_widget_get_selected_filepath(widget * w);///e.g. for dele
 void file_list_widget_load_directory_entries(widget * w);/// reloads directory, use when contents are expected to have changed
 
 ///should be called inside action function when encountering issue before returning false, action functions should under no circumstances set force text here (instead pass null) when force was passed in as true
-void file_list_widget_set_error_information(const char * message,const char * cancel_button_text,const char * force_button_text);
+void file_list_widget_set_error_information(struct widget_context* context, const char * message,const char * cancel_button_text,const char * force_button_text);
 
 #endif
 

@@ -41,7 +41,7 @@ typedef struct widget_popup
 }
 widget_popup;
 
-widget * create_popup(widget_relative_positioning positioning,bool auto_close);
+widget * create_popup(struct widget_context* context, widget_relative_positioning positioning,bool auto_close);
 
 void set_popup_alignment_widgets(widget * popup,widget * internal_alignment_widget,widget * external_alignment_widget);
 

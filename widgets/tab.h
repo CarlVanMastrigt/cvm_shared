@@ -38,10 +38,10 @@ widget_tab_folder;
 
 
 
-widget * create_tab_folder(widget ** button_box,widget_layout button_box_layout);
-widget * create_tab_page(widget * folder,char * title,widget * page_widget);
+widget * create_tab_folder(struct widget_context* context, widget ** button_box,widget_layout button_box_layout);
+widget * create_tab_page(struct widget_context* context, widget * folder,char * title,widget * page_widget);
 
-widget * create_vertical_tab_pair_box(widget ** tab_folder);
+widget * create_vertical_tab_pair_box(struct widget_context* context, widget ** tab_folder);
 
 
 #endif

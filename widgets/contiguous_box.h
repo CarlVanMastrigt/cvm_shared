@@ -52,12 +52,12 @@ typedef struct widget_contiguous_box
 }
 widget_contiguous_box;
 
-widget * create_contiguous_box(widget_layout layout,int min_display_count);
+widget * create_contiguous_box(struct widget_context* context, widget_layout layout, int min_display_count);
 
 void set_contiguous_box_default_contained_dimensions(widget * contiguous_box,widget_dimension_function default_min_w,widget_dimension_function default_min_h);
 
 void ensure_widget_in_contiguous_box_is_visible(widget * w,widget * cb);
-widget * create_contiguous_box_scrollbar(widget * box);
+widget * create_contiguous_box_scrollbar(struct widget_context* context, widget* box);
 
 bool get_ancestor_contiguous_box_data(widget * w,rectangle * r,uint32_t * status);
 

@@ -71,9 +71,9 @@ typedef struct cvm_overlay_renderer cvm_overlay_renderer;
 struct cvm_overlay_renderer* cvm_overlay_renderer_create(struct cvm_vk_device * device, struct cvm_vk_staging_buffer_ * staging_buffer, uint32_t active_render_count);
 void cvm_overlay_renderer_destroy(struct cvm_overlay_renderer * renderer, struct cvm_vk_device * device);
 
-cvm_vk_timeline_semaphore_moment cvm_overlay_render_to_target(const cvm_vk_device * device, cvm_overlay_renderer * renderer, struct cvm_overlay_image_atlases* image_atlases, widget * menu_widget, const struct cvm_overlay_target* target);
+cvm_vk_timeline_semaphore_moment cvm_overlay_render_to_target(const cvm_vk_device* device, cvm_overlay_renderer* renderer, struct cvm_overlay_image_atlases* image_atlases, widget* root_widget, const struct cvm_overlay_target* target);
 
-cvm_vk_timeline_semaphore_moment cvm_overlay_render_to_presentable_image(const cvm_vk_device * device, cvm_overlay_renderer * renderer, struct cvm_overlay_image_atlases* image_atlases, widget * menu_widget, cvm_vk_swapchain_presentable_image * presentable_image, bool last_use);
+cvm_vk_timeline_semaphore_moment cvm_overlay_render_to_presentable_image(const cvm_vk_device* device, cvm_overlay_renderer* renderer, struct cvm_overlay_image_atlases* image_atlases, widget* root_widget, cvm_vk_swapchain_presentable_image* presentable_image, bool last_use);
 
 
 

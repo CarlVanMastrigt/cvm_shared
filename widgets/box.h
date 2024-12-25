@@ -25,7 +25,7 @@ along with cvm_shared.  If not, see <https://www.gnu.org/licenses/>.
 #define WIDGET_BOX_H
 
 
-widget * create_box(widget_layout layout,widget_distribution distribution);
+widget * create_box(struct widget_context* context, widget_layout layout,widget_distribution distribution);
 
 
 #endif

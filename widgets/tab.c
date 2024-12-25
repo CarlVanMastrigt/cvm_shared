@@ -100,9 +100,9 @@ static widget_appearence_function_set tab_button_appearence_functions=
 };
 
 
-static widget * create_tab_button(widget * page_widget,char * page_name)
+static widget * create_tab_button(struct widget_context* context, widget * page_widget,char * page_name)
 {
-    widget * w=create_text_button(page_name,page_widget,false,tab_button_func);
+    widget * w=create_text_button(context, page_name,page_widget,false,tab_button_func);
 
     w->base.appearence_functions=&tab_button_appearence_functions;
 
@@ -304,11 +304,11 @@ static widget_appearence_function_set tab_folder_appearence_functions=
 
 
 
-widget * create_tab_folder(widget ** button_box,widget_layout button_box_layout)
+widget * create_tab_folder(struct widget_context* context, widget ** button_box,widget_layout button_box_layout)
 {
-    widget * w = create_widget(sizeof(widget_tab_folder));
+    widget * w = create_widget(context, sizeof(widget_tab_folder));
 
-    *button_box = w->tab_folder.tab_button_container = create_contiguous_box(button_box_layout, 0);
+    *button_box = w->tab_folder.tab_button_container = create_contiguous_box(context, button_box_layout, 0);
 
     w->tab_folder.current_tab_page=NULL;
     w->tab_folder.last=NULL;
@@ -320,9 +320,9 @@ widget * create_tab_folder(widget ** button_box,widget_layout button_box_layout)
 }
 
 
-widget * create_tab_page(widget * folder,char * title,widget * page_widget)
+widget * create_tab_page(struct widget_context* context, widget * folder,char * title,widget * page_widget)
 {
-    add_child_to_parent(folder->tab_folder.tab_button_container,create_tab_button(page_widget,title));
+    add_child_to_parent(folder->tab_folder.tab_button_container,create_tab_button(context, page_widget,title));
 
     add_child_to_parent(folder,page_widget);
 
@@ -335,16 +335,16 @@ widget * create_tab_page(widget * folder,char * title,widget * page_widget)
 #warning have more generic add_tab page, that provides button (of any sub-type) rather than creating one in a specified location
 
 #warning possibly unnecessary
-widget * create_vertical_tab_pair_box(widget ** tab_folder)///if kept, also create horizontal version
+widget * create_vertical_tab_pair_box(struct widget_context* context, widget ** tab_folder)///if kept, also create horizontal version
 {
     widget *box_0,*box_1,*buttons;
 
-    box_0=create_box(WIDGET_VERTICAL,WIDGET_LAST_DISTRIBUTED);
-    box_1=add_child_to_parent(box_0,create_box(WIDGET_HORIZONTAL,WIDGET_LAST_DISTRIBUTED));
-    add_child_to_parent(box_0,create_separator_widget());
-    *tab_folder=add_child_to_parent(box_0,create_tab_folder(&buttons,WIDGET_HORIZONTAL));
+    box_0=create_box(context, WIDGET_VERTICAL,WIDGET_LAST_DISTRIBUTED);
+    box_1=add_child_to_parent(box_0,create_box(context, WIDGET_HORIZONTAL,WIDGET_LAST_DISTRIBUTED));
+    add_child_to_parent(box_0,create_separator_widget(context));
+    *tab_folder=add_child_to_parent(box_0,create_tab_folder(context, &buttons, WIDGET_HORIZONTAL));
     add_child_to_parent(box_1,buttons);
-    add_child_to_parent(box_1,create_empty_widget(0,0));
+    add_child_to_parent(box_1,create_empty_widget(context, 0, 0));
 
     return box_0;
 }

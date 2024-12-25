@@ -35,7 +35,8 @@ typedef struct widget_container
 widget_container;
 
 
-widget * create_container(size_t size);
+#warning need to declare size in outermost and use init functions elsewhere!
+widget * create_container(struct widget_context* context, size_t size);
 
 
 void container_widget_render(overlay_theme * theme,widget * w,int16_t x_off,int16_t y_off,struct cvm_overlay_render_batch * restrict render_batch,rectangle bounds);

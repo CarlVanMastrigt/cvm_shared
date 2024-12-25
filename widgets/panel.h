@@ -33,7 +33,7 @@ typedef struct widget_panel
 }
 widget_panel;
 
-widget * create_panel(void);
+widget * create_panel(struct widget_context* context);
 
 
 #endif

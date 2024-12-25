@@ -265,9 +265,9 @@ void change_textbox_text(widget * w,char * new_text,bool owns_new_text)///use re
     }
 }
 
-widget * create_textbox(char * text,bool owns_text,int min_horizontal_glyphs,int min_visible_lines)///enable wrapping as input param? forces sizing and allows horizontal scrolling otherwise
+widget * create_textbox(struct widget_context* context, char * text,bool owns_text,int min_horizontal_glyphs,int min_visible_lines)///enable wrapping as input param? forces sizing and allows horizontal scrolling otherwise
 {
-    widget * w = create_widget(sizeof(widget_textbox));
+    widget * w = create_widget(context, sizeof(widget_textbox));
 
     w->base.appearence_functions = &textbox_appearence_functions;
     w->base.behaviour_functions = &textbox_behaviour_functions;
@@ -297,9 +297,9 @@ widget * create_textbox(char * text,bool owns_text,int min_horizontal_glyphs,int
 
 static const int32_t scroll_bar_zero=0;
 
-widget * create_textbox_scrollbar(widget * textbox)
+widget * create_textbox_scrollbar(struct widget_context* context, widget* textbox)
 {
-    widget * w=create_slider_bar_dynamic(&textbox->textbox.y_offset,&scroll_bar_zero,&textbox->textbox.max_offset,&textbox->textbox.visible_size,&textbox->textbox.wheel_delta,NULL,NULL,false);
+    widget * w = create_slider_bar_dynamic(context, &textbox->textbox.y_offset, &scroll_bar_zero, &textbox->textbox.max_offset, &textbox->textbox.visible_size, &textbox->textbox.wheel_delta, NULL, NULL, false);
     #warning replace above with adjacent slider
 
     return w;

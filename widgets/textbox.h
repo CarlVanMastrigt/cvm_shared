@@ -52,11 +52,11 @@ typedef struct widget_textbox
 }
 widget_textbox;
 
-widget * create_textbox(char * text,bool owns_text,int min_horizontal_glyphs,int min_visible_lines);
+widget * create_textbox(struct widget_context* context, char * text,bool owns_text,int min_horizontal_glyphs,int min_visible_lines);
 
 void change_textbox_text(widget * w,char * new_text,bool owns_new_text);
 
-widget * create_textbox_scrollbar(widget * textbox);
+widget * create_textbox_scrollbar(struct widget_context* context, widget * textbox);
 
 
 

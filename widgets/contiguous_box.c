@@ -276,9 +276,9 @@ static widget_appearence_function_set all_visible_contiguous_box_functions=
 //}
 
 
-widget * create_contiguous_box(widget_layout layout,int min_display_count)
+widget * create_contiguous_box(struct widget_context* context, widget_layout layout,int min_display_count)
 {
-    widget * w=create_container(sizeof(widget_contiguous_box));
+    widget * w=create_container(context, sizeof(widget_contiguous_box));
 
     if(min_display_count)
     {
@@ -292,7 +292,7 @@ widget * create_contiguous_box(widget_layout layout,int min_display_count)
 
     w->base.behaviour_functions=&contiguous_box_behaviour_functions;
 
-    w->contiguous_box.contained_box=create_box(layout,WIDGET_NORMALLY_DISTRIBUTED);
+    w->contiguous_box.contained_box=create_box(context, layout,WIDGET_NORMALLY_DISTRIBUTED);
     w->contiguous_box.contained_box->base.parent=w;
 
     w->base.status|=WIDGET_IS_CONTIGUOUS_BOX;
@@ -349,8 +349,9 @@ void ensure_widget_in_contiguous_box_is_visible(widget * w,widget * cb)
 //    }
 }
 
-widget * create_contiguous_box_scrollbar(widget * box)
+widget * create_contiguous_box_scrollbar(struct widget_context* context, widget * box)
 {
+    assert(false);// NYI
 //    widget * w=create_slider_bar(box->contiguous_box.offset,0,0,NULL,NULL,false,0);
 //    #warning replace above with adjacent slider
 //

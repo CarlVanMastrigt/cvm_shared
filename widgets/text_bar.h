@@ -50,8 +50,8 @@ typedef struct widget_text_bar
 widget_text_bar;
 
 /// min_glyph_render_count==0  ->  render all text (doesnt really work with dynamic text though...
-widget * create_static_text_bar(char * text);
-widget * create_dynamic_text_bar(int min_glyph_render_count,widget_text_alignment text_alignment,bool allow_selection);
+widget * create_static_text_bar(struct widget_context* context, char * text);
+widget * create_dynamic_text_bar(struct widget_context* context, int min_glyph_render_count,widget_text_alignment text_alignment,bool allow_selection);
 
 void text_bar_widget_set_text_pointer(widget * w,char * text_pointer);///also marks as having been updated
 void text_bar_widget_set_text(widget * w,const char * text_to_copy);

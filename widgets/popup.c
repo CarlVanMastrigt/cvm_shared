@@ -150,9 +150,9 @@ static widget_behaviour_function_set popup_behaviour_functions=
 
 
 
-widget * create_popup(widget_relative_positioning positioning,bool auto_close)
+widget * create_popup(struct widget_context* context, widget_relative_positioning positioning,bool auto_close)
 {
-    widget * w=create_widget(sizeof(widget_popup));
+    widget * w=create_widget(context, sizeof(widget_popup));
 
     w->base.appearence_functions=&popup_appearence_functions;
     w->base.behaviour_functions=&popup_behaviour_functions;

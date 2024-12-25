@@ -313,9 +313,9 @@ void cvm_overlay_render_batch_terminate(struct cvm_overlay_render_batch* batch);
 
 
 
-/// `menu_widget` must have been organised for an `extent` the same as the render_pass & pipeline this batch will be used with
+/// `root_widget` must have been organised for an `extent` the same as the render_pass & pipeline this batch will be used with
 /// we should know resolution of presentable image/target/viewport of pipeline to be used here, and organise menu widget accordingly
-void cvm_overlay_render_batch_build(struct cvm_overlay_render_batch* batch, widget * menu_widget, struct cvm_overlay_image_atlases* image_atlases, VkExtent2D target_extent);
+void cvm_overlay_render_batch_build(struct cvm_overlay_render_batch* batch, widget* root_widget, struct cvm_overlay_image_atlases* image_atlases, VkExtent2D target_extent);
 
 /// `descriptor_set` must have been fetched with `cvm_overlay_descriptor_set_fetch`
 void cvm_overlay_render_batch_stage(struct cvm_overlay_render_batch* batch, const struct cvm_vk_device * device, struct cvm_vk_staging_buffer_* staging_buffer, const float* colour_array, VkDescriptorSet descriptor_set);
