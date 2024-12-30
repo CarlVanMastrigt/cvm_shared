@@ -41,7 +41,7 @@ static void resize_constraint_widget_delete(widget * w)
     }
 }
 
-static void resize_constraint_widget_left_click(overlay_theme * theme,widget * w,int x,int y)
+static void resize_constraint_widget_left_click(overlay_theme * theme, widget * w, int x, int y, bool double_clicked)
 {
     if((w->resize_constraint.alignment_data&WIDGET_RESIZABLE_LOCKED_HORIZONTAL)&&(w->resize_constraint.alignment_data&WIDGET_RESIZABLE_LOCKED_VERTICAL))return;
 

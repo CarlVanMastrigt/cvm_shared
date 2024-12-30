@@ -53,6 +53,7 @@ file_list_type;
 ///returns whether popup is required, should always have completed file/folder result in file_list.composite_buffer will require modifying error popup in function but that's probably okay
 /// second parameter is whether to force the operation
 typedef bool(*file_list_widget_action)(widget*,bool);
+#warning above should instead not consider the widget at all (if possible) and should just operate on the widget_context and filename
 
 //void load_file_search_directory_entries(file_search_data * fsd);
 
@@ -136,8 +137,6 @@ const char * file_list_widget_get_selected_filepath(widget * w);///e.g. for dele
 
 void file_list_widget_load_directory_entries(widget * w);/// reloads directory, use when contents are expected to have changed
 
-///should be called inside action function when encountering issue before returning false, action functions should under no circumstances set force text here (instead pass null) when force was passed in as true
-void file_list_widget_set_error_information(struct widget_context* context, const char * message,const char * cancel_button_text,const char * force_button_text);
 
 #endif
 

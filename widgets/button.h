@@ -54,14 +54,14 @@ void button_toggle_bool_func(widget * w);
 bool button_bool_status_func(widget * w);
 bool button_widget_status_func(widget * w);
 
-widget * create_text_button(struct widget_context* context, char * text,void * data,bool free_data,widget_function func);
+widget * create_text_button(struct widget_context* context, const char * text,void * data,bool free_data,widget_function func);
 widget * create_text_highlight_toggle_button(struct widget_context* context, char * text,void * data,bool free_data,widget_function func,widget_button_toggle_status_func toggle_status);
 
-widget * create_contiguous_text_button(struct widget_context* context, char * text,void * data,bool free_data,widget_function func);
-widget * create_contiguous_text_highlight_toggle_button(struct widget_context* context, char * text,void * data,bool free_data,widget_function func,widget_button_toggle_status_func toggle_status);
+widget * create_contiguous_text_button(struct widget_context* context, const char * text,void * data,bool free_data,widget_function func);
+widget * create_contiguous_text_highlight_toggle_button(struct widget_context* context, const char * text,void * data,bool free_data,widget_function func,widget_button_toggle_status_func toggle_status);
 
-widget * create_icon_button(struct widget_context* context, char * icon_name,void * data,bool free_data,widget_function func);
-widget * create_icon_toggle_button(struct widget_context* context, char * positive_icon,char * negative_icon,void * data,bool free_data,widget_function func,widget_button_toggle_status_func toggle_status);
+widget * create_icon_button(struct widget_context* context, const char * icon_name,void * data,bool free_data,widget_function func);
+widget * create_icon_toggle_button(struct widget_context* context, const char * positive_icon, const char * negative_icon,void * data,bool free_data,widget_function func,widget_button_toggle_status_func toggle_status);
 
 ///external responsibility to call organise widget on appropriate parent widget
 void button_widget_set_text(widget * w,const char * new_text);

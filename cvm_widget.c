@@ -34,6 +34,8 @@ void widget_context_initialise(struct widget_context* context, overlay_theme* th
     context->only_interactable_widget = NULL;
 
     context->previously_clicked_widget = NULL;
+
+    context->root_widget = NULL;
 }
 
 void widget_context_terminate(struct widget_context* context)
@@ -42,7 +44,7 @@ void widget_context_terminate(struct widget_context* context)
     assert(context->registered_widget_count == 0);
 
     assert(context->currently_active_widget == NULL);
-    assert(context->currently_active_widget == NULL);
+    assert(context->only_interactable_widget == NULL);
 }
 
 /// one level below root
@@ -57,6 +59,7 @@ static widget* get_widgets_toplevel_ancestor(widget * w)
     }
 
     assert(w && w->base.parent && w->base.parent->base.status&WIDGET_IS_ROOT);///COULD NOT FIND APPROPRIATE WIDGET TOPLEVEL ANCESTOR (ROOT)
+    // above error usually indicates you're trying to do something that requires a widget to be part of a valid hierarchy
 
     return w;
 }
@@ -131,7 +134,7 @@ static widget_appearence_function_set base_appearence_functions=
 
 
 
-static void base_widget_left_click(overlay_theme * theme,widget * w,int x,int y)
+static void base_widget_left_click(overlay_theme * theme, widget * w, int x, int y, bool double_clicked)
 {
     puts("error calling base: l_click");
 }
@@ -214,11 +217,9 @@ static widget_behaviour_function_set base_behaviour_functions =
     .wid_delete     =   base_widget_delete
 };
 
-widget * create_widget(struct widget_context* context, size_t size)
+void widget_base_initialise(widget_base* base, struct widget_context* context, const widget_appearence_function_set * appearence_functions, const widget_behaviour_function_set * behaviour_functions)
 {
-    widget * w = malloc(size);
-
-    w->base = (widget_base)
+    *base = (widget_base)
     {
         .context = context,
         .status = WIDGET_ACTIVE,
@@ -228,9 +229,16 @@ widget * create_widget(struct widget_context* context, size_t size)
         .parent = NULL,
         .next = NULL,
         .prev = NULL,
-        .appearence_functions = &base_appearence_functions,
-        .behaviour_functions = &base_behaviour_functions,
+        .appearence_functions = appearence_functions,
+        .behaviour_functions = behaviour_functions,
     };
+}
+
+widget * create_widget(struct widget_context* context, size_t size)
+{
+    widget * w = malloc(size);
+
+    widget_base_initialise(&w->base, context, &base_appearence_functions, &base_behaviour_functions);
 
     return w;
 }
@@ -377,7 +385,7 @@ void blank_widget_set_h(overlay_theme * theme,widget * w)
 
 
 
-void blank_widget_left_click(overlay_theme * theme,widget * w,int x,int y)
+void blank_widget_left_click(overlay_theme * theme, widget * w, int x, int y, bool double_clicked)
 {
 }
 
@@ -442,7 +450,7 @@ bool is_currently_active_widget(widget * w)
 
 
 
-void set_currently_active_widget_(struct widget_context* context, widget * w)
+void set_currently_active_widget(struct widget_context* context, widget * w)
 {
     widget* old_active = context->currently_active_widget;
     if((old_active) && (old_active != w))
@@ -453,7 +461,7 @@ void set_currently_active_widget_(struct widget_context* context, widget * w)
     context->currently_active_widget = w;
 }
 
-void set_only_interactable_widget_(struct widget_context* context, widget * w)
+void set_only_interactable_widget(struct widget_context* context, widget * w)
 {
     context->only_interactable_widget = w;
 }
@@ -573,17 +581,6 @@ static widget * get_widget_under_mouse(widget * root, int x_in, int y_in)
 }
 
 
-#warning instead make `double_clicked` an input to l_click
-bool check_widget_double_clicked(widget * w)
-{
-    assert(w);
-
-    if(w->base.context->within_double_click_time)
-    {
-        return w == w->base.context->previously_clicked_widget;
-    }
-}
-
 bool handle_widget_overlay_left_click(widget* root_widget,int x_in,int y_in)
 {
     assert(root_widget->base.status&WIDGET_IS_ROOT);
@@ -595,25 +592,36 @@ bool handle_widget_overlay_left_click(widget* root_widget,int x_in,int y_in)
     widget * w = get_widget_under_mouse(root_widget, x_in, y_in);
 
     // consider if this is correct
-    set_currently_active_widget_(context, w);
+    set_currently_active_widget(context, w);
     #warning need a step to validate aspects of root widget upon stuff like window change
+
+    close_auto_close_popup_tree(w);
+    #warning ^ ????
+
+    #warning if a widget can delete its own hierarchy then setting the previously clicked widget like this references a deleted widget, AS CAN close_auto_close_popup_tree!!!
 
     if(w)
     {
         /// not the greatest solution
-        context->within_double_click_time = (t - context->previously_clicked_time) < context->double_click_time;
+
+        bool double_clicked = (t - context->previously_clicked_time) < context->double_click_time && w == context->previously_clicked_widget;
+
+        /// must go here as it needs to be invalidatable inside the l_click function
+        context->previously_clicked_widget = w;
+        context->previously_clicked_time = t;
 
         move_toplevel_widget_to_front(w);
 
-        w->base.behaviour_functions->l_click(context->theme, w, x_in, y_in);
+        w->base.behaviour_functions->l_click(context->theme, w, x_in, y_in, double_clicked);
+
+        return true;
     }
-
-    close_auto_close_popup_tree(w);
-
-    context->previously_clicked_time = t;
-    context->previously_clicked_widget = w;
-
-    return (w!=NULL);
+    else
+    {
+        context->previously_clicked_widget = NULL;
+        context->previously_clicked_time = t;
+        return false;
+    }
 }
 
 ///returns wether this function intercepted (used) the input
@@ -636,7 +644,7 @@ bool handle_widget_overlay_left_release(widget* root_widget, int x_in, int y_in)
     // (action being releasing on top of the specified widget, usually this is just checking you click and release the same widget)
     if(!active_widget->base.behaviour_functions->l_release(context->theme, active_widget, released_upon, x_in, y_in))
     {
-        set_currently_active_widget_(context, NULL);
+        set_currently_active_widget(context, NULL);
     }
 
     return true;
@@ -745,27 +753,13 @@ void remove_child_from_parent(widget * child)
 {
     widget * parent=child->base.parent;
 
-    struct widget_context* context = child->base.context;
-
-    
-    if(child == context->currently_active_widget)
-    {
-        // don't invalidate as that may call click away (do we want this though?)
-        context->currently_active_widget = NULL;
-    }
-    if(child == context->only_interactable_widget)
-    {
-        // don't invalidate as that may call click away (do we want this though?)
-        context->only_interactable_widget = NULL;
-    }
-
     if(parent == NULL)
     {
         assert(child->base.status&WIDGET_IS_ROOT);
     }
     else
     {
-        assert(parent->base.context == child->base.context);// there should only ever be one context for widgets in the same heirarchy
+        assert(parent->base.context == child->base.context);// there should only ever be one context for widgets in the same hierarchy
         parent->base.behaviour_functions->remove_child(parent,child);
     }
     
@@ -784,17 +778,32 @@ void delete_widget(widget * w)
         return;
     }
 
+    struct widget_context* context = w->base.context;
+
+    if(w == context->currently_active_widget)
+    {
+        // note: this is specifically NOT calling click away (do we want that though?)
+        context->currently_active_widget = NULL;
+    }
+    if(w == context->only_interactable_widget)
+    {
+        context->only_interactable_widget = NULL;
+    }
+    if(w == context->previously_clicked_widget)
+    {
+        context->previously_clicked_widget = NULL;
+    }
+
     assert(!(w->base.status&WIDGET_DO_NOT_DELETE));///should not be trying to delete a widget that has been marked as undeleteable, but handle it anyway
     if(w->base.status&WIDGET_DO_NOT_DELETE)
     {
         return;
     }
 
-    #warning links to other widgets in popup.trigger_widget and any button that toggles another widget prevents deletion from being a clean process! (deletion of any widget in this king of structure may cause a segfault)
+    #warning links to other widgets in popup.trigger_widget and any button that toggles another widget prevents deletion from being a clean process! (deletion of any widget in this kind of structure may cause a segfault)
 
     w->base.behaviour_functions->wid_delete(w);
 
-    #warning this will potentially call click_away WHICH IS AN ISSUE IF WE INVALIDATE CURRENTLY CATIVE INSIDE THIS
     remove_child_from_parent(w);
 
     free(w);
@@ -807,9 +816,13 @@ void delete_widget(widget * w)
 
 widget* create_root_widget(struct widget_context* context, overlay_theme* theme)
 {
+    assert(context->root_widget == NULL);//should only be one root widget
+
     // better to have underlying init function that all these functions call?
     widget* w = create_container(context, sizeof(widget_container));///actually is just a pure container
     w->base.status |= WIDGET_IS_ROOT;
+
+    context->root_widget = w;
 
     return w;
 }

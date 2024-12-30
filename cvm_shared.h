@@ -20,7 +20,7 @@ along with cvm_shared.  If not, see <https://www.gnu.org/licenses/>.
 #ifndef CVM_SHARED_H
 #define CVM_SHARED_H
 
-///needed for sincosf, may want to re-evaluate usage
+///needed for sincosf, may want to re-evaluate usage, at least move to math??
 #define _GNU_SOURCE
 
 ///change to only include external headers that are actually needed try to reduce count overall
@@ -68,6 +68,7 @@ static inline uint32_t cvm_align_u32(uint32_t size, uint32_t alignment)
 
 typedef union widget widget;
 
+/// move these to dedicated file (cvm_math?)
 static inline uint64_t cvm_po2_64_gte(uint64_t v){ return 64-__builtin_clzl(v-1); }
 static inline uint64_t cvm_po2_64_gt(uint64_t v){ return 64-__builtin_clzl(v); }
 static inline uint64_t cvm_po2_64_lt(uint64_t v){ return 63-__builtin_clzl(v-1); }
@@ -84,7 +85,6 @@ static inline uint32_t cvm_allocation_increase_step(uint32_t current_size)
 }
 
 static inline uint32_t cvm_lbs_32(uint32_t v){ return __builtin_ctz(v); }
-
 
 
 #include "cvm_math.h"

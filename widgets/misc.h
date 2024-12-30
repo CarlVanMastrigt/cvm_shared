@@ -51,6 +51,8 @@ widget * create_bool_checkbox_button_pair(struct widget_context* context, char *
 
 widget * create_icon_collapse_button(struct widget_context* context, char * icon_collapse,char * icon_expand,widget * widget_to_control,bool collapse);
 
+void create_self_deleting_dialogue(struct widget_context* context, widget* root_widget, const char* message_str, const char* accept_str, const char* cancel_str, void* data, void (*accept_function)(void*), void (*cancel_function)(void*));
+
 #endif
 
 

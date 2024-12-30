@@ -114,8 +114,11 @@ static void enterbox_check_visible_offset(overlay_theme * theme,widget * w)
 
 
 
-static void enterbox_widget_left_click(overlay_theme * theme,widget * w,int x,int y)
+static void enterbox_widget_left_click(overlay_theme * theme, widget * w, int x, int y, bool double_clicked)
 {
+    #warning handle double click (select all)
+    #warning find another way to communicate to start accepting text input
+
     if(!SDL_IsTextInputActive()) SDL_StartTextInput();///need to only call if not already active...
 
     if(*w->enterbox.composition_text)return;
@@ -305,12 +308,12 @@ static bool enterbox_widget_key_down(overlay_theme * theme,widget * w,SDL_Keycod
         {
             w->enterbox.activation_func(w);
         }
-        set_currently_active_widget_(w->base.context, NULL);
+        set_currently_active_widget(w->base.context, NULL);
         break;
 
     case SDLK_ESCAPE:
         #warning probably dont want escape to ever activate, or at least not most of the time, any way to accomplish this? should it be the same as clicking away?
-        set_currently_active_widget_(w->base.context, NULL);
+        set_currently_active_widget(w->base.context, NULL);
         break;
 
         default:;

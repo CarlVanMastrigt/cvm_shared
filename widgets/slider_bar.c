@@ -126,7 +126,7 @@ static void set_slider_bar_value_using_mouse_x(overlay_theme * theme,widget * w,
     if(w->slider_bar.func) w->slider_bar.func(w);
 }
 
-static void horizontal_slider_bar_widget_left_click(overlay_theme * theme,widget * w,int x,int y)
+static void horizontal_slider_bar_widget_left_click(overlay_theme * theme, widget * w, int x, int y, bool double_clicked)
 {
 	set_slider_bar_value_using_mouse_x(theme,w,x);
 }

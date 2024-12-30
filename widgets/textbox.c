@@ -63,7 +63,7 @@ static bool textbox_widget_scroll(overlay_theme * theme,widget * w,int delta)
     return true;
 }
 
-static void textbox_widget_left_click(overlay_theme * theme,widget * w,int x,int y)
+static void textbox_widget_left_click(overlay_theme * theme, widget * w, int x, int y, bool double_clicked)
 {
     adjust_coordinates_to_widget_local(w,&x,&y);
     w->textbox.selection_end=w->textbox.selection_begin=overlay_text_multiline_find_offset(&theme->font,&w->textbox.text_block,
@@ -111,7 +111,7 @@ static bool textbox_widget_key_down(overlay_theme * theme,widget * w,SDL_Keycode
     case SDLK_ESCAPE:
         widget* root_widget = find_root_widget(w);
         assert(root_widget);
-        set_currently_active_widget_(w->base.context, NULL);
+        set_currently_active_widget(w->base.context, NULL);
         break;
 
         default:;

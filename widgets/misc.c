@@ -318,3 +318,90 @@ widget * create_icon_collapse_button(struct widget_context* context, char* icon_
 
     return button;
 }
+
+
+
+
+
+struct self_deleting_dialogue
+{
+    void* data;// strongly recommended to make this independent of as much else as possible, though this may be impossible
+    void (*accept_function)(void*);
+    void (*cancel_function)(void*);
+    widget* dialogue;
+};
+
+static void self_deleting_dialogue_accept_button_func(widget* w)
+{
+    struct self_deleting_dialogue* ptr = w->button.data;
+    struct self_deleting_dialogue sdd = *ptr;
+    free(ptr);
+
+    // this is deleting a widget from inside its own callstack, ergo it requires some nuance and care
+    delete_widget(sdd.dialogue);
+
+    sdd.accept_function(sdd.data);
+}
+
+static void self_deleting_dialogue_cancel_button_func(widget* w)
+{
+    struct self_deleting_dialogue* ptr = w->button.data;
+    struct self_deleting_dialogue sdd = *ptr;
+    free(ptr);
+
+    // this is deleting a widget from inside its own callstack, ergo it requires some nuance and care
+    delete_widget(sdd.dialogue);
+
+    sdd.cancel_function(sdd.data);
+}
+
+
+#warning this could/should take a struct with some members being conditional??
+
+#warning FUCK, this triggers inside a callstack, meaning the rest of the widgets may remain valid???
+/// last clicked likely still valid FUCK
+void create_self_deleting_dialogue(struct widget_context* context, widget* root_widget, const char* message_str, const char* accept_str, const char* cancel_str, void* data, void (*accept_function)(void*), void (*cancel_function)(void*))
+{
+    widget *box1,*box2,*panel;
+    struct self_deleting_dialogue* sdd;
+
+    sdd = malloc(sizeof(struct self_deleting_dialogue));
+    sdd->data = data;
+    sdd->accept_function = accept_function;
+    sdd->cancel_function = cancel_function;
+
+
+    #warning should this really be a popup?, is there a better paradigm (popup should be for navigating popup lists)
+    sdd->dialogue = create_popup(context, WIDGET_POSITIONING_CENTRED, false);///replace with popup widget w/ appropriate relative positioning
+    sdd->dialogue->base.status |= WIDGET_ACTIVE;
+
+    add_child_to_parent(root_widget, sdd->dialogue);
+
+    panel=add_child_to_parent(sdd->dialogue,create_panel(context));
+
+    // add_child_to_parent(panel,create_empty_widget(context, 40,40));
+
+    box1=add_child_to_parent(panel,create_box(context, WIDGET_VERTICAL, WIDGET_EVENLY_DISTRIBUTED));
+
+    /*message bar*/add_child_to_parent(box1, create_static_text_bar(context, message_str));
+
+    box1=add_child_to_parent(box1,create_box(context, WIDGET_HORIZONTAL,WIDGET_EVENLY_DISTRIBUTED));
+    add_child_to_parent(box1,create_empty_widget(context, 0,0));
+    box1=add_child_to_parent(box1,create_box(context, WIDGET_HORIZONTAL,WIDGET_LAST_DISTRIBUTED));
+    box2=add_child_to_parent(box1,create_box(context, WIDGET_HORIZONTAL,WIDGET_ALL_SAME_DISTRIBUTED));
+    add_child_to_parent(box1,create_empty_widget(context, 0,0));
+    #warning above could (probably should) be a specialised centring widget
+
+    /*accept button*/ add_child_to_parent(box2,create_text_button(context, accept_str, sdd, false,self_deleting_dialogue_accept_button_func));
+    /*cancel button*/ add_child_to_parent(box2,create_text_button(context, cancel_str, sdd, false,self_deleting_dialogue_cancel_button_func));
+
+    // #warning button or something else in hierarchy should be able to intercept escape key or invalidation input (is a good use/justification of popup)
+
+    
+
+    organise_toplevel_widget(sdd->dialogue);
+
+    // move_toplevel_widget_to_front(popup); // shouldn't be necessary
+    set_only_interactable_widget(context, sdd->dialogue);
+    // organise_root_widget(root_widget, root_widget->base.r.x2, root_widget->base.r.y2);
+}

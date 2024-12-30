@@ -97,8 +97,9 @@ static void text_bar_copy_selection_to_clipboard(widget * w)
 
 
 
-static void text_bar_widget_left_click(overlay_theme * theme,widget * w,int x,int y)
+static void text_bar_widget_left_click(overlay_theme * theme, widget * w, int x, int y, bool double_clicked)
 {
+    #warning handle double click (select all if selectable)
     text_bar_recalculate_text_size_and_offset(theme,w);
 
     adjust_coordinates_to_widget_local(w,&x,&y);
@@ -218,7 +219,7 @@ static bool text_bar_widget_key_down(overlay_theme * theme,widget * w,SDL_Keycod
         break;
 
     case SDLK_ESCAPE:
-        set_currently_active_widget_(w->base.context, NULL);
+        set_currently_active_widget(w->base.context, NULL);
         break;
 
         default:;
@@ -362,7 +363,8 @@ static widget_appearence_function_set text_bar_appearence_functions=
 
 
 ///static provably isnt best name, or want to add another variant for when text references string that is modified externally
-widget * create_static_text_bar(struct widget_context* context, char * text)
+#warning probably want a better mechanism to expose all the capabilities of the text bar
+widget * create_static_text_bar(struct widget_context* context, const char * text)
 {
 	widget * w=create_widget(context, sizeof(widget_text_bar));
 
@@ -385,10 +387,12 @@ widget * create_static_text_bar(struct widget_context* context, char * text)
     else w->text_bar.text=NULL;
 
     w->text_bar.visible_offset=0;
+    w->text_bar.max_visible_offset=0;
     w->text_bar.text_pixel_length=0;
 
-    w->text_bar.selection_begin=NULL;
-    w->text_bar.selection_end=NULL;
+#warning use of selection_begin/selection_end elsewhere without validity checks seems quite dangerous/stupid, correct this, null selection should work
+    w->text_bar.selection_begin=w->text_bar.text;
+    w->text_bar.selection_end=w->text_bar.text;
 
 	return w;
 }

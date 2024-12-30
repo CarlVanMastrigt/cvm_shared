@@ -19,14 +19,14 @@ along with cvm_shared.  If not, see <https://www.gnu.org/licenses/>.
 
 #include "cvm_shared.h"
 
-static void anchor_widget_left_click(overlay_theme * theme,widget * w,int x,int y)
+static void anchor_widget_left_click(overlay_theme * theme, widget * w, int x, int y, bool double_clicked)
 {
     if(w->anchor.constraint)
     {
-        if(check_widget_double_clicked(w))
+        if(double_clicked)
         {
             toggle_resize_constraint_maximize(w->anchor.constraint);
-            set_currently_active_widget_(w->base.context, NULL);
+            set_currently_active_widget(w->base.context, NULL);
         }
         else
         {
@@ -141,18 +141,23 @@ static widget_appearence_function_set text_anchor_appearence_functions=
     .set_h  =   blank_widget_set_h
 };
 
+void widget_text_anchor_initialise(widget_anchor* anchor, struct widget_context* context, widget* constraint, char* title)
+{
+    widget_base_initialise(&anchor->base, context, &text_anchor_appearence_functions, &anchor_behaviour_functions);
+
+    anchor->x_clicked=0;
+    anchor->y_clicked=0;
+    anchor->constraint=constraint;
+
+    if(title)anchor->text=cvm_strdup(title);
+    else anchor->text=NULL;
+}
+
 widget * create_anchor(struct widget_context* context, widget* constraint, char* title)
 {
-    widget * w=create_widget(context, sizeof(widget_anchor));
-
-    w->base.behaviour_functions=&anchor_behaviour_functions;
-    w->base.appearence_functions=&text_anchor_appearence_functions;
-
-    w->anchor.x_clicked=0;
-    w->anchor.y_clicked=0;
-    if(title)w->anchor.text=cvm_strdup(title);
-    else w->anchor.text=NULL;
-    w->anchor.constraint=constraint;
+    widget * w = malloc(sizeof(widget_anchor));
+    
+    widget_text_anchor_initialise(&w->anchor, context, constraint, title);
 
     return w;
 }

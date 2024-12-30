@@ -1,5 +1,5 @@
 /**
-Copyright 2020,2021,2022 Carl van Mastrigt
+Copyright 2020,2021,2022,2024 Carl van Mastrigt
 
 This file is part of cvm_shared.
 
@@ -33,7 +33,7 @@ along with cvm_shared.  If not, see <https://www.gnu.org/licenses/>.
 #define WIDGET_IS_ROOT              0x00000010 /** used for validation in various places*/
 #define WIDGET_IS_AUTO_CLOSE_POPUP  0x00000020
 #define WIDGET_IS_CONTIGUOUS_BOX    0x00000040
-#define WIDGET_DO_NOT_DELETE        0x00000080 /** must only be deleted by specialised method, which will set this to false before executing*/
+#define WIDGET_DO_NOT_DELETE        0x00000080 /** must only be deleted by specialised method, which will set this to false before executing, REMOVE THIS! */
 
 #define WIDGET_H_FIRST  0x10000000
 #define WIDGET_H_LAST   0x20000000
@@ -89,7 +89,7 @@ widget_appearence_function_set;
 
 typedef struct widget_behaviour_function_set
 {
-    void    (*const l_click)    (overlay_theme*,widget*,int,int);
+    void    (*const l_click)    (overlay_theme*,widget*,int,int,bool);
     bool    (*const l_release)  (overlay_theme*,widget*,widget*,int,int);
     void    (*const r_click)    (overlay_theme*,widget*,int,int);
     void    (*const m_move)     (overlay_theme*,widget*,int,int);
@@ -158,7 +158,8 @@ struct widget_context
     /// used for double click detection
     widget* previously_clicked_widget;
     uint32_t previously_clicked_time;
-    bool within_double_click_time;
+
+    widget* root_widget;///
 };
 
 void widget_context_initialise(struct widget_context* context, overlay_theme* theme);
@@ -177,13 +178,13 @@ typedef struct widget_base
 
     rectangle r;
 
-    widget * parent;
+    widget* parent;
 
-    widget * next;
-    widget * prev;
+    widget* next;
+    widget* prev;
 
-    widget_appearence_function_set * appearence_functions;
-    widget_behaviour_function_set * behaviour_functions;
+    const widget_appearence_function_set* appearence_functions;
+    const widget_behaviour_function_set* behaviour_functions;
 }
 widget_base;
 
@@ -231,7 +232,7 @@ union widget
 
 widget * create_widget(struct widget_context* context, size_t size);
 
-
+void widget_base_initialise(widget_base* base, struct widget_context* context, const widget_appearence_function_set * appearence_functions, const widget_behaviour_function_set * behaviour_functions);
 
 
 
@@ -263,7 +264,7 @@ void        blank_widget_min_h          (overlay_theme * theme,widget * w);
 void        blank_widget_set_w          (overlay_theme * theme,widget * w);
 void        blank_widget_set_h          (overlay_theme * theme,widget * w);
 
-void        blank_widget_left_click     (overlay_theme * theme,widget * w,int x,int y);
+void        blank_widget_left_click     (overlay_theme * theme, widget * w, int x, int y, bool double_clicked);
 bool        blank_widget_left_release   (overlay_theme * theme,widget * clicked,widget * released,int x,int y);
 void        blank_widget_right_click    (overlay_theme * theme,widget * w,int x,int y);
 void        blank_widget_mouse_movement (overlay_theme * theme,widget * w,int x,int y);
@@ -314,14 +315,12 @@ void delete_widget(widget * w);
 
 
 // the separation of these can be avoided if ROOT is required to be provided
-void set_currently_active_widget_(struct widget_context* context, widget * w);
-void set_only_interactable_widget_(struct widget_context* context, widget * w);
+void set_currently_active_widget(struct widget_context* context, widget * w);
+void set_only_interactable_widget(struct widget_context* context, widget * w);
 
 bool is_currently_active_widget(widget * w);
 //bool test_currently_active_widget_key_input(void);
 
-void set_overlay_double_click_time(uint32_t t);
-bool check_widget_double_clicked(widget * w);
 
 bool widget_active(widget * w);
 
@@ -330,7 +329,7 @@ widget* find_root_widget(widget* w);
 
 widget* create_root_widget(struct widget_context* context, overlay_theme* theme);
 
-#endif
+#endif // CVM_WIDGET_H
 
 
 

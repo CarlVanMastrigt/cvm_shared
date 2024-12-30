@@ -28,13 +28,6 @@ along with cvm_shared.  If not, see <https://www.gnu.org/licenses/>.
 
 ///implement basics of dirent for windows?
 
-#warning make these a part of some genericized set, 
-static widget * error_dialogue_widget=NULL;///singleton, deleted when no more menu widgets exist
-static widget * error_dialogue_message_text_bar=NULL;
-static widget * error_dialogue_cancel_button=NULL;
-static widget * error_dialogue_force_button=NULL;
-static uint32_t extant_file_list_count=0;///used to track need for above, delete this upon last deletion
-
 static inline int file_list_string_compare_number_blocks(const char * s1,const char * s2)
 {
     char c1,c2,d;
@@ -459,26 +452,14 @@ static void file_list_enter_selected_directory(widget * w)
     file_list_widget_load_directory_entries(w);
 }
 
-static void file_list_widget_sucessful_action_cleanup(widget * w)
+
+void test_accept_function(void* data)
 {
-    w->file_list.selected_entry_index=-1;
-    if(w->file_list.directory_text_bar)text_bar_widget_set_text_pointer(w->file_list.directory_text_bar,w->file_list.directory_buffer);
-
-    error_dialogue_cancel_button->button.data=NULL;
-    error_dialogue_force_button->button.data=NULL;
-
-    ///error dialogue will not always be triggered so these are not strictly necessary, but they will work anyway and when they might cause issue that is likely an invalid state
-    set_only_interactable_widget_(w->base.context, NULL);
-    remove_child_from_parent(error_dialogue_widget);
-
-    w->file_list.offset=0;
-    ///do any other required cleanup
-
-    if(w->file_list.parent_widget)
-    {
-        w->file_list.parent_widget->base.status&=~WIDGET_ACTIVE;
-        organise_toplevel_widget(w->file_list.parent_widget);
-    }
+    puts("accept");
+}
+void test_cancel_function(void* data)
+{
+    puts("cancel");
 }
 
 static void file_list_widget_perform_action(widget * w)
@@ -491,30 +472,34 @@ static void file_list_widget_perform_action(widget * w)
         }
         else
         {
+            puts("PERFORM ACTION!");
             assert(w->file_list.action);
-            if(w->file_list.action)
-            {
-                if(w->file_list.action(w,false))
-                {
-                    file_list_widget_sucessful_action_cleanup(w);
-                }
-                else
-                {
-                    assert(!error_dialogue_widget->base.parent);///error must have been handled already previously (which would close the dialogue box and remove it from the menu that opened it)
 
-                    error_dialogue_cancel_button->button.data=w;
-                    error_dialogue_force_button->button.data=w;
+            create_self_deleting_dialogue(w->base.context, w->base.context->root_widget, "do thing?", "yes", "no",NULL,test_accept_function, test_cancel_function);
 
-                    set_popup_alignment_widgets(error_dialogue_widget,NULL,w->file_list.parent_widget ? w->file_list.parent_widget : w);///passing null as internal will use the contailed widget (the panel)
+            // if(w->file_list.action)
+            // {
+            //     if(w->file_list.action(w,false))
+            //     {
+            //         file_list_widget_sucessful_action_cleanup(w);
+            //     }
+            //     else
+            //     {
+            //         assert(!error_dialogue_widget->base.parent);///error must have been handled already previously (which would close the dialogue box and remove it from the menu that opened it)
 
-                    #warning this approach to substituting in widgets NEEDS TO GO!
-                    widget* root_widget = find_root_widget(w);
-                    assert(root_widget);
-                    add_child_to_parent(root_widget, error_dialogue_widget);
-                    set_only_interactable_widget_(w->base.context, error_dialogue_widget);
-                    organise_toplevel_widget(error_dialogue_widget);
-                }
-            }
+            //         error_dialogue_cancel_button->button.data=w;
+            //         error_dialogue_force_button->button.data=w;
+
+            //         set_popup_alignment_widgets(error_dialogue_widget,NULL,w->file_list.parent_widget ? w->file_list.parent_widget : w);///passing null as internal will use the contailed widget (the panel)
+
+            //         #warning this approach to substituting in widgets NEEDS TO GO!
+            //         widget* root_widget = find_root_widget(w);
+            //         assert(root_widget);
+            //         add_child_to_parent(root_widget, error_dialogue_widget);
+            //         set_only_interactable_widget(w->base.context, error_dialogue_widget);
+            //         organise_toplevel_widget(error_dialogue_widget);
+            //     }
+            // }
         }
     }
 }
@@ -524,24 +509,8 @@ static void file_list_widget_perform_action(widget * w)
 ///REMOVE THIS
 static bool test_file_action(widget * w,bool force)
 {
+    #warning REMOVE
     printf("TEST %d %s\n",w->file_list.selected_entry_index,w->file_list.composite_buffer);
-    if(force)
-    {
-        static uint32_t c=0;
-        c++;
-        printf("TEST FILE LOAD FORCED %s %s\n",w->file_list.composite_buffer, (c&1)?"succ":"fail");
-        if(!(c&1))
-        {
-            file_list_widget_set_error_information(w->base.context, w->file_list.composite_buffer,"nah","no really, do it");
-        }
-        return c&1;
-    }
-    else
-    {
-        printf("TEST FILE LOAD (failing to test system) %s\n",w->file_list.composite_buffer);
-        file_list_widget_set_error_information(w->base.context, w->file_list.composite_buffer,"Cancel","Force");
-        return false;
-    }
 }
 
 
@@ -558,7 +527,7 @@ static bool file_list_widget_scroll(overlay_theme * theme,widget * w,int delta)
     return true;
 }
 
-static void file_list_widget_left_click(overlay_theme * theme,widget * w,int x,int y)
+static void file_list_widget_left_click(overlay_theme * theme, widget * w, int x, int y, bool double_clicked)
 {
     rectangle r;
 	int32_t index;
@@ -574,7 +543,7 @@ static void file_list_widget_left_click(overlay_theme * theme,widget * w,int x,i
 
     if(w->file_list.selected_entry_index==index)
     {
-        if(check_widget_double_clicked(w))
+        if(double_clicked)
         {
             file_list_widget_perform_action(w);
             return;
@@ -634,7 +603,7 @@ static bool file_list_widget_key_down(overlay_theme * theme,widget * w,SDL_Keyco
         break;
 
     case SDLK_ESCAPE:
-        set_currently_active_widget_(w->base.context, NULL);
+        set_currently_active_widget(w->base.context, NULL);
         file_list_widget_deselect_entry(w);///not sure is desirable but w/e
         break;
 
@@ -660,22 +629,6 @@ void file_list_widget_delete(widget * w)
     free(w->file_list.composite_buffer);
     free(w->file_list.entries);
     if(w->file_list.free_action_data)free(w->file_list.action_data);
-
-    assert(extant_file_list_count);
-
-    if(error_dialogue_widget && extant_file_list_count && !--extant_file_list_count)
-    {
-        assert(error_dialogue_widget->base.status&WIDGET_DO_NOT_DELETE);
-
-        remove_child_from_parent(error_dialogue_widget);
-        error_dialogue_widget->base.status&=~WIDGET_DO_NOT_DELETE;
-        delete_widget(error_dialogue_widget);
-
-        error_dialogue_widget=NULL;
-        error_dialogue_message_text_bar=NULL;
-        error_dialogue_cancel_button=NULL;
-        error_dialogue_force_button=NULL;
-    }
 }
 
 static widget_behaviour_function_set enterbox_behaviour_functions=
@@ -816,7 +769,7 @@ widget * create_file_list(struct widget_context* context, int16_t min_visible_ro
 {
     widget * w=create_widget(context, sizeof(widget_file_list));
 
-    extant_file_list_count++;
+    // extant_file_list_count++;
 
     w->base.appearence_functions=&file_list_appearence_functions;
     w->base.behaviour_functions=&enterbox_behaviour_functions;
@@ -980,89 +933,5 @@ const char * file_list_widget_get_selected_filepath(widget * w)
 }
 
 
-
-static void file_list_widget_error_cancel_button_function(widget * w)
-{
-    ///extract this before stripping data in next step
-    widget_file_list * fl=w->button.data;
-
-    assert(fl);
-    if(!fl)return;
-
-    error_dialogue_cancel_button->button.data=NULL;
-    error_dialogue_force_button->button.data=NULL;
-
-    set_only_interactable_widget_(w->base.context, NULL);
-    remove_child_from_parent(error_dialogue_widget);
-}
-
-static void file_list_widget_error_force_button_function(widget * w)
-{
-    widget_file_list * fl=w->button.data;
-
-    assert(fl);
-    if(!fl)return;
-
-    assert(fl->action);
-    if(fl->action)
-    {
-        if(fl->action((widget*)fl,true))
-        {
-            file_list_widget_sucessful_action_cleanup((widget*)fl);
-        }
-        else
-        {
-            ///all other shit already set, just need to account for potential changed widget statuses
-            organise_toplevel_widget(error_dialogue_widget);
-        }
-    }
-}
-
-#warning i hate this..
-void file_list_widget_set_error_information(struct widget_context* context, const char * message,const char * cancel_button_text,const char * force_button_text)
-{
-    widget *box1,*box2,*panel;
-    assert(message);
-    assert(cancel_button_text);
-
-    if(!error_dialogue_widget)
-    {
-        error_dialogue_widget=create_popup(context, WIDGET_POSITIONING_CENTRED,false);///replace with popup widget w/ appropriate relative positioning
-        error_dialogue_widget->base.status|=WIDGET_ACTIVE|WIDGET_DO_NOT_DELETE;///popup widgets disabled by default, not the methodology we'll be employing here
-
-        panel=add_child_to_parent(error_dialogue_widget,create_panel(context));
-
-        box1=add_child_to_parent(panel,create_box(context, WIDGET_VERTICAL, WIDGET_EVENLY_DISTRIBUTED));
-
-        error_dialogue_message_text_bar=add_child_to_parent(box1, create_static_text_bar(context, NULL));
-        ///integrate following into initialisation of text bar? allow more complicated initialisation?
-        error_dialogue_message_text_bar->text_bar.max_glyph_render_count=48;
-        error_dialogue_message_text_bar->text_bar.text_alignment=WIDGET_TEXT_RIGHT_ALIGNED;
-
-        box1=add_child_to_parent(box1,create_box(context, WIDGET_HORIZONTAL,WIDGET_EVENLY_DISTRIBUTED));
-        add_child_to_parent(box1,create_empty_widget(context, 0,0));
-        box1=add_child_to_parent(box1,create_box(context, WIDGET_HORIZONTAL,WIDGET_LAST_DISTRIBUTED));
-        box2=add_child_to_parent(box1,create_box(context, WIDGET_HORIZONTAL,WIDGET_ALL_SAME_DISTRIBUTED));
-
-        error_dialogue_force_button=add_child_to_parent(box2,create_text_button(context, NULL,NULL,false,file_list_widget_error_force_button_function));
-        error_dialogue_cancel_button=add_child_to_parent(box2,create_text_button(context, NULL,NULL,false,file_list_widget_error_cancel_button_function));
-
-        add_child_to_parent(box1,create_empty_widget(context, 0,0));
-    }
-
-    if(force_button_text)
-    {
-        button_widget_set_text(error_dialogue_force_button,force_button_text);
-        error_dialogue_force_button->base.status|=WIDGET_ACTIVE;
-    }
-    else
-    {
-        error_dialogue_force_button->base.status&=~WIDGET_ACTIVE;
-    }
-
-    button_widget_set_text(error_dialogue_cancel_button,cancel_button_text);
-
-    text_bar_widget_set_text(error_dialogue_message_text_bar,message);
-}
 
 
