@@ -35,7 +35,7 @@ typedef struct widget_container
 widget_container;
 
 
-#warning need to declare size in outermost and use init functions elsewhere!
+void widget_container_initialise(widget_container* container, struct widget_context* context);
 widget * create_container(struct widget_context* context, size_t size);
 
 

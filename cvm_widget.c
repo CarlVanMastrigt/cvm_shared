@@ -203,18 +203,18 @@ static void base_widget_delete(widget * w)
 
 static widget_behaviour_function_set base_behaviour_functions =
 {
-    .l_click        =   base_widget_left_click,
-    .l_release      =   base_widget_left_release,
-    .r_click        =   base_widget_right_click,
-    .m_move         =   base_widget_mouse_movement,
-    .scroll         =   base_widget_scroll,
-    .key_down       =   base_widget_key_down,
-    .text_input     =   base_widget_text_input,
-    .text_edit      =   base_widget_text_edit,
-    .click_away     =   base_widget_click_away,
-    .add_child      =   base_widget_add_child,
-    .remove_child   =   base_widget_remove_child,
-    .wid_delete     =   base_widget_delete
+    .l_click      = base_widget_left_click,
+    .l_release    = base_widget_left_release,
+    .r_click      = base_widget_right_click,
+    .m_move       = base_widget_mouse_movement,
+    .scroll       = base_widget_scroll,
+    .key_down     = base_widget_key_down,
+    .text_input   = base_widget_text_input,
+    .text_edit    = base_widget_text_edit,
+    .click_away   = base_widget_click_away,
+    .add_child    = base_widget_add_child,
+    .remove_child = base_widget_remove_child,
+    .wid_delete   = base_widget_delete
 };
 
 void widget_base_initialise(widget_base* base, struct widget_context* context, const widget_appearence_function_set * appearence_functions, const widget_behaviour_function_set * behaviour_functions)

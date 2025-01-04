@@ -34,6 +34,7 @@ along with cvm_shared.  If not, see <https://www.gnu.org/licenses/>.
 #define WIDGET_IS_AUTO_CLOSE_POPUP  0x00000020
 #define WIDGET_IS_CONTIGUOUS_BOX    0x00000040
 #define WIDGET_DO_NOT_DELETE        0x00000080 /** must only be deleted by specialised method, which will set this to false before executing, REMOVE THIS! */
+// could have one that is essentiually "was allocated" that determines if to free upon deletion
 
 #define WIDGET_H_FIRST  0x10000000
 #define WIDGET_H_LAST   0x20000000

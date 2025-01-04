@@ -83,7 +83,7 @@ void * cvm_vk_shunt_buffer_reserve_bytes(struct cvm_vk_shunt_buffer * buffer, Vk
 
         if(buffer->offset > buffer->size)
         {
-            do buffer->size = cvm_allocation_increase_step(buffer->size);
+            do buffer->size *= 2;
             while(buffer->offset > buffer->size);
 
             buffer->size = CVM_MIN(buffer->size, buffer->max_size);

@@ -476,30 +476,6 @@ static void file_list_widget_perform_action(widget * w)
             assert(w->file_list.action);
 
             create_self_deleting_dialogue(w->base.context, w->base.context->root_widget, "do thing?", "yes", "no",NULL,test_accept_function, test_cancel_function);
-
-            // if(w->file_list.action)
-            // {
-            //     if(w->file_list.action(w,false))
-            //     {
-            //         file_list_widget_sucessful_action_cleanup(w);
-            //     }
-            //     else
-            //     {
-            //         assert(!error_dialogue_widget->base.parent);///error must have been handled already previously (which would close the dialogue box and remove it from the menu that opened it)
-
-            //         error_dialogue_cancel_button->button.data=w;
-            //         error_dialogue_force_button->button.data=w;
-
-            //         set_popup_alignment_widgets(error_dialogue_widget,NULL,w->file_list.parent_widget ? w->file_list.parent_widget : w);///passing null as internal will use the contailed widget (the panel)
-
-            //         #warning this approach to substituting in widgets NEEDS TO GO!
-            //         widget* root_widget = find_root_widget(w);
-            //         assert(root_widget);
-            //         add_child_to_parent(root_widget, error_dialogue_widget);
-            //         set_only_interactable_widget(w->base.context, error_dialogue_widget);
-            //         organise_toplevel_widget(error_dialogue_widget);
-            //     }
-            // }
         }
     }
 }

@@ -77,16 +77,11 @@ static inline uint32_t cvm_po2_32_gte(uint32_t v){ return 32-__builtin_clz(v-1);
 static inline uint32_t cvm_po2_32_gt(uint32_t v){ return 32-__builtin_clz(v); }
 static inline uint32_t cvm_po2_32_lt(uint32_t v){ return 31-__builtin_clz(v-1); }
 
-static inline uint32_t cvm_allocation_increase_step(uint32_t current_size)
-{
-    uint32_t i=__builtin_clz(current_size);
-    assert(i<30);///must be at least 4 (less than 30 leading zeros)
-    return 1u<<(30-i);///add 1 quarter of current size rounded down ( cvm_po2_32_gt(current_size)-2)
-}
+
 
 static inline uint32_t cvm_lbs_32(uint32_t v){ return __builtin_ctz(v); }
 
-
+#include "cvm_utils.h"
 #include "cvm_math.h"
 #include "cvm_data_structures.h"
 #include "cvm_random.h"
@@ -105,13 +100,6 @@ static inline uint32_t cvm_lbs_32(uint32_t v){ return __builtin_ctz(v); }
 
 #include "cvm_independent_overlay.h"
 
-
-static inline char * cvm_strdup(const char * in)
-{
-    size_t len=(strlen(in)+1)*sizeof(char);
-    char * out=malloc(len);
-    return memcpy(out,in,len);
-}
 
 #endif
 

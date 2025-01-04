@@ -34,7 +34,7 @@ typedef struct widget_button
     widget_function func;
     void * data;
 
-    uint32_t free_data:1;
+    uint32_t free_data:1;/// worth making part of base status?
 
     ///forms of toggle
     uint32_t variant_text:1;
@@ -42,11 +42,10 @@ typedef struct widget_button
 
     char * text;
 
+    /// worth moving to another type?
     widget_button_toggle_status_func toggle_status;///for toggle button, use this to do toggle upon potential_interaction ???
 }
 widget_button;
-
-widget * create_button(struct widget_context* context, void * data,widget_function func,bool free_data);
 
 void blank_button_func(widget * w);
 void button_toggle_bool_func(widget * w);
@@ -55,6 +54,8 @@ bool button_bool_status_func(widget * w);
 bool button_widget_status_func(widget * w);
 
 widget * create_text_button(struct widget_context* context, const char * text,void * data,bool free_data,widget_function func);
+
+widget * create_text_toggle_button(struct widget_context* context, char * positive_text,char * negative_text,void * data, bool free_data,widget_function func,widget_button_toggle_status_func toggle_status);
 widget * create_text_highlight_toggle_button(struct widget_context* context, char * text,void * data,bool free_data,widget_function func,widget_button_toggle_status_func toggle_status);
 
 widget * create_contiguous_text_button(struct widget_context* context, const char * text,void * data,bool free_data,widget_function func);
@@ -62,10 +63,6 @@ widget * create_contiguous_text_highlight_toggle_button(struct widget_context* c
 
 widget * create_icon_button(struct widget_context* context, const char * icon_name,void * data,bool free_data,widget_function func);
 widget * create_icon_toggle_button(struct widget_context* context, const char * positive_icon, const char * negative_icon,void * data,bool free_data,widget_function func,widget_button_toggle_status_func toggle_status);
-
-///external responsibility to call organise widget on appropriate parent widget
-void button_widget_set_text(widget * w,const char * new_text);
-
 
 
 #endif

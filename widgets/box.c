@@ -592,35 +592,31 @@ static widget_appearence_function_set horizontal_all_same_distributed_box_functi
 
 
 
-
-
-
-
-
-
-
-
-
-
 widget * create_box(struct widget_context* context, widget_layout layout,widget_distribution distribution)
 {
-    widget * w=create_container(context, sizeof(widget_container));///actually is just pure container
+    widget * w = create_container(context, sizeof(widget_container));
 
-    if(layout==WIDGET_VERTICAL)
+    switch(layout)
     {
-        if(distribution==WIDGET_FIRST_DISTRIBUTED)          w->base.appearence_functions=&vertical_first_distributed_box_functions;
-        else if(distribution==WIDGET_LAST_DISTRIBUTED)      w->base.appearence_functions=&vertical_last_distributed_box_functions;
-        else if(distribution==WIDGET_EVENLY_DISTRIBUTED)    w->base.appearence_functions=&vertical_evenly_distributed_box_functions;
-        else if(distribution==WIDGET_NORMALLY_DISTRIBUTED)  w->base.appearence_functions=&vertical_normally_distributed_box_functions;
-        else if(distribution==WIDGET_ALL_SAME_DISTRIBUTED)  w->base.appearence_functions=&vertical_all_same_distributed_box_functions;
-    }
-    if(layout==WIDGET_HORIZONTAL)
-    {
-        if(distribution==WIDGET_FIRST_DISTRIBUTED)          w->base.appearence_functions=&horizontal_first_distributed_box_functions;
-        else if(distribution==WIDGET_LAST_DISTRIBUTED)      w->base.appearence_functions=&horizontal_last_distributed_box_functions;
-        else if(distribution==WIDGET_EVENLY_DISTRIBUTED)    w->base.appearence_functions=&horizontal_evenly_distributed_box_functions;
-        else if(distribution==WIDGET_NORMALLY_DISTRIBUTED)  w->base.appearence_functions=&horizontal_normally_distributed_box_functions;
-        else if(distribution==WIDGET_ALL_SAME_DISTRIBUTED)  w->base.appearence_functions=&horizontal_all_same_distributed_box_functions;
+        case WIDGET_VERTICAL: switch(distribution)
+        {
+            case WIDGET_FIRST_DISTRIBUTED:    w->base.appearence_functions = &vertical_first_distributed_box_functions;    break;
+            case WIDGET_LAST_DISTRIBUTED:     w->base.appearence_functions = &vertical_last_distributed_box_functions;     break;
+            case WIDGET_EVENLY_DISTRIBUTED:   w->base.appearence_functions = &vertical_evenly_distributed_box_functions;   break;
+            case WIDGET_NORMALLY_DISTRIBUTED: w->base.appearence_functions = &vertical_normally_distributed_box_functions; break;
+            case WIDGET_ALL_SAME_DISTRIBUTED: w->base.appearence_functions = &vertical_all_same_distributed_box_functions; break;
+        }
+        break;
+        
+        case WIDGET_HORIZONTAL: switch(distribution)
+        {
+            case WIDGET_FIRST_DISTRIBUTED:    w->base.appearence_functions = &horizontal_first_distributed_box_functions;    break;
+            case WIDGET_LAST_DISTRIBUTED:     w->base.appearence_functions = &horizontal_last_distributed_box_functions;     break;
+            case WIDGET_EVENLY_DISTRIBUTED:   w->base.appearence_functions = &horizontal_evenly_distributed_box_functions;   break;
+            case WIDGET_NORMALLY_DISTRIBUTED: w->base.appearence_functions = &horizontal_normally_distributed_box_functions; break;
+            case WIDGET_ALL_SAME_DISTRIBUTED: w->base.appearence_functions = &horizontal_all_same_distributed_box_functions; break;
+        }
+        break;
     }
 
     return w;

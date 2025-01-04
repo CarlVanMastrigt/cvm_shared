@@ -134,7 +134,7 @@ bool cvm_vk_managed_buffer_acquire_temporary_allocation(cvm_vk_managed_buffer * 
     {
         next_index=mb->first_unused_temporary_allocation;
 
-        additional_allocations=cvm_allocation_increase_step(mb->temporary_allocation_data_space);
+        additional_allocations = mb->temporary_allocation_data_space;
         assert(additional_allocations>=32);
         assert(!(additional_allocations&(additional_allocations-1)));
 

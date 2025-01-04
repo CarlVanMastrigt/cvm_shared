@@ -216,29 +216,19 @@ static widget_appearence_function_set container_appearence_functions=
 };
 
 
+void widget_container_initialise(widget_container* container, struct widget_context* context)
+{
+    widget_base_initialise(&container->base, context, &container_appearence_functions, &container_behaviour_functions);
+
+    container->first=NULL;
+    container->last=NULL;
+}
 
 widget * create_container(struct widget_context* context, size_t size)
 {
-    widget * w=create_widget(context, size);
+    widget * w = malloc(size);
 
-    w->container.first=NULL;
-    w->container.last=NULL;
+    widget_container_initialise(&w->container, context);
 
-    w->base.appearence_functions=&container_appearence_functions;
-    w->base.behaviour_functions=&container_behaviour_functions;
     return w;
 }
-
-
-
-
-
-
-
-
-
-
-
-
-
-

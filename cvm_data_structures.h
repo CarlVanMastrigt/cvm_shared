@@ -49,11 +49,10 @@ static inline void name##_stack_initialise( name##_stack * s )                  
                                                                                 \
 static inline type * name##_stack_new( name##_stack * s )                       \
 {                                                                               \
-    uint_fast32_t n;                                                            \
     if(s->count==s->space)                                                      \
     {                                                                           \
-        n=cvm_allocation_increase_step(s->space);                               \
-        s->data=realloc(s->data,sizeof( type )*(s->space+=n));                  \
+        s->space *= 2;                                                          \
+        s->data=realloc(s->data, sizeof( type ) * s->space);                    \
     }                                                                           \
     return s->data+s->count++;                                                  \
 }                                                                               \
@@ -92,8 +91,8 @@ static inline void name##_stack_push_multiple                                   
     uint_fast32_t n;                                                            \
     while((s->count+count) > s->space)                                          \
     {                                                                           \
-        n=cvm_allocation_increase_step(s->space);                               \
-        s->data=realloc(s->data,sizeof( type )*(s->space+=n));                  \
+        s->space *= 2;                                                          \
+        s->data=realloc(s->data, sizeof( type ) * s->space);                    \
     }                                                                           \
     memcpy(s->data+s->count,values,sizeof( type )*count);                       \
     s->count+=count;                                                            \
@@ -158,8 +157,8 @@ static inline uint32_t name##_array_add( name##_array * l , type value )        
     {                                                                           \
         if(l->count==l->space)                                                  \
         {                                                                       \
-            n=cvm_allocation_increase_step(l->space);                           \
-            l->array=realloc(l->array,sizeof( type )*(l->space+=n));            \
+            l->space *= 2;                                                      \
+            l->array=realloc(l->array, sizeof( type ) * l->space);              \
         }                                                                       \
         i=l->count++;                                                           \
     }                                                                           \
@@ -176,8 +175,8 @@ static inline uint32_t name##_array_add_ptr                                     
     {                                                                           \
         if(l->count==l->space)                                                  \
         {                                                                       \
-            n=cvm_allocation_increase_step(l->space);                           \
-            l->array=realloc(l->array,sizeof( type )*(l->space+=n));            \
+            l->space *= 2;                                                      \
+            l->array=realloc(l->array, sizeof( type ) * l->space);              \
         }                                                                       \
         i=l->count++;                                                           \
     }                                                                           \
