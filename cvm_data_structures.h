@@ -1,5 +1,5 @@
 /**
-Copyright 2020,2021,2022,2023 Carl van Mastrigt
+Copyright 2020,2021,2022,2023,2024 Carl van Mastrigt
 
 This file is part of cvm_shared.
 
@@ -226,7 +226,9 @@ desirable
 CVM_BIN_HEAP_CMP(A,B) must be declared, with true resulting in the value A
 moving UP the heap
 
-TODO: make any inputs to heap_cmp pointers and constant
+TODO: make any inputs to heap_cmp pointers and const
+
+TODO: use test sort heap performance improvements
 */
 
 #ifndef CVM_BIN_HEAP
