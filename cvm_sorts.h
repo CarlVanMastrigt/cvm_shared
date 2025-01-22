@@ -91,7 +91,6 @@ void FUNCTION_NAME(TYPE * data, size_t count)                                   
                                                                                                                        \
         while(1)                                                                                                       \
         {                                                                                                              \
-            /* prefix increment/decrement b/c current iterators have already been sorted */                            \
             /* we want the iters after these while loops to be the first positions that violate pivot sorting */       \
             /* note: we don't specially handle the pivot, so it may end up on either side of range */                  \
             while(CVM_COMPARE_LT((++iter_forwards), (&pivot)));                                                        \
@@ -115,7 +114,7 @@ void FUNCTION_NAME(TYPE * data, size_t count)                                   
         {                                                                                                              \
             if((end - iter_forwards) < chunk_size)                                                                     \
             {                                                                                                          \
-                /* both parts of this range sorted, get another range to sort (if any are left) */                     \
+                /* both parts of this range sufficiently sorted, get another range to sort (if any are left) */        \
                 if(stack_size==0)                                                                                      \
                 {                                                                                                      \
                     break;                                                                                             \
@@ -126,13 +125,13 @@ void FUNCTION_NAME(TYPE * data, size_t count)                                   
             }                                                                                                          \
             else                                                                                                       \
             {                                                                                                          \
-                /* after pivot sorted, before pivot unsorted so sort that range */                                     \
+                /* after pivot sufficiently sorted, before pivot NOT, so sort that range */                            \
                 start = iter_forwards;                                                                                 \
             }                                                                                                          \
         }                                                                                                              \
         else if((end - iter_forwards) < chunk_size)                                                                    \
         {                                                                                                              \
-            /* before pivot sorted, after pivot unsorted so sort that range next */                                    \
+            /* before pivot sufficiently sorted, after pivot unsorted so sort that range next */                       \
             end = iter_backwards;                                                                                      \
         }                                                                                                              \
         /* otherwise both chunks (before and after the pivot) are unsorted and must be sufficiently sorted */          \
