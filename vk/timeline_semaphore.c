@@ -98,8 +98,16 @@ void cvm_vk_timeline_semaphore_moment_wait(const cvm_vk_device * device,const cv
 
 bool cvm_vk_timeline_semaphore_moment_query(const cvm_vk_device * device,const cvm_vk_timeline_semaphore_moment * moment)
 {
-    uint64_t v;
-    vkGetSemaphoreCounterValue(device->device,moment->semaphore,&v);
-    return v>=moment->value;
+    uint64_t v = 0;
+    VkResult r;
+    r = vkGetSemaphoreCounterValue(device->device,moment->semaphore,&v);
+    if(r==VK_SUCCESS)
+    {
+        return v>=moment->value;
+    }
+    else
+    {
+        return false;
+    }
     #warning do range based comparison respecting the under the hood wrapping values
 }

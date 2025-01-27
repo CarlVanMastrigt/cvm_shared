@@ -16,8 +16,11 @@ GNU Affero General Public License for more details.
 You should have received a copy of the GNU Affero General Public License
 along with cvm_shared.  If not, see <https://www.gnu.org/licenses/>.
 */
+#define _XOPEN_SOURCE 700
 
 #include "cvm_shared.h"
+
+#define _XOPEN_SOURCE 700
 
 #include <dirent.h>
 
@@ -356,7 +359,7 @@ void file_list_widget_load_directory_entries(widget * w)
 
     while((entry=readdir(directory)))
     {
-        if(entry->d_type==DT_DIR)
+        if(entry->d_type==4)//DT_DIR
         {
             type_id=CVM_FL_DIRECTORY_TYPE_ID;
         }

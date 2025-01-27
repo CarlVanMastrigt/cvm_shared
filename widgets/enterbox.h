@@ -56,7 +56,7 @@ widget* create_enterbox(struct widget_context* context, uint32_t max_strlen,uint
 
 static inline widget* create_enterbox_simple(struct widget_context* context, uint32_t glyph_count, char * initial_text,widget_function activation_func,widget_function update_contents_func,void* data, bool free_data,bool activate_upon_deselect)
 {
-    create_enterbox(context, glyph_count * CVM_OVERLAY_MAX_UNICODE_BYTES, glyph_count, glyph_count,initial_text,activation_func,update_contents_func,NULL,data,free_data,activate_upon_deselect);
+    return create_enterbox(context, glyph_count * CVM_OVERLAY_MAX_UNICODE_BYTES, glyph_count, glyph_count,initial_text,activation_func,update_contents_func,NULL,data,free_data,activate_upon_deselect);
 }
 
 

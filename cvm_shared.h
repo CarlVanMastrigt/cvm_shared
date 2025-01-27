@@ -21,7 +21,7 @@ along with cvm_shared.  If not, see <https://www.gnu.org/licenses/>.
 #define CVM_SHARED_H
 
 ///needed for sincosf, may want to re-evaluate usage, at least move to math??
-#define _GNU_SOURCE
+// #define _GNU_SOURCE
 
 ///change to only include external headers that are actually needed try to reduce count overall
 #include <stdbool.h>
@@ -46,40 +46,13 @@ along with cvm_shared.  If not, see <https://www.gnu.org/licenses/>.
 
 #include <vulkan/vulkan.h>
 
-///own headers
 
 #define CVM_SHARED_ENGINE_NAME "cvm_shared"
 #define CVM_SHARED_ENGINE_VERSION 1
 
-#define CVM_INVALID_U32_INDEX 0xFFFFFFFF
-#define CVM_INVALID_U16 0xFFFF
 
-#define CVM_CONCAT2_MACRO(A,B) A ## B
-#define CVM_CONCAT2(A, B) CVM_CONCAT2_MACRO(A, B)
+typedef union widget widget; // find a better place to put this?
 
-#define CVM_MAX(A,B) (((A)>(B))?(A):(B))
-#define CVM_MIN(A,B) (((A)<(B))?(A):(B))
-#define CVM_CLAMP(X,MIN,MAX) CVM_MAX(MIN,CVM_MIN(MAX,X))
-
-static inline uint32_t cvm_align_u32(uint32_t size, uint32_t alignment)
-{
-    return (size+alignment-1) & ~(alignment-1);
-}
-
-typedef union widget widget;
-
-/// move these to dedicated file (cvm_math?)
-static inline uint64_t cvm_po2_64_gte(uint64_t v){ return 64-__builtin_clzl(v-1); }
-static inline uint64_t cvm_po2_64_gt(uint64_t v){ return 64-__builtin_clzl(v); }
-static inline uint64_t cvm_po2_64_lt(uint64_t v){ return 63-__builtin_clzl(v-1); }
-
-static inline uint32_t cvm_po2_32_gte(uint32_t v){ return 32-__builtin_clz(v-1); }
-static inline uint32_t cvm_po2_32_gt(uint32_t v){ return 32-__builtin_clz(v); }
-static inline uint32_t cvm_po2_32_lt(uint32_t v){ return 31-__builtin_clz(v-1); }
-
-
-
-static inline uint32_t cvm_lbs_32(uint32_t v){ return __builtin_ctz(v); }
 
 #include "cvm_utils.h"
 #include "cvm_math.h"

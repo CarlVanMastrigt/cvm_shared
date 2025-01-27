@@ -58,8 +58,8 @@ struct cvm_directory
 
 	struct cvm_directory_entry* entries;
 	size_t entry_space;
-	size_t entry_total_count;
-	size_t entry_filtered_count;
+	size_t entry_count_total;
+	size_t entry_count_visible;
 
 	uint32_t filter_exclude_flags;
     /// composite buffer to iterate, with double null terminating character ['\0','\0'] at the end to know when to finish
@@ -70,7 +70,7 @@ struct cvm_directory
     size_t filename_buffer_space;
     size_t filename_buffer_offset;
 
-    int (*sort_function)(const struct cvm_directory*, const struct cvm_directory_entry*, const struct cvm_directory_entry*)/// if null_ptr take as-is (don't sort)
+    bool (*sort_function)(const struct cvm_directory_entry*, const struct cvm_directory_entry*, const struct cvm_directory*);/// if null_ptr take as-is (don't sort)
 };
 
 static inline const char* cvm_directory_get_entry_name(const struct cvm_directory* directory, const struct cvm_directory_entry* entry)
@@ -91,6 +91,6 @@ void cvm_directory_get_file_path(struct cvm_directory* directory, const char* pa
 void cvm_directory_reload(struct cvm_directory* directory);
 void cvm_directory_set_ordering_name(struct cvm_directory* directory, bool reversed);
 void cvm_directory_set_ordering_time(struct cvm_directory* directory, bool reversed);
-void cvm_directory_set_ordering_custom(struct cvm_directory* directory, int (*sort_function)(const struct cvm_directory*, const struct cvm_directory_entry*, const struct cvm_directory_entry*));
+void cvm_directory_set_ordering(struct cvm_directory* directory, bool (*sort_function)(const struct cvm_directory_entry*, const struct cvm_directory_entry*, const struct cvm_directory*));
 
 #endif // CVM_DIRECTORY_H

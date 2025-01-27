@@ -91,6 +91,7 @@ static void textbox_widget_mouse_movement(overlay_theme * theme,widget * w,int x
 
 static bool textbox_widget_key_down(overlay_theme * theme,widget * w,SDL_Keycode keycode,SDL_Keymod mod)
 {
+    widget* root_widget;
     switch(keycode)
     {
     case SDLK_c:
@@ -109,7 +110,7 @@ static bool textbox_widget_key_down(overlay_theme * theme,widget * w,SDL_Keycode
         break;
 
     case SDLK_ESCAPE:
-        widget* root_widget = find_root_widget(w);
+        root_widget = find_root_widget(w);
         assert(root_widget);
         set_currently_active_widget(w->base.context, NULL);
         break;

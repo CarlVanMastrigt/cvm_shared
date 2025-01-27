@@ -899,7 +899,7 @@ static inline void cvm_vk_pipeline_cache_initialise(struct cvm_vk_pipeline_cache
         return;
     }
 
-    pipeline_cache->file_name = strdup(cache_file_name);
+    pipeline_cache->file_name = cvm_strdup(cache_file_name);
 
     cache_file = fopen(cache_file_name,"rb");
 

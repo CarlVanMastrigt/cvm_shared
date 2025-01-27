@@ -17,37 +17,32 @@ You should have received a copy of the GNU Affero General Public License
 along with cvm_shared.  If not, see <https://www.gnu.org/licenses/>.
 */
 
+
 #define _XOPEN_SOURCE 700
+
 
 #include <limits.h>
 #include <stdlib.h>
 #include <stdio.h>
+#include <assert.h>
 
 #include "cvm_utils.h"
-
 #include "cvm_directory.h"
-
-#include <sys/stat.h>
-#include <dirent.h>
+#include "cvm_sorts.h"
 
 
-
-
-#include <errno.h>
-
-
-
-static inline void cvm_directory_add_entry(struct cvm_directory* directory, char* name, uint32_t flags, uint64_t mod_t_sec, uint32_t mod_t_nsec)
+// generic functions used by utilities
+void cvm_directory_add_entry(struct cvm_directory* directory, char* name, uint32_t flags, uint64_t mod_t_sec, uint32_t mod_t_nsec)
 {
 	size_t len = strlen(name) + 1;//+1 for /0 terminator character
 	assert(mod_t_nsec < 1000000000);
 
-	if(directory->entry_total_count == directory->entry_space)
+	if(directory->entry_count_total == directory->entry_space)
 	{
 		directory->entry_space *= 2;
 		directory->entries = realloc(directory->entries, sizeof(struct cvm_directory_entry) * directory->entry_space);
 	}
-	directory->entries[directory->entry_total_count++] = (struct cvm_directory_entry)
+	directory->entries[directory->entry_count_total++] = (struct cvm_directory_entry)
 	{
 		.entry_name_offset = directory->filename_buffer_offset,
 		.flags = flags,
@@ -66,7 +61,7 @@ static inline void cvm_directory_add_entry(struct cvm_directory* directory, char
 }
 
 ///file directory should map indices (0-n in display) to relevant lookup information (type and index in dir) 
-static inline void cvm_directory_ensure_path_space(struct cvm_directory* directory, size_t required_space)
+void cvm_directory_ensure_path_space(struct cvm_directory* directory, size_t required_space)
 {
 	if(required_space > directory->path_space)
     {
@@ -77,159 +72,227 @@ static inline void cvm_directory_ensure_path_space(struct cvm_directory* directo
 }
 
 
-// static inline int cvm_directory_sort_function(const void* a, const void* b, void* context)
-// {
-// 	const struct cvm_directory* directory = context;
-// 	const struct cvm_directory_entry* entry_1 = a;
-// 	const struct cvm_directory_entry* entry_2 = b;
 
-// 	#warning need to apply filter here as that overrides sort
-// 	/// ALSO can track count for filtering!
 
-// 	if(directory->sort_function)
-// 	{
-// 		return directory->sort_function(directory, entry_1, entry_2);
-// 	}
-// 	else
-// 	{
-// 		return 0;
-// 	}
-// }
 
-static inline void cvm_directory_sort(struct cvm_directory* directory)
+
+
+
+// `util` functions should be implemented in platform specific manner
+bool cvm_directory_utility_set_path(struct cvm_directory* directory, const char* path);
+void cvm_directory_utility_scan(struct cvm_directory* directory);
+void cvm_directory_utility_goto_parent(struct cvm_directory* directory);
+void cvm_directory_utility_get_path(struct cvm_directory* directory, const char* to_append, size_t* required_space, char* path_buffer);
+
+
+#define CVM_DIRECTORY_UTILITY_IMPLEMENTATION
+#include "cvm_directory_utility_implementation.c"
+#undef CVM_DIRECTORY_UTILITY_IMPLEMENTATION
+
+
+
+
+
+
+
+
+
+
+/// used as wrapper over function pointer
+static inline bool cvm_directory_sort_function(const struct cvm_directory_entry* entry_1, const struct cvm_directory_entry* entry_2, const struct cvm_directory* directory)
 {
-	// qsort_s(directory->entries, directory->entry_total_count, sizeof(struct cvm_directory_entry), &cvm_directory_sort_function, directory);
-	//cannot use qsort() easily as entries need to access external data, instead need to sort with own function...
+	#warning this should ONLY be called if the sort function is non-null
+	return directory->sort_function(entry_1, entry_2, directory);
 }
 
+#define CVM_COMPARE_LT cvm_directory_sort_function
+CVM_QUICKSORT_CONTEXT(struct cvm_directory_entry, cvm_directory_sort, 8, const struct cvm_directory*);
 
-
-
-
-
-bool cvm_directory_util_set_path(struct cvm_directory* directory, const char* path);
-void cvm_directory_util_scan(struct cvm_directory* directory);
-void cvm_directory_util_goto_parent(struct cvm_directory* directory);
-void cvm_directory_util_get_path(struct cvm_directory* directory, const char* to_append, size_t* required_space, char* path_buffer);
-
-
-
-/// this function sets length so it must not use extant length
-bool cvm_directory_util_set_path(struct cvm_directory* directory, const char* path)
+static inline void cvm_directory_filter_and_sort(struct cvm_directory* directory)
 {
-	char* new_path;
-	size_t len;
+	#warning need to apply filter here then sort only unfiltered range
 
-	#warning need to handle errors (in a better way), specifically a missing folder path, which should be resolvable/constructable? -- create with force
-	
-	new_path = realpath(path, NULL);
-	if(new_path)
+	size_t processed_count, passing_count;
+	struct cvm_directory_entry tmp;
+	struct cvm_directory_entry* entries;
+	uint32_t exclude_flags;
+
+	entries = directory->entries;
+	exclude_flags = directory->filter_exclude_flags;
+
+	processed_count = 0;
+	passing_count = directory->entry_count_total;
+
+	while(processed_count < passing_count)
 	{
-		len = strlen(new_path);
-		cvm_directory_ensure_path_space(directory, len + 2);
-		strcpy(directory->path, new_path);
-		if((len>0) && (directory->path[len-1] != '/'))
+		if(entries[processed_count].flags & directory->filter_exclude_flags)
 		{
-			directory->path[len++] = '/';
-			directory->path[len] = '\0';
+			passing_count--;
+			tmp = entries[processed_count];
+			entries[processed_count] = entries[passing_count];
+			entries[passing_count] = tmp;
 		}
-		free(new_path);
-		directory->path_length = len;
-		return true;
+		else
+		{
+			processed_count++;
+		}
 	}
-	return false;
-}
 
-#warning should probably only support regular files and directories unless requested otherwise
-/// bitmask of options?? -- options could include listing .. and . "LIST_CONVENIENCE_ENTRIES"
-void cvm_directory_util_scan(struct cvm_directory* directory)
-{
-	DIR * d;
-    struct dirent* e;
-    struct stat s;
-    size_t len;
-    uint32_t flags;
+	assert(processed_count==passing_count);
+	directory->entry_count_visible = passing_count;
 
-    directory->entry_total_count = 0;
-    directory->entry_filtered_count = 0;
-    directory->filename_buffer_offset = 0;
+	assert(directory->sort_function);
 
-    d = opendir(directory->path);
+	cvm_directory_sort(entries, passing_count, directory);
 
-    if(!d)
-    {
-    	// this shouldn't happen, should fix this issue when path is set (cvm_directory_util_set_path)
-    	fprintf(stderr,"dir to open invalid (%s)\n", directory->path);
-    	return;
-    }
-
-    while((e=readdir(d)))
-    {
-    	len = strlen(e->d_name);
-    	// use directory->path to stash the filepath being assessed
-    	cvm_directory_ensure_path_space(directory, directory->path_length + len + 1);
-    	memcpy(directory->path + directory->path_length, e->d_name, sizeof(char) * (len + 1));
-    	stat(directory->path, &s);
-
-    	assert(__builtin_popcount(s.st_mode & S_IFMT) <= 1);// only 1 should be set
-    	switch (s.st_mode & S_IFMT) {
-    		case S_IFBLK:	flags = CVM_DIRECTORY_FLAG_BLOCK_DEV;    break;
-			case S_IFCHR:	flags = CVM_DIRECTORY_FLAG_CHAR_DEV;     break;
-			case S_IFDIR:	flags = CVM_DIRECTORY_FLAG_DIRECTORY;    break;
-			case S_IFIFO:	flags = CVM_DIRECTORY_FLAG_PIPE;         break;
-			case S_IFLNK:	flags = CVM_DIRECTORY_FLAG_LINK;         break;// can a link also be a directory?? if so we should handle that
-			case S_IFREG:	flags = CVM_DIRECTORY_FLAG_REGULAR_FILE; break;
-			case S_IFSOCK:	flags = CVM_DIRECTORY_FLAG_SOCKET;       break;
-			default:        flags = CVM_DIRECTORY_FLAG_UNKNOWN;      break;
-    	}
-
-    	// are convenience files implicitly hidden?
-    	if( !strcmp(e->d_name, ".") || !strcmp(e->d_name, ".") ) flags |= CVM_DIRECTORY_FLAG_CONVENIENCE;
-    	if( len && e->d_name[0] == '.') flags |= CVM_DIRECTORY_FLAG_HIDDEN;
-
-    	printf("%s : %s : %lu : %u\n", S_ISDIR(s.st_mode)?"folder":(S_ISREG(s.st_mode)?"file":"?"), directory->path, s.st_mtim.tv_sec, s.st_mtim.tv_nsec);
-    	cvm_directory_add_entry(directory, e->d_name, flags, s.st_mtim.tv_sec, s.st_mtim.tv_nsec);
-    	directory->path[directory->path_length] = '\0';
-    }
-}
-
-void cvm_directory_util_goto_parent(struct cvm_directory* directory)
-{
-	bool parent_exists;
-	// lil bit hacky
-	cvm_directory_ensure_path_space(directory, directory->path_length + 3);
-	strcpy(directory->path + directory->path_length, "..");
-	parent_exists = cvm_directory_util_set_path(directory, directory->path);
-	assert(parent_exists);
-}
-
-void cvm_directory_util_get_path(struct cvm_directory* directory, const char* to_append, size_t* required_space, char* path_buffer)
-{
-	size_t append_len;
-	struct stat s;
-	int err;
-
-	// when making space, add 2, one of '\0' and one ofr a directory marking '/' in case the entry accessed is a directory
-	append_len = to_append ? strlen(to_append) : 0;
-
-	if(path_buffer)
+	#warning for testing REMOVE (?)
+	size_t i=0;
+	while(i<directory->entry_count_visible)
 	{
-		assert(*required_space >= directory->path_length + append_len + 2);
-		strcpy(path_buffer, directory->path);
-		if(to_append)
-		{
-			strcpy(path_buffer + directory->path_length, to_append);
-			// for consistency, if accessed entry is a directory append a '/'
-			err = stat(path_buffer, &s);
-			if(!err && S_ISDIR(s.st_mode) && (path_buffer[directory->path_length + append_len - 1] != '/'))
-			{
-				strcpy(path_buffer + directory->path_length + append_len , "/");
-			}
-		}
+		struct cvm_directory_entry* e = directory->entries+i++;
+		printf("%s : %s : %lu : %u\n", (e->flags&CVM_DIRECTORY_FLAG_DIRECTORY)?"folder":((e->flags&CVM_DIRECTORY_FLAG_REGULAR_FILE)?"file":"?"),
+		       directory->filename_buffer+e->entry_name_offset, e->mod_t_sec, e->mod_t_nsec);
+	}
+	puts("===== filtered =====");
+	while(i<directory->entry_count_total)
+	{
+		struct cvm_directory_entry* e = directory->entries+i++;
+		printf("%s : %s : %lu : %u\n", (e->flags&CVM_DIRECTORY_FLAG_DIRECTORY)?"folder":((e->flags&CVM_DIRECTORY_FLAG_REGULAR_FILE)?"file":"?"),
+		       directory->filename_buffer+e->entry_name_offset, e->mod_t_sec, e->mod_t_nsec);
+	}
+}
+
+#warning move this to utilities and make it more parsable (and fucking validate/understand it)
+static inline int cvm_strcmp_numbers(const char * s1,const char * s2)
+{
+    char c1,c2,d;
+    const char *n1,*n2,*e1,*e2;
+
+    do
+    {
+        c1=*s1;
+        c2=*s2;
+
+        if(c1>='0' && c1<='9' && c2>='0' && c2<='9')///enter number analysis scheme
+        {
+            ///already know first is digit
+            n1=s1+1;
+            n2=s2+1;
+            ///find end of number block
+            while(*n1>='0' && *n1<='9')n1++;
+            while(*n2>='0' && *n2<='9')n2++;
+            e1=n1;
+            e2=n2;
+            d=0;///initially treat numbers as the same, let most significat different digit determine their difference
+            while(1)
+            {
+                ///start with step back, last char, by definition, isnt a number
+                n1--;
+                n2--;
+                if(n1<s1)
+                {
+                    if(!d && n2>=s2)return -1;///n2 is the same number as n1 but has more digits so leading zeros (or non-zeros) takes precedence
+                    while(n2>=s2) if(*n2-- != '0') return -1;///n2 is larger
+                    if(d) return d;
+                    else break;
+                }
+                if(n2<s2)
+                {
+                    if(!d) return 1; ///same as other branch but n1>=s1 is definitely satisfied by other branch not having been taken
+                    while(n1>=s1) if(*n1-- != '0') return 1;///n1 is larger
+                    if(d) return d;
+                    else break;
+                }
+                if(*n1!=*n2) d=*n1-*n2;
+            }
+            ///skip to the point past the number block
+            s1=e1;
+            s2=e2;
+            c1=*s1;
+            c2=*s2;
+        }
+        else
+        {
+            s1++;
+            s2++;
+        }
+
+        // convert lower case
+        #warning order lower first but match lower and upper case symbols
+
+        #warning is there an ordering for non-latin alphabets that can easily be respected??
+        // if(c1>='A' && c1<='Z')c1-='A'-'a';
+        // if(c2>='A' && c2<='Z')c2-='A'-'a';
+    }
+    while((c1==c2)&&(c1)&&(c2));
+
+    return (c1-c2);
+}
+
+
+static bool cvm_directory_sort_entries_name_ascending(const struct cvm_directory_entry* entry_1, const struct cvm_directory_entry* entry_2, const struct cvm_directory* directory)
+{
+	const char* str_1 = directory->filename_buffer + entry_1->entry_name_offset;
+	const char* str_2 = directory->filename_buffer + entry_2->entry_name_offset;
+
+	///directory goes first if they're of different types (dir vs non dir)
+	if((entry_1->flags ^ entry_2->flags) & CVM_DIRECTORY_FLAG_DIRECTORY)
+	{
+		return entry_1->flags & CVM_DIRECTORY_FLAG_DIRECTORY;
+	}
+
+	return cvm_strcmp_numbers(str_1,str_2) < 0;
+}
+
+static bool cvm_directory_sort_entries_name_descending(const struct cvm_directory_entry* entry_1, const struct cvm_directory_entry* entry_2, const struct cvm_directory* directory)
+{
+	const char* str_1 = directory->filename_buffer + entry_1->entry_name_offset;
+	const char* str_2 = directory->filename_buffer + entry_2->entry_name_offset;
+
+	///directory goes first if they're of different types (dir vs non dir)
+	if((entry_1->flags ^ entry_2->flags) & CVM_DIRECTORY_FLAG_DIRECTORY)
+	{
+		return entry_1->flags & CVM_DIRECTORY_FLAG_DIRECTORY;
+	}
+
+	return cvm_strcmp_numbers(str_1,str_2) > 0;
+}
+
+static bool cvm_directory_sort_entries_time_ascending(const struct cvm_directory_entry* entry_1, const struct cvm_directory_entry* entry_2, const struct cvm_directory* directory)
+{
+	///directory goes first if they're of different types (dir vs non dir)
+	if((entry_1->flags ^ entry_2->flags) & CVM_DIRECTORY_FLAG_DIRECTORY)
+	{
+		return entry_1->flags & CVM_DIRECTORY_FLAG_DIRECTORY;
+	}
+
+	if(entry_1->mod_t_sec == entry_2->mod_t_sec)
+	{
+		// if seconds the same use nanoseconds
+		return entry_1->mod_t_nsec < entry_2->mod_t_nsec;
 	}
 	else
 	{
-		*required_space = directory->path_length + append_len + 2;
+		return entry_1->mod_t_sec < entry_2->mod_t_sec;
+	}
+}
+
+static bool cvm_directory_sort_entries_time_descending(const struct cvm_directory_entry* entry_1, const struct cvm_directory_entry* entry_2, const struct cvm_directory* directory)
+{
+	///directory goes first if they're of different types (dir vs non dir)
+	if((entry_1->flags ^ entry_2->flags) & CVM_DIRECTORY_FLAG_DIRECTORY)
+	{
+		return entry_1->flags & CVM_DIRECTORY_FLAG_DIRECTORY;
+	}
+
+	if(entry_1->mod_t_sec == entry_2->mod_t_sec)
+	{
+		// if seconds the same use nanoseconds
+		return entry_1->mod_t_nsec > entry_2->mod_t_nsec;
+	}
+	else
+	{
+		return entry_1->mod_t_sec > entry_2->mod_t_sec;
 	}
 }
 
@@ -254,10 +317,10 @@ void cvm_directory_initialise(struct cvm_directory* directory, const char* initi
 
 		.entries = malloc(sizeof(struct cvm_directory_entry)*16),
 		.entry_space = 16,
-		.entry_total_count = 0,
-		.entry_filtered_count = 0,
+		.entry_count_total = 0,
+		.entry_count_visible = 0,
 
-		.filter_exclude_flags = 0,/// set this!
+		.filter_exclude_flags = 0,
 		.filter_extension_buffer = malloc(sizeof(char)*64),
 		.filter_extension_buffer_space = 64,
 
@@ -265,11 +328,12 @@ void cvm_directory_initialise(struct cvm_directory* directory, const char* initi
 		.filename_buffer_space = 4096,
 		.filename_buffer_offset = 0,
 
-		.sort_function = NULL,// set this!
+		.sort_function = &cvm_directory_sort_entries_name_ascending,
 	};
 
-	cvm_directory_util_set_path(directory, initial_path);
-	cvm_directory_util_scan(directory);
+	cvm_directory_utility_set_path(directory, initial_path);
+	cvm_directory_utility_scan(directory);
+    cvm_directory_filter_and_sort(directory);
 }
 
 void cvm_directory_terminate(struct cvm_directory* directory)
@@ -283,47 +347,63 @@ void cvm_directory_terminate(struct cvm_directory* directory)
 
 void cvm_directory_goto_parent(struct cvm_directory* directory)
 {
-	cvm_directory_util_goto_parent(directory);
-	cvm_directory_util_scan(directory);
+	cvm_directory_utility_goto_parent(directory);
+	cvm_directory_utility_scan(directory);
+	cvm_directory_filter_and_sort(directory);
 }
 
 void cvm_directory_get_entry_path(struct cvm_directory* directory, uint32_t entry_index, size_t* required_space, char* path_buffer)
 {
 	char* entry_name;
 
-	assert(entry_index < directory->entry_filtered_count);
+	assert(entry_index < directory->entry_count_visible);
 
 	entry_name = directory->filename_buffer + directory->entries[entry_index].entry_name_offset;
 
-	cvm_directory_util_get_path(directory, entry_name, required_space, path_buffer);
+	cvm_directory_utility_get_path(directory, entry_name, required_space, path_buffer);
 }
 
 void cvm_directory_get_file_path(struct cvm_directory* directory, const char* path_relative_filename, size_t* required_space, char* path_buffer)
 {
-	cvm_directory_util_get_path(directory, path_relative_filename, required_space, path_buffer);
+	cvm_directory_utility_get_path(directory, path_relative_filename, required_space, path_buffer);
 }
 
 void cvm_directory_reload(struct cvm_directory* directory)
 {
-	///
+	cvm_directory_utility_scan(directory);
+	cvm_directory_filter_and_sort(directory);
 }
 
 void cvm_directory_set_ordering_name(struct cvm_directory* directory, bool reversed)
 {
-	//
+	if(reversed)
+	{
+		cvm_directory_set_ordering(directory, &cvm_directory_sort_entries_name_descending);
+	}
+	else
+	{
+		cvm_directory_set_ordering(directory, &cvm_directory_sort_entries_name_ascending);
+	}
 }
 
 void cvm_directory_set_ordering_time(struct cvm_directory* directory, bool reversed)
 {
-	//
+	if(reversed)
+	{
+		cvm_directory_set_ordering(directory, &cvm_directory_sort_entries_time_descending);
+	}
+	else
+	{
+		cvm_directory_set_ordering(directory, &cvm_directory_sort_entries_time_ascending);
+	}
 }
 
-void cvm_directory_set_ordering_custom(struct cvm_directory* directory, int (*sort_function)(const struct cvm_directory*, const struct cvm_directory_entry*, const struct cvm_directory_entry*))
+void cvm_directory_set_ordering(struct cvm_directory* directory, bool (*sort_function)(const struct cvm_directory_entry*, const struct cvm_directory_entry*, const struct cvm_directory*))
 {
 	if(sort_function != directory->sort_function)
 	{
 		directory->sort_function = sort_function;
-		cvm_directory_sort(directory);
+		cvm_directory_filter_and_sort(directory);
 	}
 }
 
