@@ -131,7 +131,7 @@ static void text_anchor_widget_min_h(overlay_theme * theme,widget * w)
 
 
 
-static widget_appearence_function_set text_anchor_appearence_functions=
+const static widget_appearence_function_set text_anchor_appearence_functions=
 {
     .render =   text_anchor_widget_render,
     .select =   text_anchor_widget_select,

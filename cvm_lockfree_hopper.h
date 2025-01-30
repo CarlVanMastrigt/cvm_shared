@@ -35,7 +35,8 @@ along with cvm_shared.  If not, see <https://www.gnu.org/licenses/>.
 
 typedef struct cvm_lockfree_hopper
 {
-    _Alignas(128) atomic_uint_fast64_t head;
+    // does alignas here actually improve performance?
+    atomic_uint_fast64_t head;
 }
 cvm_lockfree_hopper;
 

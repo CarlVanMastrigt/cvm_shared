@@ -23,9 +23,68 @@ along with cvm_shared.  If not, see <https://www.gnu.org/licenses/>.
 #define CVM_GATE_SIGNAL_STATUS  ((uint_fast32_t)0x80000001) /**would be last signal and thread is waiting*/
 #define CVM_GATE_DEP_COUNT_MASK ((uint_fast32_t)0x7FFFFFFF)
 
-cvm_gate * cvm_gate_acquire(cvm_gate_pool * pool)
+
+static void cvm_gate_add_dependency(union cvm_sync_primitive* primitive)
 {
-    cvm_gate * gate;
+    cvm_gate_add_dependencies(&primitive->gate, 1);
+}
+static void cvm_gate_signal_dependency(union cvm_sync_primitive* primitive)
+{
+    cvm_gate_signal_dependencies(&primitive->gate, 1);
+}
+static void cvm_gate_add_successor(union cvm_sync_primitive* primitive, union cvm_sync_primitive* successor)
+{
+    assert(false);// gate cannot have sucessors
+    successor->sync_functions->signal_dependency(successor);
+}
+
+const static struct cvm_sync_primitive_functions gate_sync_functions =
+{
+    .add_dependency    = &cvm_gate_add_dependency,
+    .signal_dependency = &cvm_gate_signal_dependency,
+    .add_successor     = &cvm_gate_add_successor,
+};
+
+static void cvm_gate_initialise(void * elem, void * data)
+{
+    struct cvm_gate* gate = elem;
+    struct cvm_gate_pool* pool = data;
+
+    gate->sync_functions = &gate_sync_functions;
+    gate->pool = pool;
+
+    gate->condition=NULL;
+    gate->mutex=NULL;
+    atomic_init(&gate->status, 0);
+}
+
+static void cvm_gate_terminate(void * elem, void * data)
+{
+    struct cvm_gate* gate = elem;
+    assert(gate->mutex==NULL);
+    assert(gate->condition==NULL);
+}
+
+
+void cvm_gate_pool_initialise(struct cvm_gate_pool* pool, size_t capacity_exponent)
+{
+    cvm_lockfree_pool_initialise(&pool->available_gates,capacity_exponent,sizeof(struct cvm_gate));
+    cvm_lockfree_pool_call_for_every_entry(&pool->available_gates, &cvm_gate_initialise, pool);
+}
+
+void cvm_gate_pool_terminate(struct cvm_gate_pool* pool)
+{
+    cvm_lockfree_pool_call_for_every_entry(&pool->available_gates, &cvm_gate_terminate, NULL);
+    cvm_lockfree_pool_terminate(&pool->available_gates);
+}
+
+
+
+
+
+struct cvm_gate * cvm_gate_prepare(struct cvm_gate_pool* pool)
+{
+    struct cvm_gate* gate;
 
     gate=cvm_lockfree_pool_acquire_entry(&pool->available_gates);
     assert(atomic_load(&gate->status)==0);
@@ -34,7 +93,7 @@ cvm_gate * cvm_gate_acquire(cvm_gate_pool * pool)
     return gate;
 }
 
-void cvm_gate_signal(cvm_gate * gate)
+void cvm_gate_signal_dependencies(struct cvm_gate* gate, uint_fast32_t dependency_count)
 {
     uint_fast32_t current_status, replacement_status;
     bool locked;
@@ -77,7 +136,7 @@ void cvm_gate_signal(cvm_gate * gate)
     }
 }
 
-void cvm_gate_wait_and_relinquish(cvm_gate * gate)
+void cvm_gate_wait_and_relinquish(struct cvm_gate * gate)
 {
     mtx_t mutex;
     cnd_t condition;
@@ -127,7 +186,7 @@ void cvm_gate_wait_and_relinquish(cvm_gate * gate)
     cvm_lockfree_pool_relinquish_entry(&gate->pool->available_gates,gate);
 }
 
-void cvm_gate_add_dependencies(cvm_gate * gate, uint32_t dependency_count)
+void cvm_gate_add_dependencies(struct cvm_gate * gate, uint_fast32_t dependency_count)
 {
     atomic_fetch_add_explicit(&gate->status,dependency_count,memory_order_relaxed);
     /// ADDING dependencies shouldn't incurr memory ordering restrictions
@@ -135,40 +194,3 @@ void cvm_gate_add_dependencies(cvm_gate * gate, uint32_t dependency_count)
 }
 
 
-static void cvm_gate_signal_func(void * primitive)
-{
-    cvm_gate_signal(primitive);
-}
-
-static void cvm_gate_initialise(void * elem, void * data)
-{
-    cvm_gate * gate = elem;
-    cvm_gate_pool * pool = data;
-
-    gate->signal_function = &cvm_gate_signal_func;
-    gate->pool = pool;
-
-    gate->condition=NULL;
-    gate->mutex=NULL;
-    atomic_init(&gate->status, 0);
-}
-
-static void cvm_gate_terminate(void * elem, void * data)
-{
-    cvm_gate * gate = elem;
-    assert(gate->mutex==NULL);
-    assert(gate->condition==NULL);
-}
-
-
-void cvm_gate_pool_initialise(cvm_gate_pool * pool, size_t capacity_exponent)
-{
-    cvm_lockfree_pool_initialise(&pool->available_gates,capacity_exponent,sizeof(cvm_gate));
-    cvm_lockfree_pool_call_for_every_entry(&pool->available_gates, &cvm_gate_initialise, pool);
-}
-
-void cvm_gate_pool_terminate(cvm_gate_pool * pool)
-{
-    cvm_lockfree_pool_call_for_every_entry(&pool->available_gates, &cvm_gate_terminate, NULL);
-    cvm_lockfree_pool_terminate(&pool->available_gates);
-}

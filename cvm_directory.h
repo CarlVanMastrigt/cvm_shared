@@ -42,7 +42,6 @@ along with cvm_shared.  If not, see <https://www.gnu.org/licenses/>.
 struct cvm_directory_entry
 {
 	size_t entry_name_offset;
-	// bool is_directory;// subtype value?
 	uint32_t flags;
 	uint32_t mod_t_nsec:30;
 	uint64_t mod_t_sec;
@@ -92,5 +91,7 @@ void cvm_directory_reload(struct cvm_directory* directory);
 void cvm_directory_set_ordering_name(struct cvm_directory* directory, bool reversed);
 void cvm_directory_set_ordering_time(struct cvm_directory* directory, bool reversed);
 void cvm_directory_set_ordering(struct cvm_directory* directory, bool (*sort_function)(const struct cvm_directory_entry*, const struct cvm_directory_entry*, const struct cvm_directory*));
+
+void cvm_directory_debug_print(struct cvm_directory* directory);
 
 #endif // CVM_DIRECTORY_H

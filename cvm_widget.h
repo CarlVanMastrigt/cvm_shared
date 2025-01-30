@@ -46,11 +46,21 @@ along with cvm_shared.  If not, see <https://www.gnu.org/licenses/>.
 #define WIDGET_POS_FLAGS_V      0xC0000000
 #define WIDGET_POS_FLAGS        0xF0000000
 
-
+#warning make this a non-pointer declaration
+// for optionally provoking behaviour on widgets, will always be paired with a data variable, however that means widget type always needs to be known
+//  ^ can data & function reasonably be put on widget_base?
 typedef void(*widget_function)(widget*);
+typedef void(widget_function_)(widget*);
+
+struct widget_function_data_pair
+{
+    void (*function) (widget*);
+    void* data;
+};
 
 typedef struct widget_appearence_function_set
 {
+    #warning move theme to widget context
     void    (*const render) (overlay_theme*,widget*,int16_t,int16_t,struct cvm_overlay_render_batch*,rectangle);
     widget* (*const select) (overlay_theme*,widget*,int16_t,int16_t);
     void    (*const min_w)  (overlay_theme*,widget*);
@@ -90,6 +100,10 @@ widget_appearence_function_set;
 
 typedef struct widget_behaviour_function_set
 {
+    #warning make these actions rather than interactions (?? even possible) e.g. select, deselect, activate, deactivate
+    // ^ may make it difficult to have variant interaction modes, like single click button, release button and double click button...
+    // widget under mouse could be used to query activation requirements (stored in status flags?? returned by behaviour function?)
+
     void    (*const l_click)    (overlay_theme*,widget*,int,int,bool);
     bool    (*const l_release)  (overlay_theme*,widget*,widget*,int,int);
     void    (*const r_click)    (overlay_theme*,widget*,int,int);
@@ -211,7 +225,6 @@ widget_base;
 union widget
 {
     widget_base                 base;
-
 
     widget_button               button;
     widget_anchor               anchor;

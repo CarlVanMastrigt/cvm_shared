@@ -405,3 +405,20 @@ void create_self_deleting_dialogue(struct widget_context* context, widget* root_
     set_only_interactable_widget(context, sdd->dialogue);
     // organise_root_widget(root_widget, root_widget->base.r.x2, root_widget->base.r.y2);
 }
+
+
+
+
+
+
+
+/** remove
+widget_contiguous_box
+widget_file_list
+
+make text_bar more dynamic or create a new widget type
+*/
+
+
+
+

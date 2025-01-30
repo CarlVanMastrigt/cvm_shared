@@ -53,6 +53,63 @@ widget * create_icon_collapse_button(struct widget_context* context, char * icon
 
 void create_self_deleting_dialogue(struct widget_context* context, widget* root_widget, const char* message_str, const char* accept_str, const char* cancel_str, void* data, void (*accept_function)(void*), void (*cancel_function)(void*));
 
+
+
+
+
+
+
+// // this *basically* needs to be an ad-hoc widget, otherwise would need to somehow pass through behaviour for internal widget(s) -- maybe thats possible though?
+// typedef struct widget_file_list_2
+// {
+//     widget_base base;
+
+//     struct cvm_directory* directory;
+
+
+// }
+// widget_file_list_2;
+
+
+// way to support grid, h-list, v-list?
+typedef struct widget_multibox
+{
+    widget_base base;
+
+    void* shared_data;
+
+    ///uses shared_data to get count for display purposes
+    uint32_t (*const get_count)(void*);
+
+    ///uses shared_data and index to get a particular entry for rendering &c.
+    void*    (*const get_entry)(void*, int32_t);
+
+    #warning other widgets that keep pointers (e.g. sliderbar) should perhaps instead have accessor functions?? (as above) to allow more complex or threadsafe behaviour
+
+   	// appearance & behaviour of contents
+   	#warning these actually arent enough! they don't provide any way to know WHICH element/content to render for! (FUCK) basically need specialised render function!
+   		/// ^ min sizes can be
+    // const widget_appearence_function_set* entry_appearence_functions;
+    // const widget_behaviour_function_set* entry_behaviour_functions;
+
+    // what should these take as input to get data? widget* or void* ???
+    // render same as `widget_appearence_function_set` with the entry number included
+    void    (*const entry_render) (widget*,int16_t,int16_t,struct cvm_overlay_render_batch*,rectangle,uint32_t);
+    int16_t (*const entry_min_w)  (widget*);
+    int16_t (*const entry_min_h)  (widget*);
+
+    // behaviour functions WAY more complex!
+
+    // for rendering purposes, need x and y to account for grid capabilities
+    // affect widget w/h which are int16
+    int16_t min_displayed_count_x;
+    int16_t min_displayed_count_y;
+}
+widget_multibox;
+
+
+
+
 #endif
 
 

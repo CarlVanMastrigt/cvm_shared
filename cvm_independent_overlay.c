@@ -471,14 +471,14 @@ struct cvm_overlay_renderer* cvm_overlay_renderer_create(struct cvm_vk_device * 
 void cvm_overlay_renderer_destroy(struct cvm_overlay_renderer * renderer, struct cvm_vk_device * device)
 {
     struct cvm_overlay_target_resources * target_resources;
-    uint32_t i;
+    struct cvm_overlay_transient_resources* transient_resources;
 
-    for(i=0;i<renderer->transient_count_initialised;i++)
+    while( cvm_overlay_transient_resources_queue_dequeue(&renderer->transient_resources_queue, &transient_resources))
     {
-        cvm_overlay_transient_resources_terminate(renderer->transient_resources_backing + i, device);
+        cvm_overlay_transient_resources_terminate(transient_resources, device);
     }
-    free(renderer->transient_resources_backing);
     cvm_overlay_transient_resources_queue_terminate(&renderer->transient_resources_queue);
+    free(renderer->transient_resources_backing);
 
 
     while((target_resources = cvm_overlay_target_resources_queue_dequeue_ptr(&renderer->target_resources)))
@@ -488,11 +488,8 @@ void cvm_overlay_renderer_destroy(struct cvm_overlay_renderer * renderer, struct
     cvm_overlay_target_resources_queue_terminate(&renderer->target_resources);
 
 
-
     cvm_overlay_render_batch_terminate(&renderer->render_batch);
-
     cvm_overlay_rendering_resources_terminate(&renderer->rendering_resources, device);
-
 
     free(renderer);
 }

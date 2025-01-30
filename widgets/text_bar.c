@@ -83,6 +83,7 @@ static void text_bar_copy_selection_to_clipboard(widget * w)
         tmp=*s_end;
         *s_end='\0';
 
+        #warning possibly want abstraction over this, function in properties of event?
         SDL_SetClipboardText(s_begin);
 
         *s_end=tmp;
@@ -290,11 +291,26 @@ static void text_bar_widget_render(overlay_theme * theme,widget * w,int16_t x_of
 
 
     text_render_data.x-=w->text_bar.visible_offset;
-    if(w->text_bar.selection_end > w->text_bar.selection_begin) text_render_data.selection_begin=w->text_bar.selection_begin, text_render_data.selection_end=w->text_bar.selection_end;
-    else text_render_data.selection_begin=w->text_bar.selection_end, text_render_data.selection_end=w->text_bar.selection_begin;
 
-    text_render_data.flags|=(w->text_bar.min_glyph_render_count||w->text_bar.max_glyph_render_count)*OVERLAY_TEXT_RENDER_FADING;
-    text_render_data.flags|=is_currently_active_widget(w)*OVERLAY_TEXT_RENDER_SELECTION;
+    if(w->text_bar.min_visible_glyph_count)
+    {
+        text_render_data.flags |= OVERLAY_TEXT_RENDER_FADING;
+    }
+    if(is_currently_active_widget(w))
+    {
+        text_render_data.flags |= OVERLAY_TEXT_RENDER_SELECTION;
+
+        if(w->text_bar.selection_end > w->text_bar.selection_begin)
+        {
+            text_render_data.selection_begin = w->text_bar.selection_begin;
+            text_render_data.selection_end   = w->text_bar.selection_end;
+        }
+        else
+        {
+            text_render_data.selection_begin = w->text_bar.selection_end;
+            text_render_data.selection_end   = w->text_bar.selection_begin;
+        }
+    }
 
     overlay_text_single_line_render(render_batch,theme,&text_render_data);
 }
@@ -309,26 +325,14 @@ static widget * text_bar_widget_select(overlay_theme * theme,widget * w,int16_t 
 static void text_bar_widget_min_w(overlay_theme * theme,widget * w)
 {
     int16_t max_w;
+    /// should re-query text here
 
-
-    if(w->text_bar.min_glyph_render_count)
+    if(w->text_bar.min_visible_glyph_count)
     {
-        w->base.min_w = 2*theme->h_bar_text_offset + w->text_bar.min_glyph_render_count * theme->font.max_advance + 1;///+1 for caret
-        ///also need to set flag to recalculate text size here b/c that functionality won't be provoked upon theme change but this function will be called and the product of the change will be necessary
+        w->base.min_w = 2*theme->h_bar_text_offset + w->text_bar.min_visible_glyph_count * theme->font.max_advance + 1;///+1 for caret
         w->text_bar.recalculate_text_size=true;
     }
     else w->base.min_w = 2*theme->h_bar_text_offset + overlay_text_single_line_get_pixel_length(&theme->font,w->text_bar.text) + 1;///+1 for caret
-
-    if(w->text_bar.max_glyph_render_count)
-    {
-        assert(w->text_bar.min_glyph_render_count < w->text_bar.max_glyph_render_count);
-        max_w=2*theme->h_bar_text_offset + w->text_bar.max_glyph_render_count * theme->font.max_advance;
-        if(w->base.min_w>max_w)
-        {
-            w->base.min_w=max_w;
-            w->text_bar.recalculate_text_size=true;
-        }
-    }
 }
 
 static void text_bar_widget_min_h(overlay_theme * theme,widget * w)
@@ -374,8 +378,7 @@ widget * create_static_text_bar(struct widget_context* context, const char * tex
 	///w->text_bar.set_text=NULL;
 	///w->text_bar.data=NULL;
 
-	w->text_bar.min_glyph_render_count=0;
-	w->text_bar.max_glyph_render_count=0;
+	w->text_bar.min_visible_glyph_count=0;
 
 	w->text_bar.free_text=true;
 	w->text_bar.allow_selection=false;
@@ -397,16 +400,15 @@ widget * create_static_text_bar(struct widget_context* context, const char * tex
 	return w;
 }
 
-widget * create_dynamic_text_bar(struct widget_context* context, int min_glyph_render_count,widget_text_alignment text_alignment,bool allow_selection)
+widget * create_dynamic_text_bar(struct widget_context* context, int16_t min_visible_glyph_count, widget_text_alignment text_alignment,bool allow_selection)
 {
 	widget * w=create_widget(context, sizeof(widget_text_bar));
 
 	w->base.appearence_functions=&text_bar_appearence_functions;
 	w->base.behaviour_functions=&text_bar_behaviour_functions;
 
-	assert(min_glyph_render_count);///ZERO GLYPH RENDER COUNT INVALID FOR DYNAMIC TEXT BARS
-	w->text_bar.min_glyph_render_count=min_glyph_render_count;
-	w->text_bar.max_glyph_render_count=0;
+	assert(min_visible_glyph_count);///ZERO GLYPH RENDER COUNT INVALID FOR DYNAMIC TEXT BARS
+	w->text_bar.min_visible_glyph_count=min_visible_glyph_count;
 
 	w->text_bar.free_text=false;
 	w->text_bar.allow_selection=allow_selection;
@@ -469,8 +471,9 @@ void text_bar_widget_set_text(widget * w,const char * text_to_copy)
 }
 
 /**
-
 programmable text bar is almost certainly undesirable, requires constant update, which i would prefer to avoid, instead changes should be externally managed and updates called
+    ^ maybe there's no other way though?
+        ^ to include current selection in bar, would need to link one widget to another, which is allowed, but is quite unsafe (text bar needs to look at file list widget)
 
 for patching file search elements together; the file search manager should be doing the work (in a separate buffer presumably)
 

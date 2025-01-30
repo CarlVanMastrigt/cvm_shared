@@ -19,8 +19,6 @@ along with cvm_shared.  If not, see <https://www.gnu.org/licenses/>.
 
 #ifdef CVM_DIRECTORY_UTILITY_IMPLEMENTATION
 
-
-
 #include <sys/stat.h>
 #include <dirent.h>
 

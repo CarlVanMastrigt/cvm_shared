@@ -22,14 +22,14 @@ along with cvm_shared.  If not, see <https://www.gnu.org/licenses/>.
 #warning do we want a syetem to spin up new workers if/when a gate is stalled? (trylock or atomic checking only?)
 
 
-void cvm_sync_task_happens_before_task(cvm_task * a, cvm_task * b)
+void cvm_sync_establish_ordering_typed(union cvm_sync_primitive* a, union cvm_sync_primitive* b)
 {
-    cvm_task_add_dependencies(b, 1);
-    cvm_task_add_successor(a,(cvm_sync_primitive*)b);
+    b->sync_functions->add_dependency(b);
+    // because sucessor may signal the dependency immediately, b must have a dependency set first
+    a->sync_functions->add_successor(a,b);
 }
 
-void cvm_sync_task_happens_before_gate(cvm_task * a, cvm_gate * b)
+void cvm_sync_establish_ordering(void* a, void* b)
 {
-    cvm_gate_add_dependencies(b, 1);
-    cvm_task_add_successor(a,(cvm_sync_primitive*)b);
+    cvm_sync_establish_ordering_typed(a, b);
 }

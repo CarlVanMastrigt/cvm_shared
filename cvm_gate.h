@@ -24,39 +24,40 @@ along with cvm_shared.  If not, see <https://www.gnu.org/licenses/>.
 #ifndef CVM_GATE_H
 #define CVM_GATE_H
 
-typedef struct cvm_gate_pool
+struct cvm_gate_pool
 {
     cvm_lockfree_pool available_gates;
-}
-cvm_gate_pool;
+};
 
-typedef struct cvm_gate
+struct cvm_gate
 {
-    cvm_sync_primitive_signal_function * signal_function;/// polymorphic base
+    const struct cvm_sync_primitive_functions* sync_functions;
 
-    cvm_gate_pool * pool;
+    struct cvm_gate_pool* pool;
 
     atomic_uint_fast32_t status;
 
-    mtx_t * mutex;
-    cnd_t * condition;
-}
-cvm_gate;
+    mtx_t* mutex;
+    cnd_t* condition;
+};
 
-cvm_gate * cvm_gate_acquire(cvm_gate_pool * pool);
+void cvm_gate_pool_initialise(struct cvm_gate_pool* pool, size_t capacity_exponent);
+void cvm_gate_pool_terminate(struct cvm_gate_pool* pool);
 
-/// must be called once for every dependency added by a call to cvm_gate_add_dependencies
-void cvm_gate_signal(cvm_gate * gate);
 
-/// MUST be called at some point as this will clean up the acquired gate
-void cvm_gate_wait_and_relinquish(cvm_gate * gate);
+struct cvm_gate* cvm_gate_prepare(struct cvm_gate_pool* pool);
 
 /// used to set up dependencies (calls to cvm_gate_signal) to wait on (dont return from cvm_gate_wait until all signals happen)
 /// must know that an gate has at least one outstanding dependency and/or that the gate hasn't been waited on for calling this to be legal
-void cvm_gate_add_dependencies(cvm_gate * gate, uint32_t dependency_count);
+void cvm_gate_add_dependencies(struct cvm_gate* gate, uint_fast32_t dependency_count);
 
-void cvm_gate_pool_initialise(cvm_gate_pool * pool, size_t capacity_exponent);
-void cvm_gate_pool_terminate(cvm_gate_pool * pool);
+/// must be called once for every dependency added by a call to cvm_gate_add_dependencies
+void cvm_gate_signal_dependencies(struct cvm_gate* gate, uint_fast32_t dependency_count);
+
+/// MUST be called at some point as this will clean up the acquired gate
+void cvm_gate_wait_and_relinquish(struct cvm_gate* gate);
+
+
 
 
 #endif

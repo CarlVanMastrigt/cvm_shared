@@ -24,26 +24,36 @@ along with cvm_shared.  If not, see <https://www.gnu.org/licenses/>.
 #ifndef CVM_SYNC_PRIMITIVES_H
 #define CVM_SYNC_PRIMITIVES_H
 
-///polymorphic base for primitives (gate, task &c.)
-typedef void (cvm_sync_primitive_signal_function)(void * primitive);
+union cvm_sync_primitive;
 
-typedef union cvm_sync_primitive cvm_sync_primitive;
+struct cvm_sync_primitive_functions
+{
+    void(*const add_dependency   )(union cvm_sync_primitive*);
+    void(*const signal_dependency)(union cvm_sync_primitive*);
+    void(*const add_successor    )(union cvm_sync_primitive*, union cvm_sync_primitive*);//primitive, successor
+};
 
 #include "cvm_task.h"
 #include "cvm_gate.h"
 
 union cvm_sync_primitive
 {
-    cvm_sync_primitive_signal_function * signal_function;// base of all elements in union
-    cvm_task task;
-    cvm_gate gate;
+    const struct cvm_sync_primitive_functions* sync_functions;
+    struct cvm_task task;
+    struct cvm_gate gate;
 };
 
-/// adds a successor/dependency relationship to the 2 tasks
-void cvm_sync_task_happens_before_task(cvm_task * a, cvm_task * b);
-/// are aliases of above more confusing/undesirable? otherwise could alias as add_dependency and add_dependent
+/**
+ * a happens before b
+ *
+ * a must have a reference retained or an unsignalled dependency
+ * b must have an unsignalled dependency
+ *
+ * (for tasks not yet having been enqueued on counts as an unsignalled dependency)
+ * (for gates not yet having been waited on counts as an unsignalled dependency)
+ */
+void cvm_sync_establish_ordering_typed(union cvm_sync_primitive* a, union cvm_sync_primitive* b);
+void cvm_sync_establish_ordering(void* a, void* b);
 
-/// use to ensure a task runs before the gate is signalled
-void cvm_sync_task_happens_before_gate(cvm_task * a, cvm_gate * b);
 
 #endif

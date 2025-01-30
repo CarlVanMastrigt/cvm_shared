@@ -79,10 +79,10 @@ void cvm_directory_ensure_path_space(struct cvm_directory* directory, size_t req
 
 
 // `util` functions should be implemented in platform specific manner
-bool cvm_directory_utility_set_path(struct cvm_directory* directory, const char* path);
-void cvm_directory_utility_scan(struct cvm_directory* directory);
-void cvm_directory_utility_goto_parent(struct cvm_directory* directory);
-void cvm_directory_utility_get_path(struct cvm_directory* directory, const char* to_append, size_t* required_space, char* path_buffer);
+// bool cvm_directory_utility_set_path(struct cvm_directory* directory, const char* path);
+// void cvm_directory_utility_scan(struct cvm_directory* directory);
+// void cvm_directory_utility_goto_parent(struct cvm_directory* directory);
+// void cvm_directory_utility_get_path(struct cvm_directory* directory, const char* to_append, size_t* required_space, char* path_buffer);
 
 
 #define CVM_DIRECTORY_UTILITY_IMPLEMENTATION
@@ -93,20 +93,17 @@ void cvm_directory_utility_get_path(struct cvm_directory* directory, const char*
 
 
 
-
-
-
-
-
 /// used as wrapper over function pointer
 static inline bool cvm_directory_sort_function(const struct cvm_directory_entry* entry_1, const struct cvm_directory_entry* entry_2, const struct cvm_directory* directory)
 {
-	#warning this should ONLY be called if the sort function is non-null
 	return directory->sort_function(entry_1, entry_2, directory);
 }
 
 #define CVM_COMPARE_LT cvm_directory_sort_function
 CVM_QUICKSORT_CONTEXT(struct cvm_directory_entry, cvm_directory_sort, 8, const struct cvm_directory*);
+
+
+
 
 static inline void cvm_directory_filter_and_sort(struct cvm_directory* directory)
 {
@@ -144,28 +141,13 @@ static inline void cvm_directory_filter_and_sort(struct cvm_directory* directory
 	assert(directory->sort_function);
 
 	cvm_directory_sort(entries, passing_count, directory);
-
-	#warning for testing REMOVE (?)
-	size_t i=0;
-	while(i<directory->entry_count_visible)
-	{
-		struct cvm_directory_entry* e = directory->entries+i++;
-		printf("%s : %s : %lu : %u\n", (e->flags&CVM_DIRECTORY_FLAG_DIRECTORY)?"folder":((e->flags&CVM_DIRECTORY_FLAG_REGULAR_FILE)?"file":"?"),
-		       directory->filename_buffer+e->entry_name_offset, e->mod_t_sec, e->mod_t_nsec);
-	}
-	puts("===== filtered =====");
-	while(i<directory->entry_count_total)
-	{
-		struct cvm_directory_entry* e = directory->entries+i++;
-		printf("%s : %s : %lu : %u\n", (e->flags&CVM_DIRECTORY_FLAG_DIRECTORY)?"folder":((e->flags&CVM_DIRECTORY_FLAG_REGULAR_FILE)?"file":"?"),
-		       directory->filename_buffer+e->entry_name_offset, e->mod_t_sec, e->mod_t_nsec);
-	}
 }
 
 #warning move this to utilities and make it more parsable (and fucking validate/understand it)
 static inline int cvm_strcmp_numbers(const char * s1,const char * s2)
 {
-    char c1,c2,d;
+	// in effect returns sign(s1 - s2) in terms of position in ordered list
+    char c1,c2,l1,l2,d;
     const char *n1,*n2,*e1,*e2;
 
     do
@@ -191,21 +173,26 @@ static inline int cvm_strcmp_numbers(const char * s1,const char * s2)
                 n2--;
                 if(n1<s1)
                 {
-                    if(!d && n2>=s2)return -1;///n2 is the same number as n1 but has more digits so leading zeros (or non-zeros) takes precedence
-                    while(n2>=s2) if(*n2-- != '0') return -1;///n2 is larger
+                    // if(!d && n2>=s2)return -1;// more digits go later if "number" is the same
+                    while(n2>=s2) if(*n2-- != '0') return -1;///n2 is larger number
                     if(d) return d;
                     else break;
                 }
                 if(n2<s2)
                 {
-                    if(!d) return 1; ///same as other branch but n1>=s1 is definitely satisfied by other branch not having been taken
-                    while(n1>=s1) if(*n1-- != '0') return 1;///n1 is larger
+                    // if(!d && n1>=s1) return 1; // more digits go later if "number" is the same
+                    while(n1>=s1) if(*n1-- != '0') return 1;///n1 is larger number
                     if(d) return d;
                     else break;
                 }
-                if(*n1!=*n2) d=*n1-*n2;
+                if(*n1!=*n2)
+                {
+                	// most significant different digit
+                	d=*n1-*n2;
+                }
             }
-            ///skip to the point past the number block
+
+            ///skip to the point past the number block (reset s and c)
             s1=e1;
             s2=e2;
             c1=*s1;
@@ -217,18 +204,22 @@ static inline int cvm_strcmp_numbers(const char * s1,const char * s2)
             s2++;
         }
 
-        // convert lower case
-        #warning order lower first but match lower and upper case symbols
 
         #warning is there an ordering for non-latin alphabets that can easily be respected??
-        // if(c1>='A' && c1<='Z')c1-='A'-'a';
-        // if(c2>='A' && c2<='Z')c2-='A'-'a';
+        // give alphabetical order higher priority than capitalization
+        l1=c1;
+        l2=c2;
+        if(l1>='A' && l1<='Z')l1-='A'-'a';
+        if(l2>='A' && l2<='Z')l2-='A'-'a';
+        if(l1!=l2)
+        {
+        	return l1-l2;
+        }
     }
     while((c1==c2)&&(c1)&&(c2));
 
     return (c1-c2);
 }
-
 
 static bool cvm_directory_sort_entries_name_ascending(const struct cvm_directory_entry* entry_1, const struct cvm_directory_entry* entry_2, const struct cvm_directory* directory)
 {
@@ -295,11 +286,6 @@ static bool cvm_directory_sort_entries_time_descending(const struct cvm_director
 		return entry_1->mod_t_sec > entry_2->mod_t_sec;
 	}
 }
-
-
-
-
-
 
 
 
@@ -411,3 +397,23 @@ void cvm_directory_set_ordering(struct cvm_directory* directory, bool (*sort_fun
 // for widgets that reference this we should avoid having anything built on top of it, this becomes complicated in the case of text bar though (for selections)
 // this can be done in custom fashion though (validating contents and querying basis before invalidating local contents)
 // it DOES however mean we should move all sort/filter operations to the directory
+
+// all widgets accessing directory should use opaque accesses for all variables!, this is quite difficult (but not impossible) for textbox displaying selected widget
+
+void cvm_directory_debug_print(struct cvm_directory* directory)
+{
+	size_t i;
+	printf("directory: %s\n", directory->path);
+	puts("==== visible entries ====");
+	for(i=0; i<directory->entry_count_visible; i++)
+	{
+		printf("\"%s\" (0x%X)\n",directory->filename_buffer+directory->entries[i].entry_name_offset, directory->entries[i].flags);
+	}
+	puts("==== non-visible entries ====");
+	for(i=directory->entry_count_visible; i<directory->entry_count_total; i++)
+	{
+		printf("\"%s\" (0x%X)\n",directory->filename_buffer+directory->entries[i].entry_name_offset, directory->entries[i].flags);
+	}
+	puts("\n");
+}
+
