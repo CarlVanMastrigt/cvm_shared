@@ -40,7 +40,7 @@ struct cvm_lockfree_pool
 void cvm_lockfree_pool_initialise(cvm_lockfree_pool * pool, size_t capacity_exponent, size_t entry_size);
 void cvm_lockfree_pool_terminate(cvm_lockfree_pool * pool);
 
-void * cvm_lockfree_pool_acquire_entry(cvm_lockfree_pool * pool);
+void* cvm_lockfree_pool_acquire_entry(cvm_lockfree_pool * pool);
 void cvm_lockfree_pool_relinquish_entry(cvm_lockfree_pool * pool, void * entry);
 
 void cvm_lockfree_pool_call_for_every_entry(cvm_lockfree_pool * pool,void (*func)(void * elem, void * data), void * data);

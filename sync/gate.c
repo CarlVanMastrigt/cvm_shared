@@ -168,7 +168,7 @@ void cvm_gate_signal_conditions(struct cvm_gate* gate, uint_fast32_t count)
     uint_fast32_t current_status, replacement_status;
     bool locked;
 
-    current_status=atomic_load_explicit(&gate->status, memory_order_relaxed);
+    current_status=atomic_load_explicit(&gate->status, memory_order_acquire);
     locked = false;
 
     do
@@ -195,7 +195,7 @@ void cvm_gate_signal_conditions(struct cvm_gate* gate, uint_fast32_t count)
         }
 
     }
-    while(!atomic_compare_exchange_weak_explicit(&gate->status, &current_status, replacement_status, memory_order_release, memory_order_relaxed));
+    while(!atomic_compare_exchange_weak_explicit(&gate->status, &current_status, replacement_status, memory_order_release, memory_order_acquire));
 
     assert(locked == (current_status==CVM_GATE_SIGNAL_STATUS));///must have locked if we need to signal the condition, and must not have locked if we don't
 

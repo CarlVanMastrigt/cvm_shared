@@ -19,6 +19,8 @@ along with cvm_shared.  If not, see <https://www.gnu.org/licenses/>.
 
 #include "cvm_shared.h"
 
+#warning check mask shouldn't be necessary, as hopper should ONLY add contents between being reset...
+
 #define CVM_LOCKFREE_HOPPER_CHECK_MASK ((uint_fast64_t)0xFFFFFFFFFFFE0000llu)
 #define CVM_LOCKFREE_HOPPER_ENTRY_MASK ((uint_fast64_t)0x000000000000FFFFllu)
 
@@ -140,7 +142,7 @@ void* cvm_lockfree_hopper_get_next(cvm_lockfree_pool * pool, void * previous_ent
     uint_fast64_t previous_entry_index;
     size_t previous_entry_offset;
 
-    #warning genericise getting indexx in pool!
+    #warning genericise getting index in pool!
     assert(previous_entry!=NULL);
     assert((char*)previous_entry >= pool->available_entries.entry_data);
 

@@ -45,7 +45,7 @@ void cvm_lockfree_stack_push(cvm_lockfree_stack * stack, void * entry)
 
     assert(entry_index < ((uint_fast64_t)1 << stack->capacity_exponent));
 
-    current_head=atomic_load_explicit(&stack->head, memory_order_relaxed);
+    current_head = atomic_load_explicit(&stack->head, memory_order_relaxed);
     do
     {
         stack->next_buffer[entry_index] = (uint16_t)(current_head & CVM_LOCKFREE_STACK_ENTRY_MASK);
@@ -79,4 +79,5 @@ void * cvm_lockfree_stack_pull(cvm_lockfree_stack * stack)
 
     return stack->entry_data + entry_index*stack->entry_size;
 }
+
 

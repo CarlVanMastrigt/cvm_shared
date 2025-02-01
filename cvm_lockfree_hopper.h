@@ -35,26 +35,26 @@ along with cvm_shared.  If not, see <https://www.gnu.org/licenses/>.
 
 typedef struct cvm_lockfree_hopper
 {
-    // does alignas here actually improve performance?
+    // this could probably be an atomic pointer
     atomic_uint_fast64_t head;
 }
 cvm_lockfree_hopper;
 
 /// a hopper uses a pool for backing
-void cvm_lockfree_hopper_initialise(cvm_lockfree_hopper * hopper, cvm_lockfree_pool * pool);
-void cvm_lockfree_hopper_terminate(cvm_lockfree_hopper * hopper);
+void cvm_lockfree_hopper_initialise(cvm_lockfree_hopper* hopper, cvm_lockfree_pool* pool);
+void cvm_lockfree_hopper_terminate(cvm_lockfree_hopper* hopper);
 
 void cvm_lockfree_hopper_reset(cvm_lockfree_hopper * hopper);
 
-bool cvm_lockfree_hopper_push(cvm_lockfree_hopper * hopper, cvm_lockfree_pool * pool, void * entry);/// returns true if it was added, false if not (fails if hopper is locked)
+bool cvm_lockfree_hopper_push(cvm_lockfree_hopper* hopper, cvm_lockfree_pool* pool, void* entry);/// returns true if it was added, false if not (fails if hopper is locked)
 bool cvm_lockfree_hopper_check_if_locked(cvm_lockfree_hopper * hopper);
-void * cvm_lockfree_hopper_lock_and_get_first(cvm_lockfree_hopper * hopper, cvm_lockfree_pool * pool);
+void* cvm_lockfree_hopper_lock_and_get_first(cvm_lockfree_hopper* hopper, cvm_lockfree_pool* pool);
 
 /// hopper not actually required for these functions, only for the initial lock and get operation
 /// these should also ONLY be used passing a `previous_entry` returned by that function or these
 void* cvm_lockfree_hopper_relinquish_and_get_next(cvm_lockfree_pool * pool, void * previous_entry);
 
-void* cvm_lockfree_hopper_get_next(cvm_lockfree_pool * pool, void * previous_entry);
+void* cvm_lockfree_hopper_get_next(cvm_lockfree_pool* pool, void * previous_entry);
 /// MUST be called with value returned by `cvm_lockfree_hopper_lock_and_get_first` and CANNOT have called `cvm_lockfree_hopper_relinquish_and_get_next` while iterating entries
 void cvm_lockfree_hopper_relinquish_all(cvm_lockfree_pool * pool, void * first_entry, void * last_entry);
 

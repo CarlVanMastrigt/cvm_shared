@@ -25,28 +25,6 @@ along with cvm_shared.  If not, see <https://www.gnu.org/licenses/>.
 #define CVM_TASK_H
 
 
-// probably want tie in to an "actor" subsystem (single threaded process) should that actually be determined to be a desirable thing to have
-//      ^ could just have series of tasks that trigger each other and/or mailbox that ensures it either has a task executing or enqueues execution of a task to handle the work (unified work system)
-
-struct cvm_task
-{
-    const struct cvm_sync_primitive_functions* sync_functions;
-
-    struct cvm_task_system* task_system;
-
-    void(*task_function)(void*);
-    void* task_function_data;
-
-    /// need to only init atomics once: "If obj was not default-constructed, or this function is called twice on the same obj, the behavior is undefined."
-
-    atomic_uint_fast32_t dependency_count;
-    atomic_uint_fast32_t reference_count;
-
-    cvm_lockfree_hopper successor_hopper;
-};
-
-
-
 struct cvm_task_system
 {
     cvm_lockfree_pool task_pool;
@@ -85,34 +63,48 @@ void cvm_task_system_terminate(struct cvm_task_system* task_system);
 
 
 
-// task stars inert/unactivated and cannot run (so that order of execution relative to other promitives can be established) `cvm_task_activate` must be called for it to run
+struct cvm_task
+{
+    const struct cvm_sync_primitive_functions* sync_functions;
+
+    struct cvm_task_system* task_system;
+
+    void(*task_function)(void*);
+    void* task_function_data;
+
+    /// need to only init atomics once: "If obj was not default-constructed, or this function is called twice on the same obj, the behavior is undefined."
+
+    atomic_uint_fast32_t condition_count;
+    atomic_uint_fast32_t reference_count;
+
+    cvm_lockfree_hopper successor_hopper;
+};
+
+
+// task starts inert/unactivated and cannot run (so that order of execution relative to other primitives can be established) `cvm_task_activate` must be called for it to run
 struct cvm_task* cvm_task_prepare(struct cvm_task_system* task_system, void(*task_function)(void*), void* data);
 
 /// allows a task to be executed
-/// must either add all associated dependencies before calling this or add dependencies and retain the task as necessary to set up the dependencies later
+/// must either add all associated dependencies/condition before calling this OR impose conditions and retain references the task as necessary to set up dependencies later
 void cvm_task_activate(struct cvm_task* task);//commit?
 
 
 
-
-/// everything from here is only useful if task successors/predecessors/data want to be set up AFTER the task has been enqueued
-
-
+// all conditions must be satisfied for a task to run
 
 /// corresponds to the number of times a matching `cvm_task_signal_conditions` must be called for the task before it can be executed
-/// at least one dependency must be held in order to set up a dependency to that task if it has already been enqueued
+/// at least one condition must be unsignalled in order to set up another condition to that task if it has already been enqueued
 void cvm_task_impose_conditions(struct cvm_task* task, uint_fast32_t count);
 
 /// use this to signal that some set of data and/or dependencies required by the task have been set up, total must be matched to the count provided to cvm_task_impose_conditions
 void cvm_task_signal_conditions(struct cvm_task* task, uint_fast32_t count);
 
-/// execution dependencies also act as retained references (because we cannot clean up a task until it has been executed) as such if a dependency is required anyway then a refernce need not be held as well
 
-/// corresponds to the number of times a matching `cvm_task_release_retainer` must be called for the task before it can be destroyed/released (i.e. the pointer becomes an invalid way to refernce this task)
+/// corresponds to the number of times a matching `cvm_task_release_reference` must be called for the task before it can be cleaned up
 /// at least one retainer must be held in order to set up a successor to that task if it has already been enqueued
 void cvm_task_retain_references(struct cvm_task* task, uint_fast32_t count);
 
-/// signal that we are done setting up things that must happen before cleanup (e.g. setting up successors tasks/gates)
+/// signal that we are done setting up things that must happen before cleanup (e.g. setting up successors)
 void cvm_task_release_references(struct cvm_task* task, uint_fast32_t count);
 
 

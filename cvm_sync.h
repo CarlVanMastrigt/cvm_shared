@@ -39,12 +39,14 @@ struct cvm_sync_primitive_functions
 
 #include "sync/task.h"
 #include "sync/gate.h"
+#include "sync/barrier.h"
 
 union cvm_sync_primitive
 {
     const struct cvm_sync_primitive_functions* sync_functions;
     struct cvm_task task;
     struct cvm_gate gate;
+    struct cvm_barrier barrier;
 };
 
 static inline void cvm_sync_primitive_impose_condition(union cvm_sync_primitive* primitive)

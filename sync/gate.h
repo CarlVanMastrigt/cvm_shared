@@ -29,6 +29,9 @@ struct cvm_gate_pool
     cvm_lockfree_pool available_gates;
 };
 
+void cvm_gate_pool_initialise(struct cvm_gate_pool* pool, size_t capacity_exponent);
+void cvm_gate_pool_terminate(struct cvm_gate_pool* pool);
+
 struct cvm_gate
 {
     const struct cvm_sync_primitive_functions* sync_functions;
@@ -40,10 +43,6 @@ struct cvm_gate
     mtx_t* mutex;
     cnd_t* condition;
 };
-
-void cvm_gate_pool_initialise(struct cvm_gate_pool* pool, size_t capacity_exponent);
-void cvm_gate_pool_terminate(struct cvm_gate_pool* pool);
-
 
 struct cvm_gate* cvm_gate_prepare(struct cvm_gate_pool* pool);
 
