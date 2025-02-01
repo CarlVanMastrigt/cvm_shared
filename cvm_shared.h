@@ -67,7 +67,7 @@ typedef union widget widget; // find a better place to put this?
 #include "cvm_mesh.h"
 #include "cvm_coherent_data_structures.h"
 #include "cvm_thread.h"
-#include "cvm_sync_primitives.h"
+#include "cvm_sync.h"
 
 
 #include "cvm_debug_render.h"

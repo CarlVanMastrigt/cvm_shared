@@ -1,5 +1,5 @@
 /**
-Copyright 2024 Carl van Mastrigt
+Copyright 2024,2025 Carl van Mastrigt
 
 This file is part of cvm_shared.
 
@@ -17,95 +17,8 @@ You should have received a copy of the GNU Affero General Public License
 along with cvm_shared.  If not, see <https://www.gnu.org/licenses/>.
 */
 
-#include "cvm_shared.h"
+#include "task.h"
 
-
-void cvm_task_add_dependencies(struct cvm_task* task, uint_fast32_t count)
-{
-    uint_fast32_t old_count=atomic_fetch_add_explicit(&task->dependency_count, count, memory_order_relaxed);
-    assert(old_count>0);/// should not be adding dependencies when none still exist (need held dependencies to addsetup more dependencies)
-}
-
-void cvm_task_signal_dependencies(struct cvm_task* task, uint_fast32_t count)
-{
-    uint_fast32_t old_count;
-    bool unstall_worker;
-    struct cvm_task_system* task_system = task->task_system;
-
-    /// this is responsible for coalescing all modifications, but also for making them available to the next thread/atomic to recieve this memory (after the potential release in this function)
-    old_count=atomic_fetch_sub_explicit(&task->dependency_count, count, memory_order_acq_rel);
-    assert(old_count >= count);///must not make dep. count go negative
-
-    if(old_count==count)/// this is the last dependency this task was waiting on, put it on list of available tasks and make sure there's a worker thread to satisfy it
-    {
-        /// acquire stall count here?
-        unstall_worker=cvm_coherent_queue_with_counter_push_and_decrement(&task_system->pending_tasks, task);
-
-        if(unstall_worker)
-        {
-            mtx_lock(&task_system->worker_thread_mutex);
-
-            assert(!task_system->shutdown_completed);/// shouldnt have stopped running if tasks have yet to complete
-            assert(task_system->stalled_thread_count > 0);/// weren't actually any stalled workers!
-            assert(task_system->signalled_unstalls < task_system->stalled_thread_count);///invalid unstall request
-
-            task_system->signalled_unstalls++;/// required for preventing spurrious wakeup
-
-            cnd_signal(&task_system->worker_thread_condition);
-
-            mtx_unlock(&task_system->worker_thread_mutex);
-        }
-    }
-}
-
-
-
-void cvm_task_retain_references(struct cvm_task * task, uint_fast32_t count)
-{
-    uint_fast32_t old_count=atomic_fetch_add_explicit(&task->reference_count, count, memory_order_relaxed);
-    assert(old_count!=0);/// should not be adding successors reservations when none still exist (need held successors reservations to addsetup more successors reservations)
-}
-
-void cvm_task_release_references(struct cvm_task * task, uint_fast32_t count)
-{
-    /// need to release to prevent reads/writes of successor/completion data being moved after this operation
-    uint_fast32_t old_count=atomic_fetch_sub_explicit(&task->reference_count, count, memory_order_release);
-
-    assert(old_count >= count);/// have completed more successor reservations than were made
-
-    if(old_count==count)
-    {
-        /// this should only happen after task completion, BUT the only time this counter can (if used properly) hit zero is if the task HAS completed!
-        cvm_lockfree_pool_relinquish_entry(&task->task_system->task_pool, task);
-    }
-}
-
-struct cvm_task* cvm_task_prepare(struct cvm_task_system* task_system, void(*task_function)(void*), void * data)
-{
-    struct cvm_task* task;
-
-    task = cvm_lockfree_pool_acquire_entry(&task_system->task_pool);
-
-    task->task_system = task_system;
-
-    task->task_function=task_function;
-    task->task_function_data=data;
-
-    cvm_lockfree_hopper_reset(&task->successor_hopper);
-
-    /// need to wait on "enqueue" op before beginning, ergo need one extra dependency for that (enqueue is really just a signal)
-    atomic_store_explicit(&task->dependency_count, 1, memory_order_relaxed);
-    /// need to retain a reference until the successors are actually signalled, ergo one extra reference that will be released after completing the task
-    atomic_store_explicit(&task->reference_count, 1, memory_order_relaxed);
-
-    return task;
-}
-
-void cvm_task_enqueue(struct cvm_task* task)
-{
-    /// this is basically just called differently to account for the "hidden" wait counter added on task creation
-    cvm_task_signal_dependencies(task, 1);
-}
 
 
 
@@ -186,7 +99,7 @@ static int cvm_task_worker_thread_function(void* in)
 
         while(successor_ptr)
         {
-            (*successor_ptr)->sync_functions->signal_dependency(*successor_ptr);
+            (*successor_ptr)->sync_functions->signal_condition(*successor_ptr);
             successor_ptr = cvm_lockfree_hopper_relinquish_and_get_next(&task_system->successor_pool, successor_ptr);
         }
 
@@ -196,15 +109,15 @@ static int cvm_task_worker_thread_function(void* in)
     return 0;
 }
 
-static void cvm_task_add_dependency(union cvm_sync_primitive* primitive)
+static void cvm_task_impose_condition(union cvm_sync_primitive* primitive)
 {
-    cvm_task_add_dependencies(&primitive->task, 1);
+    cvm_task_impose_conditions(&primitive->task, 1);
 }
-static void cvm_task_signal_dependency(union cvm_sync_primitive* primitive)
+static void cvm_task_signal_condition(union cvm_sync_primitive* primitive)
 {
-    cvm_task_signal_dependencies(&primitive->task, 1);
+    cvm_task_signal_conditions(&primitive->task, 1);
 }
-static void cvm_task_add_successor_(union cvm_sync_primitive* primitive, union cvm_sync_primitive* successor)
+static void cvm_task_attach_successor(union cvm_sync_primitive* primitive, union cvm_sync_primitive* successor)
 {
     struct cvm_task* task;
     struct cvm_lockfree_pool* successor_pool;
@@ -218,7 +131,7 @@ static void cvm_task_add_successor_(union cvm_sync_primitive* primitive, union c
     if(cvm_lockfree_hopper_check_if_locked(&task->successor_hopper))
     {
         /// if hopper already locked then task has been completed, can signal
-        successor->sync_functions->signal_dependency(successor);
+        successor->sync_functions->signal_condition(successor);
     }
     else
     {
@@ -233,16 +146,26 @@ static void cvm_task_add_successor_(union cvm_sync_primitive* primitive, union c
         {
             /// if we failed to add the successor then the task has already been completed, relinquish the storage and signal the successor
             cvm_lockfree_pool_relinquish_entry(successor_pool, successor_ptr);
-            successor->sync_functions->signal_dependency(successor);
+            successor->sync_functions->signal_condition(successor);
         }
     }
+}
+static void cvm_task_retain_reference(union cvm_sync_primitive* primitive)
+{
+    cvm_task_retain_references(&primitive->task, 1);
+}
+static void cvm_task_release_reference(union cvm_sync_primitive* primitive)
+{
+    cvm_task_release_references(&primitive->task, 1);
 }
 
 const static struct cvm_sync_primitive_functions task_sync_functions =
 {
-    .add_dependency    = &cvm_task_add_dependency,
-    .signal_dependency = &cvm_task_signal_dependency,
-    .add_successor     = &cvm_task_add_successor_,
+    .impose_condition  = &cvm_task_impose_condition,
+    .signal_condition  = &cvm_task_signal_condition,
+    .attach_successor  = &cvm_task_attach_successor,
+    .retain_reference  = &cvm_task_retain_reference,
+    .release_reference = &cvm_task_release_reference,
 };
 
 static void cvm_task_initialise(void* elem, void* data)
@@ -300,9 +223,7 @@ void cvm_task_system_begin_shutdown(struct cvm_task_system* task_system)
 /// ^ this is also necessary/useful for queues i believe,
 ///     ^ have to wait till all tasks that would use a queue have completed before attempting to terminate the queue, best/safest way to do this is to have the queue outlive the task system
 
-#warning having arbitrary threads be able to do task work without needing to be started by the task system would also be good, does require adjustment of thread count inside thread mutex
-
-void cvm_task_system_terminate(struct cvm_task_system* task_system)
+void cvm_task_system_end_shutdown(struct cvm_task_system* task_system)
 {
     uint32_t i;
 
@@ -321,7 +242,10 @@ void cvm_task_system_terminate(struct cvm_task_system* task_system)
         thrd_join(task_system->worker_threads[i], NULL);
     }
     assert(task_system->stalled_thread_count==0);/// make sure everyone woke up okay
+}
 
+void cvm_task_system_terminate(struct cvm_task_system* task_system)
+{
     free(task_system->worker_threads);
 
     cnd_destroy(&task_system->worker_thread_condition);
@@ -332,4 +256,97 @@ void cvm_task_system_terminate(struct cvm_task_system* task_system)
     cvm_coherent_queue_with_counter_terminate(&task_system->pending_tasks);
     cvm_lockfree_pool_terminate(&task_system->task_pool);
 }
+
+
+
+
+void cvm_task_impose_conditions(struct cvm_task* task, uint_fast32_t count)
+{
+    uint_fast32_t old_count=atomic_fetch_add_explicit(&task->dependency_count, count, memory_order_relaxed);
+    assert(old_count>0);/// should not be adding dependencies when none still exist (need held dependencies to addsetup more dependencies)
+}
+
+void cvm_task_signal_conditions(struct cvm_task* task, uint_fast32_t count)
+{
+    uint_fast32_t old_count;
+    bool unstall_worker;
+    struct cvm_task_system* task_system = task->task_system;
+
+    /// this is responsible for coalescing all modifications, but also for making them available to the next thread/atomic to recieve this memory (after the potential release in this function)
+    old_count=atomic_fetch_sub_explicit(&task->dependency_count, count, memory_order_acq_rel);
+    assert(old_count >= count);///must not make dep. count go negative
+
+    if(old_count==count)/// this is the last dependency this task was waiting on, put it on list of available tasks and make sure there's a worker thread to satisfy it
+    {
+        /// acquire stall count here?
+        unstall_worker=cvm_coherent_queue_with_counter_push_and_decrement(&task_system->pending_tasks, task);
+
+        if(unstall_worker)
+        {
+            mtx_lock(&task_system->worker_thread_mutex);
+
+            assert(!task_system->shutdown_completed);/// shouldnt have stopped running if tasks have yet to complete
+            assert(task_system->stalled_thread_count > 0);/// weren't actually any stalled workers!
+            assert(task_system->signalled_unstalls < task_system->stalled_thread_count);///invalid unstall request
+
+            task_system->signalled_unstalls++;/// required for preventing spurrious wakeup
+
+            cnd_signal(&task_system->worker_thread_condition);
+
+            mtx_unlock(&task_system->worker_thread_mutex);
+        }
+    }
+}
+
+
+
+void cvm_task_retain_references(struct cvm_task * task, uint_fast32_t count)
+{
+    uint_fast32_t old_count=atomic_fetch_add_explicit(&task->reference_count, count, memory_order_relaxed);
+    assert(old_count!=0);/// should not be adding successors reservations when none still exist (need held successors reservations to addsetup more successors reservations)
+}
+
+void cvm_task_release_references(struct cvm_task * task, uint_fast32_t count)
+{
+    /// need to release to prevent reads/writes of successor/completion data being moved after this operation
+    uint_fast32_t old_count=atomic_fetch_sub_explicit(&task->reference_count, count, memory_order_release);
+
+    assert(old_count >= count);/// have completed more successor reservations than were made
+
+    if(old_count==count)
+    {
+        /// this should only happen after task completion, BUT the only time this counter can (if used properly) hit zero is if the task HAS completed!
+        cvm_lockfree_pool_relinquish_entry(&task->task_system->task_pool, task);
+    }
+}
+
+struct cvm_task* cvm_task_prepare(struct cvm_task_system* task_system, void(*task_function)(void*), void * data)
+{
+    struct cvm_task* task;
+
+    task = cvm_lockfree_pool_acquire_entry(&task_system->task_pool);
+
+    task->task_system = task_system;
+
+    task->task_function=task_function;
+    task->task_function_data=data;
+
+    cvm_lockfree_hopper_reset(&task->successor_hopper);
+
+    /// need to wait on "enqueue" op before beginning, ergo need one extra dependency for that (enqueue is really just a signal)
+    atomic_store_explicit(&task->dependency_count, 1, memory_order_relaxed);
+    /// need to retain a reference until the successors are actually signalled, ergo one extra reference that will be released after completing the task
+    atomic_store_explicit(&task->reference_count, 1, memory_order_relaxed);
+
+    return task;
+}
+
+void cvm_task_activate(struct cvm_task* task)
+{
+    /// this is basically just called differently to account for the "hidden" wait counter added on task creation
+    cvm_task_signal_conditions(task, 1);
+}
+
+
+
 

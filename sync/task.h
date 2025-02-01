@@ -1,5 +1,5 @@
 /**
-Copyright 2024 Carl van Mastrigt
+Copyright 2024,2025 Carl van Mastrigt
 
 This file is part of cvm_shared.
 
@@ -76,33 +76,37 @@ void cvm_task_system_initialise(struct cvm_task_system* task_system, uint32_t wo
 /// this CAN be called inside a task!
 void cvm_task_system_begin_shutdown(struct cvm_task_system* task_system);
 
+/// waits for all tasks to complete and worker threads to join before returning, as such cannot be called inside a task
+void cvm_task_system_end_shutdown(struct cvm_task_system* task_system);
+
 /// any outstanding tasks will be executed before this returns
 /// as such any task still in flight must not have dependencies that would only be satisfied after this function has returned
 void cvm_task_system_terminate(struct cvm_task_system* task_system);
 
+
+
+// task stars inert/unactivated and cannot run (so that order of execution relative to other promitives can be established) `cvm_task_activate` must be called for it to run
 struct cvm_task* cvm_task_prepare(struct cvm_task_system* task_system, void(*task_function)(void*), void* data);
 
-/// allows a task to be executed (is basically just another signal task call lol)
+/// allows a task to be executed
 /// must either add all associated dependencies before calling this or add dependencies and retain the task as necessary to set up the dependencies later
-void cvm_task_enqueue(struct cvm_task* task);
+void cvm_task_activate(struct cvm_task* task);//commit?
 
 
 
-/// everything from here is only useful if task successors/predecessors want to be set up AFTER the task has been enqueued
+
+/// everything from here is only useful if task successors/predecessors/data want to be set up AFTER the task has been enqueued
 
 
 
-/// corresponds to the number of times a matching `cvm_task_signal_dependency` must be called for the task before it can be executed
+/// corresponds to the number of times a matching `cvm_task_signal_conditions` must be called for the task before it can be executed
 /// at least one dependency must be held in order to set up a dependency to that task if it has already been enqueued
-void cvm_task_add_dependencies(struct cvm_task* task, uint_fast32_t count);
+void cvm_task_impose_conditions(struct cvm_task* task, uint_fast32_t count);
 
-/// use this to signal that some set of data and/or dependencies required by the task have been set up, total must be matched to the count provided to cvm_ts_add_task_signal_dependencies
-void cvm_task_signal_dependencies(struct cvm_task* task, uint_fast32_t count);
-
+/// use this to signal that some set of data and/or dependencies required by the task have been set up, total must be matched to the count provided to cvm_task_impose_conditions
+void cvm_task_signal_conditions(struct cvm_task* task, uint_fast32_t count);
 
 /// execution dependencies also act as retained references (because we cannot clean up a task until it has been executed) as such if a dependency is required anyway then a refernce need not be held as well
-
-
 
 /// corresponds to the number of times a matching `cvm_task_release_retainer` must be called for the task before it can be destroyed/released (i.e. the pointer becomes an invalid way to refernce this task)
 /// at least one retainer must be held in order to set up a successor to that task if it has already been enqueued
@@ -114,6 +118,11 @@ void cvm_task_release_references(struct cvm_task* task, uint_fast32_t count);
 
 
 
+
+static inline union cvm_sync_primitive* cvm_task_as_sync_primitive(struct cvm_task* task)
+{
+    return (union cvm_sync_primitive*)task;
+}
 
 
 #endif

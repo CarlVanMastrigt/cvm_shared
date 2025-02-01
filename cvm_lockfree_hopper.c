@@ -104,7 +104,7 @@ void * cvm_lockfree_hopper_lock_and_get_first(cvm_lockfree_hopper * hopper, cvm_
     return pool->available_entries.entry_data + entry_index*pool->available_entries.entry_size;
 }
 
-void * cvm_lockfree_hopper_relinquish_and_get_next(cvm_lockfree_pool * pool, void * current_entry)
+void* cvm_lockfree_hopper_relinquish_and_get_next(cvm_lockfree_pool * pool, void * current_entry)
 {
     uint_fast64_t current_entry_index,next_entry_index;
     size_t current_entry_offset;
@@ -135,7 +135,7 @@ void * cvm_lockfree_hopper_relinquish_and_get_next(cvm_lockfree_pool * pool, voi
     return next_entry;
 }
 
-void * cvm_lockfree_hopper_get_next(cvm_lockfree_pool * pool, void * previous_entry)
+void* cvm_lockfree_hopper_get_next(cvm_lockfree_pool * pool, void * previous_entry)
 {
     uint_fast64_t previous_entry_index;
     size_t previous_entry_offset;
@@ -159,7 +159,7 @@ void * cvm_lockfree_hopper_get_next(cvm_lockfree_pool * pool, void * previous_en
     }
 }
 
-#warning
+#warning implement me!
 //void * cvm_lockfree_hopper_relinquish_all(cvm_lockfree_pool * pool, void * first_entry, void * last_entry)
 //{
 //    uint_fast64_t first_entry_index,last_entry_index;

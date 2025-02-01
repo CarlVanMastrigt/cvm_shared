@@ -52,9 +52,9 @@ void * cvm_lockfree_hopper_lock_and_get_first(cvm_lockfree_hopper * hopper, cvm_
 
 /// hopper not actually required for these functions, only for the initial lock and get operation
 /// these should also ONLY be used passing a `previous_entry` returned by that function or these
-void * cvm_lockfree_hopper_relinquish_and_get_next(cvm_lockfree_pool * pool, void * previous_entry);
+void* cvm_lockfree_hopper_relinquish_and_get_next(cvm_lockfree_pool * pool, void * previous_entry);
 
-void * cvm_lockfree_hopper_get_next(cvm_lockfree_pool * pool, void * previous_entry);
+void* cvm_lockfree_hopper_get_next(cvm_lockfree_pool * pool, void * previous_entry);
 /// MUST be called with value returned by `cvm_lockfree_hopper_lock_and_get_first` and CANNOT have called `cvm_lockfree_hopper_relinquish_and_get_next` while iterating entries
 void cvm_lockfree_hopper_relinquish_all(cvm_lockfree_pool * pool, void * first_entry, void * last_entry);
 

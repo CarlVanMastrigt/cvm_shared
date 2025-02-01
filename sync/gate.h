@@ -1,5 +1,5 @@
 /**
-Copyright 2024 Carl van Mastrigt
+Copyright 2024,2025 Carl van Mastrigt
 
 This file is part of cvm_shared.
 
@@ -47,17 +47,21 @@ void cvm_gate_pool_terminate(struct cvm_gate_pool* pool);
 
 struct cvm_gate* cvm_gate_prepare(struct cvm_gate_pool* pool);
 
-/// used to set up dependencies (calls to cvm_gate_signal) to wait on (dont return from cvm_gate_wait until all signals happen)
-/// must know that an gate has at least one outstanding dependency and/or that the gate hasn't been waited on for calling this to be legal
-void cvm_gate_add_dependencies(struct cvm_gate* gate, uint_fast32_t dependency_count);
-
-/// must be called once for every dependency added by a call to cvm_gate_add_dependencies
-void cvm_gate_signal_dependencies(struct cvm_gate* gate, uint_fast32_t dependency_count);
-
 /// MUST be called at some point as this will clean up the acquired gate
-void cvm_gate_wait_and_relinquish(struct cvm_gate* gate);
+void cvm_gate_wait(struct cvm_gate* gate);
+
+/// used to set up dependencies (calls to cvm_gate_signal_conditions) to wait on (dont return from wait until all signals happen)
+/// must know that an gate has at least one outstanding dependency and/or that the gate hasn't been waited on for calling this to be legal
+void cvm_gate_impose_conditions(struct cvm_gate* gate, uint_fast32_t count);
+
+/// must be called once for every dependency added by a call to cvm_gate_impose_conditions
+void cvm_gate_signal_conditions(struct cvm_gate* gate, uint_fast32_t count);
 
 
+static inline union cvm_sync_primitive* cvm_gate_as_sync_primitive(struct cvm_gate* gate)
+{
+    return (union cvm_sync_primitive*)gate;
+}
 
 
 #endif
