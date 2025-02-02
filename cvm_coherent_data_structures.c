@@ -33,18 +33,17 @@ void cvm_lockfree_pool_initialise(cvm_lockfree_pool * pool, size_t capacity_expo
 
     count=(size_t)1<<capacity_exponent;
 
-    for(i=0;i<count-1;i++)
+    for(i=0; i<count-1; i++)
     {
-        pool->available_entries.next_buffer[i]=i+1;
+        pool->available_entries.next_buffer[i] = i+1;
     }
-    pool->available_entries.next_buffer[count-1]=CVM_LOCKFREE_STACK_INVALID_ENTRY;
+    pool->available_entries.next_buffer[count-1] = CVM_LOCKFREE_STACK_INVALID_ENTRY;
 }
 
 void cvm_lockfree_pool_terminate(cvm_lockfree_pool * pool)
 {
     free(pool->available_entries.next_buffer);
     free(pool->available_entries.entry_data);
-    /// do NOT terminate the backing entries
 }
 
 
@@ -56,9 +55,18 @@ void * cvm_lockfree_pool_acquire_entry(cvm_lockfree_pool * pool)
 
 void cvm_lockfree_pool_relinquish_entry(cvm_lockfree_pool * pool, void * entry)
 {
-    cvm_lockfree_stack_push(&pool->available_entries,entry);
+    cvm_lockfree_stack_push(&pool->available_entries, entry);
 }
 
+void cvm_lockfree_pool_relinquish_entry_index(cvm_lockfree_pool* pool, uint32_t entry_index)
+{
+    cvm_lockfree_stack_push_index_range(&pool->available_entries, entry_index, entry_index);
+}
+
+void cvm_lockfree_pool_relinquish_entry_index_range(cvm_lockfree_pool* pool, uint32_t first_entry_index, uint32_t last_entry_index)
+{
+    cvm_lockfree_stack_push_index_range(&pool->available_entries, first_entry_index, last_entry_index);
+}
 
 void cvm_lockfree_pool_call_for_every_entry(cvm_lockfree_pool * pool,void (*func)(void * elem, void * data), void * data)
 {

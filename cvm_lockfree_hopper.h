@@ -48,15 +48,34 @@ void cvm_lockfree_hopper_reset(cvm_lockfree_hopper * hopper);
 
 bool cvm_lockfree_hopper_push(cvm_lockfree_hopper* hopper, cvm_lockfree_pool* pool, void* entry);/// returns true if it was added, false if not (fails if hopper is locked)
 bool cvm_lockfree_hopper_check_if_locked(cvm_lockfree_hopper * hopper);
-void* cvm_lockfree_hopper_lock_and_get_first(cvm_lockfree_hopper* hopper, cvm_lockfree_pool* pool);
+
+
+/**
+ * will only change entry index if the new one is valid
+ * usage pattern is:  lock -> iterate -> relinquish_all / relinquish_range
+ *
+ * MUST call `cvm_lockfree_pool_relinquish_entry_index_range` after locking with:
+ * `first_entry_index` given `entry_index` returned by `cvm_lockfree_hopper_lock_and_get_first`
+ * `last_entry_index` given `entry_index` AFTER a failing (NULL return) call to `cvm_lockfree_hopper_iterate`
+*/
+
+// locking also gets the first elemnt, and begins the process of emptying the hopper (which must be done)
+void* cvm_lockfree_hopper_lock_and_get_first(cvm_lockfree_hopper* hopper, cvm_lockfree_pool* pool, uint32_t* entry_index);
+
+//returns NULL when there are no further entries, WITHOUT altering entry_index (will only change entry index if the new one is valid)
+void* cvm_lockfree_hopper_iterate(cvm_lockfree_pool* pool, uint32_t* entry_index);
+
+void* cvm_lockfree_hopper_relinquish_range(cvm_lockfree_pool* pool, uint32_t first_entry_index, uint32_t last_entry_index);
 
 /// hopper not actually required for these functions, only for the initial lock and get operation
 /// these should also ONLY be used passing a `previous_entry` returned by that function or these
 void* cvm_lockfree_hopper_relinquish_and_get_next(cvm_lockfree_pool * pool, void * previous_entry);
 
 void* cvm_lockfree_hopper_get_next(cvm_lockfree_pool* pool, void * previous_entry);
-/// MUST be called with value returned by `cvm_lockfree_hopper_lock_and_get_first` and CANNOT have called `cvm_lockfree_hopper_relinquish_and_get_next` while iterating entries
-void cvm_lockfree_hopper_relinquish_all(cvm_lockfree_pool * pool, void * first_entry, void * last_entry);
+
+
+
+
 
 #endif
 

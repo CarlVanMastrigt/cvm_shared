@@ -121,6 +121,7 @@ void cvm_barrier_signal_conditions(struct cvm_barrier* barrier, uint_fast32_t co
     uint_fast32_t old_count;
     struct cvm_barrier_pool* pool;
     union cvm_sync_primitive** successor_ptr;
+    uint32_t first_successor_index, successor_index;
 
     /// this is responsible for coalescing all modifications, but also for making them available to the next thread/atomic to recieve this memory (after the potential release in this function)
     old_count = atomic_fetch_sub_explicit(&barrier->condition_count, count, memory_order_acq_rel);
@@ -130,15 +131,19 @@ void cvm_barrier_signal_conditions(struct cvm_barrier* barrier, uint_fast32_t co
     {
         pool = barrier->pool;
 
-        successor_ptr = cvm_lockfree_hopper_lock_and_get_first(&barrier->successor_hopper, &pool->successor_pool);
+        successor_ptr = cvm_lockfree_hopper_lock_and_get_first(&barrier->successor_hopper, &pool->successor_pool, &first_successor_index);
 
         cvm_barrier_release_references(barrier, 1);
+
+        successor_index = first_successor_index;
 
         while(successor_ptr)
         {
             cvm_sync_primitive_signal_condition(*successor_ptr);
-            successor_ptr = cvm_lockfree_hopper_relinquish_and_get_next(&pool->successor_pool, successor_ptr);
+            successor_ptr = cvm_lockfree_hopper_iterate(&pool->successor_pool, &successor_index);
         }
+
+        cvm_lockfree_hopper_relinquish_range(&pool->successor_pool, first_successor_index, successor_index);
     }
 }
 

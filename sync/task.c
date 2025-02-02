@@ -89,21 +89,25 @@ static int cvm_task_worker_thread_function(void* in)
     struct cvm_task_system* task_system = in;
     struct cvm_task* task;
     union cvm_sync_primitive** successor_ptr;
+    uint32_t first_successor_index, successor_index;
 
     while((task = cvm_task_worker_thread_get_task(task_system)))
     {
         task->task_function(task->task_function_data);
 
-        ///could be for loop but w/e
-        successor_ptr = cvm_lockfree_hopper_lock_and_get_first(&task->successor_hopper, &task_system->successor_pool);
+        successor_ptr = cvm_lockfree_hopper_lock_and_get_first(&task->successor_hopper, &task_system->successor_pool, &first_successor_index);
 
         cvm_task_release_references(task, 1);// the sucessors dont require the hopper anymore, task is done with, so can release
+
+        successor_index = first_successor_index;
 
         while(successor_ptr)
         {
             cvm_sync_primitive_signal_condition(*successor_ptr);
-            successor_ptr = cvm_lockfree_hopper_relinquish_and_get_next(&task_system->successor_pool, successor_ptr);
+            successor_ptr = cvm_lockfree_hopper_iterate(&task_system->successor_pool, &successor_index);
         }
+
+        cvm_lockfree_hopper_relinquish_range(&task_system->successor_pool, first_successor_index, successor_index);
     }
 
     return 0;
@@ -144,6 +148,8 @@ static void cvm_task_attach_successor(union cvm_sync_primitive* primitive, union
 
         if(!cvm_lockfree_hopper_push(&task->successor_hopper, successor_pool, successor_ptr))
         {
+            // potential to run out of successors if thread stalls here, shouldn't be a problem unless system is under stress
+            //  ^ (max_worker_threads * max_successors) should be sufficient overhead
             /// if we failed to add the successor then the task has already been completed, relinquish the storage and signal the successor
             cvm_lockfree_pool_relinquish_entry(successor_pool, successor_ptr);
             cvm_sync_primitive_signal_condition(successor);

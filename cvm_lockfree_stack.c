@@ -22,10 +22,10 @@ along with cvm_shared.  If not, see <https://www.gnu.org/licenses/>.
 void cvm_lockfree_stack_initialise(cvm_lockfree_stack * stack, cvm_lockfree_pool * pool)
 {
     atomic_init(&stack->head,CVM_LOCKFREE_STACK_INVALID_ENTRY);
-    stack->next_buffer=pool->available_entries.next_buffer;
-    stack->entry_data=pool->available_entries.entry_data;
-    stack->entry_size=pool->available_entries.entry_size;
-    stack->capacity_exponent=pool->available_entries.capacity_exponent;
+    stack->next_buffer = pool->available_entries.next_buffer;
+    stack->entry_data = pool->available_entries.entry_data;
+    stack->entry_size = pool->available_entries.entry_size;
+    stack->capacity_exponent = pool->available_entries.capacity_exponent;
 }
 
 void cvm_lockfree_stack_terminate(cvm_lockfree_stack * stack)
@@ -33,28 +33,29 @@ void cvm_lockfree_stack_terminate(cvm_lockfree_stack * stack)
     assert((atomic_load_explicit(&stack->head, memory_order_relaxed) & CVM_LOCKFREE_STACK_ENTRY_MASK) == CVM_LOCKFREE_STACK_INVALID_ENTRY);/// stack should be empty upon termination
 }
 
-void cvm_lockfree_stack_push(cvm_lockfree_stack * stack, void * entry)
+
+void cvm_lockfree_stack_push_index_range(cvm_lockfree_stack * stack, uint32_t first_entry_index, uint32_t last_entry_index)
 {
-    uint_fast64_t entry_index,current_head,replacement_head;
-    size_t entry_offset;
+    uint_fast64_t current_head, replacement_head;
 
-    assert((char*)entry >= stack->entry_data);
-
-    entry_offset = (char*)entry - stack->entry_data;
-    entry_index = (uint_fast64_t) (entry_offset / stack->entry_size);
-
-    assert(entry_index < ((uint_fast64_t)1 << stack->capacity_exponent));
+    assert(first_entry_index < ((uint_fast64_t)1 << stack->capacity_exponent));
+    assert(last_entry_index  < ((uint_fast64_t)1 << stack->capacity_exponent));
 
     current_head = atomic_load_explicit(&stack->head, memory_order_relaxed);
     do
     {
-        stack->next_buffer[entry_index] = (uint16_t)(current_head & CVM_LOCKFREE_STACK_ENTRY_MASK);
-        replacement_head=((current_head & CVM_LOCKFREE_STACK_CHECK_MASK) + CVM_LOCKFREE_STACK_CHECK_UNIT) | entry_index;
+        stack->next_buffer[last_entry_index] = (uint16_t)(current_head & CVM_LOCKFREE_STACK_ENTRY_MASK);
+        replacement_head = ((current_head & CVM_LOCKFREE_STACK_CHECK_MASK) + CVM_LOCKFREE_STACK_CHECK_UNIT) | first_entry_index;
     }
     while(!atomic_compare_exchange_weak_explicit(&stack->head, &current_head, replacement_head, memory_order_release, memory_order_relaxed));
 }
 
-void * cvm_lockfree_stack_pull(cvm_lockfree_stack * stack)
+void cvm_lockfree_stack_push_index(cvm_lockfree_stack * stack, uint32_t entry_index)
+{
+    cvm_lockfree_stack_push_index_range(stack, entry_index, entry_index);
+}
+
+uint32_t cvm_lockfree_stack_pull_index(cvm_lockfree_stack * stack)
 {
     uint_fast64_t entry_index,current_head,replacement_head;
 
@@ -62,10 +63,10 @@ void * cvm_lockfree_stack_pull(cvm_lockfree_stack * stack)
     do
     {
         entry_index = current_head & CVM_LOCKFREE_STACK_ENTRY_MASK;
-        /// if there are no more entries in this list then return NULL
+        /// if there are no more entries in this list then return NULL / CVM_LOCKFREE_STACK_INVALID_ENTRY_U32
         if(entry_index == CVM_LOCKFREE_STACK_INVALID_ENTRY)
         {
-            return NULL;
+            return CVM_LOCKFREE_STACK_INVALID_ENTRY_U32;
         }
 
         replacement_head = ((current_head & CVM_LOCKFREE_STACK_CHECK_MASK) + CVM_LOCKFREE_STACK_CHECK_UNIT) | (uint_fast64_t)(stack->next_buffer[entry_index]);
@@ -74,10 +75,54 @@ void * cvm_lockfree_stack_pull(cvm_lockfree_stack * stack)
     /// success memory order could (conceptually) be relaxed here as we don't need to release/acquire any changes when that happens as nothing outside the atomic has changed
     /// but fail must acquire as the "next" member of "first" element may have changed
 
-
     assert(entry_index < ((uint_fast64_t)1 << stack->capacity_exponent));
+    assert(entry_index <= UINT32_MAX);
 
-    return stack->entry_data + entry_index*stack->entry_size;
+    return entry_index;
+}
+
+
+void cvm_lockfree_stack_push_range(cvm_lockfree_stack* stack, void* first_entry, void* last_entry)
+{
+    ptrdiff_t first_entry_index,last_entry_index;
+
+    assert((char*)first_entry >= stack->entry_data);
+    assert((char*)last_entry >= stack->entry_data);
+
+    first_entry_index = (ptrdiff_t)((char*)first_entry - stack->entry_data) / stack->entry_size;
+    last_entry_index  = (ptrdiff_t)((char*)last_entry  - stack->entry_data) / stack->entry_size;
+
+    assert(first_entry_index < ((ptrdiff_t)1 << stack->capacity_exponent));
+    assert(last_entry_index  < ((ptrdiff_t)1 << stack->capacity_exponent));
+
+    cvm_lockfree_stack_push_index_range(stack, first_entry_index, last_entry_index);
+}
+
+void cvm_lockfree_stack_push(cvm_lockfree_stack* stack, void * entry)
+{
+    ptrdiff_t entry_index;
+
+    assert((char*)entry >= stack->entry_data);
+
+    entry_index = (ptrdiff_t)((char*)entry - stack->entry_data) / stack->entry_size;
+
+    assert(entry_index < ((ptrdiff_t)1 << stack->capacity_exponent));
+
+    cvm_lockfree_stack_push_index_range(stack, entry_index, entry_index);
+}
+
+void * cvm_lockfree_stack_pull(cvm_lockfree_stack* stack)
+{
+    uint32_t entry_index;
+
+    entry_index = cvm_lockfree_stack_pull_index(stack);
+
+    if(entry_index == CVM_LOCKFREE_STACK_INVALID_ENTRY_U32)
+    {
+        return NULL;;
+    }
+
+    return stack->entry_data + entry_index * stack->entry_size;
 }
 
 
