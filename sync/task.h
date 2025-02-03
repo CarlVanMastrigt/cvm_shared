@@ -55,10 +55,11 @@ void cvm_task_system_initialise(struct cvm_task_system* task_system, uint32_t wo
 void cvm_task_system_begin_shutdown(struct cvm_task_system* task_system);
 
 /// waits for all tasks to complete and worker threads to join before returning, as such cannot be called inside a task
-void cvm_task_system_end_shutdown(struct cvm_task_system* task_system);
-
 /// any outstanding tasks will be executed before this returns
 /// as such any task still in flight must not have dependencies that would only be satisfied after this function has returned
+void cvm_task_system_end_shutdown(struct cvm_task_system* task_system);
+
+/// cleans up allocations
 void cvm_task_system_terminate(struct cvm_task_system* task_system);
 
 

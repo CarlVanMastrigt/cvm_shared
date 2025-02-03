@@ -55,9 +55,9 @@ const static struct cvm_sync_primitive_functions gate_sync_functions =
     .release_reference = &cvm_gate_release_reference,
 };
 
-static void cvm_gate_initialise(void * elem, void * data)
+static void cvm_gate_initialise(void* entry, void* data)
 {
-    struct cvm_gate* gate = elem;
+    struct cvm_gate* gate = entry;
     struct cvm_gate_pool* pool = data;
 
     gate->sync_functions = &gate_sync_functions;
@@ -68,9 +68,9 @@ static void cvm_gate_initialise(void * elem, void * data)
     atomic_init(&gate->status, 0);
 }
 
-static void cvm_gate_terminate(void * elem, void * data)
+static void cvm_gate_terminate(void* entry, void* data)
 {
-    struct cvm_gate* gate = elem;
+    struct cvm_gate* gate = entry;
     assert(gate->mutex==NULL);
     assert(gate->condition==NULL);
 }
@@ -96,14 +96,14 @@ struct cvm_gate * cvm_gate_prepare(struct cvm_gate_pool* pool)
 {
     struct cvm_gate* gate;
 
-    gate=cvm_lockfree_pool_acquire_entry(&pool->available_gates);
-    assert(atomic_load(&gate->status)==0);
+    gate = cvm_lockfree_pool_acquire_entry(&pool->available_gates);
+    assert(atomic_load(&gate->status) == 0);
     /// this is 0 dependencies and in the non-waiting state, this could be made some high count with a fetch sub in `cvm_gate_wait` if error checking is desirable
 
     return gate;
 }
 
-#warning do we want a syetem to spin up new workers if/when a gate is stalled? (trylock or atomic checking only?)
+// could have a system to execute tasks while waiting, but waiting is really undesirable anyway so avoid it flat out
 void cvm_gate_wait(struct cvm_gate * gate)
 {
     mtx_t mutex;
@@ -111,7 +111,7 @@ void cvm_gate_wait(struct cvm_gate * gate)
     uint_fast32_t current_status, replacement_status;
     bool successfully_replaced;
 
-    current_status=atomic_load_explicit(&gate->status, memory_order_acquire);
+    current_status = atomic_load_explicit(&gate->status, memory_order_acquire);
 
     if(current_status)/// has dependencies remaining
     {
@@ -128,22 +128,22 @@ void cvm_gate_wait(struct cvm_gate * gate)
 
         do
         {
-            assert(!(current_status&CVM_GATE_WAITING_FLAG));/// must NOT already have waiting flag set, did you try and wait on this gate twice?
+            assert( ! (current_status & CVM_GATE_WAITING_FLAG) );/// must NOT already have waiting flag set, did you try and wait on this gate twice?
             replacement_status = current_status | CVM_GATE_WAITING_FLAG;
             successfully_replaced = atomic_compare_exchange_weak_explicit(&gate->status, &current_status, replacement_status, memory_order_release, memory_order_acquire);
         }
-        while(!successfully_replaced && current_status);
+        while( !successfully_replaced && current_status);
         ///must either have nothing waiting or have flagged the status as waiting by this point
         /// release to ensure ordering of mutex lock (not 100% on whether this is actually necessary)
 
         while(current_status)///if we did flag the status as waiting
         {
             cnd_wait(&condition, &mutex);
-            current_status=atomic_load_explicit(&gate->status, memory_order_acquire);/// load to double check signal actually happened in case of spurrious wake up
+            current_status = atomic_load_explicit(&gate->status, memory_order_acquire);/// load to double check signal actually happened in case of spurrious wake up
         }
 
-        gate->mutex=NULL;
-        gate->condition=NULL;
+        gate->mutex = NULL;
+        gate->condition = NULL;
 
         mtx_unlock(&mutex);
 
@@ -168,7 +168,7 @@ void cvm_gate_signal_conditions(struct cvm_gate* gate, uint_fast32_t count)
     uint_fast32_t current_status, replacement_status;
     bool locked;
 
-    current_status=atomic_load_explicit(&gate->status, memory_order_acquire);
+    current_status = atomic_load_explicit(&gate->status, memory_order_acquire);
     locked = false;
 
     do
@@ -176,7 +176,7 @@ void cvm_gate_signal_conditions(struct cvm_gate* gate, uint_fast32_t count)
         assert((current_status&CVM_GATE_CONDITION_MASK)>0);/// you have signalled more times than dependencies were added! this is incredibly bad and unsafe
         /// the above may not catch this case immediately; may actually result in signalling a *different* gate after the intended gate gets recycled
 
-        if(current_status==CVM_GATE_SIGNAL_STATUS)
+        if(current_status == CVM_GATE_SIGNAL_STATUS)
         {
             ///it's only possible for 1 thread to see this value. and if locked before deps hitting 0: exactly 1 thread MUST see this value
             /// if more than one thread sees this value that implies we have 2 threads running trying to signal the last dependency, which is "guarded" against by the above assert
@@ -187,19 +187,19 @@ void cvm_gate_signal_conditions(struct cvm_gate* gate, uint_fast32_t count)
                 mtx_lock(gate->mutex);/// must lock before going from waiting to "complete" (status==0)
                 locked = true;/// don't relock if compare exchange fails
             }
-            replacement_status=0;/// this indicates the waiting thread may proceed when it is woken up
+            replacement_status = 0;/// this indicates the waiting thread may proceed when it is woken up
         }
         else
         {
-            replacement_status=current_status-1;
+            replacement_status = current_status - 1;
         }
 
     }
     while(!atomic_compare_exchange_weak_explicit(&gate->status, &current_status, replacement_status, memory_order_release, memory_order_acquire));
 
-    assert(locked == (current_status==CVM_GATE_SIGNAL_STATUS));///must have locked if we need to signal the condition, and must not have locked if we don't
+    assert(locked == (current_status == CVM_GATE_SIGNAL_STATUS));///must have locked if we need to signal the condition, and must not have locked if we don't
 
-    if(current_status==CVM_GATE_SIGNAL_STATUS)
+    if(current_status == CVM_GATE_SIGNAL_STATUS)
     {
         cnd_signal(gate->condition);
         mtx_unlock(gate->mutex);

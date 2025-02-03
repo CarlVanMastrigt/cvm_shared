@@ -17,27 +17,29 @@ You should have received a copy of the GNU Affero General Public License
 along with cvm_shared.  If not, see <https://www.gnu.org/licenses/>.
 */
 
-#include "cvm_shared.h"
+#include "coherent_structures.h"
+#include <stdlib.h>
+#include <assert.h>
 
 void cvm_lockfree_pool_initialise(cvm_lockfree_pool * pool, size_t capacity_exponent, size_t entry_size)
 {
     size_t i,count;
-    assert(capacity_exponent<=16);///requested more capacity than possible (consider switching next to be a u32)
+    assert(capacity_exponent<=24);///requested more capacity than currently possible (consider increasing range, requires altering defines in lockfree_stack header)
 
     /// the available entries will store the actual pointers rather than duplicates (like other stacks created from this pool)
     atomic_init(&pool->available_entries.head,0);
-    pool->available_entries.next_buffer=malloc(sizeof(uint16_t)<<capacity_exponent);
-    pool->available_entries.entry_data=malloc(entry_size<<capacity_exponent);
-    pool->available_entries.entry_size=entry_size;
-    pool->available_entries.capacity_exponent=capacity_exponent;
+    pool->available_entries.next_buffer = malloc(sizeof(uint32_t)<<capacity_exponent);
+    pool->available_entries.entry_data = malloc(entry_size<<capacity_exponent);
+    pool->available_entries.entry_size = entry_size;
+    pool->available_entries.capacity_exponent = capacity_exponent;
 
     count=(size_t)1<<capacity_exponent;
 
     for(i=0; i<count-1; i++)
     {
-        pool->available_entries.next_buffer[i] = i+1;
+        pool->available_entries.next_buffer[i] = (uint32_t)(i + 1);
     }
-    pool->available_entries.next_buffer[count-1] = CVM_LOCKFREE_STACK_INVALID_ENTRY;
+    pool->available_entries.next_buffer[count-1] = (uint32_t)CVM_LOCKFREE_STACK_INVALID_ENTRY;
 }
 
 void cvm_lockfree_pool_terminate(cvm_lockfree_pool * pool)
@@ -45,8 +47,6 @@ void cvm_lockfree_pool_terminate(cvm_lockfree_pool * pool)
     free(pool->available_entries.next_buffer);
     free(pool->available_entries.entry_data);
 }
-
-
 
 void * cvm_lockfree_pool_acquire_entry(cvm_lockfree_pool * pool)
 {
@@ -68,7 +68,7 @@ void cvm_lockfree_pool_relinquish_entry_index_range(cvm_lockfree_pool* pool, uin
     cvm_lockfree_stack_push_index_range(&pool->available_entries, first_entry_index, last_entry_index);
 }
 
-void cvm_lockfree_pool_call_for_every_entry(cvm_lockfree_pool * pool,void (*func)(void * elem, void * data), void * data)
+void cvm_lockfree_pool_call_for_every_entry(cvm_lockfree_pool * pool,void (*func)(void* entry, void* data), void* data)
 {
     size_t i,count;
     count = (size_t)1 << pool->available_entries.capacity_exponent;

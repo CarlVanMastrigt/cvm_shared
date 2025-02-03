@@ -1,5 +1,5 @@
 /**
-Copyright 2024 Carl van Mastrigt
+Copyright 2024,2025 Carl van Mastrigt
 
 This file is part of cvm_shared.
 
@@ -17,20 +17,15 @@ You should have received a copy of the GNU Affero General Public License
 along with cvm_shared.  If not, see <https://www.gnu.org/licenses/>.
 */
 
-#ifndef CVM_SHARED_H
-#include "cvm_shared.h"
-#endif
-
 #ifndef CVM_LOCKFREE_STACK_H
 #define CVM_LOCKFREE_STACK_H
 
-#define CVM_LOCKFREE_STACK_CHECK_MASK ((uint_fast64_t)0xFFFFFFFFFFFF0000llu)
-#define CVM_LOCKFREE_STACK_ENTRY_MASK ((uint_fast64_t)0x000000000000FFFFllu)
+#include "coherent_structures.h"
 
-#define CVM_LOCKFREE_STACK_INVALID_ENTRY ((uint_fast64_t)0x000000000000FFFFllu)
-#define CVM_LOCKFREE_STACK_INVALID_ENTRY_U32 ((uint32_t)0x0000FFFFu)
-
-#define CVM_LOCKFREE_STACK_CHECK_UNIT ((uint_fast64_t)0x0000000000010000llu)
+#define CVM_LOCKFREE_STACK_CHECK_MASK    ((uint_fast64_t)0xFFFFFFFFFF000000llu)
+#define CVM_LOCKFREE_STACK_ENTRY_MASK    ((uint_fast64_t)0x0000000000FFFFFFllu)
+#define CVM_LOCKFREE_STACK_INVALID_ENTRY ((uint_fast64_t)0x0000000000FFFFFFllu)
+#define CVM_LOCKFREE_STACK_CHECK_UNIT    ((uint_fast64_t)0x0000000001000000llu)
 
 typedef struct cvm_lockfree_stack
 {
@@ -39,7 +34,7 @@ typedef struct cvm_lockfree_stack
     size_t entry_size;
     size_t capacity_exponent;
     char* entry_data;
-    uint16_t* next_buffer;
+    uint32_t* next_buffer;
 }
 cvm_lockfree_stack;
 
@@ -49,20 +44,16 @@ void cvm_lockfree_stack_initialise(cvm_lockfree_stack* stack, cvm_lockfree_pool*
 void cvm_lockfree_stack_terminate(cvm_lockfree_stack* stack);
 
 
-
 void cvm_lockfree_stack_push_index_range(cvm_lockfree_stack* stack, uint32_t first_entry_index, uint32_t last_entry_index);
 void cvm_lockfree_stack_push_index(cvm_lockfree_stack* stack, uint32_t entry_index);
 
-// CVM_LOCKFREE_STACK_INVALID_ENTRY_U32 returned to indicate failure
+// (uint32_t)CVM_LOCKFREE_STACK_ENTRY_MASK returned to indicate failure
 uint32_t cvm_lockfree_stack_pull_index(cvm_lockfree_stack* stack);
-
-
 
 void cvm_lockfree_stack_push_range(cvm_lockfree_stack* stack, void* first_entry, void* last_entry);
 void cvm_lockfree_stack_push(cvm_lockfree_stack* stack, void * entry);
 
 // NULL returned to indicate failure
 void* cvm_lockfree_stack_pull(cvm_lockfree_stack* stack);
-
 
 #endif

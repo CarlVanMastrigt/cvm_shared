@@ -95,7 +95,7 @@ static int cvm_task_worker_thread_function(void* in)
     {
         task->task_function(task->task_function_data);
 
-        successor_ptr = cvm_lockfree_hopper_lock_and_get_first(&task->successor_hopper, &task_system->successor_pool, &first_successor_index);
+        successor_ptr = cvm_lockfree_hopper_lock(&task->successor_hopper, &task_system->successor_pool, &first_successor_index);
 
         cvm_task_release_references(task, 1);// the sucessors dont require the hopper anymore, task is done with, so can release
 
@@ -174,9 +174,9 @@ const static struct cvm_sync_primitive_functions task_sync_functions =
     .release_reference = &cvm_task_release_reference,
 };
 
-static void cvm_task_initialise(void* elem, void* data)
+static void cvm_task_initialise(void* entry, void* data)
 {
-    struct cvm_task* task = elem;
+    struct cvm_task* task = entry;
     struct cvm_task_system* task_system = data;
 
     task->sync_functions = &task_sync_functions;

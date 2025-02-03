@@ -71,6 +71,23 @@ void create_self_deleting_dialogue(struct widget_context* context, widget* root_
 // widget_file_list_2;
 
 
+struct multibox_functions // appearance?
+{
+    // internal/content/element functions first
+
+    /// widget(multibox), x_off, y_off, render_batch, bounds, element/entry index
+    void    (*const entry_render) (widget*,int16_t,int16_t,struct cvm_overlay_render_batch*,rectangle,uint32_t);
+    int16_t (*const entry_min_w ) (widget*);
+    int16_t (*const entry_min_h ) (widget*);
+
+
+    ///uses shared_data to get count for display purposes
+    uint32_t (*const get_count)(void*);
+
+    ///uses shared_data and index to get a particular entry for rendering &c.
+    void*    (*const get_entry)(void*, int32_t);
+};
+
 // way to support grid, h-list, v-list?
 typedef struct widget_multibox
 {
@@ -78,25 +95,29 @@ typedef struct widget_multibox
 
     void* shared_data;
 
-    ///uses shared_data to get count for display purposes
-    uint32_t (*const get_count)(void*);
+    const struct multibox_functions* functions;
 
-    ///uses shared_data and index to get a particular entry for rendering &c.
-    void*    (*const get_entry)(void*, int32_t);
+    uint32_t selected_widget;
+
+    /**
+     * layout - horizontal, vertical, grid
+     * need a way to represent more complex behaviour (more than just click/activate - drag &c.)
+     * ^ this almost warrants interaction rewrite in itself, but how will this shit even work?
+     * ^ drag can be accomplished with down-up distinction, with currently active widget tracking data for this
+     *   ^ mouse button down/up, gamepad up/down
+     *   ^ drag can be handled as special property for rendering this widget (this very much extended functionality)
+     *     ^ does not allow complex inter-widget drag functionality, but probably will work where necessary
+    */
+
+    /** consider following for content behaviour, may need something more specialised as not all will be necessary*/
+    // const widget_behaviour_function_set* content_behaviour_functions;
 
     #warning other widgets that keep pointers (e.g. sliderbar) should perhaps instead have accessor functions?? (as above) to allow more complex or threadsafe behaviour
 
-   	// appearance & behaviour of contents
-   	#warning these actually arent enough! they don't provide any way to know WHICH element/content to render for! (FUCK) basically need specialised render function!
-   		/// ^ min sizes can be
-    // const widget_appearence_function_set* entry_appearence_functions;
-    // const widget_behaviour_function_set* entry_behaviour_functions;
 
     // what should these take as input to get data? widget* or void* ???
     // render same as `widget_appearence_function_set` with the entry number included
-    void    (*const entry_render) (widget*,int16_t,int16_t,struct cvm_overlay_render_batch*,rectangle,uint32_t);
-    int16_t (*const entry_min_w)  (widget*);
-    int16_t (*const entry_min_h)  (widget*);
+
 
     // behaviour functions WAY more complex!
 

@@ -81,9 +81,9 @@ const static struct cvm_sync_primitive_functions barrier_sync_functions =
     .release_reference = &cvm_barrier_release_reference,
 };
 
-static void cvm_barrier_initialise(void* elem, void* data)
+static void cvm_barrier_initialise(void* entry, void* data)
 {
-    struct cvm_barrier* barrier = elem;
+    struct cvm_barrier* barrier = entry;
     struct cvm_barrier_pool* pool = data;
 
     barrier->sync_functions = &barrier_sync_functions;
@@ -131,7 +131,7 @@ void cvm_barrier_signal_conditions(struct cvm_barrier* barrier, uint_fast32_t co
     {
         pool = barrier->pool;
 
-        successor_ptr = cvm_lockfree_hopper_lock_and_get_first(&barrier->successor_hopper, &pool->successor_pool, &first_successor_index);
+        successor_ptr = cvm_lockfree_hopper_lock(&barrier->successor_hopper, &pool->successor_pool, &first_successor_index);
 
         cvm_barrier_release_references(barrier, 1);
 

@@ -421,4 +421,18 @@ make text_bar more dynamic or create a new widget type
 
 
 
+/// widget(multibox), x_off, y_off, render_batch, bounds, element/entry index
+void cvm_directory_multibox_entry_render(widget* multibox, int16_t x_off, int16_t y_off, struct cvm_overlay_render_batch* render_batch, rectangle bounds, uint32_t entry_index)
+{
+}
 
+
+
+// directory multibox functions
+const struct multibox_functions directory_multibox_functions = (struct multibox_functions)
+{
+    .entry_render = &cvm_directory_multibox_entry_render,
+};
+
+
+// multibox specific
