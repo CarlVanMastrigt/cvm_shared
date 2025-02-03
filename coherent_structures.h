@@ -17,13 +17,13 @@ You should have received a copy of the GNU Affero General Public License
 along with cvm_shared.  If not, see <https://www.gnu.org/licenses/>.
 */
 
-#ifndef CVM_COHERENT_STRUCTURES_H
-#define CVM_COHERENT_STRUCTURES_H
-
 #include <stddef.h>
 #include <inttypes.h>
 #include <stdbool.h>
 #include <stdatomic.h>
+
+#ifndef CVM_COHERENT_STRUCTURES_H
+#define CVM_COHERENT_STRUCTURES_H
 
 /** lockfree_pool
  * a pool is just a stack that has it's own internal backing and starts full

@@ -17,10 +17,10 @@ You should have received a copy of the GNU Affero General Public License
 along with cvm_shared.  If not, see <https://www.gnu.org/licenses/>.
 */
 
+#include "coherent_structures.h"
+
 #ifndef CVM_LOCKFREE_STACK_H
 #define CVM_LOCKFREE_STACK_H
-
-#include "coherent_structures.h"
 
 #define CVM_LOCKFREE_STACK_CHECK_MASK    ((uint_fast64_t)0xFFFFFFFFFF000000llu)
 #define CVM_LOCKFREE_STACK_ENTRY_MASK    ((uint_fast64_t)0x0000000000FFFFFFllu)

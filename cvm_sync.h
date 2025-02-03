@@ -17,9 +17,13 @@ You should have received a copy of the GNU Affero General Public License
 along with cvm_shared.  If not, see <https://www.gnu.org/licenses/>.
 */
 
-#ifndef CVM_SHARED_H
-#include "cvm_shared.h"
-#endif
+#include <stddef.h>
+#include <inttypes.h>
+#include <stdbool.h>
+#include <stdatomic.h>
+#include <threads.h>
+
+#include "coherent_structures.h"
 
 #ifndef CVM_SYNC_H
 #define CVM_SYNC_H
@@ -83,19 +87,7 @@ static inline void cvm_sync_primitive_attach_successor(union cvm_sync_primitive*
 }
 
 
-
-
-
-struct cvm_sync_queue
-{
-    union cvm_sync_primitive* _Atomic end_primitive;
-};
-
-void cvm_sync_queue_initialise(struct cvm_sync_queue* queue);
-void cvm_sync_queue_terminate(struct cvm_sync_queue* queue);
-
-void cvm_sync_queue_enqueue_primitive(struct cvm_sync_queue* queue, union cvm_sync_primitive* primitive);
-void cvm_sync_queue_enqueue_primitive_range(struct cvm_sync_queue* queue, union cvm_sync_primitive* first_primitive, union cvm_sync_primitive* last_primitive);
-
+// these sync structs are built on top of other primitives
+#include "sync/queue.h"
 
 #endif

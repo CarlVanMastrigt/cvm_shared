@@ -17,13 +17,10 @@ You should have received a copy of the GNU Affero General Public License
 along with cvm_shared.  If not, see <https://www.gnu.org/licenses/>.
 */
 
-#ifndef CVM_SHARED_H
-#include "cvm_shared.h"
-#endif
+#include "cvm_sync.h"
 
 #ifndef CVM_BARRIER_H
 #define CVM_BARRIER_H
-
 
 struct cvm_barrier_pool
 {

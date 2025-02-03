@@ -1,5 +1,5 @@
 /**
-Copyright 2024,2025 Carl van Mastrigt
+Copyright 2025 Carl van Mastrigt
 
 This file is part of cvm_shared.
 
@@ -17,11 +17,8 @@ You should have received a copy of the GNU Affero General Public License
 along with cvm_shared.  If not, see <https://www.gnu.org/licenses/>.
 */
 
-#include "cvm_shared.h"
-
-
-
-
+#include "sync/queue.h"
+#include <assert.h>
 
 void cvm_sync_queue_initialise(struct cvm_sync_queue* queue)
 {

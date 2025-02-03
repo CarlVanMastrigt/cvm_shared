@@ -17,13 +17,10 @@ You should have received a copy of the GNU Affero General Public License
 along with cvm_shared.  If not, see <https://www.gnu.org/licenses/>.
 */
 
-#include "coherent_structures.h"
+#include "coherent_structures/lockfree_hopper.h"
 #include <assert.h>
 
-
 #define CVM_LOCKFREE_HOPPER_LOCK_BIT  ((uint_fast64_t)0x8000000000000000llu)
-
-
 
 void cvm_lockfree_hopper_initialise(cvm_lockfree_hopper* hopper, cvm_lockfree_pool* pool)
 {

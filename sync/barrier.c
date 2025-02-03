@@ -17,9 +17,8 @@ You should have received a copy of the GNU Affero General Public License
 along with cvm_shared.  If not, see <https://www.gnu.org/licenses/>.
 */
 
-#include "barrier.h"
-
-
+#include "sync/barrier.h"
+#include <assert.h>
 
 static void cvm_barrier_impose_condition(union cvm_sync_primitive* primitive)
 {

@@ -17,10 +17,10 @@ You should have received a copy of the GNU Affero General Public License
 along with cvm_shared.  If not, see <https://www.gnu.org/licenses/>.
 */
 
+#include "coherent_structures.h"
+
 #ifndef CVM_LOCKFREE_HOPPER_H
 #define CVM_LOCKFREE_HOPPER_H
-
-#include "coherent_structures.h"
 
 /** lockfree_hopper
  * a hopper is a simplified stack that supports atomic addition, but then must be locked before its entries are accessed

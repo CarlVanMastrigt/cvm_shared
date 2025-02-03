@@ -17,7 +17,7 @@ You should have received a copy of the GNU Affero General Public License
 along with cvm_shared.  If not, see <https://www.gnu.org/licenses/>.
 */
 
-#include "coherent_structures.h"
+#include "coherent_structures/coherent_queue.h"
 #include <stdlib.h>
 #include <assert.h>
 

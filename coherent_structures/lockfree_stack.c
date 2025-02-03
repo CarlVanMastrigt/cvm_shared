@@ -17,7 +17,7 @@ You should have received a copy of the GNU Affero General Public License
 along with cvm_shared.  If not, see <https://www.gnu.org/licenses/>.
 */
 
-#include "coherent_structures.h"
+#include "coherent_structures/lockfree_stack.h"
 #include <assert.h>
 
 void cvm_lockfree_stack_initialise(cvm_lockfree_stack * stack, cvm_lockfree_pool * pool)

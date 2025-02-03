@@ -17,10 +17,10 @@ You should have received a copy of the GNU Affero General Public License
 along with cvm_shared.  If not, see <https://www.gnu.org/licenses/>.
 */
 
-#ifndef CVM_COHERENT_QUEUE_WITH_COUNTER_H
-#define CVM_COHERENT_QUEUE_WITH_COUNTERH
-
 #include "coherent_structures.h"
+
+#ifndef CVM_COHERENT_QUEUE_WITH_COUNTER_H
+#define CVM_COHERENT_QUEUE_WITH_COUNTER_H
 
 typedef struct cvm_coherent_queue_with_counter
 {

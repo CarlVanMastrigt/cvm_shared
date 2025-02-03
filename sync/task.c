@@ -17,12 +17,9 @@ You should have received a copy of the GNU Affero General Public License
 along with cvm_shared.  If not, see <https://www.gnu.org/licenses/>.
 */
 
-#include "task.h"
-
-
-
-
-
+#include "sync/task.h"
+#include <stdlib.h>
+#include <assert.h>
 
 static inline struct cvm_task* cvm_task_worker_thread_get_task(struct cvm_task_system* task_system)
 {
@@ -199,20 +196,20 @@ void cvm_task_system_initialise(struct cvm_task_system* task_system, uint32_t wo
 
     cvm_coherent_queue_with_counter_initialise(&task_system->pending_tasks, &task_system->task_pool);
 
-    task_system->worker_threads=malloc(sizeof(thrd_t)*worker_thread_count);
-    task_system->worker_thread_count=worker_thread_count;
+    task_system->worker_threads = malloc(sizeof(thrd_t) * worker_thread_count);
+    task_system->worker_thread_count = worker_thread_count;
 
     cnd_init(&task_system->worker_thread_condition);
     mtx_init(&task_system->worker_thread_mutex, mtx_plain);
 
-    task_system->shutdown_completed=false;
-    task_system->shutdown_initiated=false;
+    task_system->shutdown_completed = false;
+    task_system->shutdown_initiated = false;
 
-    task_system->stalled_thread_count=0;
-    task_system->signalled_unstalls=0;
+    task_system->stalled_thread_count = 0;
+    task_system->signalled_unstalls = 0;
 
     /// will need setup mutex locked here if we want to wait on all workers to start before progressing (maybe useful to have, but I can't think of a reason)
-    for(i=0;i<worker_thread_count;i++)
+    for(i=0; i<worker_thread_count; i++)
     {
         thrd_create(task_system->worker_threads+i, cvm_task_worker_thread_function, task_system);
     }

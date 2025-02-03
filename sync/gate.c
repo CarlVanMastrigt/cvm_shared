@@ -17,7 +17,8 @@ You should have received a copy of the GNU Affero General Public License
 along with cvm_shared.  If not, see <https://www.gnu.org/licenses/>.
 */
 
-#include "gate.h"
+#include "sync/gate.h"
+#include <assert.h>
 
 #define CVM_GATE_WAITING_FLAG   ((uint_fast32_t)0x80000000)
 #define CVM_GATE_SIGNAL_STATUS  ((uint_fast32_t)0x80000001) /**would be last condition to signal AND thread is waiting*/
