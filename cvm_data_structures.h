@@ -1,5 +1,5 @@
 /**
-Copyright 2020,2021,2022,2023 Carl van Mastrigt
+Copyright 2020,2021,2022,2023,2024 Carl van Mastrigt
 
 This file is part of cvm_shared.
 
@@ -25,78 +25,99 @@ along with cvm_shared.  If not, see <https://www.gnu.org/licenses/>.
 #define CVM_DATA_STRUCTURES_H
 
 
+///add->push get->pull
+
 #ifndef CVM_STACK
 #define CVM_STACK(type,name,start_size)                                         \
                                                                                 \
 typedef struct name##_stack                                                     \
 {                                                                               \
-    type * stack;                                                               \
+    type * data;                                                                \
     uint_fast32_t space;                                                        \
     uint_fast32_t count;                                                        \
 }                                                                               \
 name##_stack;                                                                   \
                                                                                 \
                                                                                 \
-static inline void name##_stack_ini( name##_stack * s )                         \
+static inline void name##_stack_initialise( name##_stack * s )                  \
 {                                                                               \
     assert(start_size>3 && !(start_size & (start_size-1)));                     \
-    s->stack=malloc( sizeof( type ) * start_size );                             \
+    s->data=malloc( sizeof( type ) * start_size );                              \
     s->space=start_size;                                                        \
-    s->count=0;                                                                 \
-}                                                                               \
-                                                                                \
-static inline void name##_stack_add( name##_stack * s , type value )            \
-{                                                                               \
-    uint_fast32_t n;                                                            \
-    if(s->count==s->space)                                                      \
-    {                                                                           \
-        n=cvm_allocation_increase_step(s->space);                               \
-        s->stack=realloc(s->stack,sizeof( type )*(s->space+=n));                \
-    }                                                                           \
-    s->stack[s->count++]=value;                                                 \
-}                                                                               \
-                                                                                \
-static inline int name##_stack_get( name##_stack * s , type * value )           \
-{                                                                               \
-    if(s->count==0)return 0;                                                    \
-    *value=s->stack[--s->count];                                                \
-    return 1;                                                                   \
-}                                                                               \
-                                                                                \
-static inline void name##_stack_del( name##_stack * s )                         \
-{                                                                               \
-    free(s->stack);                                                             \
-}                                                                               \
-                                                                                \
-static inline void name##_stack_clr( name##_stack * s )                         \
-{                                                                               \
     s->count=0;                                                                 \
 }                                                                               \
                                                                                 \
 static inline type * name##_stack_new( name##_stack * s )                       \
 {                                                                               \
-    uint_fast32_t n;                                                            \
     if(s->count==s->space)                                                      \
     {                                                                           \
-        n=cvm_allocation_increase_step(s->space);                               \
-        s->stack=realloc(s->stack,sizeof( type )*(s->space+=n));                \
+        s->space *= 2;                                                          \
+        s->data=realloc(s->data, sizeof( type ) * s->space);                    \
     }                                                                           \
-    return s->stack+s->count++;                                                 \
+    return s->data+s->count++;                                                  \
 }                                                                               \
                                                                                 \
-static inline void name##_stack_add_multiple                                    \
-( name##_stack * s , type * values , uint_fast32_t count)                       \
+static inline void name##_stack_push( name##_stack * s , type value )           \
+{                                                                               \
+    *( name##_stack_new( s ) ) = value;                                         \
+}                                                                               \
+                                                                                \
+static inline bool name##_stack_pull( name##_stack * s , type * value )         \
+{                                                                               \
+    if(s->count==0)return false;                                                \
+    *value=s->data[--s->count];                                                 \
+    return true;                                                                \
+}                                                                               \
+                                                                                \
+static inline type * name##_stack_pull_ptr( name##_stack * s )                  \
+{                                                                               \
+    if(s->count==0)return NULL;                                                 \
+    return s->data + --s->count;                                                \
+}                                                                               \
+                                                                                \
+static inline void name##_stack_terminate( name##_stack * s )                   \
+{                                                                               \
+    free(s->data);                                                              \
+}                                                                               \
+                                                                                \
+static inline void name##_stack_reset( name##_stack * s )                       \
+{                                                                               \
+    s->count=0;                                                                 \
+}                                                                               \
+                                                                                \
+static inline void name##_stack_push_multiple                                   \
+( name##_stack * s , uint_fast32_t count , const type * values)                 \
 {                                                                               \
     uint_fast32_t n;                                                            \
     while((s->count+count) > s->space)                                          \
     {                                                                           \
-        n=cvm_allocation_increase_step(s->space);                               \
-        s->stack=realloc(s->stack,sizeof( type )*(s->space+=n));                \
+        s->space *= 2;                                                          \
+        s->data=realloc(s->data, sizeof( type ) * s->space);                    \
     }                                                                           \
-    memcpy(s->stack+s->count,values,sizeof( type )*count);                      \
+    memcpy(s->data+s->count,values,sizeof( type )*count);                       \
     s->count+=count;                                                            \
 }                                                                               \
-///add a reset function??
+                                                                                \
+static inline size_t name##_stack_size( name##_stack * s )                      \
+{                                                                               \
+    return sizeof( type ) * s->count;                                           \
+}                                                                               \
+                                                                                \
+static inline void name##_stack_copy( name##_stack * s , void * dst )           \
+{                                                                               \
+    memcpy( dst , s->data , sizeof( type ) * s->count );                        \
+}                                                                               \
+                                                                                \
+static inline type * name##_stack_get_ptr( name##_stack * s , uint_fast32_t i ) \
+{                                                                               \
+    return s->data + i;                                                         \
+}                                                                               \
+                                                                                \
+static inline void name##_stack_remove( name##_stack * s , uint_fast32_t i )    \
+{                                                                               \
+    memmove( s->data + i, s->data + i + 1, sizeof(type) * ( --s->count-i));     \
+}                                                                               \
+
 #endif
 
 CVM_STACK(uint32_t,u32,16)
@@ -104,86 +125,94 @@ CVM_STACK(uint32_t,u32,16)
 
 
 
-#ifndef CVM_LIST
-#define CVM_LIST(type,name,start_size)                                          \
+
+
+#ifndef CVM_ARRAY
+#define CVM_ARRAY(type,name,start_size)                                         \
                                                                                 \
-typedef struct name##_list                                                      \
+typedef struct name##_array                                                     \
 {                                                                               \
     u32_stack available_indices;                                                \
-    type * list;                                                                \
+    type * array;                                                               \
     uint_fast32_t space;                                                        \
     uint_fast32_t count;                                                        \
 }                                                                               \
-name##_list;                                                                    \
+name##_array;                                                                   \
                                                                                 \
                                                                                 \
-static inline void name##_list_ini( name##_list * l )                           \
+static inline void name##_array_initialise( name##_array * l )                  \
 {                                                                               \
     assert(start_size>3 && !(start_size & (start_size-1)));                     \
-    u32_stack_ini(&l->available_indices);                                       \
-    l->list=malloc( sizeof( type ) * start_size );                              \
+    u32_stack_initialise(&l->available_indices);                                \
+    l->array=malloc( sizeof( type ) * start_size );                             \
     l->space=start_size;                                                        \
     l->count=0;                                                                 \
 }                                                                               \
                                                                                 \
-static inline uint32_t name##_list_add( name##_list * l , type value )          \
+static inline uint32_t name##_array_add( name##_array * l , type value )        \
 {                                                                               \
     uint_fast32_t n;                                                            \
     uint32_t i;                                                                 \
-    if(!u32_stack_get(&l->available_indices,&i))                                \
+    if(!u32_stack_pull(&l->available_indices,&i))                               \
     {                                                                           \
         if(l->count==l->space)                                                  \
         {                                                                       \
-            n=cvm_allocation_increase_step(l->space);                           \
-            l->list=realloc(l->list,sizeof( type )*(l->space+=n));              \
+            l->space *= 2;                                                      \
+            l->array=realloc(l->array, sizeof( type ) * l->space);              \
         }                                                                       \
         i=l->count++;                                                           \
     }                                                                           \
-    l->list[i]=value;                                                           \
+    l->array[i]=value;                                                          \
     return i;                                                                   \
 }                                                                               \
                                                                                 \
-static inline uint32_t name##_list_add_ptr( name##_list * l , type * value )    \
+static inline uint32_t name##_array_add_ptr                                     \
+( name##_array * l , const type * value )                                       \
 {                                                                               \
     uint_fast32_t n;                                                            \
     uint32_t i;                                                                 \
-    if(!u32_stack_get(&l->available_indices,&i))                                \
+    if(!u32_stack_pull(&l->available_indices,&i))                               \
     {                                                                           \
         if(l->count==l->space)                                                  \
         {                                                                       \
-            n=cvm_allocation_increase_step(l->space);                           \
-            l->list=realloc(l->list,sizeof( type )*(l->space+=n));              \
+            l->space *= 2;                                                      \
+            l->array=realloc(l->array, sizeof( type ) * l->space);              \
         }                                                                       \
         i=l->count++;                                                           \
     }                                                                           \
-    l->list[i]=*value;                                                          \
+    l->array[i]=*value;                                                         \
     return i;                                                                   \
 }                                                                               \
                                                                                 \
-static inline void name##_list_get                                              \
-( name##_list * l , type * value , uint32_t i )                                 \
+static inline type name##_array_get( name##_array * l , uint32_t i )            \
 {                                                                               \
-    assert(i < l->count);                                                       \
-    *value=l->list[i];                                                          \
-    u32_stack_add(&l->available_indices,i);                                     \
+    u32_stack_push(&l->available_indices,i);                                    \
+    return l->array[i];                                                         \
 }                                                                               \
                                                                                 \
-static inline void name##_list_del( name##_list * l )                           \
+/** returned pointer cannot be used after any other operation has occurred*/    \
+static inline const type * name##_array_get_ptr( name##_array * l , uint32_t i )\
 {                                                                               \
-    u32_stack_del(&l->available_indices);                                       \
-    free(l->list);                                                              \
+    u32_stack_push(&l->available_indices,i);                                    \
+    return l->array+i;                                                          \
 }                                                                               \
                                                                                 \
-static inline void name##_list_clr( name##_list * l )                           \
+static inline void name##_array_terminate( name##_array * l )                   \
 {                                                                               \
-    u32_stack_clr(&l->available_indices);                                       \
+    u32_stack_terminate(&l->available_indices);                                 \
+    free(l->array);                                                             \
+}                                                                               \
+                                                                                \
+static inline void name##_array_reset( name##_array * l )                       \
+{                                                                               \
+    u32_stack_reset(&l->available_indices);                                     \
     l->count=0;                                                                 \
 }                                                                               \
 
 #endif
 
 
-CVM_LIST(uint32_t,u32,16)
+CVM_ARRAY(uint32_t,u32,16)
 
 
 /**
@@ -196,6 +225,10 @@ desirable
 /**
 CVM_BIN_HEAP_CMP(A,B) must be declared, with true resulting in the value A
 moving UP the heap
+
+TODO: make any inputs to heap_cmp pointers and const
+
+TODO: use test sort heap performance improvements
 */
 
 #ifndef CVM_BIN_HEAP
@@ -216,7 +249,7 @@ static inline void name##_bin_heap_ini( name##_bin_heap * h )                   
     h->count=0;                                                                 \
 }                                                                               \
                                                                                 \
-static inline void name##_bin_heap_add( name##_bin_heap * h ,   type data )     \
+static inline void name##_bin_heap_add( name##_bin_heap * h , const type data ) \
 {                                                                               \
     if(h->count==h->space)h->heap=realloc(h->heap,sizeof(type)*(h->space*=2));  \
                                                                                 \
@@ -239,7 +272,10 @@ static inline void name##_bin_heap_clr( name##_bin_heap * h )                   
                                                                                 \
 static inline bool name##_bin_heap_get( name##_bin_heap * h , type * data )     \
 {                                                                               \
-    if(h->count==0)return false;                                                \
+    if(h->count==0)                                                             \
+    {                                                                           \
+        return false;                                                           \
+    }                                                                           \
                                                                                 \
     *data=h->heap[0];                                                           \
                                                                                 \
@@ -250,7 +286,10 @@ static inline bool name##_bin_heap_get( name##_bin_heap * h , type * data )     
     while((d=(u<<1)+1) < (h->count))                                            \
     {                                                                           \
         d+=((d+1 < h->count)&&(CVM_BIN_HEAP_CMP(h->heap[d+1],h->heap[d])));     \
-        if(CVM_BIN_HEAP_CMP(r,h->heap[d])) break;                               \
+        if(CVM_BIN_HEAP_CMP(r,h->heap[d]))                                      \
+        {                                                                       \
+            break;                                                              \
+        }                                                                       \
         h->heap[u]=h->heap[d];                                                  \
         u=d;                                                                    \
     }                                                                           \
@@ -273,123 +312,352 @@ static inline void name##_bin_heap_del( name##_bin_heap * h )                   
 
 
 
+#ifndef CVM_QUEUE
+#define CVM_QUEUE(type,name,start_size)                                         \
+                                                                                \
+typedef struct name##_queue                                                     \
+{                                                                               \
+    type * data;                                                                \
+    uint_fast32_t space;                                                        \
+    uint_fast32_t count;                                                        \
+    uint_fast32_t front;                                                        \
+}                                                                               \
+name##_queue;                                                                   \
+                                                                                \
+                                                                                \
+static inline void name##_queue_initialise( name##_queue * q )                  \
+{                                                                               \
+    assert(( (start_size) & ( (start_size) - 1 )) == 0);                        \
+    q->data=malloc( sizeof( type ) * start_size );                              \
+    q->space=start_size;                                                        \
+    q->count=0;                                                                 \
+    q->front=0;                                                                 \
+}                                                                               \
+                                                                                \
+static inline uint32_t name##_queue_new_index( name##_queue * q )               \
+{                                                                               \
+    uint_fast32_t front_offset, move_count;                                     \
+    type * src;                                                                 \
+    if(q->count == q->space)                                                    \
+    {                                                                           \
+        q->data = realloc(q->data, sizeof(type) * q->count * 2);                \
+        front_offset = q->front & (q->space - 1);                               \
+        if(q->front & q->space)                                                 \
+        {                                                                       \
+            src = q->data + front_offset;                                       \
+            move_count = q->space - front_offset;                               \
+        }                                                                       \
+        else                                                                    \
+        {                                                                       \
+            src = q->data;                                                      \
+            move_count = front_offset;                                          \
+        }                                                                       \
+        memcpy(src + q->space, src, sizeof(type) * move_count);                 \
+        q->space *= 2;                                                          \
+    }                                                                           \
+    return q->front + q->count++;                                               \
+}                                                                               \
+                                                                                \
+static inline type * name##_queue_get_ptr( name##_queue * q , uint32_t index )  \
+{                                                                               \
+    return q->data + (index & (q->space - 1));                                  \
+}                                                                               \
+                                                                                \
+static inline type * name##_queue_new( name##_queue * q )                       \
+{                                                                               \
+    return q->data + ( name##_queue_new_index(q) & (q->space - 1));             \
+}                                                                               \
+                                                                                \
+static inline uint32_t name##_queue_enqueue( name##_queue * q , type value )    \
+{                                                                               \
+    uint_fast32_t i;                                                            \
+    i = name##_queue_new_index(q);                                              \
+    q->data[i & (q->space - 1)] = value;                                        \
+    return i;                                                                   \
+}                                                                               \
+                                                                                \
+static inline bool name##_queue_dequeue( name##_queue * q , type * value )      \
+{                                                                               \
+    if(q->count == 0)                                                           \
+    {                                                                           \
+        return false;                                                           \
+    }                                                                           \
+    if(value)                                                                   \
+    {                                                                           \
+        *value = q->data[ q->front & (q->space - 1) ];                          \
+    }                                                                           \
+    q->front++;                                                                 \
+    q->count--;                                                                 \
+    return true;                                                                \
+}                                                                               \
+                                                                                \
+static inline type * name##_queue_dequeue_ptr( name##_queue * q )               \
+{                                                                               \
+    type * ptr;                                                                 \
+    if(q->count == 0)                                                           \
+    {                                                                           \
+        return NULL;                                                            \
+    }                                                                           \
+    ptr = q->data + (q->front & (q->space - 1));                                \
+    q->front++;                                                                 \
+    q->count--;                                                                 \
+    return ptr;                                                                 \
+}                                                                               \
+                                                                                \
+static inline void name##_queue_terminate( name##_queue * q )                   \
+{                                                                               \
+    free(q->data);                                                              \
+}                                                                               \
+                                                                                \
+static inline type * name##_queue_get_front_ptr( name##_queue * q )             \
+{                                                                               \
+    if(q->count == 0)                                                           \
+    {                                                                           \
+        return NULL;                                                            \
+    }                                                                           \
+    return q->data + (q->front & (q->space - 1));                               \
+}                                                                               \
+                                                                                \
+static inline type * name##_queue_get_back_ptr( name##_queue * q )              \
+{                                                                               \
+    if(q->count == 0)                                                           \
+    {                                                                           \
+        return NULL;                                                            \
+    }                                                                           \
+    return q->data + ((q->front + q->count - 1) & (q->space - 1));              \
+}                                                                               \
+                                                                                \
+static inline uint32_t name##_queue_front_index( name##_queue * q )             \
+{                                                                               \
+    return q->front;                                                            \
+}                                                                               \
+                                                                                \
+static inline uint32_t name##_queue_back_index( name##_queue * q )              \
+{                                                                               \
+    return q->front + q->count - 1;                                             \
+}                                                                               \
+
+
+#endif
+
+/**
+brief on queue resizing:
+need to move the correct part of the buffer to maintain (modulo) indices after resizing:
+|+++o+++|
+|---o+++++++----|
+vs
+        |+++o+++|
+|+++--------o+++|
+^ realloced segment array with alignment of relative (intended) indices/offsets
+
+
+iterating a queue
+for(i=0;i<q->count;i++) queue_get_ptr(q, q->front + i)
+*/
+
+CVM_QUEUE(uint32_t,u32,16)
 
 
 
 
 
 
-typedef uint8_t cvm_atomic_pad[256-sizeof(atomic_uint_fast32_t)];
-
-typedef struct cvm_thread_safe_expanding_queue
+struct cvm_cache_link
 {
-    size_t type_size;
-    uint_fast32_t block_size;
-    char * in_block;
-    char * out_block;
-    char * end_block;
-    cvm_atomic_pad start_pad;
-    atomic_uint_fast32_t spinlock;
-    cvm_atomic_pad spinlock_pad;
-    atomic_uint_fast32_t in;
-    cvm_atomic_pad in_pad;
-    atomic_uint_fast32_t out;
-    cvm_atomic_pad out_pad;
-    atomic_uint_fast32_t in_buffer_fence;
-    cvm_atomic_pad in_buffer_fence_pad;
-    atomic_uint_fast32_t out_buffer_fence;
-    cvm_atomic_pad out_buffer_fence_pad;
-    atomic_uint_fast32_t in_completions;
-    cvm_atomic_pad in_completions_pad;
-    atomic_uint_fast32_t out_completions;
-    cvm_atomic_pad out_completions_pad;
-}
-cvm_thread_safe_expanding_queue;
+    uint16_t older;
+    uint16_t newer;
+};
 
-void cvm_thread_safe_expanding_queue_ini( cvm_thread_safe_expanding_queue * list , uint_fast32_t block_size , size_t type_size );///not coherent
-void cvm_thread_safe_expanding_queue_add( cvm_thread_safe_expanding_queue * list , void * value );
-bool cvm_thread_safe_expanding_queue_get( cvm_thread_safe_expanding_queue * list , void * value );
-void cvm_thread_safe_expanding_queue_del( cvm_thread_safe_expanding_queue * list );///not coherent
+/**
+CVM_CACHE_CMP( entry , key ) must be declared, is used for equality checking when finding
+entries in the cache; this comparison should take pointers of the type (a) and
+the key_type (B)
+*/
+
+#ifndef CVM_CACHE
+#define CVM_CACHE(type,key_type,name)                                           \
+typedef struct name##_cache                                                     \
+{                                                                               \
+    type* entries;                                                              \
+    struct cvm_cache_link* links;                                               \
+    uint16_t oldest;                                                            \
+    uint16_t newest;                                                            \
+    uint16_t first_free;                                                        \
+    uint16_t count;                                                             \
+}                                                                               \
+name##_cache;                                                                   \
+                                                                                \
+static inline void name##_cache_initialise                                      \
+( name##_cache * cache , uint32_t size)                                         \
+{                                                                               \
+    assert(size >= 2);                                                          \
+    cache->links = malloc(sizeof(struct cvm_cache_link) * size);                \
+    cache->entries = malloc(sizeof( type ) * size);                             \
+    cache->oldest = CVM_INVALID_U16;                                            \
+    cache->newest = CVM_INVALID_U16;                                            \
+    cache->count  = 0;                                                          \
+    cache->first_free = size - 1;                                               \
+    while(size--)                                                               \
+    {                                                                           \
+        cache->links[size].newer = size - 1;                                    \
+        cache->links[size].older = CVM_INVALID_U16;/*not needed*/               \
+    }                                                                           \
+    assert(cache->links[0].newer == CVM_INVALID_U16);                           \
+}                                                                               \
+                                                                                \
+static inline void name##_cache_terminate( name##_cache * cache )               \
+{                                                                               \
+    free(cache->links);                                                         \
+    free(cache->entries);                                                       \
+}                                                                               \
+                                                                                \
+static inline type * name##_cache_find                                          \
+( name##_cache * cache , const key_type key )                                   \
+{                                                                               \
+    uint16_t i,p;                                                               \
+    const type * e;                                                             \
+    for(i = cache->newest; i != CVM_INVALID_U16; i = cache->links[i].older)     \
+    {                                                                           \
+        e = cache->entries + i;                                                 \
+        if(CVM_CACHE_CMP( e , key ))                                            \
+        {/** move to newest slot in cache */                                    \
+            if(cache->newest != i)                                              \
+            {                                                                   \
+                if(cache->oldest == i)                                          \
+                {                                                               \
+                    cache->oldest = cache->links[i].newer;                      \
+                }                                                               \
+                else                                                            \
+                {                                                               \
+                    p = cache->links[i].older;                                  \
+                    cache->links[p].newer = cache->links[i].newer;              \
+                }                                                               \
+                cache->links[cache->newest].newer = i;                          \
+                cache->links[i].older = cache->newest;                          \
+                cache->links[i].newer = CVM_INVALID_U16;                        \
+                cache->newest = i;                                              \
+            }                                                                   \
+            return cache->entries + i;                                          \
+        }                                                                       \
+    }                                                                           \
+                                                                                \
+    return NULL;                                                                \
+}                                                                               \
+                                                                                \
+static inline type * name##_cache_new( name##_cache * cache , bool * evicted )  \
+{                                                                               \
+    uint16_t i;                                                                 \
+    if(cache->first_free != CVM_INVALID_U16)                                    \
+    {                                                                           \
+        if(evicted)                                                             \
+        {                                                                       \
+            *evicted = false;                                                   \
+        }                                                                       \
+        i = cache->first_free;                                                  \
+        cache->first_free = cache->links[i].newer;                              \
+        if(cache->newest == CVM_INVALID_U16)                                    \
+        {                                                                       \
+            cache->oldest = i;                                                  \
+        }                                                                       \
+        else                                                                    \
+        {                                                                       \
+            cache->links[cache->newest].newer = i;                              \
+        }                                                                       \
+    }                                                                           \
+    else                                                                        \
+    {                                                                           \
+        if(evicted)                                                             \
+        {                                                                       \
+            *evicted = true;                                                    \
+        }                                                                       \
+        i = cache->oldest;                                                      \
+        cache->oldest = cache->links[i].newer;                                  \
+        cache->links[cache->oldest].older = CVM_INVALID_U16;                    \
+        cache->links[cache->newest].newer = i;                                  \
+    }                                                                           \
+    cache->links[i].newer = CVM_INVALID_U16;                                    \
+    cache->links[i].older = cache->newest;                                      \
+    cache->newest = i;                                                          \
+    cache->count++;                                                             \
+    return cache->entries + i;                                                  \
+}                                                                               \
+                                                                                \
+static inline type * name##_cache_evict( name##_cache * cache )                 \
+{                                                                               \
+    uint16_t i;                                                                 \
+    i = cache->oldest;                                                          \
+    if(i == CVM_INVALID_U16)                                                    \
+    {                                                                           \
+        return NULL;                                                            \
+    }                                                                           \
+    cache->oldest = cache->links[i].newer;                                      \
+    if(cache->oldest == CVM_INVALID_U16)                                        \
+    {                                                                           \
+        cache->newest = CVM_INVALID_U16;                                        \
+    }                                                                           \
+    else                                                                        \
+    {                                                                           \
+        cache->links[cache->oldest].older = CVM_INVALID_U16;                    \
+    }                                                                           \
+    cache->links[i].newer = cache->first_free;                                  \
+    cache->links[i].older = CVM_INVALID_U16;/*not needed*/                      \
+    cache->first_free = i;                                                      \
+    cache->count--;                                                             \
+    return cache->entries + i;                                                  \
+}                                                                               \
+                                                                                \
+static inline void name##_cache_remove( name##_cache * cache , type * entry)    \
+{                                                                               \
+    uint16_t i = entry - cache->entries;                                        \
+    if(cache->oldest == i)                                                      \
+    {                                                                           \
+        cache->oldest = cache->links[i].newer;                                  \
+        cache->links[cache->oldest].older = CVM_INVALID_U16;                    \
+    }                                                                           \
+    else                                                                        \
+    {                                                                           \
+        cache->links[cache->links[i].older].newer = cache->links[i].newer;      \
+    }                                                                           \
+    if(cache->newest == i)                                                      \
+    {                                                                           \
+        cache->newest = cache->links[i].older;                                  \
+        cache->links[cache->newest].newer = CVM_INVALID_U16;                    \
+    }                                                                           \
+    else                                                                        \
+    {                                                                           \
+        cache->links[cache->links[i].newer].older = cache->links[i].older;      \
+    }                                                                           \
+    cache->links[i].newer = cache->first_free;                                  \
+    cache->links[i].older = CVM_INVALID_U16;/*not needed*/                      \
+    cache->first_free = i;                                                      \
+    cache->count--;                                                             \
+}                                                                               \
+                                                                                \
+static inline type * name##_cache_get_oldest_ptr( name##_cache * cache )        \
+{                                                                               \
+    if(cache->oldest == CVM_INVALID_U16)                                        \
+    {                                                                           \
+        return NULL;                                                            \
+    }                                                                           \
+    return cache->entries + cache->oldest;                                      \
+}                                                                               \
+
+#endif
 
 
 
-typedef struct cvm_thread_safe_queue
-{
-    size_t type_size;
-    uint_fast32_t max_entry_count;
-    char * data;
-    cvm_atomic_pad start_pad;
-    atomic_uint_fast32_t in;
-    cvm_atomic_pad in_pad;
-    atomic_uint_fast32_t out;
-    cvm_atomic_pad out_pad;
-    atomic_uint_fast32_t in_fence;
-    cvm_atomic_pad in_fence_pad;
-    atomic_uint_fast32_t out_fence;
-    cvm_atomic_pad out_fence_pad;
-}
-cvm_thread_safe_queue;
-
-void cvm_thread_safe_queue_ini( cvm_thread_safe_queue * list , uint_fast32_t max_entry_count , size_t type_size );///not coherent
-bool cvm_thread_safe_queue_add( cvm_thread_safe_queue * list , void * value );
-bool cvm_thread_safe_queue_get( cvm_thread_safe_queue * list , void * value );
-void cvm_thread_safe_queue_del( cvm_thread_safe_queue * list );///not coherent
 
 
 
 
 
 
-typedef struct cvm_lock_free_stack_head
-{
-    uint_fast64_t change_count;
-    char * first;
-}
-cvm_lock_free_stack_head;
-
-typedef struct cvm_lock_free_stack
-{
-    void * unit_allocation;
-    size_t type_size;
-    cvm_atomic_pad start_pad;
-    _Atomic cvm_lock_free_stack_head allocated;
-    cvm_atomic_pad allocated_pad;
-    _Atomic cvm_lock_free_stack_head available;
-    cvm_atomic_pad available_pad;
-}
-cvm_lock_free_stack;
-
-void cvm_lock_free_stack_ini( cvm_lock_free_stack * stack , uint32_t num_units , size_t type_size );///not lockfree
-bool cvm_lock_free_stack_add( cvm_lock_free_stack * stack , void * value );
-bool cvm_lock_free_stack_get( cvm_lock_free_stack * stack , void * value );
-void cvm_lock_free_stack_del( cvm_lock_free_stack * stack );///not lockfree
 
 
 
 
-///    is faster than the general type under all usage patterns.
-///    thread safe unless total stored entries exceed max_entry_count (not thread-safe because of this).
 
-typedef struct cvm_coherent_limted_queue
-{
-    size_t type_size;
-    uint_fast32_t max_entry_count;
 
-    uint8_t * data;
-    cvm_atomic_pad start_pad;
-    atomic_uint_fast32_t fence;
-    cvm_atomic_pad fence_pad;
-    atomic_uint_fast32_t in;
-    cvm_atomic_pad in_pad;
-    atomic_uint_fast32_t out;
-    cvm_atomic_pad out_pad;
-}
-cvm_coherent_limted_queue;
-
-void cvm_coherent_limted_queue_ini( cvm_coherent_limted_queue * list , uint_fast32_t max_entry_count , size_t type_size );
-void cvm_coherent_limted_queue_add( cvm_coherent_limted_queue * list , void * value );
-bool cvm_coherent_limted_queue_get( cvm_coherent_limted_queue * list , void * value );
-void cvm_coherent_limted_queue_del( cvm_coherent_limted_queue * list );
 
 
 

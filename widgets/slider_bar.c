@@ -126,7 +126,7 @@ static void set_slider_bar_value_using_mouse_x(overlay_theme * theme,widget * w,
     if(w->slider_bar.func) w->slider_bar.func(w);
 }
 
-static void horizontal_slider_bar_widget_left_click(overlay_theme * theme,widget * w,int x,int y)
+static void horizontal_slider_bar_widget_left_click(overlay_theme * theme, widget * w, int x, int y, bool double_clicked)
 {
 	set_slider_bar_value_using_mouse_x(theme,w,x);
 }
@@ -212,7 +212,7 @@ static widget_behaviour_function_set horizontal_slider_bar_behaviour_functions=
 
 
 
-static void horizontal_slider_bar_widget_render(overlay_theme * theme,widget * w,int16_t x_off,int16_t y_off,cvm_overlay_element_render_buffer * erb,rectangle bounds)
+static void horizontal_slider_bar_widget_render(overlay_theme * theme,widget * w,int16_t x_off,int16_t y_off,struct cvm_overlay_render_batch * restrict render_batch,rectangle bounds)
 {
     int32_t before,bar,after,range,m;
 
@@ -245,8 +245,8 @@ static void horizontal_slider_bar_widget_render(overlay_theme * theme,widget * w
         after=(after*(w->slider_bar.bar_fraction-1))/w->slider_bar.bar_fraction;
     }
 
-    theme->h_bar_render(erb,theme,bounds,r,w->base.status,OVERLAY_MAIN_COLOUR);
-	theme->h_bar_slider_render(erb,theme,bounds,r,w->base.status,OVERLAY_TEXT_COLOUR_0,before,bar,after);
+    theme->h_bar_render(render_batch, theme, bounds, r, w->base.status, OVERLAY_MAIN_COLOUR);
+	theme->h_bar_slider_render(render_batch, theme, bounds, r, w->base.status, OVERLAY_TEXT_COLOUR_0, before, bar, after);
 }
 
 static widget * horizontal_slider_bar_widget_select(overlay_theme * theme,widget * w,int16_t x_in,int16_t y_in)
@@ -279,9 +279,9 @@ static widget_appearence_function_set horizontal_slider_bar_appearence_functions
 
 
 
-widget * create_slider_bar(int * value,widget_function func,void * data,bool free_data)
+widget * create_slider_bar(struct widget_context* context, int * value,widget_function func,void * data,bool free_data)
 {
-	widget * w=create_widget(sizeof(widget_slider_bar));
+	widget * w = create_widget(context, sizeof(widget_slider_bar));
 
 	w->slider_bar.data=data;
 	w->slider_bar.func=func;
@@ -305,9 +305,9 @@ widget * create_slider_bar(int * value,widget_function func,void * data,bool fre
 	return w;
 }
 
-widget * create_slider_bar_fixed(int32_t * value,int32_t min_value,int32_t max_value,int32_t bar_fraction,int32_t scroll_fraction,widget_function func,void * data,bool free_data)
+widget * create_slider_bar_fixed(struct widget_context* context, int32_t * value,int32_t min_value,int32_t max_value,int32_t bar_fraction,int32_t scroll_fraction,widget_function func,void * data,bool free_data)
 {
-	widget * w=create_widget(sizeof(widget_slider_bar));
+	widget * w=create_widget(context, sizeof(widget_slider_bar));
 
 	assert(bar_fraction>=2);///CANNOT TAKE UP WHOLE BAR OR DIVIDE BY 0
 
@@ -333,9 +333,9 @@ widget * create_slider_bar_fixed(int32_t * value,int32_t min_value,int32_t max_v
 	return w;
 }
 
-widget * create_slider_bar_dynamic(int32_t * value,const int32_t * min_value,const int32_t * max_value,const int32_t * bar_size,const int32_t * scroll_delta,widget_function func,void * data,bool free_data)
+widget * create_slider_bar_dynamic(struct widget_context* context, int32_t * value,const int32_t * min_value,const int32_t * max_value,const int32_t * bar_size,const int32_t * scroll_delta,widget_function func,void * data,bool free_data)
 {
-	widget * w=create_widget(sizeof(widget_slider_bar));
+	widget * w=create_widget(context, sizeof(widget_slider_bar));
 
 	w->slider_bar.data=data;
 	w->slider_bar.func=func;

@@ -52,9 +52,13 @@ typedef struct widget_enterbox
 }
 widget_enterbox;
 
-widget * create_enterbox(uint32_t max_strlen,uint32_t max_glyphs,uint32_t min_glyphs_visible,char * initial_text,widget_function activation_func,widget_function update_contents_func,widget_function upon_input_func,void * data,bool free_data,bool activate_upon_deselect);
-#define create_enterbox_simple(glyph_count,initial_text,activation_func,update_contents_func,data,free_data,activate_upon_deselect)\
-create_enterbox(glyph_count * CVM_OVERLAY_MAX_UNICODE_BYTES,glyph_count,glyph_count,initial_text,activation_func,update_contents_func,NULL,data,free_data,activate_upon_deselect)
+widget* create_enterbox(struct widget_context* context, uint32_t max_strlen,uint32_t max_glyphs,uint32_t min_glyphs_visible,char * initial_text,widget_function activation_func,widget_function update_contents_func,widget_function upon_input_func,void * data,bool free_data,bool activate_upon_deselect);
+
+static inline widget* create_enterbox_simple(struct widget_context* context, uint32_t glyph_count, char * initial_text,widget_function activation_func,widget_function update_contents_func,void* data, bool free_data,bool activate_upon_deselect)
+{
+    return create_enterbox(context, glyph_count * CVM_OVERLAY_MAX_UNICODE_BYTES, glyph_count, glyph_count,initial_text,activation_func,update_contents_func,NULL,data,free_data,activate_upon_deselect);
+}
+
 
 void blank_enterbox_function(widget * w);
 

@@ -38,7 +38,6 @@ static VkPipelineColorBlendAttachmentState cvm_vk_default_additive_blend_state;
 
 static VkImageCreateInfo cvm_vk_default_framebuffer_image_creation_info;
 static VkImageViewCreateInfo cvm_vk_default_framebuffer_image_view_creation_info;
-static VkFramebufferCreateInfo cvm_vk_default_framebuffer_creation_info;
 
 ///implement more variants when mesh supports vertex normas and tex-coords
 static VkVertexInputBindingDescription cvm_vk_default_pos_vertex_input_binding;
@@ -49,7 +48,6 @@ VkPipelineVertexInputStateCreateInfo cvm_vk_default_empty_vertex_input_state;
 
 
 
-static VkSampler cvm_vk_fetch_sampler;
 
 
 #warning have 2 variants of below, 1 that ouputs depth at the near plane and 1 at the far, for use with post processing algorithms that interface with depth in some way
@@ -101,42 +99,10 @@ static void cvm_vk_destroy_default_vertex_bindings(void)
 {
 }
 
-static void cvm_vk_create_default_samplers(void)
+void cvm_vk_create_defaults_old(void)
 {
-    ///should perhaps make this one wrap? (for use with bayer dither or similar applications)
-    VkSamplerCreateInfo fetch_sampler_creation_info=(VkSamplerCreateInfo)
-    {
-        .sType=VK_STRUCTURE_TYPE_SAMPLER_CREATE_INFO,
-        .pNext=NULL,
-        .flags=0,
-        .magFilter=VK_FILTER_NEAREST,
-        .minFilter=VK_FILTER_NEAREST,
-        .mipmapMode=VK_SAMPLER_MIPMAP_MODE_NEAREST,
-        .addressModeU=VK_SAMPLER_ADDRESS_MODE_CLAMP_TO_EDGE,
-        .addressModeV=VK_SAMPLER_ADDRESS_MODE_CLAMP_TO_EDGE,
-        .addressModeW=VK_SAMPLER_ADDRESS_MODE_CLAMP_TO_EDGE,
-        .mipLodBias=0.0f,
-        .anisotropyEnable=VK_FALSE,
-        .maxAnisotropy=0.0f,
-        .compareEnable=VK_FALSE,
-        .compareOp=VK_COMPARE_OP_NEVER,
-        .minLod=0.0f,
-        .maxLod=0.0f,
-        .borderColor=VK_BORDER_COLOR_FLOAT_TRANSPARENT_BLACK,
-        .unnormalizedCoordinates=VK_TRUE,
-    };
+    #warning can make these macros??
 
-    cvm_vk_create_sampler(&cvm_vk_fetch_sampler,&fetch_sampler_creation_info);
-}
-
-static void cvm_vk_destroy_default_samplers(void)
-{
-    cvm_vk_destroy_sampler(cvm_vk_fetch_sampler);
-}
-
-void cvm_vk_create_defaults(void)
-{
-    cvm_vk_create_default_samplers();
     cvm_vk_create_default_vertex_bindings();
 
     cvm_vk_default_input_assembly_state=(VkPipelineInputAssemblyStateCreateInfo)
@@ -322,18 +288,17 @@ void cvm_vk_create_defaults(void)
         .colorWriteMask=VK_COLOR_COMPONENT_R_BIT|VK_COLOR_COMPONENT_G_BIT|VK_COLOR_COMPONENT_B_BIT|VK_COLOR_COMPONENT_A_BIT
     };
 
-    cvm_vk_create_shader_stage_info(&cvm_vk_default_fullscreen_vertex_stage,"cvm_shared/shaders/fullscreen_vert.spv",VK_SHADER_STAGE_VERTEX_BIT);
+    cvm_vk_create_shader_stage_info(&cvm_vk_default_fullscreen_vertex_stage, NULL, "shaders/fullscreen.vert.spv",VK_SHADER_STAGE_VERTEX_BIT);
 }
 
-void cvm_vk_destroy_defaults(void)
+void cvm_vk_destroy_defaults_old(void)
 {
-    cvm_vk_destroy_default_samplers();
     cvm_vk_destroy_default_vertex_bindings();
 
-    cvm_vk_destroy_shader_stage_info(&cvm_vk_default_fullscreen_vertex_stage);
+    cvm_vk_destroy_shader_stage_info(&cvm_vk_default_fullscreen_vertex_stage, NULL);
 }
 
-void cvm_vk_create_swapchain_dependednt_defaults(uint32_t width,uint32_t height)
+void cvm_vk_create_swapchain_dependent_defaults(uint32_t width,uint32_t height)
 {
     cvm_vk_default_screen_rectangle=(VkRect2D)
     {
@@ -413,22 +378,9 @@ void cvm_vk_create_swapchain_dependednt_defaults(uint32_t width,uint32_t height)
             .layerCount=1
         }
     };
-
-    cvm_vk_default_framebuffer_creation_info=(VkFramebufferCreateInfo)
-    {
-        .sType=VK_STRUCTURE_TYPE_FRAMEBUFFER_CREATE_INFO,
-        .pNext=NULL,
-        .flags=0,
-        .renderPass=VK_NULL_HANDLE,///set later
-        .attachmentCount=0,///set later
-        .pAttachments=NULL,///set later
-        .width=width,
-        .height=height,
-        .layers=1
-    };
 }
 
-void cvm_vk_destroy_swapchain_dependednt_defaults(void)
+void cvm_vk_destroy_swapchain_dependent_defaults(void)
 {
 }
 
@@ -528,15 +480,6 @@ void cvm_vk_create_default_framebuffer_image_views(VkImageView * views,VkImage *
     }
 }
 
-void cvm_vk_create_default_framebuffer(VkFramebuffer * framebuffer,VkRenderPass render_pass,VkImageView * attachments,uint32_t attachment_count)
-{
-    cvm_vk_default_framebuffer_creation_info.renderPass=render_pass;
-    cvm_vk_default_framebuffer_creation_info.attachmentCount=attachment_count;
-    cvm_vk_default_framebuffer_creation_info.pAttachments=attachments;
-
-    cvm_vk_create_framebuffer(framebuffer,&cvm_vk_default_framebuffer_creation_info);
-}
-
 
 VkPipelineVertexInputStateCreateInfo * cvm_vk_get_mesh_vertex_input_state(uint16_t flags)
 {
@@ -552,13 +495,6 @@ VkPipelineVertexInputStateCreateInfo * cvm_vk_get_mesh_vertex_input_state(uint16
 VkPipelineVertexInputStateCreateInfo * cvm_vk_get_empty_vertex_input_state(void)
 {
     return &cvm_vk_default_empty_vertex_input_state;
-}
-
-
-
-VkSampler cvm_vk_get_fetch_sampler(void)
-{
-    return cvm_vk_fetch_sampler;
 }
 
 
@@ -622,21 +558,6 @@ VkSubpassDependency cvm_vk_get_default_colour_attachment_dependency(uint32_t src
         /// ^ image attachment needs shader stage, see VK_ACCESS_2_INPUT_ATTACHMENT_READ_BIT
         .srcAccessMask=VK_ACCESS_2_COLOR_ATTACHMENT_WRITE_BIT | VK_ACCESS_2_COLOR_ATTACHMENT_READ_BIT,
         .dstAccessMask=VK_ACCESS_2_COLOR_ATTACHMENT_WRITE_BIT | VK_ACCESS_2_COLOR_ATTACHMENT_READ_BIT,
-        .dependencyFlags=VK_DEPENDENCY_BY_REGION_BIT
-    };
-}
-
-VkSubpassDependency cvm_vk_get_default_colour_attachment_dependency_specialised(uint32_t src_subpass,bool src_input_attachment,bool src_blended,uint32_t dst_subpass,bool dst_input_attachment,bool dst_blended)
-{
-    return (VkSubpassDependency)
-    {
-        .srcSubpass=src_subpass,
-        .dstSubpass=dst_subpass,
-        .srcStageMask=VK_PIPELINE_STAGE_2_COLOR_ATTACHMENT_OUTPUT_BIT | !!src_input_attachment*VK_PIPELINE_STAGE_2_FRAGMENT_SHADER_BIT,
-        .dstStageMask=VK_PIPELINE_STAGE_2_COLOR_ATTACHMENT_OUTPUT_BIT | !!dst_input_attachment*VK_PIPELINE_STAGE_2_FRAGMENT_SHADER_BIT,
-        /// ^ image attachment needs shader stage, see VK_ACCESS_2_INPUT_ATTACHMENT_READ_BIT
-        .srcAccessMask=VK_ACCESS_2_COLOR_ATTACHMENT_WRITE_BIT | (src_input_attachment||src_blended)*VK_ACCESS_2_COLOR_ATTACHMENT_READ_BIT,
-        .dstAccessMask=VK_ACCESS_2_COLOR_ATTACHMENT_WRITE_BIT | (dst_input_attachment||dst_blended)*VK_ACCESS_2_COLOR_ATTACHMENT_READ_BIT,
         .dependencyFlags=VK_DEPENDENCY_BY_REGION_BIT
     };
 }

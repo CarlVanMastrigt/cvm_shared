@@ -45,7 +45,7 @@ static int count_affecting_box_contents(widget * container)
 
 
 
-
+// note: we're sneaky here in avoiding 2 loops of double execution by operating on `prev` widget
 
 
 static void horizontal_box_widget_min_w(overlay_theme * theme,widget * w)
@@ -63,7 +63,7 @@ static void horizontal_box_widget_min_w(overlay_theme * theme,widget * w)
         {
             if(prev)
             {
-                w->base.min_w+=set_widget_minimum_width(prev,pos_flags&(~WIDGET_H_LAST));
+                w->base.min_w+=set_widget_minimum_width(prev, theme, pos_flags&(~WIDGET_H_LAST));
                 pos_flags&=(~WIDGET_H_FIRST);
             }
             prev=current;
@@ -71,7 +71,10 @@ static void horizontal_box_widget_min_w(overlay_theme * theme,widget * w)
         current=current->base.next;
     }
 
-    if(prev) w->base.min_w+=set_widget_minimum_width(prev,pos_flags);
+    if(prev)
+    {
+        w->base.min_w += set_widget_minimum_width(prev, theme, pos_flags);
+    }
 }
 
 static void horizontal_box_widget_min_h(overlay_theme * theme,widget * w)
@@ -86,7 +89,7 @@ static void horizontal_box_widget_min_h(overlay_theme * theme,widget * w)
     {
         if(widget_active(current))
         {
-            set_widget_minimum_height(current,pos_flags);
+            set_widget_minimum_height(current, theme, pos_flags);
 
             if(w->base.min_h<current->base.min_h)w->base.min_h=current->base.min_h;
         }
@@ -111,8 +114,11 @@ static void horizontal_all_same_distributed_box_widget_min_w(overlay_theme * the
         {
             if(prev)
             {
-                set_widget_minimum_width(prev,pos_flags&(~WIDGET_H_LAST));
-                if(prev->base.min_w>max_width)max_width=prev->base.min_w;
+                set_widget_minimum_width(prev, theme, pos_flags&(~WIDGET_H_LAST));
+                if(prev->base.min_w>max_width)
+                {
+                    max_width=prev->base.min_w;
+                }
                 pos_flags&=(~WIDGET_H_FIRST);
             }
             prev=current;
@@ -124,7 +130,7 @@ static void horizontal_all_same_distributed_box_widget_min_w(overlay_theme * the
 
     if(prev)
     {
-        set_widget_minimum_width(prev,pos_flags);
+        set_widget_minimum_width(prev, theme, pos_flags);
         if(prev->base.min_w>max_width)max_width=prev->base.min_w;
     }
 
@@ -136,13 +142,13 @@ static void horizontal_first_distributed_box_widget_set_w(overlay_theme * theme,
     widget * current=w->container.first;
 
     int offset=0;
-    int difference=w->base.r.x2-w->base.r.x1-w->base.min_w;
+    int difference = w->base.r.x2 - w->base.r.x1 - w->base.min_w;
 
     while(current)
     {
         if(widget_active(current))
         {
-            offset+=organise_widget_horizontally(current,offset,current->base.min_w+difference);
+            offset+=organise_widget_horizontally(current, theme, offset, current->base.min_w + difference);
             difference=0;
         }
 
@@ -156,19 +162,23 @@ static void horizontal_last_distributed_box_widget_set_w(overlay_theme * theme,w
     widget * prev=NULL;
 
     int offset=0;
+    int difference = w->base.r.x2 - w->base.r.x1 - w->base.min_w;
 
     while(current)
     {
         if(widget_active(current))
         {
-            if(prev)offset+=organise_widget_horizontally(prev,offset,prev->base.min_w);
+            if(prev)offset+=organise_widget_horizontally(prev, theme, offset, prev->base.min_w);
             prev=current;
         }
 
         current=current->base.next;
     }
 
-    if(prev)organise_widget_horizontally(prev,offset,prev->base.min_w + w->base.r.x2-w->base.r.x1-w->base.min_w);
+    if(prev)
+    {
+        organise_widget_horizontally(prev, theme, offset, prev->base.min_w + difference);
+    }
 }
 
 static void horizontal_evenly_distributed_box_widget_set_w(overlay_theme * theme,widget * w)
@@ -184,7 +194,7 @@ static void horizontal_evenly_distributed_box_widget_set_w(overlay_theme * theme
     {
         if(widget_active(current))
         {
-            offset+=organise_widget_horizontally(current,offset,current->base.min_w+( (difference/num_elements)+(element_number<(difference%num_elements)) ));
+            offset+=organise_widget_horizontally(current, theme, offset, current->base.min_w+( (difference/num_elements)+(element_number<(difference%num_elements)) ));
             element_number++;
         }
 
@@ -202,7 +212,7 @@ static void horizontal_normally_distributed_box_widget_set_w(overlay_theme * the
     {
         if(widget_active(current))
         {
-            offset+=organise_widget_horizontally(current,offset,current->base.min_w);
+            offset+=organise_widget_horizontally(current, theme, offset, current->base.min_w);
         }
 
         current=current->base.next;
@@ -222,7 +232,7 @@ static void horizontal_all_same_distributed_box_widget_set_w(overlay_theme * the
     {
         if(widget_active(current))
         {
-            offset+=organise_widget_horizontally(current,offset, (difference/num_elements)+(element_number<(difference%num_elements)) );
+            offset+=organise_widget_horizontally(current, theme, offset, (difference/num_elements)+(element_number<(difference%num_elements)) );
             element_number++;
         }
 
@@ -240,7 +250,7 @@ static void horizontal_box_widget_set_h(overlay_theme * theme,widget * w)
     {
         if(widget_active(current))
         {
-            organise_widget_vertically(current,0,w->base.r.y2-w->base.r.y1);
+            organise_widget_vertically(current, theme, 0, w->base.r.y2 - w->base.r.y1);
         }
 
         current=current->base.next;
@@ -264,7 +274,7 @@ static void vertical_box_widget_min_w(overlay_theme * theme,widget * w)
     {
         if(widget_active(current))
         {
-            set_widget_minimum_width(current,pos_flags);
+            set_widget_minimum_width(current, theme, pos_flags);
 
             if(w->base.min_w<current->base.min_w)w->base.min_w=current->base.min_w;
         }
@@ -288,7 +298,7 @@ static void vertical_box_widget_min_h(overlay_theme * theme,widget * w)
         {
             if(prev)
             {
-                w->base.min_h+=set_widget_minimum_height(prev,pos_flags&(~WIDGET_V_LAST));
+                w->base.min_h+=set_widget_minimum_height(prev, theme, pos_flags&(~WIDGET_V_LAST));
                 pos_flags&=(~WIDGET_V_FIRST);
             }
             prev=current;
@@ -297,7 +307,10 @@ static void vertical_box_widget_min_h(overlay_theme * theme,widget * w)
         current=current->base.next;
     }
 
-    if(prev) w->base.min_h+=set_widget_minimum_height(prev,pos_flags);
+    if(prev) 
+    {
+        w->base.min_h+=set_widget_minimum_height(prev, theme, pos_flags);
+    }
 }
 
 static void vertical_all_same_distributed_box_widget_min_h(overlay_theme * theme,widget * w)
@@ -316,7 +329,7 @@ static void vertical_all_same_distributed_box_widget_min_h(overlay_theme * theme
         {
             if(prev)
             {
-                w->base.min_h+=set_widget_minimum_height(prev,pos_flags&(~WIDGET_V_LAST));
+                w->base.min_h+=set_widget_minimum_height(prev, theme, pos_flags&(~WIDGET_V_LAST));
                 if(prev->base.min_h>max_height)max_height=prev->base.min_h;
                 pos_flags&=(~WIDGET_V_FIRST);
             }
@@ -330,7 +343,7 @@ static void vertical_all_same_distributed_box_widget_min_h(overlay_theme * theme
 
     if(prev)
     {
-        w->base.min_h+=set_widget_minimum_height(prev,pos_flags&(~WIDGET_V_LAST));
+        w->base.min_h+=set_widget_minimum_height(prev, theme, pos_flags&(~WIDGET_V_LAST));
         if(prev->base.min_h>max_height)max_height=prev->base.min_h;
     }
 
@@ -345,7 +358,7 @@ static void vertical_box_widget_set_w(overlay_theme * theme,widget * w)
     {
         if(widget_active(current))
         {
-            organise_widget_horizontally(current,0,w->base.r.x2-w->base.r.x1);
+            organise_widget_horizontally(current, theme, 0, w->base.r.x2 - w->base.r.x1);
         }
 
         current=current->base.next;
@@ -357,18 +370,18 @@ static void vertical_first_distributed_box_widget_set_h(overlay_theme * theme,wi
     widget * current=w->container.first;
 
     int offset=0;
-    int difference=w->base.r.y2-w->base.r.y1-w->base.min_h;
+    int difference = w->base.r.y2 - w->base.r.y1 - w->base.min_h;
 
     while(current)
     {
         if(widget_active(current))
         {
-            offset+=organise_widget_vertically(current,offset,current->base.min_h+difference);
+            offset+=organise_widget_vertically(current, theme, offset, current->base.min_h + difference);
 
             difference=0;
         }
 
-        current=current->base.next;
+        current = current->base.next;
     }
 }
 
@@ -378,21 +391,26 @@ static void vertical_last_distributed_box_widget_set_h(overlay_theme * theme,wid
     widget * prev=NULL;
 
     int offset=0;
-
-    #warning this doesnt appear to check if last widget in box is active! (probably same with horizontal version)
+    int difference = w->base.r.y2 - w->base.r.y1 - w->base.min_h;
 
     while(current)
     {
         if(widget_active(current))
         {
-            if(prev) offset+=organise_widget_vertically(prev,offset,prev->base.min_h);
+            if(prev)
+            {
+                offset+=organise_widget_vertically(prev, theme, offset, prev->base.min_h);
+            }
             prev=current;
         }
 
         current=current->base.next;
     }
 
-    if(prev)organise_widget_vertically(prev,offset,prev->base.min_h+w->base.r.y2-w->base.r.y1-w->base.min_h);
+    if(prev)
+    {
+        organise_widget_vertically(prev, theme, offset, prev->base.min_h + difference);
+    }
 }
 
 static void vertical_evenly_distributed_box_widget_set_h(overlay_theme * theme,widget * w)
@@ -401,14 +419,14 @@ static void vertical_evenly_distributed_box_widget_set_h(overlay_theme * theme,w
 
     int offset=0;
     int element_number=0;
-    int difference=w->base.r.y2-w->base.r.y1-w->base.min_h;
+    int difference = w->base.r.y2 - w->base.r.y1 - w->base.min_h;
     int num_elements=count_affecting_box_contents(w);
 
     while(current)
     {
         if(widget_active(current))
         {
-            offset+=organise_widget_vertically(current,offset,current->base.min_h+( (difference/num_elements)+(element_number<(difference%num_elements)) ));
+            offset+=organise_widget_vertically(current, theme, offset, current->base.min_h+( (difference/num_elements)+(element_number<(difference%num_elements)) ));
 
             element_number++;
         }
@@ -427,7 +445,7 @@ static void vertical_normally_distributed_box_widget_set_h(overlay_theme * theme
     {
         if(widget_active(current))
         {
-            offset+=organise_widget_vertically(current,offset,current->base.min_h);
+            offset+=organise_widget_vertically(current, theme, offset, current->base.min_h);
         }
 
         current=current->base.next;
@@ -447,7 +465,7 @@ static void vertical_all_same_distributed_box_widget_set_h(overlay_theme * theme
     {
         if(widget_active(current))
         {
-            offset+=organise_widget_vertically(current,offset, (difference/num_elements)+(element_number<(difference%num_elements)) );
+            offset+=organise_widget_vertically(current, theme, offset, (difference/num_elements)+(element_number<(difference%num_elements)) );
 
             element_number++;
         }
@@ -574,35 +592,31 @@ static widget_appearence_function_set horizontal_all_same_distributed_box_functi
 
 
 
-
-
-
-
-
-
-
-
-
-
-widget * create_box(widget_layout layout,widget_distribution distribution)
+widget * create_box(struct widget_context* context, widget_layout layout,widget_distribution distribution)
 {
-    widget * w=create_container(sizeof(widget_container));///actually is just pure container
+    widget * w = create_container(context, sizeof(widget_container));
 
-    if(layout==WIDGET_VERTICAL)
+    switch(layout)
     {
-        if(distribution==WIDGET_FIRST_DISTRIBUTED)          w->base.appearence_functions=&vertical_first_distributed_box_functions;
-        else if(distribution==WIDGET_LAST_DISTRIBUTED)      w->base.appearence_functions=&vertical_last_distributed_box_functions;
-        else if(distribution==WIDGET_EVENLY_DISTRIBUTED)    w->base.appearence_functions=&vertical_evenly_distributed_box_functions;
-        else if(distribution==WIDGET_NORMALLY_DISTRIBUTED)  w->base.appearence_functions=&vertical_normally_distributed_box_functions;
-        else if(distribution==WIDGET_ALL_SAME_DISTRIBUTED)  w->base.appearence_functions=&vertical_all_same_distributed_box_functions;
-    }
-    if(layout==WIDGET_HORIZONTAL)
-    {
-        if(distribution==WIDGET_FIRST_DISTRIBUTED)          w->base.appearence_functions=&horizontal_first_distributed_box_functions;
-        else if(distribution==WIDGET_LAST_DISTRIBUTED)      w->base.appearence_functions=&horizontal_last_distributed_box_functions;
-        else if(distribution==WIDGET_EVENLY_DISTRIBUTED)    w->base.appearence_functions=&horizontal_evenly_distributed_box_functions;
-        else if(distribution==WIDGET_NORMALLY_DISTRIBUTED)  w->base.appearence_functions=&horizontal_normally_distributed_box_functions;
-        else if(distribution==WIDGET_ALL_SAME_DISTRIBUTED)  w->base.appearence_functions=&horizontal_all_same_distributed_box_functions;
+        case WIDGET_VERTICAL: switch(distribution)
+        {
+            case WIDGET_FIRST_DISTRIBUTED:    w->base.appearence_functions = &vertical_first_distributed_box_functions;    break;
+            case WIDGET_LAST_DISTRIBUTED:     w->base.appearence_functions = &vertical_last_distributed_box_functions;     break;
+            case WIDGET_EVENLY_DISTRIBUTED:   w->base.appearence_functions = &vertical_evenly_distributed_box_functions;   break;
+            case WIDGET_NORMALLY_DISTRIBUTED: w->base.appearence_functions = &vertical_normally_distributed_box_functions; break;
+            case WIDGET_ALL_SAME_DISTRIBUTED: w->base.appearence_functions = &vertical_all_same_distributed_box_functions; break;
+        }
+        break;
+        
+        case WIDGET_HORIZONTAL: switch(distribution)
+        {
+            case WIDGET_FIRST_DISTRIBUTED:    w->base.appearence_functions = &horizontal_first_distributed_box_functions;    break;
+            case WIDGET_LAST_DISTRIBUTED:     w->base.appearence_functions = &horizontal_last_distributed_box_functions;     break;
+            case WIDGET_EVENLY_DISTRIBUTED:   w->base.appearence_functions = &horizontal_evenly_distributed_box_functions;   break;
+            case WIDGET_NORMALLY_DISTRIBUTED: w->base.appearence_functions = &horizontal_normally_distributed_box_functions; break;
+            case WIDGET_ALL_SAME_DISTRIBUTED: w->base.appearence_functions = &horizontal_all_same_distributed_box_functions; break;
+        }
+        break;
     }
 
     return w;

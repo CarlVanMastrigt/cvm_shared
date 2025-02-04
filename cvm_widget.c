@@ -18,31 +18,80 @@ along with cvm_shared.  If not, see <https://www.gnu.org/licenses/>.
 */
 
 #include "cvm_shared.h"
+#include <SDL2/SDL_timer.h>
+#include <assert.h>
+#include <stdio.h>
 
-static uint32_t double_click_time=400;
 
-static overlay_theme * current_theme;
-static widget * currently_active_widget=NULL;
-static widget * only_interactable_widget=NULL;
-static widget * potential_interaction_widget=NULL;
-
-void set_overlay_double_click_time(uint32_t t)
+void widget_context_initialise(struct widget_context* context, overlay_theme* theme)
 {
-    double_click_time=t;
+    context->theme = theme;
+    context->registered_widget_count = 0;
+
+    context->double_click_time =  400;//?
+
+    context->currently_active_widget  = NULL;
+    context->only_interactable_widget = NULL;
+
+    context->previously_clicked_widget = NULL;
+
+    context->root_widget = NULL;
 }
 
-bool check_widget_double_clicked(widget * w)
+void widget_context_terminate(struct widget_context* context)
 {
-    return (SDL_GetTicks()<(w->base.last_click_time+double_click_time));
+    // should delete/unregister all widgets before terminating context 
+    assert(context->registered_widget_count == 0);
+
+    assert(context->currently_active_widget == NULL);
+    assert(context->only_interactable_widget == NULL);
 }
 
-void render_widget_overlay(cvm_overlay_element_render_buffer * erb,widget * menu_widget)
+/// one level below root
+static widget* get_widgets_toplevel_ancestor(widget * w)
 {
-    render_widget(menu_widget,0,0,erb,menu_widget->base.r);
+    if((w)&&(w->base.parent))
+    {
+        while(w->base.parent->base.parent)
+        {
+            w=w->base.parent;
+        }
+    }
+
+    assert(w && w->base.parent && w->base.parent->base.status&WIDGET_IS_ROOT);///COULD NOT FIND APPROPRIATE WIDGET TOPLEVEL ANCESTOR (ROOT)
+    // above error usually indicates you're trying to do something that requires a widget to be part of a valid hierarchy
+
+    return w;
+}
+
+widget* find_root_widget(widget * w)
+{
+    assert(w);
+    while(w->base.parent)
+    {
+        w = w->base.parent;
+    }
+
+    assert(w);///COULD NOT FIND APPROPRIATE WIDGET TOPLEVEL ANCESTOR (ROOT)
+    // assert(w->base.status&WIDGET_IS_ROOT);///COULD NOT FIND APPROPRIATE WIDGET TOPLEVEL ANCESTOR (ROOT)
+    if(!(w->base.status&WIDGET_IS_ROOT))
+    {
+        return NULL;
+    }
+
+    return w;
 }
 
 
-static void base_widget_render(overlay_theme * theme,widget * w,int16_t x_off,int16_t y_off,cvm_overlay_element_render_buffer * erb,rectangle bounds)
+
+void render_widget_overlay(struct cvm_overlay_render_batch * restrict render_batch, widget * root_widget)
+{
+    assert(root_widget->base.status&WIDGET_IS_ROOT);
+    render_widget(root_widget, root_widget->base.context->theme, 0, 0, render_batch, root_widget->base.r);
+}
+
+
+static void base_widget_render(overlay_theme * theme,widget * w,int16_t x_off,int16_t y_off,struct cvm_overlay_render_batch * restrict render_batch,rectangle bounds)
 {
     puts("error calling base: render");
 }
@@ -73,7 +122,6 @@ static void base_widget_set_h(overlay_theme * theme,widget * w)
     puts("error calling base: set_h");
 }
 
-
 static widget_appearence_function_set base_appearence_functions=
 {
     .render =   base_widget_render,
@@ -86,7 +134,7 @@ static widget_appearence_function_set base_appearence_functions=
 
 
 
-static void base_widget_left_click(overlay_theme * theme,widget * w,int x,int y)
+static void base_widget_left_click(overlay_theme * theme, widget * w, int x, int y, bool double_clicked)
 {
     puts("error calling base: l_click");
 }
@@ -150,47 +198,47 @@ static void base_widget_remove_child(widget * parent,widget * child)
 static void base_widget_delete(widget * w)
 {
     puts("error calling base: delete");
-    //printf("=> %d\n",w->base.type);
 }
 
 
 static widget_behaviour_function_set base_behaviour_functions =
-(widget_behaviour_function_set)
 {
-    .l_click        =   base_widget_left_click,
-    .l_release      =   base_widget_left_release,
-    .r_click        =   base_widget_right_click,
-    .m_move         =   base_widget_mouse_movement,
-    .scroll         =   base_widget_scroll,
-    .key_down       =   base_widget_key_down,
-    .text_input     =   base_widget_text_input,
-    .text_edit      =   base_widget_text_edit,
-    .click_away     =   base_widget_click_away,
-    .add_child      =   base_widget_add_child,
-    .remove_child   =   base_widget_remove_child,
-    .wid_delete     =   base_widget_delete
+    .l_click      = base_widget_left_click,
+    .l_release    = base_widget_left_release,
+    .r_click      = base_widget_right_click,
+    .m_move       = base_widget_mouse_movement,
+    .scroll       = base_widget_scroll,
+    .key_down     = base_widget_key_down,
+    .text_input   = base_widget_text_input,
+    .text_edit    = base_widget_text_edit,
+    .click_away   = base_widget_click_away,
+    .add_child    = base_widget_add_child,
+    .remove_child = base_widget_remove_child,
+    .wid_delete   = base_widget_delete
 };
 
-widget * create_widget(size_t size)
+void widget_base_initialise(widget_base* base, struct widget_context* context, const widget_appearence_function_set * appearence_functions, const widget_behaviour_function_set * behaviour_functions)
 {
-    widget * w=malloc(size);
+    *base = (widget_base)
+    {
+        .context = context,
+        .status = WIDGET_ACTIVE,
+        .min_w = 0,
+        .min_h = 0,
+        .r = rectangle_ini(0,0,0,0),
+        .parent = NULL,
+        .next = NULL,
+        .prev = NULL,
+        .appearence_functions = appearence_functions,
+        .behaviour_functions = behaviour_functions,
+    };
+}
 
-    w->base.status=WIDGET_ACTIVE;
+widget * create_widget(struct widget_context* context, size_t size)
+{
+    widget * w = malloc(size);
 
-    w->base.next=NULL;
-    w->base.prev=NULL;
-
-    w->base.parent=NULL;
-
-    w->base.r=(rectangle){0,0,0,0};
-
-    w->base.min_w=0;
-    w->base.min_h=0;
-
-    w->base.last_click_time=0;
-
-    w->base.appearence_functions=&base_appearence_functions;
-    w->base.behaviour_functions=&base_behaviour_functions;
+    widget_base_initialise(&w->base, context, &base_appearence_functions, &base_behaviour_functions);
 
     return w;
 }
@@ -231,57 +279,52 @@ void get_widgets_global_coordinates(widget * w,int * x,int * y)
 
 
 
-static void organise_widget(widget * w,int width,int height)
+static void organise_widget(widget * w, overlay_theme* theme, int width, int height)
 {
     if(widget_active(w))
     {
-        set_widget_minimum_width(w,WIDGET_POS_FLAGS_H);
-        organise_widget_horizontally(w,0,width);
+        set_widget_minimum_width(w, theme, WIDGET_POS_FLAGS_H);
+        organise_widget_horizontally(w, theme, 0, width);
 
-        set_widget_minimum_height(w,WIDGET_POS_FLAGS_V);
-        organise_widget_vertically(w,0,height);
+        set_widget_minimum_height(w, theme, WIDGET_POS_FLAGS_V);
+        organise_widget_vertically(w, theme, 0, height);
     }
 }
 
-void organise_menu_widget(widget * menu_widget,int screen_width,int screen_height)
+void organise_root_widget(widget * root,int screen_width,int screen_height)
 {
-    organise_widget(menu_widget,screen_width,screen_height);
-}
+    #warning remove theme from this, instead get theme from the widgets
+    assert(root->base.status&WIDGET_IS_ROOT);
+    organise_widget(root, root->base.context->theme, screen_width, screen_height);
 
-widget * create_widget_menu(void)
-{
-    widget * w= create_container(sizeof(widget_container));///actually is just a pure container
-    w->base.status|=WIDGET_IS_MENU;
-    return w;
-}
-
-
-
-static widget * get_widgets_toplevel_ancestor(widget * w)
-{
-    if((w)&&(w->base.parent))
+    const rectangle r = root->base.r;
+    if(r.x1 != 0 || r.x2 != screen_width || r.y1 != 0 || r.y2 != screen_height)
     {
-        while(w->base.parent->base.parent)
-        {
-            w=w->base.parent;
-        }
+        fprintf(stderr, "warning: widget could not fit on screen\n>> %d->%d %d->%d vs %d, %d\n",r.x1,r.x2,r.y1,r.y2, screen_width, screen_height);
     }
-
-    assert(w && w->base.parent && w->base.parent->base.status&WIDGET_IS_MENU);///COULD NOT FIND APPROPRIATE WIDGET TOPLEVEL ANCESTOR (MENU)
-
-    return w;
 }
+
+
 
 void organise_toplevel_widget(widget * w)
 {
-    w=get_widgets_toplevel_ancestor(w);
+    widget* ancestor = get_widgets_toplevel_ancestor(w);
 
-    if(w) organise_widget(w,w->base.parent->base.r.x2-w->base.parent->base.r.x1,w->base.parent->base.r.y2-w->base.parent->base.r.y1);
+    if(ancestor)
+    {
+        organise_widget(ancestor, ancestor->base.context->theme,
+            ancestor->base.parent->base.r.x2 - ancestor->base.parent->base.r.x1,
+            ancestor->base.parent->base.r.y2 - ancestor->base.parent->base.r.y1);
+    }
+    else
+    {
+        puts("why is there no toplevel widget!?");
+    }
 }
 
 void move_toplevel_widget_to_front(widget * w)
 {
-    w=get_widgets_toplevel_ancestor(w);
+    w = get_widgets_toplevel_ancestor(w);
 
     if((!w)||(w->base.parent->container.last==w))/// ||(w->base.status & WIDGET_STAYS_AT_BOTTOM)
     {
@@ -309,29 +352,12 @@ void move_toplevel_widget_to_front(widget * w)
     w->base.next=NULL;
 }
 
-void add_widget_to_widgets_menu(widget * w,widget * to_add)
-{
-    w=get_widgets_toplevel_ancestor(w);
-
-    assert(w && to_add && to_add->base.parent==NULL);
-
-    add_child_to_parent(w->base.parent,to_add);
-}
 
 
 
 
 
-
-
-
-
-
-
-
-
-
-void blank_widget_render(overlay_theme * theme,widget * w,int16_t x_off,int16_t y_off,cvm_overlay_element_render_buffer * erb,rectangle bounds)
+void blank_widget_render(overlay_theme * theme,widget * w,int16_t x_off,int16_t y_off,struct cvm_overlay_render_batch * restrict render_batch,rectangle bounds)
 {
 }
 
@@ -359,7 +385,7 @@ void blank_widget_set_h(overlay_theme * theme,widget * w)
 
 
 
-void blank_widget_left_click(overlay_theme * theme,widget * w,int x,int y)
+void blank_widget_left_click(overlay_theme * theme, widget * w, int x, int y, bool double_clicked)
 {
 }
 
@@ -416,110 +442,98 @@ void blank_widget_delete(widget * w)
 }
 
 
-
-
-void set_current_overlay_theme(overlay_theme * theme)
-{
-    current_theme=theme;
-}
-
-overlay_theme * get_current_overlay_theme(void)
-{
-    return current_theme;
-}
-
-void set_only_interactable_widget(widget * w)
-{
-    set_currently_active_widget(NULL);///if triggered when something is selected
-    only_interactable_widget=w;
-    if(w)
-    {
-        assert(w->base.status&WIDGET_ACTIVE);
-    }
-}
-
 bool is_currently_active_widget(widget * w)
 {
-    return (w==currently_active_widget);
-}
-
-bool is_potential_interaction_widget(widget * w)
-{
-    return (w==potential_interaction_widget);
-}
-
-void set_currently_active_widget(widget * w)
-{
-    if((currently_active_widget)&&(currently_active_widget!=w))currently_active_widget->base.behaviour_functions->click_away(current_theme,currently_active_widget);
-    currently_active_widget=w;
+    assert(w);
+    return (w == w->base.context->currently_active_widget);
 }
 
 
-void render_widget(widget * w,int x_off,int y_off,cvm_overlay_element_render_buffer * erb,rectangle bounds)
+
+void set_currently_active_widget(struct widget_context* context, widget * w)
 {
+    widget* old_active = context->currently_active_widget;
+    if((old_active) && (old_active != w))
+    {
+        old_active->base.behaviour_functions->click_away(context->theme, old_active);
+    }
+
+    context->currently_active_widget = w;
+}
+
+void set_only_interactable_widget(struct widget_context* context, widget * w)
+{
+    context->only_interactable_widget = w;
+}
+
+
+void render_widget(widget * w, overlay_theme* theme, int x_off, int y_off, struct cvm_overlay_render_batch * restrict render_batch, rectangle bounds)
+{
+    #warning remove theme from this, instead get theme from the widgets
     rectangle r=rectangle_add_offset(w->base.r,x_off,y_off);
 
-    if((w)&&(w->base.status&WIDGET_ACTIVE)&&(rectangles_overlap(r,bounds)))
+    if(w && w->base.status&WIDGET_ACTIVE && rectangles_overlap(r,bounds))
     {
-        w->base.appearence_functions->render(current_theme,w,x_off,y_off,erb,bounds);
+        w->base.appearence_functions->render(theme, w, x_off, y_off, render_batch, bounds);
     }
 }
 
-widget * select_widget(widget * w,int x_in,int y_in)
+#warning remove theme from this...
+widget * select_widget(widget * w, overlay_theme* theme, int x_in, int y_in)
 {
-    if((w)&&(w->base.status&WIDGET_ACTIVE)&&(rectangle_surrounds_point(w->base.r,(vec2i){.x=x_in,.y=y_in})))
+    if(w && w->base.status&WIDGET_ACTIVE && rectangle_surrounds_point(w->base.r,(vec2i){.x=x_in,.y=y_in}))
     {
-        return w->base.appearence_functions->select(current_theme,w,x_in,y_in);
+        return w->base.appearence_functions->select(theme, w, x_in, y_in);
     }
     return NULL;
 }
 
-int16_t set_widget_minimum_width(widget * w,uint32_t pos_flags)
+int16_t set_widget_minimum_width(widget * w, overlay_theme* theme, uint32_t pos_flags)
 {
-    if((w)&&(w->base.status&WIDGET_ACTIVE))
+    if(w && w->base.status&WIDGET_ACTIVE)
     {
         w->base.status&=WIDGET_POS_FLAGS_CLEAR;
         w->base.status|=(WIDGET_POS_FLAGS_H&pos_flags);
 
-        w->base.appearence_functions->min_w(current_theme,w);
+        w->base.appearence_functions->min_w(theme, w);
 
         return w->base.min_w;
     }
     return 0;
 }
 
-int16_t set_widget_minimum_height(widget * w,uint32_t pos_flags)
+int16_t set_widget_minimum_height(widget * w, overlay_theme* theme, uint32_t pos_flags)
 {
-    if((w)&&(w->base.status&WIDGET_ACTIVE))
+    if(w && w->base.status&WIDGET_ACTIVE)
     {
         w->base.status|=(WIDGET_POS_FLAGS_V&pos_flags);
 
-        w->base.appearence_functions->min_h(current_theme,w);
+        w->base.appearence_functions->min_h(theme, w);
 
         return w->base.min_h;
     }
     return 0;
 }
 
-int16_t organise_widget_horizontally(widget * w,int16_t x_pos,int16_t width)
+int16_t organise_widget_horizontally(widget * w, overlay_theme* theme, int16_t x_pos, int16_t width)
 {
-    if((w)&&(w->base.status&WIDGET_ACTIVE))
+    if(w && w->base.status&WIDGET_ACTIVE)
     {
         w->base.r.x1=x_pos;
         w->base.r.x2=x_pos+width;
-        w->base.appearence_functions->set_w(current_theme,w);
+        w->base.appearence_functions->set_w(theme, w);
         return width;
     }
     return 0;
 }
 
-int16_t organise_widget_vertically(widget * w,int16_t y_pos,int16_t height)
+int16_t organise_widget_vertically(widget * w, overlay_theme* theme, int16_t y_pos, int16_t height)
 {
-    if((w)&&(w->base.status&WIDGET_ACTIVE))
+    if(w && w->base.status&WIDGET_ACTIVE)
     {
         w->base.r.y1=y_pos;
         w->base.r.y2=y_pos+height;
-        w->base.appearence_functions->set_h(current_theme,w);
+        w->base.appearence_functions->set_h(theme, w);
         return height;
     }
     return 0;
@@ -527,86 +541,127 @@ int16_t organise_widget_vertically(widget * w,int16_t y_pos,int16_t height)
 
 
 
-static widget * get_widget_under_mouse(widget * menu_widget,int x_in,int y_in)
+static widget * get_widget_under_mouse(widget * root, int x_in, int y_in)
 {
-    widget *current,*tmp;
+    widget *current,*selected;
 
-    if(only_interactable_widget)
+    assert(root->base.status&WIDGET_IS_ROOT);
+
+    struct widget_context* context = root->base.context;
+
+    if(context->only_interactable_widget)
     {
-        adjust_coordinates_to_widget_local(only_interactable_widget,&x_in,&y_in);
-        tmp=select_widget(only_interactable_widget,x_in,y_in);
+        adjust_coordinates_to_widget_local(context->only_interactable_widget, &x_in, &y_in);
+        selected = select_widget(context->only_interactable_widget, context->theme, x_in, y_in);
 
-        if(tmp) return tmp;
-        else return only_interactable_widget;
+        if(selected) 
+        {
+            return selected;
+        }
+        else
+        {
+            /// returns base of interactable to ensure no OTHER systems (non-UI) will attempt to capture the input
+            #warning consider doing this for other things like key-presses
+            return context->only_interactable_widget;
+        }
     }
 
-    current=menu_widget->container.last;
-
-    while(current)
+    for(current = root->container.last; current; current = current->base.prev)
     {
-        tmp=select_widget(current,x_in,y_in);
+        selected = select_widget(current, context->theme, x_in, y_in);
 
-        if(tmp)
+        if(selected)
         {
             //if(move_to_top)move_toplevel_widget_to_front(current);
-            return tmp;
+            return selected;
         }
-
-        current=current->base.prev;
     }
 
     return NULL;
 }
 
-void find_potential_interaction_widget(widget * menu_widget,int mouse_x,int mouse_y)
+
+bool handle_widget_overlay_left_click(widget* root_widget,int x_in,int y_in)
 {
-    potential_interaction_widget=get_widget_under_mouse(menu_widget,mouse_x,mouse_y);
-}
+    assert(root_widget->base.status&WIDGET_IS_ROOT);
 
+    struct widget_context* context = root_widget->base.context;
 
+    #warning remove SDL call here!
+    uint32_t t = SDL_GetTicks();
+    widget * w = get_widget_under_mouse(root_widget, x_in, y_in);
 
+    // consider if this is correct
+    set_currently_active_widget(context, w);
+    #warning need a step to validate aspects of root widget upon stuff like window change
 
+    close_auto_close_popup_tree(w);
+    #warning ^ ????
 
-bool handle_widget_overlay_left_click(widget * menu_widget,int x_in,int y_in)
-{
-    widget * w=get_widget_under_mouse(menu_widget,x_in,y_in);
-
-    set_currently_active_widget(w);
+    #warning if a widget can delete its own hierarchy then setting the previously clicked widget like this references a deleted widget, AS CAN close_auto_close_popup_tree!!!
 
     if(w)
     {
+        /// not the greatest solution
+
+        bool double_clicked = (t - context->previously_clicked_time) < context->double_click_time && w == context->previously_clicked_widget;
+
+        /// must go here as it needs to be invalidatable inside the l_click function
+        context->previously_clicked_widget = w;
+        context->previously_clicked_time = t;
+
         move_toplevel_widget_to_front(w);
 
-        w->base.behaviour_functions->l_click(current_theme,w,x_in,y_in);
+        w->base.behaviour_functions->l_click(context->theme, w, x_in, y_in, double_clicked);
 
-        w->base.last_click_time=SDL_GetTicks();
+        return true;
     }
-
-    close_auto_close_popup_tree(w);
-
-    return (w!=NULL);
+    else
+    {
+        context->previously_clicked_widget = NULL;
+        context->previously_clicked_time = t;
+        return false;
+    }
 }
 
 ///returns wether this function intercepted (used) the input
-bool handle_widget_overlay_left_release(widget * menu_widget,int x_in,int y_in)
+bool handle_widget_overlay_left_release(widget* root_widget, int x_in, int y_in)
 {
-    if(currently_active_widget==NULL)return false;
+    assert(root_widget->base.status&WIDGET_IS_ROOT);
 
-    widget * released_upon=get_widget_under_mouse(menu_widget,x_in,y_in);
+    struct widget_context* context = root_widget->base.context;
+    widget* active_widget = context->currently_active_widget;
 
-    if(!currently_active_widget->base.behaviour_functions->l_release(current_theme,currently_active_widget,released_upon,x_in,y_in))
+    if(active_widget == NULL)
     {
-        set_currently_active_widget(NULL);
+
+        return false;
+    }
+
+    widget * released_upon = get_widget_under_mouse(root_widget, x_in, y_in);
+
+    // release returns whether to ignore this action 
+    // (action being releasing on top of the specified widget, usually this is just checking you click and release the same widget)
+    if(!active_widget->base.behaviour_functions->l_release(context->theme, active_widget, released_upon, x_in, y_in))
+    {
+        set_currently_active_widget(context, NULL);
     }
 
     return true;
 }
 
-bool handle_widget_overlay_movement(widget * menu_widget,int x_in,int y_in)
+bool handle_widget_overlay_movement(widget * root_widget,int x_in,int y_in)
 {
-    if((currently_active_widget)&&(SDL_GetMouseState(NULL, NULL) & SDL_BUTTON(SDL_BUTTON_LEFT)))
+    assert(root_widget->base.status&WIDGET_IS_ROOT);
+
+    struct widget_context* context = root_widget->base.context;
+    widget* active_widget = context->currently_active_widget;
+
+    #warning remove SDL calls from this
+    #warning is "button left" really sensible for this? should check how enterboxes work..
+    if((active_widget)&&(SDL_GetMouseState(NULL, NULL) & SDL_BUTTON(SDL_BUTTON_LEFT)))
     {
-        currently_active_widget->base.behaviour_functions->m_move(current_theme,currently_active_widget,x_in,y_in);
+        active_widget->base.behaviour_functions->m_move(context->theme, active_widget, x_in, y_in);
 
         return true;
     }
@@ -614,51 +669,72 @@ bool handle_widget_overlay_movement(widget * menu_widget,int x_in,int y_in)
     return false;
 }
 
-bool handle_widget_overlay_wheel(widget * menu_widget,int x_in,int y_in,int delta)
+bool handle_widget_overlay_wheel(widget * root_widget,int x_in,int y_in,int delta)
 {
-    widget * w=get_widget_under_mouse(menu_widget,x_in,y_in);
+    assert(root_widget->base.status&WIDGET_IS_ROOT);
+    overlay_theme* theme = root_widget->base.context->theme;
 
-    if(w==NULL)return false;
+    widget * w = get_widget_under_mouse(root_widget, x_in, y_in);
+
+    if(w==NULL)
+    {
+        return false;
+    }
 
     bool finished=false;
 
     while((w)&&(!finished))
     {
-        finished=w->base.behaviour_functions->scroll(current_theme,w,delta);
+        finished=w->base.behaviour_functions->scroll(theme, w, delta);
 
-        w=w->base.parent;
+        w = w->base.parent;
     }
 
-    handle_widget_overlay_movement(menu_widget,x_in,y_in);///to avoid scrollbar/slider_bar etc. changing when currently clicked
+    #warning following is a hack, should be handled by scriollbar internally by checking id currently active widget 
+    handle_widget_overlay_movement(root_widget, x_in, y_in);///to avoid scrollbar/slider_bar etc. changing when currently clicked
 
     return true;
 }
 
-bool handle_widget_overlay_keyboard(widget * menu_widget,SDL_Keycode keycode,SDL_Keymod mod)
+bool handle_widget_overlay_keyboard(widget * root_widget, SDL_Keycode keycode, SDL_Keymod mod)
 {
-    if(currently_active_widget)
+    assert(root_widget->base.status&WIDGET_IS_ROOT);
+    struct widget_context* context = root_widget->base.context;
+    widget* active_widget = context->currently_active_widget;
+
+    #warning this function should be genericized the most, should handle ACTIONS/COMMANDS instead of specific keys, that way it can handle controller input as well
+
+    if(active_widget)
     {
-        return currently_active_widget->base.behaviour_functions->key_down(current_theme,currently_active_widget,keycode,mod);
+        return active_widget->base.behaviour_functions->key_down(context->theme, active_widget, keycode, mod);
     }
 
     return false;
 }
 
-bool handle_widget_overlay_text_input(widget * menu_widget,char * text)
+bool handle_widget_overlay_text_input(widget * root_widget, char * text)
 {
-    if(currently_active_widget)
+    assert(root_widget->base.status&WIDGET_IS_ROOT);
+    struct widget_context* context = root_widget->base.context;
+    widget* active_widget = context->currently_active_widget;
+
+    if(active_widget)
     {
-        return currently_active_widget->base.behaviour_functions->text_input(current_theme,currently_active_widget,text);
+        return active_widget->base.behaviour_functions->text_input(context->theme, active_widget, text);
     }
 
     return false;
 }
 
-bool handle_widget_overlay_text_edit(widget * menu_widget,char * text,int start,int length)
+bool handle_widget_overlay_text_edit(widget * root_widget, char * text, int start, int length)
 {
-    if(currently_active_widget)
+    assert(root_widget->base.status&WIDGET_IS_ROOT);
+    struct widget_context* context = root_widget->base.context;
+    widget* active_widget = context->currently_active_widget;
+
+    if(active_widget)
     {
-        return currently_active_widget->base.behaviour_functions->text_edit(current_theme,currently_active_widget,text,start,length);
+        return active_widget->base.behaviour_functions->text_edit(context->theme, active_widget, text, start, length);
     }
 
     return false;
@@ -668,6 +744,7 @@ bool handle_widget_overlay_text_edit(widget * menu_widget,char * text,int start,
 
 widget * add_child_to_parent(widget * parent,widget * child)
 {
+    assert(parent->base.context == child->base.context);// there should only ever be one context for widgets in the same heirarchy
     parent->base.behaviour_functions->add_child(parent,child);
     return child;
 }
@@ -675,26 +752,77 @@ widget * add_child_to_parent(widget * parent,widget * child)
 void remove_child_from_parent(widget * child)
 {
     widget * parent=child->base.parent;
-    if(parent)parent->base.behaviour_functions->remove_child(parent,child);
-    child->base.parent=NULL;///there is a lot of duplication of this, remove from all add child instances?
+
+    if(parent == NULL)
+    {
+        assert(child->base.status&WIDGET_IS_ROOT);
+    }
+    else
+    {
+        assert(parent->base.context == child->base.context);// there should only ever be one context for widgets in the same hierarchy
+        parent->base.behaviour_functions->remove_child(parent,child);
+    }
+    
+
+    child->base.parent=NULL;///there is a lot of duplication of this, remove from all add child instances? does it matter? assert it has been done
+    #warning instead assert above, removing the child should set its parent to NULL
 }
 
 void delete_widget(widget * w)
 {
-    if(!w)return;
+    assert(w);
+
+    if(!w)
+    {
+        fprintf(stderr, "ERROR: deleting NULL widget");
+        return;
+    }
+
+    struct widget_context* context = w->base.context;
+
+    if(w == context->currently_active_widget)
+    {
+        // note: this is specifically NOT calling click away (do we want that though?)
+        context->currently_active_widget = NULL;
+    }
+    if(w == context->only_interactable_widget)
+    {
+        context->only_interactable_widget = NULL;
+    }
+    if(w == context->previously_clicked_widget)
+    {
+        context->previously_clicked_widget = NULL;
+    }
+
+    assert(!(w->base.status&WIDGET_DO_NOT_DELETE));///should not be trying to delete a widget that has been marked as undeleteable, but handle it anyway
+    if(w->base.status&WIDGET_DO_NOT_DELETE)
+    {
+        return;
+    }
+
+    #warning links to other widgets in popup.trigger_widget and any button that toggles another widget prevents deletion from being a clean process! (deletion of any widget in this kind of structure may cause a segfault)
+
+    w->base.behaviour_functions->wid_delete(w);
 
     remove_child_from_parent(w);
 
-    assert(!(w->base.status&WIDGET_DO_NOT_DELETE));///should not be trying to delete a widget that has been marked as undeleteable, but handle it anyway
-    if(w->base.status&WIDGET_DO_NOT_DELETE)return;
-
-    if(w==currently_active_widget)currently_active_widget=NULL;///avoid calling click away when deleting by not using set_currently_active_widget
-    if(w==only_interactable_widget)only_interactable_widget=NULL;
-
-    /// link to other widgets in popup.trigger_widget and any button that toggles another widget prevents deletion from being clean (deletion of any widget in this king of structure may cause a segfault)
-
-    w->base.behaviour_functions->wid_delete(w);
     free(w);
 }
 
 
+
+
+
+
+widget* create_root_widget(struct widget_context* context, overlay_theme* theme)
+{
+    assert(context->root_widget == NULL);//should only be one root widget
+
+    // better to have underlying init function that all these functions call?
+    widget* w = create_container(context, sizeof(widget_container));///actually is just a pure container
+    w->base.status |= WIDGET_IS_ROOT;
+
+    context->root_widget = w;
+
+    return w;
+}

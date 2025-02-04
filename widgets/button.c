@@ -49,17 +49,8 @@ bool button_widget_status_func(widget * w)
 
 
 
-static void button_widget_left_click(overlay_theme * theme,widget * w,int x,int y)
+static void button_widget_left_click(overlay_theme * theme, widget * w, int x, int y, bool double_clicked)
 {
-    /*if(w->button.double_click_action)
-    {
-        if(check_widget_double_click(w))
-        {
-            w->button.double_click_action(w);
-            return;
-        }
-    }*/
-
     if(w->button.func)
 	{
 		w->button.func(w);
@@ -102,28 +93,37 @@ static widget_behaviour_function_set button_behaviour_functions=
 };
 
 
-
-widget * create_button(void * data,widget_function func,bool free_data)
+void widget_button_initialise(widget_button* button, struct widget_context* context, const widget_appearence_function_set * appearence_functions, widget_function func, void * data, bool free_data)
 {
-    widget * w=create_widget(sizeof(widget_button));
+    widget_base_initialise(&button->base, context, appearence_functions, &button_behaviour_functions);
 
-    w->base.behaviour_functions=&button_behaviour_functions;
+    button->data = data;
+    button->func = func;
+    button->text = NULL;
+    button->toggle_status = NULL;
+    button->free_data = free_data;
+    button->variant_text = false;
+    button->highlight = false;
 
-    w->button.data=data;
-    w->button.func=func;
+    button->base.status |= WIDGET_CLOSE_POPUP_TREE;
+}
 
-    w->button.text=NULL;
 
-    w->button.toggle_status=NULL;
+/// combine 2 strings
+static inline char* cvm_strdup_button_toggle_packed(const char* negative_text, const char* positive_text)
+{
+    char *text,*t;
+    int len;
 
-    w->button.free_data=free_data;
+    len = 2;// space for null terminating characters
+    if(negative_text) len+= strlen(negative_text);
+    if(positive_text) len+= strlen(positive_text);
 
-    w->button.variant_text=false;
-    w->button.highlight=false;
+    text = t = malloc(len * sizeof(char));
+    if(negative_text) while((*t++ = *negative_text++));
+    if(positive_text) while((*t++ = *positive_text++));
 
-    w->base.status|=WIDGET_CLOSE_POPUP_TREE;
-
-    return w;
+    return text;
 }
 
 
@@ -131,10 +131,7 @@ widget * create_button(void * data,widget_function func,bool free_data)
 
 
 
-
-
-
-static void text_button_widget_render(overlay_theme * theme,widget * w,int16_t x_off,int16_t y_off,cvm_overlay_element_render_buffer * erb,rectangle bounds)
+static void text_button_widget_render(overlay_theme * theme,widget * w,int16_t x_off,int16_t y_off,struct cvm_overlay_render_batch * restrict render_batch,rectangle bounds)
 {
     rectangle r=rectangle_add_offset(w->base.r,x_off,y_off);
     overlay_colour c=OVERLAY_MAIN_COLOUR;
@@ -162,9 +159,9 @@ static void text_button_widget_render(overlay_theme * theme,widget * w,int16_t x
         }
     }
 
-    theme->h_bar_render(erb,theme,bounds,r,w->base.status,c);
+    theme->h_bar_render(render_batch, theme, bounds, r, w->base.status, c);
 
-    overlay_text_single_line_render(erb,theme,&text_render_data);
+    overlay_text_single_line_render(render_batch, theme, &text_render_data);
 }
 
 static widget * text_button_widget_select(overlay_theme * theme,widget * w,int16_t x_in,int16_t y_in)
@@ -207,49 +204,36 @@ static widget_appearence_function_set text_button_appearence_functions=
     .set_h  =   blank_widget_set_h
 };
 
-widget * create_text_button(char * text,void * data,bool free_data,widget_function func)
+widget * create_text_button(struct widget_context* context, const char * text,void * data,bool free_data,widget_function func)
 {
-    widget * button=create_button(data,func,free_data);
+    widget * w = malloc(sizeof(widget_button));
 
-    if(text)button->button.text=cvm_strdup(text);
-
-    button->base.appearence_functions=&text_button_appearence_functions;
-
-    return button;
-}
-
-widget * create_text_toggle_button(char * positive_text,char * negative_text,void * data,widget_function func,widget_button_toggle_status_func toggle_status)
-{
-    widget * w=create_button(data,func,false);
-
-    w->base.appearence_functions=&text_button_appearence_functions;
-
-    w->button.toggle_status=toggle_status;
-    w->button.variant_text=true;
-
-    int len=2;
-    if(negative_text)len+=strlen(negative_text);
-    if(positive_text)len+=strlen(positive_text);
-
-    char * t=w->button.text=malloc(len*sizeof(char));
-    if(negative_text)while(*negative_text) *t++ = *negative_text++;
-    *t++ = '\0';
-    if(positive_text)while(*positive_text) *t++ = *positive_text++;
-    *t++ = '\0';
+    widget_button_initialise(&w->button, context, &text_button_appearence_functions, func, data, free_data);
+    w->button.text = cvm_strdup(text);
 
     return w;
 }
 
-widget * create_text_highlight_toggle_button(char * text,void * data,bool free_data,widget_function func,widget_button_toggle_status_func toggle_status)
+widget * create_text_toggle_button(struct widget_context* context, char * positive_text,char * negative_text,void * data, bool free_data,widget_function func,widget_button_toggle_status_func toggle_status)
 {
-    widget * w=create_button(data,func,free_data);
+    widget * w = malloc(sizeof(widget_button));
 
-    if(text)w->button.text=cvm_strdup(text);
+    widget_button_initialise(&w->button, context, &text_button_appearence_functions, func, data, free_data);
+    w->button.toggle_status = toggle_status;
+    w->button.variant_text = true;
+    w->button.text = cvm_strdup_button_toggle_packed(negative_text, positive_text);
 
-    w->base.appearence_functions=&text_button_appearence_functions;
+    return w;
+}
 
-    w->button.toggle_status=toggle_status;
-    w->button.highlight=true;
+widget * create_text_highlight_toggle_button(struct widget_context* context, char * text,void * data,bool free_data,widget_function func,widget_button_toggle_status_func toggle_status)
+{
+    widget * w = malloc(sizeof(widget_button));
+
+    widget_button_initialise(&w->button, context, &text_button_appearence_functions, func, data, free_data);
+    w->button.toggle_status = toggle_status;
+    w->button.highlight = true;
+    w->button.text = cvm_strdup(text);
 
     return w;
 }
@@ -260,7 +244,7 @@ widget * create_text_highlight_toggle_button(char * text,void * data,bool free_d
 
 
 
-static void contiguous_text_button_widget_render(overlay_theme * theme,widget * w,int16_t x_off,int16_t y_off,cvm_overlay_element_render_buffer * erb,rectangle bounds)
+static void contiguous_text_button_widget_render(overlay_theme * theme,widget * w,int16_t x_off,int16_t y_off,struct cvm_overlay_render_batch * restrict render_batch,rectangle bounds)
 {
     rectangle r=rectangle_add_offset(w->base.r,x_off,y_off);
 
@@ -287,11 +271,11 @@ static void contiguous_text_button_widget_render(overlay_theme * theme,widget * 
 
         if(w->button.highlight)
         {
-            theme->h_bar_box_constrained_render(erb,theme,bounds,r,w->base.status,OVERLAY_HIGHLIGHTING_COLOUR,text_render_data.box_r,text_render_data.box_status);
+            theme->h_bar_box_constrained_render(render_batch,theme,bounds,r,w->base.status,OVERLAY_HIGHLIGHTING_COLOUR,text_render_data.box_r,text_render_data.box_status);
         }
     }
 
-    overlay_text_single_line_render(erb,theme,&text_render_data);
+    overlay_text_single_line_render(render_batch,theme,&text_render_data);
 }
 
 static void contiguous_text_button_widget_min_h(overlay_theme * theme,widget * w)
@@ -309,27 +293,24 @@ static widget_appearence_function_set contiguous_text_button_appearence_function
     .set_h  =   blank_widget_set_h
 };
 
-widget * create_contiguous_text_button(char * text,void * data,bool free_data,widget_function func)
+widget * create_contiguous_text_button(struct widget_context* context, const char * text,void * data,bool free_data,widget_function func)
 {
-    widget * w=create_button(data,func,free_data);
+    widget * w = malloc(sizeof(widget_button));
 
-    if(text)w->button.text=cvm_strdup(text);
-
-    w->base.appearence_functions=&contiguous_text_button_appearence_functions;
+    widget_button_initialise(&w->button, context, &contiguous_text_button_appearence_functions, func, data, free_data);
+    w->button.text = cvm_strdup(text);
 
     return w;
 }
 
-widget * create_contiguous_text_highlight_toggle_button(char * text,void * data,bool free_data,widget_function func,widget_button_toggle_status_func toggle_status)
+widget * create_contiguous_text_highlight_toggle_button(struct widget_context* context, const char * text,void * data,bool free_data,widget_function func,widget_button_toggle_status_func toggle_status)
 {
-    widget * w=create_button(data,func,free_data);
+    widget * w = malloc(sizeof(widget_button));
 
-    if(text)w->button.text=cvm_strdup(text);
-
-    w->base.appearence_functions=&contiguous_text_button_appearence_functions;
-
-    w->button.toggle_status=toggle_status;
-    w->button.highlight=true;
+    widget_button_initialise(&w->button, context, &contiguous_text_button_appearence_functions, func, data, free_data);
+    w->button.toggle_status = toggle_status;
+    w->button.highlight = true;
+    w->button.text = cvm_strdup(text);
 
     return w;
 }
@@ -344,7 +325,7 @@ widget * create_contiguous_text_highlight_toggle_button(char * text,void * data,
 
 
 
-static void icon_button_widget_render(overlay_theme * theme,widget * w,int16_t x_off,int16_t y_off,cvm_overlay_element_render_buffer * erb,rectangle bounds)
+static void icon_button_widget_render(overlay_theme * theme,widget * w,int16_t x_off,int16_t y_off,struct cvm_overlay_render_batch * restrict render_batch,rectangle bounds)
 {
     char * t=w->button.text;
 
@@ -355,8 +336,8 @@ static void icon_button_widget_render(overlay_theme * theme,widget * w,int16_t x
 
     rectangle r=rectangle_add_offset(w->base.r,x_off,y_off);
 
-    theme->square_render(erb,theme,bounds,r,w->base.status,OVERLAY_MAIN_COLOUR);
-    overlay_text_centred_glyph_render(erb,&theme->font,bounds,r,t,OVERLAY_TEXT_COLOUR_0);
+    theme->square_render(render_batch,theme,bounds,r,w->base.status,OVERLAY_MAIN_COLOUR);
+    overlay_text_centred_glyph_render(render_batch,&theme->font,bounds,r,t,OVERLAY_TEXT_COLOUR_0);
 }
 
 static widget * icon_button_widget_select(overlay_theme * theme,widget * w,int16_t x_in,int16_t y_in)
@@ -386,43 +367,26 @@ static widget_appearence_function_set icon_button_appearence_functions=
     .set_h  =   blank_widget_set_h
 };
 
-widget * create_icon_button(char * icon_name,void * data,bool free_data,widget_function func)
+widget * create_icon_button(struct widget_context* context, const char * icon_name,void * data,bool free_data,widget_function func)
 {
-    widget * button=create_button(data,func,free_data);
+    widget * w = malloc(sizeof(widget_button));
 
-    if(icon_name)button->button.text=cvm_strdup(icon_name);
+    widget_button_initialise(&w->button, context, &icon_button_appearence_functions, func, data, free_data);
+    w->button.text = cvm_strdup(icon_name);
 
-    button->base.appearence_functions=&icon_button_appearence_functions;
-
-	return button;
+	return w;
 }
 
-widget * create_icon_toggle_button(char * positive_icon,char * negative_icon,void * data,bool free_data,widget_function func,widget_button_toggle_status_func toggle_status)
+widget * create_icon_toggle_button(struct widget_context* context, const char * positive_icon, const char * negative_icon,void * data,bool free_data,widget_function func,widget_button_toggle_status_func toggle_status)
 {
-    widget * w=create_button(data,func,free_data);
+    widget * w = malloc(sizeof(widget_button));
 
-    w->base.appearence_functions=&icon_button_appearence_functions;
-
-    w->button.toggle_status=toggle_status;
-    w->button.variant_text=true;
-
-    int len=2;
-    if(negative_icon)len+=strlen(negative_icon);
-    if(positive_icon)len+=strlen(positive_icon);
-
-    char * t=w->button.text=malloc(len*sizeof(char));
-    if(negative_icon)while((*t++ = *negative_icon++));
-    else *t++ = '\0';
-    if(positive_icon)while((*t++ = *positive_icon++));
-    else *t++ = '\0';
+    widget_button_initialise(&w->button, context, &icon_button_appearence_functions, func, data, free_data);
+    w->button.toggle_status = toggle_status;
+    w->button.variant_text = true;
+    w->button.text = cvm_strdup_button_toggle_packed(negative_icon, positive_icon);
 
     return w;
-}
-
-void button_widget_set_text(widget * w,const char * new_text)
-{
-    w->button.text=realloc(w->button.text,sizeof(char)*(strlen(new_text)+1));
-    strcpy(w->button.text,new_text);
 }
 
 

@@ -1,5 +1,5 @@
 /**
-Copyright 2020,2021,2022 Carl van Mastrigt
+Copyright 2020,2021,2022,2024 Carl van Mastrigt
 
 This file is part of cvm_shared.
 
@@ -19,14 +19,14 @@ along with cvm_shared.  If not, see <https://www.gnu.org/licenses/>.
 
 #include "cvm_shared.h"
 
-static void anchor_widget_left_click(overlay_theme * theme,widget * w,int x,int y)
+static void anchor_widget_left_click(overlay_theme * theme, widget * w, int x, int y, bool double_clicked)
 {
     if(w->anchor.constraint)
     {
-        if(check_widget_double_clicked(w))
+        if(double_clicked)
         {
             toggle_resize_constraint_maximize(w->anchor.constraint);
-            set_currently_active_widget(NULL);
+            set_currently_active_widget(w->base.context, NULL);
         }
         else
         {
@@ -92,10 +92,10 @@ static widget_behaviour_function_set anchor_behaviour_functions=
 
 
 
-static void text_anchor_widget_render(overlay_theme * theme,widget * w,int16_t x_off,int16_t y_off,cvm_overlay_element_render_buffer * erb,rectangle bounds)
+static void text_anchor_widget_render(overlay_theme * theme, widget * w, int16_t x_off, int16_t y_off, struct cvm_overlay_render_batch * restrict render_batch, rectangle bounds)
 {
-	rectangle r=rectangle_add_offset(w->base.r,x_off,y_off);
-	theme->h_bar_render(erb,theme,bounds,r,w->base.status,OVERLAY_ALTERNATE_MAIN_COLOUR);
+	rectangle r=rectangle_add_offset(w->base.r, x_off, y_off);
+	theme->h_bar_render(render_batch, theme, bounds, r, w->base.status, OVERLAY_ALTERNATE_MAIN_COLOUR);
 
 	overlay_text_single_line_render_data text_render_data=
 	{
@@ -107,7 +107,7 @@ static void text_anchor_widget_render(overlay_theme * theme,widget * w,int16_t x
 	    .colour=OVERLAY_TEXT_COLOUR_0
 	};
 
-    overlay_text_single_line_render(erb,theme,&text_render_data);
+    overlay_text_single_line_render(render_batch, theme, &text_render_data);
 }
 
 static widget * text_anchor_widget_select(overlay_theme * theme,widget * w,int16_t x_in,int16_t y_in)
@@ -131,7 +131,7 @@ static void text_anchor_widget_min_h(overlay_theme * theme,widget * w)
 
 
 
-static widget_appearence_function_set text_anchor_appearence_functions=
+const static widget_appearence_function_set text_anchor_appearence_functions=
 {
     .render =   text_anchor_widget_render,
     .select =   text_anchor_widget_select,
@@ -141,18 +141,23 @@ static widget_appearence_function_set text_anchor_appearence_functions=
     .set_h  =   blank_widget_set_h
 };
 
-widget * create_anchor(widget * constraint,char * title)
+void widget_text_anchor_initialise(widget_anchor* anchor, struct widget_context* context, widget* constraint, char* title)
 {
-    widget * w=create_widget(sizeof(widget_anchor));
+    widget_base_initialise(&anchor->base, context, &text_anchor_appearence_functions, &anchor_behaviour_functions);
 
-    w->base.behaviour_functions=&anchor_behaviour_functions;
-    w->base.appearence_functions=&text_anchor_appearence_functions;
+    anchor->x_clicked=0;
+    anchor->y_clicked=0;
+    anchor->constraint=constraint;
 
-    w->anchor.x_clicked=0;
-    w->anchor.y_clicked=0;
-    if(title)w->anchor.text=cvm_strdup(title);
-    else w->anchor.text=NULL;
-    w->anchor.constraint=constraint;
+    if(title)anchor->text=cvm_strdup(title);
+    else anchor->text=NULL;
+}
+
+widget * create_anchor(struct widget_context* context, widget* constraint, char* title)
+{
+    widget * w = malloc(sizeof(widget_anchor));
+    
+    widget_text_anchor_initialise(&w->anchor, context, constraint, title);
 
     return w;
 }

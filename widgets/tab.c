@@ -31,7 +31,7 @@ static void tab_button_func(widget * button)
 }
 
 ///the only if page is active paradigm is great for automatically enabling/disabling tabs based on availability
-static void tab_button_widget_render(overlay_theme * theme,widget * w,int16_t x_off,int16_t y_off,cvm_overlay_element_render_buffer * erb,rectangle bounds)
+static void tab_button_widget_render(overlay_theme * theme,widget * w,int16_t x_off,int16_t y_off,struct cvm_overlay_render_batch * restrict render_batch,rectangle bounds)
 {
     rectangle r=rectangle_add_offset(w->base.r,x_off,y_off);
 
@@ -55,7 +55,7 @@ static void tab_button_widget_render(overlay_theme * theme,widget * w,int16_t x_
         {
             if(page->base.parent->tab_folder.current_tab_page==page)
             {
-                theme->h_bar_box_constrained_render(erb,theme,bounds,r,w->base.status,OVERLAY_HIGHLIGHTING_COLOUR,text_render_data.box_r,text_render_data.box_status);
+                theme->h_bar_box_constrained_render(render_batch,theme,bounds,r,w->base.status,OVERLAY_HIGHLIGHTING_COLOUR,text_render_data.box_r,text_render_data.box_status);
             }
             text_render_data.flags|=OVERLAY_TEXT_RENDER_BOX_CONSTRAINED;
         }
@@ -63,10 +63,10 @@ static void tab_button_widget_render(overlay_theme * theme,widget * w,int16_t x_
         {
             if(page->base.parent->tab_folder.current_tab_page==page)
             {
-                theme->h_bar_render(erb,theme,bounds,r,w->base.status,OVERLAY_HIGHLIGHTING_COLOUR);
+                theme->h_bar_render(render_batch,theme,bounds,r,w->base.status,OVERLAY_HIGHLIGHTING_COLOUR);
             }
         }
-        overlay_text_single_line_render(erb,theme,&text_render_data);
+        overlay_text_single_line_render(render_batch,theme,&text_render_data);
     }
 }
 
@@ -100,9 +100,9 @@ static widget_appearence_function_set tab_button_appearence_functions=
 };
 
 
-static widget * create_tab_button(widget * page_widget,char * page_name)
+static widget * create_tab_button(struct widget_context* context, widget * page_widget,char * page_name)
 {
-    widget * w=create_text_button(page_name,page_widget,false,tab_button_func);
+    widget * w=create_text_button(context, page_name,page_widget,false,tab_button_func);
 
     w->base.appearence_functions=&tab_button_appearence_functions;
 
@@ -215,14 +215,14 @@ static widget_behaviour_function_set tab_folder_behaviour_functions=
 
 
 
-static void tab_folder_widget_render(overlay_theme * theme,widget * w,int16_t x_off,int16_t y_off,cvm_overlay_element_render_buffer * erb,rectangle bounds)
+static void tab_folder_widget_render(overlay_theme * theme,widget * w,int16_t x_off,int16_t y_off,struct cvm_overlay_render_batch * restrict render_batch,rectangle bounds)
 {
-    if(w->tab_folder.current_tab_page)render_widget(w->tab_folder.current_tab_page,x_off+w->base.r.x1,y_off+w->base.r.y1,erb,bounds);
+    if(w->tab_folder.current_tab_page)render_widget(w->tab_folder.current_tab_page, theme, x_off + w->base.r.x1, y_off + w->base.r.y1, render_batch, bounds);
 }
 
 static widget * tab_folder_widget_select(overlay_theme * theme,widget * w,int16_t x_in,int16_t y_in)
 {
-    if(w->tab_folder.current_tab_page)return select_widget(w->tab_folder.current_tab_page,x_in-w->base.r.x1,y_in-w->base.r.y1);
+    if(w->tab_folder.current_tab_page)return select_widget(w->tab_folder.current_tab_page, theme, x_in - w->base.r.x1, y_in - w->base.r.y1);
     return NULL;
 }
 
@@ -234,7 +234,7 @@ static void tab_folder_widget_min_w(overlay_theme * theme,widget * w)
 
     while(current)
     {
-        set_widget_minimum_width(current,w->base.status&WIDGET_POS_FLAGS_H);
+        set_widget_minimum_width(current, theme, w->base.status&WIDGET_POS_FLAGS_H);
         if(current->base.min_w > w->base.min_w) w->base.min_w = current->base.min_w;
         current=current->base.prev;
     }
@@ -263,7 +263,7 @@ static void tab_folder_widget_min_h(overlay_theme * theme,widget * w)
 
     while(current)
     {
-        set_widget_minimum_height(current,w->base.status&WIDGET_POS_FLAGS_V);
+        set_widget_minimum_height(current, theme, w->base.status&WIDGET_POS_FLAGS_V);
         if(current->base.min_h > w->base.min_h) w->base.min_h = current->base.min_h;
         current=current->base.prev;
     }
@@ -271,24 +271,24 @@ static void tab_folder_widget_min_h(overlay_theme * theme,widget * w)
 
 static void tab_folder_widget_set_w(overlay_theme * theme,widget * w)
 {
-    widget * current=w->tab_folder.last;
+    widget * current = w->tab_folder.last;
 
     while(current)
     {
-        organise_widget_horizontally(current,0,w->base.r.x2-w->base.r.x1);
-        current=current->base.prev;
+        organise_widget_horizontally(current, theme, 0, w->base.r.x2 - w->base.r.x1);
+        current = current->base.prev;
     }
 }
 
 static void tab_folder_widget_set_h(overlay_theme * theme,widget * w)
 {
-    widget * current=w->tab_folder.last;
+    widget * current = w->tab_folder.last;
 
     while(current)
     {
-        organise_widget_vertically(current,0,w->base.r.y2-w->base.r.y1);
+        organise_widget_vertically(current, theme, 0, w->base.r.y2 - w->base.r.y1);
 
-        current=current->base.prev;
+        current = current->base.prev;
     }
 }
 
@@ -304,11 +304,11 @@ static widget_appearence_function_set tab_folder_appearence_functions=
 
 
 
-widget * create_tab_folder(widget ** button_box,widget_layout button_box_layout)
+widget * create_tab_folder(struct widget_context* context, widget ** button_box,widget_layout button_box_layout)
 {
-    widget * w=create_widget(sizeof(widget_tab_folder));
+    widget * w = create_widget(context, sizeof(widget_tab_folder));
 
-    *button_box=w->tab_folder.tab_button_container=create_contiguous_box(button_box_layout,0);
+    *button_box = w->tab_folder.tab_button_container = create_contiguous_box(context, button_box_layout, 0);
 
     w->tab_folder.current_tab_page=NULL;
     w->tab_folder.last=NULL;
@@ -320,9 +320,9 @@ widget * create_tab_folder(widget ** button_box,widget_layout button_box_layout)
 }
 
 
-widget * create_tab_page(widget * folder,char * title,widget * page_widget)
+widget * create_tab_page(struct widget_context* context, widget * folder,char * title,widget * page_widget)
 {
-    add_child_to_parent(folder->tab_folder.tab_button_container,create_tab_button(page_widget,title));
+    add_child_to_parent(folder->tab_folder.tab_button_container,create_tab_button(context, page_widget,title));
 
     add_child_to_parent(folder,page_widget);
 
@@ -335,16 +335,16 @@ widget * create_tab_page(widget * folder,char * title,widget * page_widget)
 #warning have more generic add_tab page, that provides button (of any sub-type) rather than creating one in a specified location
 
 #warning possibly unnecessary
-widget * create_vertical_tab_pair_box(widget ** tab_folder)///if kept, also create horizontal version
+widget * create_vertical_tab_pair_box(struct widget_context* context, widget ** tab_folder)///if kept, also create horizontal version
 {
     widget *box_0,*box_1,*buttons;
 
-    box_0=create_box(WIDGET_VERTICAL,WIDGET_LAST_DISTRIBUTED);
-    box_1=add_child_to_parent(box_0,create_box(WIDGET_HORIZONTAL,WIDGET_LAST_DISTRIBUTED));
-    add_child_to_parent(box_0,create_separator_widget());
-    *tab_folder=add_child_to_parent(box_0,create_tab_folder(&buttons,WIDGET_HORIZONTAL));
+    box_0=create_box(context, WIDGET_VERTICAL,WIDGET_LAST_DISTRIBUTED);
+    box_1=add_child_to_parent(box_0,create_box(context, WIDGET_HORIZONTAL,WIDGET_LAST_DISTRIBUTED));
+    add_child_to_parent(box_0,create_separator_widget(context));
+    *tab_folder=add_child_to_parent(box_0,create_tab_folder(context, &buttons, WIDGET_HORIZONTAL));
     add_child_to_parent(box_1,buttons);
-    add_child_to_parent(box_1,create_empty_widget(0,0));
+    add_child_to_parent(box_1,create_empty_widget(context, 0, 0));
 
     return box_0;
 }

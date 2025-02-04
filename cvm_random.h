@@ -126,8 +126,6 @@ static inline uint16_t cvm_rng_pcg_16(uint32_t * state)
 
 /// end of stuff adapted from https://www.pcg-random.org
 
-
-
 static inline float cvm_rng_float_16(uint32_t * s)
 {
     return (((float)cvm_rng_pcg_16(s))+0.5f)*0.0000152587890625f;/// 1/65536

@@ -114,8 +114,11 @@ static void enterbox_check_visible_offset(overlay_theme * theme,widget * w)
 
 
 
-static void enterbox_widget_left_click(overlay_theme * theme,widget * w,int x,int y)
+static void enterbox_widget_left_click(overlay_theme * theme, widget * w, int x, int y, bool double_clicked)
 {
+    #warning handle double click (select all)
+    #warning find another way to communicate to start accepting text input
+
     if(!SDL_IsTextInputActive()) SDL_StartTextInput();///need to only call if not already active...
 
     if(*w->enterbox.composition_text)return;
@@ -166,6 +169,7 @@ static bool enterbox_widget_scroll(overlay_theme * theme,widget * w,int delta)
 
 static bool enterbox_widget_key_down(overlay_theme * theme,widget * w,SDL_Keycode keycode,SDL_Keymod mod)
 {
+    widget* root_widget;
     char *s_begin,*s_end,*s;
 
     if(w->enterbox.selection_end > w->enterbox.selection_begin) s_begin=w->enterbox.selection_begin, s_end=w->enterbox.selection_end;
@@ -304,12 +308,12 @@ static bool enterbox_widget_key_down(overlay_theme * theme,widget * w,SDL_Keycod
         {
             w->enterbox.activation_func(w);
         }
-        set_currently_active_widget(NULL);
+        set_currently_active_widget(w->base.context, NULL);
         break;
 
     case SDLK_ESCAPE:
-        #warning probably dont want escape to ever activate, or at least not most of the time, ay wat to accomplish this, should it be the same as clicking away?
-        set_currently_active_widget(NULL);
+        #warning probably dont want escape to ever activate, or at least not most of the time, any way to accomplish this? should it be the same as clicking away?
+        set_currently_active_widget(w->base.context, NULL);
         break;
 
         default:;
@@ -393,11 +397,11 @@ static widget_behaviour_function_set enterbox_behaviour_functions=
     .wid_delete     =   enterbox_widget_delete
 };
 
-static void enterbox_widget_render(overlay_theme * theme,widget * w,int16_t x_off,int16_t y_off,cvm_overlay_element_render_buffer * erb,rectangle bounds)
+static void enterbox_widget_render(overlay_theme * theme,widget * w,int16_t x_off,int16_t y_off,struct cvm_overlay_render_batch * restrict render_batch,rectangle bounds)
 {
-    rectangle r=rectangle_add_offset(w->base.r,x_off,y_off);
+    rectangle r=rectangle_add_offset(w->base.r, x_off, y_off);
 
-	theme->h_bar_render(erb,theme,bounds,r,w->base.status,OVERLAY_MAIN_COLOUR);
+	theme->h_bar_render(render_batch, theme, bounds, r, w->base.status, OVERLAY_MAIN_COLOUR);
 
 	if(w->enterbox.update_contents_func && !is_currently_active_widget(w))w->enterbox.update_contents_func(w);
 
@@ -428,15 +432,23 @@ static void enterbox_widget_render(overlay_theme * theme,widget * w,int16_t x_of
     {
         text_render_data.colour=OVERLAY_TEXT_COLOUR_0;
         text_render_data.text=w->enterbox.text;
-        if(w->enterbox.selection_end > w->enterbox.selection_begin) text_render_data.selection_begin=w->enterbox.selection_begin, text_render_data.selection_end=w->enterbox.selection_end;
-        else text_render_data.selection_begin=w->enterbox.selection_end, text_render_data.selection_end=w->enterbox.selection_begin;
+        if(w->enterbox.selection_end > w->enterbox.selection_begin)
+        {
+            text_render_data.selection_begin = w->enterbox.selection_begin;
+            text_render_data.selection_end = w->enterbox.selection_end;
+        }
+        else
+        {
+            text_render_data.selection_begin = w->enterbox.selection_end;
+            text_render_data.selection_end = w->enterbox.selection_begin;
+        }
         text_render_data.x=text_render_data.text_area.x1-w->enterbox.visible_offset;
     }
 
-    text_render_data.flags|=(w->enterbox.min_glyphs_visible<w->enterbox.max_glyphs)*OVERLAY_TEXT_RENDER_FADING;
-    text_render_data.flags|=is_currently_active_widget(w)*OVERLAY_TEXT_RENDER_SELECTION;
+    text_render_data.flags |= (w->enterbox.min_glyphs_visible < w->enterbox.max_glyphs) ? OVERLAY_TEXT_RENDER_FADING : 0;
+    text_render_data.flags |= is_currently_active_widget(w) ? OVERLAY_TEXT_RENDER_SELECTION : 0;
 
-    overlay_text_single_line_render(erb,theme,&text_render_data);
+    overlay_text_single_line_render(render_batch, theme, &text_render_data);
 }
 
 static widget * enterbox_widget_select(overlay_theme * theme,widget * w,int16_t x_in,int16_t y_in)
@@ -472,9 +484,9 @@ static widget_appearence_function_set enterbox_appearence_functions=
     .set_h  =   blank_widget_set_h
 };
 
-widget * create_enterbox(uint32_t max_strlen,uint32_t max_glyphs,uint32_t min_glyphs_visible,char * initial_text,widget_function activation_func,widget_function update_contents_func,widget_function upon_input_func,void * data,bool free_data,bool activate_upon_deselect)
+widget * create_enterbox(struct widget_context* context, uint32_t max_strlen,uint32_t max_glyphs,uint32_t min_glyphs_visible,char * initial_text,widget_function activation_func,widget_function update_contents_func,widget_function upon_input_func,void * data,bool free_data,bool activate_upon_deselect)
 {
-	widget * w=create_widget(sizeof(widget_enterbox));
+	widget * w=create_widget(context, sizeof(widget_enterbox));
 
 	w->enterbox.data=data;
 	w->enterbox.activation_func=activation_func;

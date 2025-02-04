@@ -48,19 +48,19 @@ void create_debug_render_data(VkDescriptorSetLayout * descriptor_set_layout)
 
     cvm_vk_create_pipeline_layout(&debug_pipeline_layout,&pipeline_layout_create_info);
 
-    cvm_vk_create_shader_stage_info(&debug_vert_stage,"cvm_shared/shaders/debug/line.vert.spv",VK_SHADER_STAGE_VERTEX_BIT);
-    cvm_vk_create_shader_stage_info(&debug_frag_stage,"cvm_shared/shaders/debug/line.frag.spv",VK_SHADER_STAGE_FRAGMENT_BIT);
+    cvm_vk_create_shader_stage_info(&debug_vert_stage, NULL, "shaders/debug/line.vert.spv",VK_SHADER_STAGE_VERTEX_BIT);
+    cvm_vk_create_shader_stage_info(&debug_frag_stage, NULL, "shaders/debug/line.frag.spv",VK_SHADER_STAGE_FRAGMENT_BIT);
 }
 
 void destroy_debug_render_data(void)
 {
-    cvm_vk_destroy_shader_stage_info(&debug_vert_stage);
-    cvm_vk_destroy_shader_stage_info(&debug_frag_stage);
+    cvm_vk_destroy_shader_stage_info(&debug_vert_stage, NULL);
+    cvm_vk_destroy_shader_stage_info(&debug_frag_stage, NULL);
 
     cvm_vk_destroy_pipeline_layout(debug_pipeline_layout);
 }
 
-void create_debug_swapchain_dependent_render_data(VkRenderPass render_pass,uint32_t subpass,VkSampleCountFlagBits sample_count)
+void create_debug_swapchain_dependent_render_data(VkRenderPass render_pass, uint32_t subpass, VkSampleCountFlagBits sample_count)
 {
 
     float line_thickness=1.0;
@@ -163,7 +163,7 @@ void create_debug_swapchain_dependent_render_data(VkRenderPass render_pass,uint3
                 .logicOpEnable=VK_FALSE,
                 .logicOp=VK_LOGIC_OP_COPY,
                 .attachmentCount=1,///must equal colorAttachmentCount in subpass
-                .pAttachments= (VkPipelineColorBlendAttachmentState[])
+                .pAttachments= (VkPipelineColorBlendAttachmentState[1])
                 {
                     cvm_vk_get_default_alpha_blend_state()
                 },
@@ -222,6 +222,9 @@ void render_debug(VkCommandBuffer cb,VkDescriptorSet * descriptor_set,debug_rend
 
     vkCmdDraw(cb,data->vertex_count,1,data->vertex_offset/sizeof(debug_vertex_data),0);
 }
+
+
+
 
 
 

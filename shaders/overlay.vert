@@ -30,7 +30,7 @@ layout(location=2) flat out uvec4 d2;
 
 layout (push_constant) uniform screen_dimensions
 {
-	layout(offset=0) vec2 inv_screen_size_x2;
+	layout(offset=0) vec2 inv_screen_size_doubled;
 };
 
 void main()
@@ -44,7 +44,7 @@ void main()
         default: p=data0.zw;
     }
 
-    gl_Position=vec4(p*inv_screen_size_x2-1.0,0.0,1.0);
+    gl_Position=vec4(p*inv_screen_size_doubled-1.0,0.0,1.0);
 
     d0=data0;
     d1=data1;

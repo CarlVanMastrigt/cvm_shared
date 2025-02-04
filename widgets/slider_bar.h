@@ -29,46 +29,58 @@ typedef struct widget_slider_bar
 {
     widget_base base;
 
-    int32_t * value_ptr;
+    widget_function func;
+    void * data;
+
+    int32_t * value_ptr;///REMOVE
+    #warning replace above with set/get functions below
+    int32_t (*get_value_func)(void*);
+    void (*set_value_func)(void*, int32_t);
+
+    #warning should functions in this case take the void ptr or data as input??
+
 
     union
     {
         int32_t min_value;
-        const int32_t * min_value_ptr;
+        const int32_t * min_value_ptr;///REMOVE
+        int32_t (*min_value_func)(void*);
     };
     union
     {
         int32_t max_value;
         const int32_t * max_value_ptr;
+        int32_t (*max_value_func)(void*);
     };
     union
     {
-        int32_t bar_fraction;
+        int32_t bar_fraction;///replace with below
+        int32_t bar_size;
         const int32_t * bar_size_ptr;
+        int32_t (*bar_size_func)(void*);
     };
     union
     {
-        int32_t scroll_fraction;
+        // either scroll a discrete fraction of the bar, or dynamically alter value by an integer amount on scroll
+        int32_t scroll_fraction;///replace with below
+        int32_t scroll_amount;
         const int32_t * scroll_delta_ptr;
+        int32_t (*scroll_delta_func)(void*);
     };
-
-    //widget_layout layout;
-
-    widget_function func;
-    void * data;
 
     uint32_t free_data:1;
     ///use bitfields to distinguish value vs value ptr's above (min/max, then put values in union)
     uint32_t dynamic_range:1;
     uint32_t dynamic_bar:1;
     uint32_t dynamic_scroll:1;
+    // bitfield to use scroll AMOUNT over scroll fraction
 }
 widget_slider_bar;
 
-widget * create_slider_bar(int * value,widget_function func,void * data,bool free_data);///set control mechanisms manually later
+widget * create_slider_bar(struct widget_context* context, int * value,widget_function func,void * data,bool free_data);///set control mechanisms manually later
 
-widget * create_slider_bar_fixed(int32_t * value,int32_t min_value,int32_t max_value,int32_t bar_fraction,int32_t scroll_fraction,widget_function func,void * data,bool free_data);
-widget * create_slider_bar_dynamic(int32_t * value,const int32_t * min_value,const int32_t * max_value,const int32_t * bar_size,const int32_t * scroll_delta,widget_function func,void * data,bool free_data);
+widget * create_slider_bar_fixed(struct widget_context* context, int32_t * value,int32_t min_value,int32_t max_value,int32_t bar_fraction,int32_t scroll_fraction,widget_function func,void * data,bool free_data);
+widget * create_slider_bar_dynamic(struct widget_context* context, int32_t * value,const int32_t * min_value,const int32_t * max_value,const int32_t * bar_size,const int32_t * scroll_delta,widget_function func,void * data,bool free_data);
 //widget * create_adjacent_slider(int * value_ptr,int min_value,int max_value,widget_function func,void * data,bool free_data,widget_layout layout,int bar_fraction);
 
 void set_slider_bar_other_values(widget * w,int * min_value_ptr,int * max_value_ptr,int * bar_size_ptr,int * wheel_delta_ptr);

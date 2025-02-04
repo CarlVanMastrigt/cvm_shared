@@ -102,7 +102,7 @@ static widget_behaviour_function_set container_behaviour_functions=
 
 
 
-void container_widget_render(overlay_theme * theme,widget * w,int16_t x_off,int16_t y_off,cvm_overlay_element_render_buffer * erb,rectangle bounds)
+void container_widget_render(overlay_theme * theme,widget * w,int16_t x_off,int16_t y_off,struct cvm_overlay_render_batch * restrict render_batch,rectangle bounds)
 {
     x_off+=w->base.r.x1;
     y_off+=w->base.r.y1;
@@ -111,7 +111,7 @@ void container_widget_render(overlay_theme * theme,widget * w,int16_t x_off,int1
 
     while(current)
     {
-        render_widget(current,x_off,y_off,erb,bounds);
+        render_widget(current, theme, x_off, y_off, render_batch, bounds);
 
         current=current->base.next;
     }
@@ -127,7 +127,7 @@ widget * container_widget_select(overlay_theme * theme,widget * w,int16_t x_in,i
 
     while(current)
     {
-        tmp=select_widget(current,x_in,y_in);
+        tmp=select_widget(current, theme, x_in, y_in);
 
         if(tmp) return tmp;
 
@@ -149,7 +149,7 @@ static void container_widget_min_w(overlay_theme * theme,widget * w)
     {
         if(widget_active(current))
         {
-            set_widget_minimum_width(current,pos_flags);
+            set_widget_minimum_width(current, theme, pos_flags);
 
             if(w->base.min_w<current->base.min_w)w->base.min_w=current->base.min_w;
         }
@@ -170,7 +170,7 @@ static void container_widget_min_h(overlay_theme * theme,widget * w)
     {
         if(widget_active(current))
         {
-            set_widget_minimum_height(current,pos_flags);
+            set_widget_minimum_height(current, theme, pos_flags);
 
             if(w->base.min_h<current->base.min_h)w->base.min_h=current->base.min_h;
         }
@@ -185,7 +185,7 @@ static void container_widget_set_w(overlay_theme * theme,widget * w)
 
     while(current)
     {
-        if(widget_active(current)) organise_widget_horizontally(current,0,w->base.r.x2-w->base.r.x1);
+        if(widget_active(current)) organise_widget_horizontally(current, theme, 0, w->base.r.x2 - w->base.r.x1);
 
         current=current->base.next;
     }
@@ -197,7 +197,7 @@ static void container_widget_set_h(overlay_theme * theme,widget * w)
 
     while(current)
     {
-        if(widget_active(current)) organise_widget_vertically(current,0,w->base.r.y2-w->base.r.y1);
+        if(widget_active(current)) organise_widget_vertically(current, theme, 0, w->base.r.y2 - w->base.r.y1);
 
         current=current->base.next;
     }
@@ -216,29 +216,19 @@ static widget_appearence_function_set container_appearence_functions=
 };
 
 
-
-widget * create_container(size_t size)
+void widget_container_initialise(widget_container* container, struct widget_context* context)
 {
-    widget * w=create_widget(size);
+    widget_base_initialise(&container->base, context, &container_appearence_functions, &container_behaviour_functions);
 
-    w->container.first=NULL;
-    w->container.last=NULL;
-
-    w->base.appearence_functions=&container_appearence_functions;
-    w->base.behaviour_functions=&container_behaviour_functions;
-    return w;
+    container->first=NULL;
+    container->last=NULL;
 }
 
+widget * create_container(struct widget_context* context, size_t size)
+{
+    widget * w = malloc(size);
 
+    widget_container_initialise(&w->container, context);
 
-
-
-
-
-
-
-
-
-
-
-
+    return w;
+}

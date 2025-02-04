@@ -83,6 +83,7 @@ static void text_bar_copy_selection_to_clipboard(widget * w)
         tmp=*s_end;
         *s_end='\0';
 
+        #warning possibly want abstraction over this, function in properties of event?
         SDL_SetClipboardText(s_begin);
 
         *s_end=tmp;
@@ -97,8 +98,9 @@ static void text_bar_copy_selection_to_clipboard(widget * w)
 
 
 
-static void text_bar_widget_left_click(overlay_theme * theme,widget * w,int x,int y)
+static void text_bar_widget_left_click(overlay_theme * theme, widget * w, int x, int y, bool double_clicked)
 {
+    #warning handle double click (select all if selectable)
     text_bar_recalculate_text_size_and_offset(theme,w);
 
     adjust_coordinates_to_widget_local(w,&x,&y);
@@ -218,7 +220,7 @@ static bool text_bar_widget_key_down(overlay_theme * theme,widget * w,SDL_Keycod
         break;
 
     case SDLK_ESCAPE:
-        set_currently_active_widget(NULL);
+        set_currently_active_widget(w->base.context, NULL);
         break;
 
         default:;
@@ -267,13 +269,13 @@ static widget_behaviour_function_set text_bar_behaviour_functions=
 
 
 
-static void text_bar_widget_render(overlay_theme * theme,widget * w,int16_t x_off,int16_t y_off,cvm_overlay_element_render_buffer * erb,rectangle bounds)
+static void text_bar_widget_render(overlay_theme * theme,widget * w,int16_t x_off,int16_t y_off,struct cvm_overlay_render_batch * restrict render_batch,rectangle bounds)
 {
     rectangle r=rectangle_add_offset(w->base.r,x_off,y_off);
 
     text_bar_recalculate_text_size_and_offset(theme,w);
 
-	theme->h_bar_render(erb,theme,bounds,r,w->base.status,OVERLAY_MAIN_COLOUR);
+	theme->h_bar_render(render_batch,theme,bounds,r,w->base.status,OVERLAY_MAIN_COLOUR);
 
     overlay_text_single_line_render_data text_render_data=
 	{
@@ -289,13 +291,28 @@ static void text_bar_widget_render(overlay_theme * theme,widget * w,int16_t x_of
 
 
     text_render_data.x-=w->text_bar.visible_offset;
-    if(w->text_bar.selection_end > w->text_bar.selection_begin) text_render_data.selection_begin=w->text_bar.selection_begin, text_render_data.selection_end=w->text_bar.selection_end;
-    else text_render_data.selection_begin=w->text_bar.selection_end, text_render_data.selection_end=w->text_bar.selection_begin;
 
-    text_render_data.flags|=(w->text_bar.min_glyph_render_count||w->text_bar.max_glyph_render_count)*OVERLAY_TEXT_RENDER_FADING;
-    text_render_data.flags|=is_currently_active_widget(w)*OVERLAY_TEXT_RENDER_SELECTION;
+    if(w->text_bar.min_visible_glyph_count)
+    {
+        text_render_data.flags |= OVERLAY_TEXT_RENDER_FADING;
+    }
+    if(is_currently_active_widget(w))
+    {
+        text_render_data.flags |= OVERLAY_TEXT_RENDER_SELECTION;
 
-    overlay_text_single_line_render(erb,theme,&text_render_data);
+        if(w->text_bar.selection_end > w->text_bar.selection_begin)
+        {
+            text_render_data.selection_begin = w->text_bar.selection_begin;
+            text_render_data.selection_end   = w->text_bar.selection_end;
+        }
+        else
+        {
+            text_render_data.selection_begin = w->text_bar.selection_end;
+            text_render_data.selection_end   = w->text_bar.selection_begin;
+        }
+    }
+
+    overlay_text_single_line_render(render_batch,theme,&text_render_data);
 }
 
 static widget * text_bar_widget_select(overlay_theme * theme,widget * w,int16_t x_in,int16_t y_in)
@@ -308,26 +325,14 @@ static widget * text_bar_widget_select(overlay_theme * theme,widget * w,int16_t 
 static void text_bar_widget_min_w(overlay_theme * theme,widget * w)
 {
     int16_t max_w;
+    /// should re-query text here
 
-
-    if(w->text_bar.min_glyph_render_count)
+    if(w->text_bar.min_visible_glyph_count)
     {
-        w->base.min_w = 2*theme->h_bar_text_offset + w->text_bar.min_glyph_render_count * theme->font.max_advance + 1;///+1 for caret
-        ///also need to set flag to recalculate text size here b/c that functionality won't be provoked upon theme change but this function will be called and the product of the change will be necessary
+        w->base.min_w = 2*theme->h_bar_text_offset + w->text_bar.min_visible_glyph_count * theme->font.max_advance + 1;///+1 for caret
         w->text_bar.recalculate_text_size=true;
     }
     else w->base.min_w = 2*theme->h_bar_text_offset + overlay_text_single_line_get_pixel_length(&theme->font,w->text_bar.text) + 1;///+1 for caret
-
-    if(w->text_bar.max_glyph_render_count)
-    {
-        assert(w->text_bar.min_glyph_render_count < w->text_bar.max_glyph_render_count);
-        max_w=2*theme->h_bar_text_offset + w->text_bar.max_glyph_render_count * theme->font.max_advance;
-        if(w->base.min_w>max_w)
-        {
-            w->base.min_w=max_w;
-            w->text_bar.recalculate_text_size=true;
-        }
-    }
 }
 
 static void text_bar_widget_min_h(overlay_theme * theme,widget * w)
@@ -362,9 +367,10 @@ static widget_appearence_function_set text_bar_appearence_functions=
 
 
 ///static provably isnt best name, or want to add another variant for when text references string that is modified externally
-widget * create_static_text_bar(char * text)
+#warning probably want a better mechanism to expose all the capabilities of the text bar
+widget * create_static_text_bar(struct widget_context* context, const char * text)
 {
-	widget * w=create_widget(sizeof(widget_text_bar));
+	widget * w=create_widget(context, sizeof(widget_text_bar));
 
 	w->base.appearence_functions=&text_bar_appearence_functions;
 	w->base.behaviour_functions=&text_bar_behaviour_functions;
@@ -372,8 +378,7 @@ widget * create_static_text_bar(char * text)
 	///w->text_bar.set_text=NULL;
 	///w->text_bar.data=NULL;
 
-	w->text_bar.min_glyph_render_count=0;
-	w->text_bar.max_glyph_render_count=0;
+	w->text_bar.min_visible_glyph_count=0;
 
 	w->text_bar.free_text=true;
 	w->text_bar.allow_selection=false;
@@ -385,24 +390,25 @@ widget * create_static_text_bar(char * text)
     else w->text_bar.text=NULL;
 
     w->text_bar.visible_offset=0;
+    w->text_bar.max_visible_offset=0;
     w->text_bar.text_pixel_length=0;
 
-    w->text_bar.selection_begin=NULL;
-    w->text_bar.selection_end=NULL;
+#warning use of selection_begin/selection_end elsewhere without validity checks seems quite dangerous/stupid, correct this, null selection should work
+    w->text_bar.selection_begin=w->text_bar.text;
+    w->text_bar.selection_end=w->text_bar.text;
 
 	return w;
 }
 
-widget * create_dynamic_text_bar(int min_glyph_render_count,widget_text_alignment text_alignment,bool allow_selection)
+widget * create_dynamic_text_bar(struct widget_context* context, int16_t min_visible_glyph_count, widget_text_alignment text_alignment,bool allow_selection)
 {
-	widget * w=create_widget(sizeof(widget_text_bar));
+	widget * w=create_widget(context, sizeof(widget_text_bar));
 
 	w->base.appearence_functions=&text_bar_appearence_functions;
 	w->base.behaviour_functions=&text_bar_behaviour_functions;
 
-	assert(min_glyph_render_count);///ZERO GLYPH RENDER COUNT INVALID FOR DYNAMIC TEXT BARS
-	w->text_bar.min_glyph_render_count=min_glyph_render_count;
-	w->text_bar.max_glyph_render_count=0;
+	assert(min_visible_glyph_count);///ZERO GLYPH RENDER COUNT INVALID FOR DYNAMIC TEXT BARS
+	w->text_bar.min_visible_glyph_count=min_visible_glyph_count;
 
 	w->text_bar.free_text=false;
 	w->text_bar.allow_selection=allow_selection;
@@ -465,8 +471,9 @@ void text_bar_widget_set_text(widget * w,const char * text_to_copy)
 }
 
 /**
-
 programmable text bar is almost certainly undesirable, requires constant update, which i would prefer to avoid, instead changes should be externally managed and updates called
+    ^ maybe there's no other way though?
+        ^ to include current selection in bar, would need to link one widget to another, which is allowed, but is quite unsafe (text bar needs to look at file list widget)
 
 for patching file search elements together; the file search manager should be doing the work (in a separate buffer presumably)
 

@@ -38,7 +38,9 @@ typedef struct widget_anchor
 }
 widget_anchor;
 
-widget * create_anchor(widget * constraint,char * title);
+void widget_text_anchor_initialise(widget_anchor* anchor, struct widget_context* context, widget* constraint, char* title);
+
+widget * create_anchor(struct widget_context* context, widget* constraint, char* title);
 
 #endif
 

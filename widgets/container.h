@@ -35,10 +35,11 @@ typedef struct widget_container
 widget_container;
 
 
-widget * create_container(size_t size);
+void widget_container_initialise(widget_container* container, struct widget_context* context);
+widget * create_container(struct widget_context* context, size_t size);
 
 
-void container_widget_render(overlay_theme * theme,widget * w,int16_t x_off,int16_t y_off,cvm_overlay_element_render_buffer * erb,rectangle bounds);
+void container_widget_render(overlay_theme * theme,widget * w,int16_t x_off,int16_t y_off,struct cvm_overlay_render_batch * restrict render_batch,rectangle bounds);
 widget * container_widget_select(overlay_theme * theme,widget * w,int16_t x_in,int16_t y_in);
 
 

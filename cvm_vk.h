@@ -1,5 +1,5 @@
 /**
-Copyright 2020,2021,2022,2023 Carl van Mastrigt
+Copyright 2020,2021,2022,2023,2024 Carl van Mastrigt
 
 This file is part of cvm_shared.
 
@@ -36,9 +36,18 @@ along with cvm_shared.  If not, see <https://www.gnu.org/licenses/>.
 #endif
 
 
+#define CVM_VK_DEFAULT_TIMEOUT 1000000000
+/// ^ 1 second
 
-CVM_STACK(VkBufferMemoryBarrier2,cvm_vk_buffer_barrier,4)
-CVM_STACK(VkBufferCopy,cvm_vk_buffer_copy,4)
+#define CVM_VK_MAX_QUEUE_FAMILY_COUNT 64
+
+
+
+
+
+
+CVM_STACK(VkBufferMemoryBarrier2, cvm_vk_buffer_barrier, 64)
+CVM_STACK(VkBufferCopy, cvm_vk_buffer_copy, 64)
 
 
 typedef struct cvm_vk_managed_buffer cvm_vk_managed_buffer;
@@ -74,54 +83,177 @@ going to have to rely on acquire op failing to know when to recreate swapchain
 ///could move these structs to the c file? - they should only ever be used by cvm_vk internally
 ///this struct contains the data needed to be known upfront when acquiring swapchain image (cvm_vk_swapchain_frame), some data could go in either struct though...
 
-typedef struct cvm_vk_timeline_semaphore
+
+typedef struct cvm_vk_device cvm_vk_device;
+
+typedef uint_least64_t cvm_vk_resource_identifier;
+
+static inline VkDeviceSize cvm_vk_align(VkDeviceSize size, VkDeviceSize alignment)
 {
-    VkSemaphore semaphore;
-    uint64_t value;
+    return (size+alignment-1) & ~(alignment-1);
 }
-cvm_vk_timeline_semaphore;
 
-typedef struct cvm_vk_swapchain_image_present_data
+
+CVM_STACK(VkBufferImageCopy, cvm_vk_buffer_image_copy, 16)
+
+#include "vk/timeline_semaphore.h"
+#include "vk/command_pool.h"
+#include "vk/swapchain.h"
+
+
+typedef struct cvm_vk_instance_setup
 {
-    VkImage image;///theese are provided by the WSI
-    VkImageView image_view;
+    const VkAllocationCallbacks* host_allocator;
 
-    VkSemaphore acquire_semaphore;///held temporarily by this struct, not owner, not created or destroyed as part of it
+    const char ** layer_names;
+    uint32_t layer_count;
 
-    //bool in_flight;///error checking
-    uint32_t successfully_acquired:1;
-    uint32_t successfully_submitted:1;
+    const char ** extension_names;
+    uint32_t extension_count;
 
-    ///following only used if present and graphics are different
-    ///     ^ test as best as possible with bool that forces behaviour, and maybe try different queue/queue_family when possible (o.e. when available hardware allows)
-    /// timeline semaphore in renderer instead?
-    VkCommandBuffer present_acquire_command_buffer;
-
-    VkSemaphore present_semaphore;///needed by VkPresentInfoKHR
-
-    ///semaphore values
-    uint64_t graphics_wait_value;
-    uint64_t present_wait_value;
-    uint64_t transfer_wait_value;///should move this to the transferchain when that becomes a thing
-
-//    VkFence completion_fence;
+    const char * application_name;
+    uint32_t application_version;
 }
-cvm_vk_swapchain_image_present_data;
+cvm_vk_instance_setup;
+
+struct cvm_vk_instance
+{
+    VkInstance instance;
+    /// consider removing above, separeating it from the device
+
+    const VkAllocationCallbacks* host_allocator;
+};
 
 
+typedef float cvm_vk_device_feature_validation_function(const VkBaseInStructure*, const VkPhysicalDeviceProperties*, const VkPhysicalDeviceMemoryProperties*, const VkExtensionProperties*, uint32_t, const VkQueueFamilyProperties*, uint32_t);
+typedef void cvm_vk_device_feature_request_function(VkBaseOutStructure*, bool*, const VkBaseInStructure*, const VkPhysicalDeviceProperties*, const VkPhysicalDeviceMemoryProperties*, const VkExtensionProperties*, uint32_t, const VkQueueFamilyProperties*, uint32_t);
+
+typedef struct cvm_vk_device_setup
+{
+    const struct cvm_vk_instance* instance;
+
+    cvm_vk_device_feature_validation_function ** feature_validation;
+    uint32_t feature_validation_count;
+
+    cvm_vk_device_feature_request_function ** feature_request;
+    uint32_t feature_request_count;
+
+    VkStructureType * device_feature_struct_types;
+    size_t * device_feature_struct_sizes;
+    uint32_t device_feature_struct_count;
+
+    uint32_t desired_graphics_queues;
+    uint32_t desired_transfer_queues;
+    uint32_t desired_async_compute_queues;
+    ///remove above and default to having just 2 (if possible) : low priority and high priority?
+
+    const char* pipeline_cache_file_name;
+}
+cvm_vk_device_setup;
 
 
+#warning separate device and instance?
 
-void cvm_vk_initialise(SDL_Window * window,uint32_t min_swapchain_images,bool sync_compute_required,const char ** requested_extensions,int requested_extension_count);
+typedef struct cvm_vk_device_queue
+{
+    cvm_vk_timeline_semaphore timeline;
+    VkQueue queue;
+}
+cvm_vk_device_queue;
+
+typedef struct cvm_vk_device_queue_family
+{
+    cvm_vk_device_queue * queues;
+    uint32_t queue_count;
+//    const VkQueueFamilyProperties properties;
+    VkCommandPool internal_command_pool;
+    ///mutex to lock above?
+}
+cvm_vk_device_queue_family;
+
+struct cvm_vk_defaults
+{
+    VkSampler fetch_sampler;
+};
+
+struct cvm_vk_pipeline_cache
+{
+    VkPipelineCache cache;
+    void* data;
+    char* file_name;
+};
+
+struct cvm_vk_device
+{
+    const VkAllocationCallbacks* host_allocator;
+
+    VkPhysicalDevice physical_device;
+    VkDevice device;///"logical" device
+
+    /// capabilities (properties & features)
+    const VkPhysicalDeviceProperties properties;
+    const VkPhysicalDeviceMemoryProperties memory_properties;
+
+    const VkPhysicalDeviceFeatures2 * features;
+
+    const VkExtensionProperties * extensions;
+    uint32_t extension_count;
+
+    const VkQueueFamilyProperties * queue_family_properties;
+
+    cvm_vk_device_queue_family * queue_families;
+    uint32_t queue_family_count;
+
+
+    /// these can be the same, though this should probably change
+    /// should have fallbacks...
+    /// rename to defaults as thats what they are really...
+    uint32_t graphics_queue_family_index;
+    uint32_t transfer_queue_family_index;///rename to host_device_transfer ??
+    uint32_t async_compute_queue_family_index;
+
+    uint32_t fallback_present_queue_family_index;
+    #warning remove present, this should be per swapchain image
+
+    struct cvm_vk_pipeline_cache pipeline_cache;
+
+    struct cvm_vk_defaults defaults;
+
+    atomic_uint_least64_t * resource_identifier_monotonic;
+};
+
+static inline cvm_vk_resource_identifier cvm_vk_resource_unique_identifier_acquire(const cvm_vk_device * device)
+{
+    return atomic_fetch_add_explicit(device->resource_identifier_monotonic, 1, memory_order_relaxed);
+}
+
+VkResult cvm_vk_instance_initialise(struct cvm_vk_instance* instance,const cvm_vk_instance_setup * setup);
+/// need a way to include extension names, include setup which gets combined?
+VkResult cvm_vk_instance_initialise_for_SDL(struct cvm_vk_instance* instance, const cvm_vk_instance_setup * setup);
 ///above extra is the max extra used by any module
-void cvm_vk_terminate(void);///also terminates swapchain dependant data at same time
+void cvm_vk_instance_terminate(struct cvm_vk_instance* instance);
 
-void cvm_vk_create_swapchain(void);
-void cvm_vk_destroy_swapchain(void);
+VkSurfaceKHR cvm_vk_create_surface_from_SDL_window(const struct cvm_vk_instance* instance, SDL_Window * window);
+void cvm_vk_destroy_surface(const struct cvm_vk_instance* instance, VkSurfaceKHR surface);
 
 
-void cvm_vk_wait_on_timeline_semaphore(cvm_vk_timeline_semaphore * timeline_semaphore,uint64_t value,uint64_t timeout_ns);
 
+
+int cvm_vk_device_initialise(cvm_vk_device * device, const cvm_vk_device_setup * external_device_setup);
+///above extra is the max extra used by any module
+void cvm_vk_device_terminate(cvm_vk_device * device);
+
+
+#warning following are placeholders for interoperability with old approach
+cvm_vk_device * cvm_vk_device_get(void);
+cvm_vk_surface_swapchain * cvm_vk_swapchain_get(void);
+
+VkFence cvm_vk_create_fence(const cvm_vk_device * device,bool initially_signalled);
+void cvm_vk_destroy_fence(const cvm_vk_device * device,VkFence fence);
+void cvm_vk_wait_on_fence_and_reset(const cvm_vk_device * device, VkFence fence);
+
+VkSemaphore cvm_vk_create_binary_semaphore(const cvm_vk_device * device);
+void cvm_vk_destroy_binary_semaphore(const cvm_vk_device * device,VkSemaphore semaphore);
 
 void cvm_vk_create_render_pass(VkRenderPass * render_pass,VkRenderPassCreateInfo * info);
 void cvm_vk_destroy_render_pass(VkRenderPass render_pass);
@@ -135,8 +267,8 @@ void cvm_vk_destroy_pipeline_layout(VkPipelineLayout pipeline_layout);
 void cvm_vk_create_graphics_pipeline(VkPipeline * pipeline,VkGraphicsPipelineCreateInfo * info);
 void cvm_vk_destroy_pipeline(VkPipeline pipeline);
 
-void cvm_vk_create_shader_stage_info(VkPipelineShaderStageCreateInfo * stage_info,const char * filename,VkShaderStageFlagBits stage);
-void cvm_vk_destroy_shader_stage_info(VkPipelineShaderStageCreateInfo * stage_info);
+void cvm_vk_create_shader_stage_info(VkPipelineShaderStageCreateInfo * stage_info,const struct cvm_vk_device* device,const char * filename,VkShaderStageFlagBits stage);
+void cvm_vk_destroy_shader_stage_info(VkPipelineShaderStageCreateInfo * stage_info,const struct cvm_vk_device* device);
 
 void cvm_vk_create_descriptor_set_layout(VkDescriptorSetLayout * descriptor_set_layout,VkDescriptorSetLayoutCreateInfo * info);
 void cvm_vk_destroy_descriptor_set_layout(VkDescriptorSetLayout descriptor_set_layout);
@@ -150,28 +282,80 @@ void cvm_vk_write_descriptor_sets(VkWriteDescriptorSet * writes,uint32_t count);
 void cvm_vk_create_image(VkImage * image,VkImageCreateInfo * info);
 void cvm_vk_destroy_image(VkImage image);
 
-void cvm_vk_create_and_bind_memory_for_images(VkDeviceMemory * memory,VkImage * images,uint32_t image_count,VkMemoryPropertyFlags required_properties,VkMemoryPropertyFlags desired_properties);
+void cvm_vk_set_view_create_info_using_image_create_info(VkImageViewCreateInfo* view_create_info, const VkImageCreateInfo* image_create_info, VkImage image);
+
+VkResult cvm_vk_allocate_and_bind_memory_for_images(VkDeviceMemory * memory,VkImage * images,uint32_t image_count,VkMemoryPropertyFlags required_properties,VkMemoryPropertyFlags desired_properties);
+
+/// default_image_views is optional
+VkResult cvm_vk_create_images(const cvm_vk_device* device, const VkImageCreateInfo* image_create_infos, uint32_t image_count, VkDeviceMemory* memory,VkImage* images, VkImageView* default_image_views);
 
 void cvm_vk_create_image_view(VkImageView * image_view,VkImageViewCreateInfo * info);
 void cvm_vk_destroy_image_view(VkImageView image_view);
 
-void cvm_vk_create_sampler(VkSampler * sampler,VkSamplerCreateInfo * info);
+void cvm_vk_create_sampler(VkSampler* sampler,VkSamplerCreateInfo * info);
 void cvm_vk_destroy_sampler(VkSampler sampler);
 
 void cvm_vk_free_memory(VkDeviceMemory memory);
 
-void cvm_vk_create_buffer(VkBuffer * buffer,VkDeviceMemory * memory,VkBufferUsageFlags usage,VkDeviceSize size,void ** mapping,bool * mapping_coherent,VkMemoryPropertyFlags required_properties,VkMemoryPropertyFlags desired_properties);
+void cvm_vk_create_buffer(VkBuffer* buffer,VkDeviceMemory * memory,VkBufferUsageFlags usage,VkDeviceSize size,void ** mapping,bool * mapping_coherent,VkMemoryPropertyFlags required_properties,VkMemoryPropertyFlags desired_properties);
 void cvm_vk_destroy_buffer(VkBuffer buffer,VkDeviceMemory memory,void * mapping);
 void cvm_vk_flush_buffer_memory_range(VkMappedMemoryRange * flush_range);
 uint32_t cvm_vk_get_buffer_alignment_requirements(VkBufferUsageFlags usage);
 
 
-VkPhysicalDeviceFeatures2 * cvm_vk_get_device_features(void);
+VkDeviceSize cvm_vk_buffer_alignment_requirements(const cvm_vk_device * device, VkBufferUsageFlags usage);
+
+#warning probably better to split this, create struct and return/result type
+typedef struct cvm_vk_buffer_memory_pair_setup
+{
+    /// in
+    VkDeviceSize buffer_size;
+    VkBufferUsageFlags usage;
+    VkMemoryPropertyFlags required_properties;
+    VkMemoryPropertyFlags desired_properties;
+    bool map_memory;
+
+    /// out
+    VkBuffer buffer;
+    VkDeviceMemory memory;
+    void * mapping;
+    bool mapping_coherent;
+    VkMemoryPropertyFlags acquired_properties;
+}
+cvm_vk_buffer_memory_pair_setup;
+
+VkResult cvm_vk_buffer_memory_pair_create(const cvm_vk_device * device, cvm_vk_buffer_memory_pair_setup * setup);
+void cvm_vk_buffer_memory_pair_destroy(const cvm_vk_device * device, VkBuffer buffer, VkDeviceMemory memory, bool memory_was_mapped);
 
 VkFormat cvm_vk_get_screen_format(void);///can remove?
 uint32_t cvm_vk_get_swapchain_image_count(void);
 VkImageView cvm_vk_get_swapchain_image_view(uint32_t index);
-VkImage cvm_vk_get_swapchain_image(uint32_t index);
+
+VkSemaphoreSubmitInfo cvm_vk_binary_semaphore_submit_info(VkSemaphore semaphore,VkPipelineStageFlags2 stages);
+
+
+/// little bit of a utility function set here
+#define CVM_VK_MAX_DESCRIPTOR_POOL_TYPES 16
+struct cvm_vk_descriptor_pool_requirements
+{
+    VkDescriptorPoolSize type_sizes[CVM_VK_MAX_DESCRIPTOR_POOL_TYPES];
+    uint32_t type_count;
+    uint32_t set_count;
+};
+VkResult cvm_vk_create_descriptor_set_layout_registering_requirements(VkDescriptorSetLayout* set_layout, const VkDescriptorSetLayoutCreateInfo* set_layout_create_info, const struct cvm_vk_device* device, struct cvm_vk_descriptor_pool_requirements* pool_requirements, uint32_t sets_using_this_layout);
+VkResult cvm_vk_create_descriptor_pool_for_sizes(VkDescriptorPool* pool, const struct cvm_vk_device* device, struct cvm_vk_descriptor_pool_requirements* pool_requirements);
+
+
+
+
+
+
+
+
+
+
+
+
 
 #define CVM_VK_MAX_QUEUES 16
 
@@ -304,7 +488,7 @@ VkCommandBuffer cvm_vk_access_batch_transfer_command_buffer(cvm_vk_module_batch 
 void cvm_vk_work_payload_add_wait(cvm_vk_module_work_payload * payload,cvm_vk_timeline_semaphore semaphore,VkPipelineStageFlags2 stages);
 
 void cvm_vk_setup_new_graphics_payload_from_batch(cvm_vk_module_work_payload * payload,cvm_vk_module_batch * batch);
-cvm_vk_timeline_semaphore cvm_vk_submit_graphics_work(cvm_vk_module_work_payload * payload,cvm_vk_payload_flags flags);
+void cvm_vk_submit_graphics_work(cvm_vk_module_work_payload * payload,cvm_vk_payload_flags flags);
 VkCommandBuffer cvm_vk_obtain_secondary_command_buffer_from_batch(cvm_vk_module_sub_batch * msb,VkFramebuffer framebuffer,VkRenderPass render_pass,uint32_t sub_pass);
 
 ///same as above but for compute (including compute?)
@@ -313,12 +497,8 @@ uint32_t cvm_vk_get_transfer_queue_family(void);
 uint32_t cvm_vk_get_graphics_queue_family(void);
 uint32_t cvm_vk_get_asynchronous_compute_queue_family(void);
 
-
-uint32_t cvm_vk_prepare_for_next_frame(bool rendering_resources_invalid);
-bool cvm_vk_recreate_rendering_resources(void);///this and operations resulting from it returning true, must be called in critical section
-bool cvm_vk_check_for_remaining_frames(uint32_t * completed_frame_index);
-
-#include "cvm_vk_memory.h"
+#warning move these to the top of this file when possible!
+#include "vk/memory.h"
 #include "cvm_vk_image.h"
 #include "cvm_vk_defaults.h"
 

@@ -65,23 +65,24 @@ static widget_behaviour_function_set contiguous_box_behaviour_functions=
 
 
 
-static void all_visible_contiguous_box_widget_render(overlay_theme * theme,widget * w,int16_t x_off,int16_t y_off,cvm_overlay_element_render_buffer * erb,rectangle bounds)
+static void all_visible_contiguous_box_widget_render(overlay_theme * theme,widget * w,int16_t x_off,int16_t y_off,struct cvm_overlay_render_batch * restrict render_batch,rectangle bounds)
 {
-    rectangle r=rectangle_add_offset(w->base.r,x_off,y_off);
+    rectangle r=rectangle_add_offset(w->base.r, x_off, y_off);
     //r.y1+=7+(int)(11.0*sin(SDL_GetTicks()*0.004));
     //r.x1+=65+(int)(11.0*sin(SDL_GetTicks()*0.001-1));
-    theme->box_render(erb,theme,bounds,r,w->base.status,OVERLAY_MAIN_COLOUR);
-    //theme->box_render(rectangle_add_offset(w->base.r,x_off,y_off),w->base.status,theme,erb,bounds,OVERLAY_MAIN_COLOUR);
+    theme->box_render(render_batch, theme, bounds, r, w->base.status, OVERLAY_MAIN_COLOUR);
+    //theme->box_render(rectangle_add_offset(w->base.r,x_off,y_off),w->base.status,theme,render_batch,bounds,OVERLAY_MAIN_COLOUR);
 
-    x_off+=w->base.r.x1;
-    y_off+=w->base.r.y1;
+    x_off += w->base.r.x1;
+    y_off += w->base.r.y1;
 
-    render_widget(w->contiguous_box.contained_box,x_off,y_off,erb,bounds);
+    render_widget(w->contiguous_box.contained_box, theme, x_off, y_off, render_batch, bounds);
 }
 
-static void some_visible_contiguous_box_widget_render(overlay_theme * theme,widget * w,int16_t x_off,int16_t y_off,cvm_overlay_element_render_buffer * erb,rectangle bounds)
+static void some_visible_contiguous_box_widget_render(overlay_theme * theme,widget * w,int16_t x_off,int16_t y_off,struct cvm_overlay_render_batch * restrict render_batch,rectangle bounds)
 {
-//    theme->box_render(rectangle_add_offset(w->base.r,x_off,y_off),w->base.status,theme,erb,bounds,OVERLAY_MAIN_COLOUR);
+    assert(false);///NYI
+//    theme->box_render(rectangle_add_offset(w->base.r,x_off,y_off),w->base.status,theme,render_batch,bounds,OVERLAY_MAIN_COLOUR);
 //
 //    x_off+=w->base.r.x1;
 //    y_off+=w->base.r.y1;
@@ -96,7 +97,7 @@ static void some_visible_contiguous_box_widget_render(overlay_theme * theme,widg
 //        .y2=y_off+w->base.r.y2-w->base.r.y1-theme->contiguous_some_box_y_offset
 //    });
 //
-//    if(rectangle_has_positive_area(bounds))render_widget(w->contiguous_box.contained_box,x_off,y_off,erb,bounds);
+//    if(rectangle_has_positive_area(bounds))render_widget(w->contiguous_box.contained_box,x_off,y_off,render_batch,bounds);
 }
 
 static widget * contiguous_box_widget_select(overlay_theme * theme,widget * w,int16_t x_in,int16_t y_in)
@@ -108,7 +109,7 @@ static widget * contiguous_box_widget_select(overlay_theme * theme,widget * w,in
         x_in-=w->base.r.x1;
         y_in-=w->base.r.y1;
 
-        tmp=select_widget(w->contiguous_box.contained_box,x_in,y_in);
+        tmp=select_widget(w->contiguous_box.contained_box, theme, x_in, y_in);
         if(tmp)return tmp;
 
         return w;
@@ -125,24 +126,24 @@ static widget * contiguous_box_widget_select(overlay_theme * theme,widget * w,in
 
 static void all_visible_contiguous_box_widget_min_w(overlay_theme * theme,widget * w)
 {
-    w->base.min_w = set_widget_minimum_width(w->contiguous_box.contained_box,0);//+2*theme->contiguous_all_box_x_offset;
+    w->base.min_w = set_widget_minimum_width(w->contiguous_box.contained_box, theme, 0);//+2*theme->contiguous_all_box_x_offset;
 }
 
 static void all_visible_contiguous_box_widget_min_h(overlay_theme * theme,widget * w)
 {
-    w->base.min_h = set_widget_minimum_height(w->contiguous_box.contained_box,0);//+2*theme->contiguous_all_box_y_offset;
+    w->base.min_h = set_widget_minimum_height(w->contiguous_box.contained_box, theme, 0);//+2*theme->contiguous_all_box_y_offset;
 }
 
 static void all_visible_contiguous_box_widget_set_w(overlay_theme * theme,widget * w)
 {
     //organise_widget_horizontally(w->contiguous_box.contained_box,theme->contiguous_all_box_x_offset,w->base.r.x2-w->base.r.x1-2*theme->contiguous_all_box_x_offset);
-    organise_widget_horizontally(w->contiguous_box.contained_box,0,w->base.r.x2-w->base.r.x1);
+    organise_widget_horizontally(w->contiguous_box.contained_box, theme, 0, w->base.r.x2 - w->base.r.x1);
 }
 
 static void all_visible_contiguous_box_widget_set_h(overlay_theme * theme,widget * w)
 {
     //organise_widget_vertically(w->contiguous_box.contained_box,theme->contiguous_all_box_y_offset,w->base.r.y2-w->base.r.y1-2*theme->contiguous_all_box_y_offset);
-    organise_widget_vertically(w->contiguous_box.contained_box,0,w->base.r.y2-w->base.r.y1);
+    organise_widget_vertically(w->contiguous_box.contained_box, theme, 0, w->base.r.y2 - w->base.r.y1);
 }
 
 static widget_appearence_function_set all_visible_contiguous_box_functions=
@@ -275,9 +276,9 @@ static widget_appearence_function_set all_visible_contiguous_box_functions=
 //}
 
 
-widget * create_contiguous_box(widget_layout layout,int min_display_count)
+widget * create_contiguous_box(struct widget_context* context, widget_layout layout,int min_display_count)
 {
-    widget * w=create_container(sizeof(widget_contiguous_box));
+    widget * w=create_container(context, sizeof(widget_contiguous_box));
 
     if(min_display_count)
     {
@@ -291,7 +292,7 @@ widget * create_contiguous_box(widget_layout layout,int min_display_count)
 
     w->base.behaviour_functions=&contiguous_box_behaviour_functions;
 
-    w->contiguous_box.contained_box=create_box(layout,WIDGET_NORMALLY_DISTRIBUTED);
+    w->contiguous_box.contained_box=create_box(context, layout,WIDGET_NORMALLY_DISTRIBUTED);
     w->contiguous_box.contained_box->base.parent=w;
 
     w->base.status|=WIDGET_IS_CONTIGUOUS_BOX;
@@ -348,8 +349,9 @@ void ensure_widget_in_contiguous_box_is_visible(widget * w,widget * cb)
 //    }
 }
 
-widget * create_contiguous_box_scrollbar(widget * box)
+widget * create_contiguous_box_scrollbar(struct widget_context* context, widget * box)
 {
+    assert(false);// NYI
 //    widget * w=create_slider_bar(box->contiguous_box.offset,0,0,NULL,NULL,false,0);
 //    #warning replace above with adjacent slider
 //

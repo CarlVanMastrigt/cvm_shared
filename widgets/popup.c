@@ -21,40 +21,42 @@ along with cvm_shared.  If not, see <https://www.gnu.org/licenses/>.
 
 static widget * old_auto_close_popup=NULL;
 static widget * new_auto_close_popup=NULL;
+#warning remove above, or move to context!!
 
 
 
-
-static void popup_widget_render(overlay_theme * theme,widget * w,int16_t x_off,int16_t y_off,cvm_overlay_element_render_buffer * erb,rectangle bounds)
+static void popup_widget_render(overlay_theme * theme,widget * w,int16_t x_off,int16_t y_off,struct cvm_overlay_render_batch * restrict render_batch,rectangle bounds)
 {
-	render_widget(w->popup.contents,x_off+w->base.r.x1,y_off+w->base.r.y1,erb,bounds);
+	render_widget(w->popup.contents, theme, x_off + w->base.r.x1, y_off + w->base.r.y1, render_batch, bounds);
 }
 
 static widget * popup_widget_select(overlay_theme * theme,widget * w,int16_t x_in,int16_t y_in)
 {
-	return select_widget(w->popup.contents,x_in-w->base.r.x1,y_in-w->base.r.y1);
+	return select_widget(w->popup.contents, theme, x_in - w->base.r.x1 , y_in - w->base.r.y1);
 }
 
 static void popup_widget_min_w(overlay_theme * theme,widget * w)
 {
-    w->base.min_w=set_widget_minimum_width(w->popup.contents,0);
+    w->base.min_w=set_widget_minimum_width(w->popup.contents, theme, 0);
 }
 
 static void popup_widget_min_h(overlay_theme * theme,widget * w)
 {
-    w->base.min_h=set_widget_minimum_height(w->popup.contents,0);
+    w->base.min_h=set_widget_minimum_height(w->popup.contents, theme, 0);
 }
 
 static void popup_widget_set_w(overlay_theme * theme,widget * w)
 {
-    organise_widget_horizontally(w->popup.contents,0,w->base.min_w);
+    organise_widget_horizontally(w->popup.contents, theme, 0, w->base.min_w);
 }
 
 static void popup_widget_set_h(overlay_theme * theme,widget * w)
 {
+    /// all this is done in set_w because that should happen after the aligned widget has been assessed
+    #warning better to make alignment a post processing step affecting only toplevel widgets!
     #warning make int16_t
     int delta_x,delta_y,width,height,max;
-    organise_widget_vertically(w->popup.contents,0,w->base.min_h);
+    organise_widget_vertically(w->popup.contents, theme, 0, w->base.min_h);
 
     widget *contained,*external,*internal;
     contained=w->popup.contents;
@@ -76,7 +78,7 @@ static void popup_widget_set_h(overlay_theme * theme,widget * w)
             delta_y+=((external->base.r.y2-external->base.r.y1) - (internal->base.r.y2-internal->base.r.y1))/2;
         }
 
-        ///implement the others, can/should probably specify relative alignment separately for horizontal and vertical
+        #warning implement the others (as switch), can/should probably specify relative alignment separately for horizontal and vertical
 
         max=w->base.r.x2-w->base.r.x1 - contained->base.r.x2;///required to move contained.x2 to overlap w.x2
         if(delta_x > max)delta_x=max;
@@ -86,7 +88,7 @@ static void popup_widget_set_h(overlay_theme * theme,widget * w)
         if(delta_y > max)delta_y=max;
         if(delta_y < 0)delta_y=0;
 
-        contained->base.r=rectangle_add_offset(contained->base.r,delta_x,delta_y);
+        contained->base.r=rectangle_add_offset(contained->base.r, delta_x, delta_y);
     }
 }
 
@@ -132,25 +134,25 @@ static void popup_widget_delete(widget * w)
 
 static widget_behaviour_function_set popup_behaviour_functions=
 {
-    .l_click        =   blank_widget_left_click,
-    .l_release      =   blank_widget_left_release,
-    .r_click        =   blank_widget_right_click,
-    .m_move         =   blank_widget_mouse_movement,
-    .scroll         =   blank_widget_scroll,
-    .key_down       =   blank_widget_key_down,
-    .text_input     =   blank_widget_text_input,
-    .text_edit      =   blank_widget_text_edit,
-    .click_away     =   blank_widget_click_away,
-    .add_child      =   popup_widget_add_child,
-    .remove_child   =   popup_widget_remove_child,
-    .wid_delete     =   popup_widget_delete
+    .l_click      = blank_widget_left_click,
+    .l_release    = blank_widget_left_release,
+    .r_click      = blank_widget_right_click,
+    .m_move       = blank_widget_mouse_movement,
+    .scroll       = blank_widget_scroll,
+    .key_down     = blank_widget_key_down,
+    .text_input   = blank_widget_text_input,
+    .text_edit    = blank_widget_text_edit,
+    .click_away   = blank_widget_click_away,
+    .add_child    = popup_widget_add_child,
+    .remove_child = popup_widget_remove_child,
+    .wid_delete   = popup_widget_delete
 };
 
 
 
-widget * create_popup(widget_relative_positioning positioning,bool auto_close)
+widget * create_popup(struct widget_context* context, widget_relative_positioning positioning,bool auto_close)
 {
-    widget * w=create_widget(sizeof(widget_popup));
+    widget * w=create_widget(context, sizeof(widget_popup));
 
     w->base.appearence_functions=&popup_appearence_functions;
     w->base.behaviour_functions=&popup_behaviour_functions;
@@ -187,12 +189,13 @@ void toggle_exclusive_popup(widget * popup)
     {
         organise_toplevel_widget(popup);
         move_toplevel_widget_to_front(popup);
-        set_only_interactable_widget(popup);
+        set_only_interactable_widget(popup->base.context, popup);
     }
-    else set_only_interactable_widget(NULL);
+    else
+    {
+        set_only_interactable_widget(popup->base.context, NULL);
+    }
 }
-
-
 
 
 void toggle_auto_close_popup(widget * popup)
@@ -228,7 +231,6 @@ bool close_auto_close_popup_tree(widget * interacted)
 
         w=w->base.parent;
     }
-
 
     if(new_auto_close_popup) w=new_auto_close_popup;
     else if((interacted)&&(!(interacted->base.status&WIDGET_CLOSE_POPUP_TREE))) w=interacted;

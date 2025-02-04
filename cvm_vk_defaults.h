@@ -27,11 +27,11 @@ along with cvm_shared.  If not, see <https://www.gnu.org/licenses/>.
 
 ///everything here must be called within critical (thread safe) section of code, generally this is how you should handle resource recreation anyway so it should be fine
 
-void cvm_vk_create_defaults(void);
-void cvm_vk_destroy_defaults(void);
+void cvm_vk_create_defaults_old(void);
+void cvm_vk_destroy_defaults_old(void);
 
-void cvm_vk_create_swapchain_dependednt_defaults(uint32_t width,uint32_t height);
-void cvm_vk_destroy_swapchain_dependednt_defaults(void);
+void cvm_vk_create_swapchain_dependent_defaults(uint32_t width,uint32_t height);
+void cvm_vk_destroy_swapchain_dependent_defaults(void);
 
 
 VkRect2D cvm_vk_get_default_render_area(void);
@@ -51,7 +51,6 @@ VkPipelineColorBlendAttachmentState cvm_vk_get_default_additive_blend_state(void
 
 void cvm_vk_create_default_framebuffer_images(VkImage * images,VkFormat format,uint32_t count,VkSampleCountFlagBits samples,VkImageUsageFlags usage);
 void cvm_vk_create_default_framebuffer_image_views(VkImageView * views,VkImage * images,VkFormat format,VkImageAspectFlags aspects,uint32_t count);
-void cvm_vk_create_default_framebuffer(VkFramebuffer * framebuffer,VkRenderPass render_pass,VkImageView * attachments,uint32_t attachment_count);
 
 VkPipelineVertexInputStateCreateInfo * cvm_vk_get_mesh_vertex_input_state(uint16_t flags);
 VkPipelineVertexInputStateCreateInfo * cvm_vk_get_empty_vertex_input_state(void);
@@ -66,7 +65,6 @@ VkAttachmentDescription cvm_vk_get_default_colour_attachment(VkFormat format,VkS
 VkAttachmentDescription cvm_vk_get_default_depth_stencil_attachment(VkFormat format,VkSampleCountFlagBits sample_count,bool depth_clear,bool depth_load,bool depth_store,bool stencil_clear,bool stencil_load,bool stencil_store);
 
 VkSubpassDependency cvm_vk_get_default_colour_attachment_dependency(uint32_t src_subpass,uint32_t dst_subpass);
-VkSubpassDependency cvm_vk_get_default_colour_attachment_dependency_specialised(uint32_t src_subpass,bool src_input_attachment,bool src_blended,uint32_t dst_subpass,bool dst_input_attachment,bool dst_blended);
 VkSubpassDependency cvm_vk_get_default_depth_stencil_attachment_dependency(uint32_t srcSubpass,uint32_t dstSubpass);
 
 #endif

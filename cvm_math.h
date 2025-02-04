@@ -60,7 +60,8 @@ along with cvm_shared.  If not, see <https://www.gnu.org/licenses/>.
 
 /// fmaxf should be used to replace the ternaries here
 
-
+#warning FFS _mm_castsi128_ps(_mm_shuffle_epi32(_mm_castps_si128(v))) -> _mm_shuffle_ps(v) (just use same vector!)
+#warning use _MM_SHUFFLE to set bitfields!
 
 /// no intrinsics for vec2f available (on sse at least)
 typedef struct vec2f
