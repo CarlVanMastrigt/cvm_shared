@@ -1,23 +1,23 @@
 /**
 Copyright 2022,2024 Carl van Mastrigt
 
-This file is part of cvm_shared.
+This file is part of solipsix.
 
-cvm_shared is free software: you can redistribute it and/or modify
+solipsix is free software: you can redistribute it and/or modify
 it under the terms of the GNU Affero General Public License as published by
 the Free Software Foundation, either version 3 of the License, or
 (at your option) any later version.
 
-cvm_shared is distributed in the hope that it will be useful,
+solipsix is distributed in the hope that it will be useful,
 but WITHOUT ANY WARRANTY; without even the implied warranty of
 MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
 GNU Affero General Public License for more details.
 
 You should have received a copy of the GNU Affero General Public License
-along with cvm_shared.  If not, see <https://www.gnu.org/licenses/>.
+along with solipsix.  If not, see <https://www.gnu.org/licenses/>.
 */
 
-#include "cvm_shared.h"
+#include "solipsix.h"
 
 
 void cvm_overlay_create_font(cvm_overlay_font * font, const FT_Library * freetype_library, char * filename, int pixel_size)

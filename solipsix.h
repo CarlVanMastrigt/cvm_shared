@@ -1,24 +1,24 @@
 /**
 Copyright 2020,2021,2022,2023 Carl van Mastrigt
 
-This file is part of cvm_shared.
+This file is part of solipsix.
 
-cvm_shared is free software: you can redistribute it and/or modify
+solipsix is free software: you can redistribute it and/or modify
 it under the terms of the GNU Affero General Public License as published by
 the Free Software Foundation, either version 3 of the License, or
 (at your option) any later version.
 
-cvm_shared is distributed in the hope that it will be useful,
+solipsix is distributed in the hope that it will be useful,
 but WITHOUT ANY WARRANTY; without even the implied warranty of
 MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
 GNU Affero General Public License for more details.
 
 You should have received a copy of the GNU Affero General Public License
-along with cvm_shared.  If not, see <https://www.gnu.org/licenses/>.
+along with solipsix.  If not, see <https://www.gnu.org/licenses/>.
 */
 
-#ifndef CVM_SHARED_H
-#define CVM_SHARED_H
+#ifndef SOLIPSIX_H
+#define SOLIPSIX_H
 
 ///needed for sincosf, may want to re-evaluate usage, at least move to math??
 // #define _GNU_SOURCE
@@ -47,8 +47,8 @@ along with cvm_shared.  If not, see <https://www.gnu.org/licenses/>.
 #include <vulkan/vulkan.h>
 
 
-#define CVM_SHARED_ENGINE_NAME "cvm_shared"
-#define CVM_SHARED_ENGINE_VERSION 1
+#define SOLIPSIX_ENGINE_NAME "solipsix"
+#define SOLIPSIX_ENGINE_VERSION 1
 
 
 typedef union widget widget; // find a better place to put this?
