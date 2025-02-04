@@ -23,7 +23,7 @@ along with cvm_shared.  If not, see <https://www.gnu.org/licenses/>.
 #include <stdatomic.h>
 #include <threads.h>
 
-#include "coherent_structures.h"
+#include "cvm_coherent_structures.h"
 
 #ifndef CVM_SYNC_H
 #define CVM_SYNC_H

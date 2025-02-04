@@ -29,7 +29,6 @@ void cvm_sync_queue_terminate(struct cvm_sync_queue* queue)
 {
     union cvm_sync_primitive* end_primitive;
 
-    #warning probably want some reserved invalid pointer to sub in here for validation/assertion
     end_primitive = atomic_exchange_explicit(&queue->end_primitive, NULL, memory_order_relaxed);
 
     if(end_primitive)

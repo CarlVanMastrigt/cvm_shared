@@ -17,7 +17,7 @@ You should have received a copy of the GNU Affero General Public License
 along with cvm_shared.  If not, see <https://www.gnu.org/licenses/>.
 */
 
-#include "coherent_structures.h"
+#include "cvm_coherent_structures.h"
 
 #ifndef CVM_LOCKFREE_HOPPER_H
 #define CVM_LOCKFREE_HOPPER_H
@@ -48,13 +48,12 @@ bool cvm_lockfree_hopper_push(cvm_lockfree_hopper* hopper, cvm_lockfree_pool* po
 bool cvm_lockfree_hopper_check_if_locked(cvm_lockfree_hopper * hopper);
 
 
-/**
- * will only change entry index if the new one is valid
- * usage pattern is:  lock -> iterate -> relinquish_all / relinquish_range
+/** hopper locking
+ * usage pattern is:  lock -> iterate -> relinquish_range
  *
- * MUST call `cvm_lockfree_pool_relinquish_entry_index_range` after locking with:
- * `first_entry_index` given `first_entry_index` returned by `cvm_lockfree_hopper_lock`
- * `last_entry_index` given `entry_index` AFTER a failing (NULL return) call to `cvm_lockfree_hopper_iterate`
+ * MUST call `cvm_lockfree_pool_relinquish_entry_index_range` after locking and processing & iterating hopper contents with:
+ * `first_entry_index` with the value of `first_entry_index` from the initial `cvm_lockfree_hopper_lock` call
+ * `last_enrty_index` with the value of `entry_index` from failing (NULL return) `cvm_lockfree_hopper_iterate` call
 */
 
 // locking also gets the first elemnt, and begins the process of emptying the hopper (which must be done)

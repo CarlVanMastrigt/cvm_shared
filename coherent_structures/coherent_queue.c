@@ -21,8 +21,6 @@ along with cvm_shared.  If not, see <https://www.gnu.org/licenses/>.
 #include <stdlib.h>
 #include <assert.h>
 
-
-
 void cvm_coherent_queue_initialise(cvm_coherent_queue* queue,cvm_lockfree_pool* pool)
 {
     queue->entry_data = pool->available_entries.entry_data;
