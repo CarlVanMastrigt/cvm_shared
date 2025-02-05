@@ -17,24 +17,29 @@ You should have received a copy of the GNU Affero General Public License
 along with solipsix.  If not, see <https://www.gnu.org/licenses/>.
 */
 
-#include "cvm_sync.h"
+#pragma once
 
-#ifndef CVM_GATE_H
-#define CVM_GATE_H
+#include <inttypes.h>
+#include <stdatomic.h>
+#include <threads.h>
 
-struct cvm_gate_pool
+#include "coherent_structures/lockfree_pool.h"
+
+// struct sol_sync_primitive_functions;
+
+struct sol_gate_pool
 {
-    cvm_lockfree_pool available_gates;
+    sol_lockfree_pool available_gates;
 };
 
-void cvm_gate_pool_initialise(struct cvm_gate_pool* pool, size_t capacity_exponent);
-void cvm_gate_pool_terminate(struct cvm_gate_pool* pool);
+void sol_gate_pool_initialise(struct sol_gate_pool* pool, size_t capacity_exponent);
+void sol_gate_pool_terminate(struct sol_gate_pool* pool);
 
-struct cvm_gate
+struct sol_gate
 {
-    const struct cvm_sync_primitive_functions* sync_functions;
+    const struct sol_sync_primitive_functions* sync_functions;
 
-    struct cvm_gate_pool* pool;
+    struct sol_gate_pool* pool;
 
     atomic_uint_fast32_t status;
 
@@ -42,26 +47,20 @@ struct cvm_gate
     cnd_t* condition;
 };
 
-struct cvm_gate* cvm_gate_prepare(struct cvm_gate_pool* pool);
+struct sol_gate* sol_gate_prepare(struct sol_gate_pool* pool);
 
 /// MUST be called at some point as this will clean up the acquired gate
-void cvm_gate_wait(struct cvm_gate* gate);
+void sol_gate_wait(struct sol_gate* gate);
 
-/// used to set up dependencies (calls to cvm_gate_signal_conditions) to wait on (dont return from wait until all signals happen)
+/// used to set up dependencies (calls to sol_gate_signal_conditions) to wait on (dont return from wait until all signals happen)
 /// must know that an gate has at least one outstanding dependency and/or that the gate hasn't been waited on for calling this to be legal
-void cvm_gate_impose_conditions(struct cvm_gate* gate, uint_fast32_t count);
+void sol_gate_impose_conditions(struct sol_gate* gate, uint_fast32_t count);
 
-/// must be called once for every dependency added by a call to cvm_gate_impose_conditions
-void cvm_gate_signal_conditions(struct cvm_gate* gate, uint_fast32_t count);
+/// must be called once for every dependency added by a call to sol_gate_impose_conditions
+void sol_gate_signal_conditions(struct sol_gate* gate, uint_fast32_t count);
 
 
-static inline union cvm_sync_primitive* cvm_gate_as_sync_primitive(struct cvm_gate* gate)
+static inline union sol_sync_primitive* sol_gate_as_sync_primitive(struct sol_gate* gate)
 {
-    return (union cvm_sync_primitive*)gate;
+    return (union sol_sync_primitive*)gate;
 }
-
-
-#endif
-
-
-

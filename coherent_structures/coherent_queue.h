@@ -17,12 +17,14 @@ You should have received a copy of the GNU Affero General Public License
 along with solipsix.  If not, see <https://www.gnu.org/licenses/>.
 */
 
-#include "cvm_coherent_structures.h"
+#pragma once
 
-#ifndef CVM_COHERENT_QUEUE_H
-#define CVM_COHERENT_QUEUE_H
+#include <inttypes.h>
+#include <stdatomic.h>
 
-typedef struct cvm_coherent_queue
+typedef struct sol_lockfree_pool sol_lockfree_pool;
+
+typedef struct sol_coherent_queue
 {
     /// faster under contention, slower when not contended
     _Alignas(128) atomic_uint_fast64_t add_index; /// will contain the stall count information
@@ -34,20 +36,11 @@ typedef struct cvm_coherent_queue
     size_t entry_size;
     size_t capacity_exponent;
 }
-cvm_coherent_queue;
+sol_coherent_queue;
 
 
-void cvm_coherent_queue_initialise(cvm_coherent_queue* queue,cvm_lockfree_pool* pool);
-void cvm_coherent_queue_terminate(cvm_coherent_queue* queue);
+void sol_coherent_queue_initialise(sol_coherent_queue* queue,sol_lockfree_pool* pool);
+void sol_coherent_queue_terminate(sol_coherent_queue* queue);
 
-void  cvm_coherent_queue_push(cvm_coherent_queue* queue, void* entry);
-void* cvm_coherent_queue_pull(cvm_coherent_queue* queue);///returns NULL on failure (b/c no elements remain)
-
-#endif
-
-
-
-
-
-
-
+void  sol_coherent_queue_push(sol_coherent_queue* queue, void* entry);
+void* sol_coherent_queue_pull(sol_coherent_queue* queue);///returns NULL on failure (b/c no elements remain)

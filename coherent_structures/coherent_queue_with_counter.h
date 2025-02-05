@@ -17,12 +17,15 @@ You should have received a copy of the GNU Affero General Public License
 along with solipsix.  If not, see <https://www.gnu.org/licenses/>.
 */
 
-#include "cvm_coherent_structures.h"
+#pragma once
 
-#ifndef CVM_COHERENT_QUEUE_WITH_COUNTER_H
-#define CVM_COHERENT_QUEUE_WITH_COUNTER_H
+#include <inttypes.h>
+#include <stdatomic.h>
+#include <stdbool.h>
 
-typedef struct cvm_coherent_queue_with_counter
+typedef struct sol_lockfree_pool sol_lockfree_pool;
+
+typedef struct sol_coherent_queue_with_counter
 {
     /// faster under contention, slower when not contended
     _Alignas(128) atomic_uint_fast64_t add_index;
@@ -34,24 +37,15 @@ typedef struct cvm_coherent_queue_with_counter
     size_t entry_size;
     size_t capacity_exponent;
 }
-cvm_coherent_queue_with_counter;
+sol_coherent_queue_with_counter;
 
-void cvm_coherent_queue_with_counter_initialise(cvm_coherent_queue_with_counter* queue,cvm_lockfree_pool* pool);
-void cvm_coherent_queue_with_counter_terminate(cvm_coherent_queue_with_counter* queue);
+void sol_coherent_queue_with_counter_initialise(sol_coherent_queue_with_counter* queue,sol_lockfree_pool* pool);
+void sol_coherent_queue_with_counter_terminate(sol_coherent_queue_with_counter* queue);
 
 /// these have no effect on the fail counter
-void  cvm_coherent_queue_with_counter_push(cvm_coherent_queue_with_counter* queue, void* entry);
-void* cvm_coherent_queue_with_counter_pull(cvm_coherent_queue_with_counter* queue);///returns NULL on failure (b/c no elements remain)
+void  sol_coherent_queue_with_counter_push(sol_coherent_queue_with_counter* queue, void* entry);
+void* sol_coherent_queue_with_counter_pull(sol_coherent_queue_with_counter* queue);///returns NULL on failure (b/c no elements remain)
 
 /// these will attempt to add/get and increment/decrement a counter which tracks getters that have been stalled waiting on new elements
-bool  cvm_coherent_queue_with_counter_push_and_decrement(cvm_coherent_queue_with_counter* queue, void* entry);///returns true if counter was nonzero, also decrements in this case
-void* cvm_coherent_queue_with_counter_pull_or_increment(cvm_coherent_queue_with_counter* queue);///returns NULL if no elements remain and increments counter, otherwise returns acquired element
-
-#endif
-
-
-
-
-
-
-
+bool  sol_coherent_queue_with_counter_push_and_decrement(sol_coherent_queue_with_counter* queue, void* entry);///returns true if counter was nonzero, also decrements in this case
+void* sol_coherent_queue_with_counter_pull_or_increment(sol_coherent_queue_with_counter* queue);///returns NULL if no elements remain and increments counter, otherwise returns acquired element

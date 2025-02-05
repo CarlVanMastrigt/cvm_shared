@@ -1,5 +1,5 @@
 /**
-Copyright 2025 Carl van Mastrigt
+Copyright 2024 Carl van Mastrigt
 
 This file is part of solipsix.
 
@@ -19,15 +19,16 @@ along with solipsix.  If not, see <https://www.gnu.org/licenses/>.
 
 #pragma once
 
-// union sol_sync_primitive;
+// #include <stddef.h>
+// #include <inttypes.h>
+// #include <stdbool.h>
+// #include <stdatomic.h>
 
-struct sol_sync_queue
-{
-    union sol_sync_primitive* _Atomic end_primitive;
-};
+// typedef struct sol_lockfree_pool sol_lockfree_pool;
+// // struct sol_lockfree_pool;
 
-void sol_sync_queue_initialise(struct sol_sync_queue* queue);
-void sol_sync_queue_terminate(struct sol_sync_queue* queue);
-
-void sol_sync_queue_enqueue_primitive(struct sol_sync_queue* queue, union sol_sync_primitive* primitive);
-void sol_sync_queue_enqueue_primitive_range(struct sol_sync_queue* queue, union sol_sync_primitive* first_primitive, union sol_sync_primitive* last_primitive);
+// #include "coherent_structures/lockfree_stack.h"
+// #include "coherent_structures/lockfree_pool.h"
+// #include "coherent_structures/lockfree_hopper.h"
+// #include "coherent_structures/coherent_queue.h"
+// #include "coherent_structures/coherent_queue_with_counter.h"

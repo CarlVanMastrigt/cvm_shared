@@ -17,17 +17,25 @@ You should have received a copy of the GNU Affero General Public License
 along with solipsix.  If not, see <https://www.gnu.org/licenses/>.
 */
 
-#include "cvm_sync.h"
+#pragma once
 
-#ifndef CVM_TASK_H
-#define CVM_TASK_H
+#include <inttypes.h>
+#include <stdbool.h>
+#include <stdatomic.h>
+#include <threads.h>
 
-struct cvm_task_system
+#include "coherent_structures/lockfree_pool.h"
+#include "coherent_structures/coherent_queue_with_counter.h"
+#include "coherent_structures/lockfree_hopper.h"
+
+// struct sol_sync_primitive_functions;
+
+struct sol_task_system
 {
-    cvm_lockfree_pool task_pool;
-    cvm_coherent_queue_with_counter pending_tasks;
+    sol_lockfree_pool task_pool;
+    sol_coherent_queue_with_counter pending_tasks;
 
-    cvm_lockfree_pool successor_pool;///pool for storing successors (linked list/hopper per task)
+    sol_lockfree_pool successor_pool;///pool for storing successors (linked list/hopper per task)
 
     thrd_t* worker_threads;/// make this system extensible (to a degree) should stalled threads want to be switched to a worker thread (can perhaps do this without relying on scheduler though)
     uint32_t worker_thread_count;
@@ -45,27 +53,27 @@ struct cvm_task_system
     /// is above too much to expose to user? maybe take expected pool size and quarter it?
 };
 
-void cvm_task_system_initialise(struct cvm_task_system* task_system, uint32_t worker_thread_count, size_t total_task_exponent, size_t total_successor_exponent);
+void sol_task_system_initialise(struct sol_task_system* task_system, uint32_t worker_thread_count, size_t total_task_exponent, size_t total_successor_exponent);
 
 /// invalid to add tasks *that don't depend on other tasks* after this has been called
 /// this CAN be called inside a task!
-void cvm_task_system_begin_shutdown(struct cvm_task_system* task_system);
+void sol_task_system_begin_shutdown(struct sol_task_system* task_system);
 
 /// waits for all tasks to complete and worker threads to join before returning, as such cannot be called inside a task
 /// any outstanding tasks will be executed before this returns
 /// as such any task still in flight must not have dependencies that would only be satisfied after this function has returned
-void cvm_task_system_end_shutdown(struct cvm_task_system* task_system);
+void sol_task_system_end_shutdown(struct sol_task_system* task_system);
 
 /// cleans up allocations
-void cvm_task_system_terminate(struct cvm_task_system* task_system);
+void sol_task_system_terminate(struct sol_task_system* task_system);
 
 
 
-struct cvm_task
+struct sol_task
 {
-    const struct cvm_sync_primitive_functions* sync_functions;
+    const struct sol_sync_primitive_functions* sync_functions;
 
-    struct cvm_task_system* task_system;
+    struct sol_task_system* task_system;
 
     void(*task_function)(void*);
     void* task_function_data;
@@ -75,46 +83,39 @@ struct cvm_task
     atomic_uint_fast32_t condition_count;
     atomic_uint_fast32_t reference_count;
 
-    cvm_lockfree_hopper successor_hopper;
+    sol_lockfree_hopper successor_hopper;
 };
 
 
-// task starts inert/unactivated and cannot run (so that order of execution relative to other primitives can be established) `cvm_task_activate` must be called for it to run
-struct cvm_task* cvm_task_prepare(struct cvm_task_system* task_system, void(*task_function)(void*), void* data);
+// task starts inert/unactivated and cannot run (so that order of execution relative to other primitives can be established) `sol_task_activate` must be called for it to run
+struct sol_task* sol_task_prepare(struct sol_task_system* task_system, void(*task_function)(void*), void* data);
 
 /// allows a task to be executed
 /// must either add all associated dependencies/condition before calling this OR impose conditions and retain references the task as necessary to set up dependencies later
-void cvm_task_activate(struct cvm_task* task);//commit?
+void sol_task_activate(struct sol_task* task);//commit?
 
 
 
 // all conditions must be satisfied for a task to run
 
-/// corresponds to the number of times a matching `cvm_task_signal_conditions` must be called for the task before it can be executed
+/// corresponds to the number of times a matching `sol_task_signal_conditions` must be called for the task before it can be executed
 /// at least one condition must be unsignalled in order to set up another condition to that task if it has already been enqueued
-void cvm_task_impose_conditions(struct cvm_task* task, uint_fast32_t count);
+void sol_task_impose_conditions(struct sol_task* task, uint_fast32_t count);
 
-/// use this to signal that some set of data and/or dependencies required by the task have been set up, total must be matched to the count provided to cvm_task_impose_conditions
-void cvm_task_signal_conditions(struct cvm_task* task, uint_fast32_t count);
+/// use this to signal that some set of data and/or dependencies required by the task have been set up, total must be matched to the count provided to sol_task_impose_conditions
+void sol_task_signal_conditions(struct sol_task* task, uint_fast32_t count);
 
 
-/// corresponds to the number of times a matching `cvm_task_release_reference` must be called for the task before it can be cleaned up
+/// corresponds to the number of times a matching `sol_task_release_reference` must be called for the task before it can be cleaned up
 /// at least one retainer must be held in order to set up a successor to that task if it has already been enqueued
-void cvm_task_retain_references(struct cvm_task* task, uint_fast32_t count);
+void sol_task_retain_references(struct sol_task* task, uint_fast32_t count);
 
 /// signal that we are done setting up things that must happen before cleanup (e.g. setting up successors)
-void cvm_task_release_references(struct cvm_task* task, uint_fast32_t count);
+void sol_task_release_references(struct sol_task* task, uint_fast32_t count);
 
 
 
-
-
-static inline union cvm_sync_primitive* cvm_task_as_sync_primitive(struct cvm_task* task)
+static inline union sol_sync_primitive* sol_task_as_sync_primitive(struct sol_task* task)
 {
-    return (union cvm_sync_primitive*)task;
+    return (union sol_sync_primitive*)task;
 }
-
-
-#endif
-
-

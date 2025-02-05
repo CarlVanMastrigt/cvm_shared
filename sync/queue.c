@@ -17,42 +17,44 @@ You should have received a copy of the GNU Affero General Public License
 along with solipsix.  If not, see <https://www.gnu.org/licenses/>.
 */
 
-#include "sync/queue.h"
 #include <assert.h>
 
-void cvm_sync_queue_initialise(struct cvm_sync_queue* queue)
+#include "sol_sync.h"
+#include "sync/queue.h"
+
+void sol_sync_queue_initialise(struct sol_sync_queue* queue)
 {
     atomic_init(&queue->end_primitive, NULL);
 }
 
-void cvm_sync_queue_terminate(struct cvm_sync_queue* queue)
+void sol_sync_queue_terminate(struct sol_sync_queue* queue)
 {
-    union cvm_sync_primitive* end_primitive;
+    union sol_sync_primitive* end_primitive;
 
     end_primitive = atomic_exchange_explicit(&queue->end_primitive, NULL, memory_order_relaxed);
 
     if(end_primitive)
     {
-        cvm_sync_primitive_release_reference(end_primitive);
+        sol_sync_primitive_release_reference(end_primitive);
     }
 }
 
-void cvm_sync_queue_enqueue_primitive_range(struct cvm_sync_queue* queue, union cvm_sync_primitive* first_primitive, union cvm_sync_primitive* last_primitive)
+void sol_sync_queue_enqueue_primitive_range(struct sol_sync_queue* queue, union sol_sync_primitive* first_primitive, union sol_sync_primitive* last_primitive)
 {
-    union cvm_sync_primitive* old_end_primitive;
+    union sol_sync_primitive* old_end_primitive;
 
-    cvm_sync_primitive_retain_reference(last_primitive);/// move this to dedicated (static inline) function?
+    sol_sync_primitive_retain_reference(last_primitive);/// move this to dedicated (static inline) function?
 
     old_end_primitive = atomic_exchange_explicit(&queue->end_primitive, last_primitive, memory_order_relaxed);
 
     if(old_end_primitive)
     {
-        cvm_sync_primitive_attach_successor(old_end_primitive, first_primitive);
-        cvm_sync_primitive_release_reference(old_end_primitive);
+        sol_sync_primitive_attach_successor(old_end_primitive, first_primitive);
+        sol_sync_primitive_release_reference(old_end_primitive);
     }
 }
 
-void cvm_sync_queue_enqueue_primitive(struct cvm_sync_queue* queue, union cvm_sync_primitive* primitive)
+void sol_sync_queue_enqueue_primitive(struct sol_sync_queue* queue, union sol_sync_primitive* primitive)
 {
-    cvm_sync_queue_enqueue_primitive_range(queue, primitive, primitive);
+    sol_sync_queue_enqueue_primitive_range(queue, primitive, primitive);
 }

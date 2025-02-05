@@ -17,25 +17,27 @@ You should have received a copy of the GNU Affero General Public License
 along with solipsix.  If not, see <https://www.gnu.org/licenses/>.
 */
 
-#include "coherent_structures/lockfree_stack.h"
 #include <assert.h>
 
-void cvm_lockfree_stack_initialise(cvm_lockfree_stack * stack, cvm_lockfree_pool * pool)
+#include "coherent_structures/lockfree_pool.h"
+#include "coherent_structures/lockfree_stack.h"
+
+void sol_lockfree_stack_initialise(sol_lockfree_stack * stack, sol_lockfree_pool * pool)
 {
-    atomic_init(&stack->head,CVM_LOCKFREE_STACK_INVALID_ENTRY);
+    atomic_init(&stack->head,SOL_LOCKFREE_STACK_INVALID_ENTRY);
     stack->next_buffer = pool->available_entries.next_buffer;
     stack->entry_data = pool->available_entries.entry_data;
     stack->entry_size = pool->available_entries.entry_size;
     stack->capacity_exponent = pool->available_entries.capacity_exponent;
 }
 
-void cvm_lockfree_stack_terminate(cvm_lockfree_stack * stack)
+void sol_lockfree_stack_terminate(sol_lockfree_stack * stack)
 {
-    assert((atomic_load_explicit(&stack->head, memory_order_relaxed) & CVM_LOCKFREE_STACK_ENTRY_MASK) == CVM_LOCKFREE_STACK_INVALID_ENTRY);/// stack should be empty upon termination
+    assert((atomic_load_explicit(&stack->head, memory_order_relaxed) & SOL_LOCKFREE_STACK_ENTRY_MASK) == SOL_LOCKFREE_STACK_INVALID_ENTRY);/// stack should be empty upon termination
 }
 
 
-void cvm_lockfree_stack_push_index_range(cvm_lockfree_stack * stack, uint32_t first_entry_index, uint32_t last_entry_index)
+void sol_lockfree_stack_push_index_range(sol_lockfree_stack * stack, uint32_t first_entry_index, uint32_t last_entry_index)
 {
     uint_fast64_t current_head, replacement_head;
 
@@ -45,32 +47,32 @@ void cvm_lockfree_stack_push_index_range(cvm_lockfree_stack * stack, uint32_t fi
     current_head = atomic_load_explicit(&stack->head, memory_order_relaxed);
     do
     {
-        stack->next_buffer[last_entry_index] = (uint32_t)(current_head & CVM_LOCKFREE_STACK_ENTRY_MASK);
-        replacement_head = ((current_head & CVM_LOCKFREE_STACK_CHECK_MASK) + CVM_LOCKFREE_STACK_CHECK_UNIT) | first_entry_index;
+        stack->next_buffer[last_entry_index] = (uint32_t)(current_head & SOL_LOCKFREE_STACK_ENTRY_MASK);
+        replacement_head = ((current_head & SOL_LOCKFREE_STACK_CHECK_MASK) + SOL_LOCKFREE_STACK_CHECK_UNIT) | first_entry_index;
     }
     while(!atomic_compare_exchange_weak_explicit(&stack->head, &current_head, replacement_head, memory_order_release, memory_order_relaxed));
 }
 
-void cvm_lockfree_stack_push_index(cvm_lockfree_stack * stack, uint32_t entry_index)
+void sol_lockfree_stack_push_index(sol_lockfree_stack * stack, uint32_t entry_index)
 {
-    cvm_lockfree_stack_push_index_range(stack, entry_index, entry_index);
+    sol_lockfree_stack_push_index_range(stack, entry_index, entry_index);
 }
 
-uint32_t cvm_lockfree_stack_pull_index(cvm_lockfree_stack * stack)
+uint32_t sol_lockfree_stack_pull_index(sol_lockfree_stack * stack)
 {
     uint_fast64_t entry_index,current_head,replacement_head;
 
     current_head=atomic_load_explicit(&stack->head, memory_order_acquire);
     do
     {
-        entry_index = current_head & CVM_LOCKFREE_STACK_ENTRY_MASK;
-        /// if there are no more entries in this list then return NULL / CVM_LOCKFREE_STACK_INVALID_ENTRY_U32
-        if(entry_index == CVM_LOCKFREE_STACK_INVALID_ENTRY)
+        entry_index = current_head & SOL_LOCKFREE_STACK_ENTRY_MASK;
+        /// if there are no more entries in this list then return NULL / SOL_LOCKFREE_STACK_INVALID_ENTRY_U32
+        if(entry_index == SOL_LOCKFREE_STACK_INVALID_ENTRY)
         {
-            return (uint32_t)CVM_LOCKFREE_STACK_INVALID_ENTRY;
+            return (uint32_t)SOL_LOCKFREE_STACK_INVALID_ENTRY;
         }
 
-        replacement_head = ((current_head & CVM_LOCKFREE_STACK_CHECK_MASK) + CVM_LOCKFREE_STACK_CHECK_UNIT) | (uint_fast64_t)(stack->next_buffer[entry_index]);
+        replacement_head = ((current_head & SOL_LOCKFREE_STACK_CHECK_MASK) + SOL_LOCKFREE_STACK_CHECK_UNIT) | (uint_fast64_t)(stack->next_buffer[entry_index]);
     }
     while(!atomic_compare_exchange_weak_explicit(&stack->head, &current_head, replacement_head, memory_order_acquire, memory_order_acquire));
     /// success memory order could (conceptually) be relaxed here as we don't need to release/acquire any changes when that happens as nothing outside the atomic has changed
@@ -83,7 +85,7 @@ uint32_t cvm_lockfree_stack_pull_index(cvm_lockfree_stack * stack)
 }
 
 
-void cvm_lockfree_stack_push_range(cvm_lockfree_stack* stack, void* first_entry, void* last_entry)
+void sol_lockfree_stack_push_range(sol_lockfree_stack* stack, void* first_entry, void* last_entry)
 {
     uint32_t first_entry_index, last_entry_index;
 
@@ -96,10 +98,10 @@ void cvm_lockfree_stack_push_range(cvm_lockfree_stack* stack, void* first_entry,
     first_entry_index = (uint32_t) (((char*)first_entry - stack->entry_data) / (ptrdiff_t)stack->entry_size);
     last_entry_index  = (uint32_t) (((char*)last_entry  - stack->entry_data) / (ptrdiff_t)stack->entry_size);
 
-    cvm_lockfree_stack_push_index_range(stack, first_entry_index, last_entry_index);
+    sol_lockfree_stack_push_index_range(stack, first_entry_index, last_entry_index);
 }
 
-void cvm_lockfree_stack_push(cvm_lockfree_stack* stack, void * entry)
+void sol_lockfree_stack_push(sol_lockfree_stack* stack, void * entry)
 {
     uint32_t entry_index;
 
@@ -108,18 +110,18 @@ void cvm_lockfree_stack_push(cvm_lockfree_stack* stack, void * entry)
 
     entry_index = (uint32_t) (((char*)entry - stack->entry_data) / (ptrdiff_t)stack->entry_size);
 
-    cvm_lockfree_stack_push_index_range(stack, entry_index, entry_index);
+    sol_lockfree_stack_push_index_range(stack, entry_index, entry_index);
 }
 
-void * cvm_lockfree_stack_pull(cvm_lockfree_stack* stack)
+void * sol_lockfree_stack_pull(sol_lockfree_stack* stack)
 {
     uint32_t entry_index;
 
-    entry_index = cvm_lockfree_stack_pull_index(stack);
+    entry_index = sol_lockfree_stack_pull_index(stack);
 
-    if(entry_index == (uint32_t)CVM_LOCKFREE_STACK_INVALID_ENTRY)
+    if(entry_index == (uint32_t)SOL_LOCKFREE_STACK_INVALID_ENTRY)
     {
-        return NULL;;
+        return NULL;
     }
 
     return stack->entry_data + entry_index * stack->entry_size;

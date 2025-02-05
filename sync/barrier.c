@@ -17,109 +17,110 @@ You should have received a copy of the GNU Affero General Public License
 along with solipsix.  If not, see <https://www.gnu.org/licenses/>.
 */
 
+#include "sol_sync.h"
 #include "sync/barrier.h"
 #include <assert.h>
 
-static void cvm_barrier_impose_condition(union cvm_sync_primitive* primitive)
+static void sol_barrier_impose_condition(union sol_sync_primitive* primitive)
 {
-    cvm_barrier_impose_conditions(&primitive->barrier, 1);
+    sol_barrier_impose_conditions(&primitive->barrier, 1);
 }
-static void cvm_barrier_signal_condition(union cvm_sync_primitive* primitive)
+static void sol_barrier_signal_condition(union sol_sync_primitive* primitive)
 {
-    cvm_barrier_signal_conditions(&primitive->barrier, 1);
+    sol_barrier_signal_conditions(&primitive->barrier, 1);
 }
-static void cvm_barrier_attach_successor(union cvm_sync_primitive* primitive, union cvm_sync_primitive* successor)
+static void sol_barrier_attach_successor(union sol_sync_primitive* primitive, union sol_sync_primitive* successor)
 {
-    struct cvm_barrier* barrier;
-    struct cvm_lockfree_pool* successor_pool;
-    union cvm_sync_primitive** successor_ptr;
+    struct sol_barrier* barrier;
+    struct sol_lockfree_pool* successor_pool;
+    union sol_sync_primitive** successor_ptr;
 
     barrier = &primitive->barrier;
 
     assert(atomic_load_explicit(&barrier->reference_count, memory_order_relaxed));
     /// barrier must be retained to set up successors (can technically be satisfied illegally, using queue for re-use will make detection better but not infallible)
 
-    if(cvm_lockfree_hopper_check_if_locked(&barrier->successor_hopper))
+    if(sol_lockfree_hopper_check_if_locked(&barrier->successor_hopper))
     {
         /// if hopper already locked then barrier has had all conditions satisfied/signalled, so can signal this successor
-        cvm_sync_primitive_signal_condition(successor);
+        sol_sync_primitive_signal_condition(successor);
     }
     else
     {
         // create sucessor and add it to the hopper
         successor_pool = &barrier->pool->successor_pool;
 
-        successor_ptr = cvm_lockfree_pool_acquire_entry(successor_pool);
+        successor_ptr = sol_lockfree_pool_acquire_entry(successor_pool);
         assert(successor_ptr);///ran out of successors
 
         *successor_ptr = successor;
 
-        if(!cvm_lockfree_hopper_push(&barrier->successor_hopper, successor_pool, successor_ptr))
+        if(!sol_lockfree_hopper_push(&barrier->successor_hopper, successor_pool, successor_ptr))
         {
             /// if we failed to add the successor then the barrier has already been completed, relinquish the storage and signal the successor
-            cvm_lockfree_pool_relinquish_entry(successor_pool, successor_ptr);
-            cvm_sync_primitive_signal_condition(successor);
+            sol_lockfree_pool_relinquish_entry(successor_pool, successor_ptr);
+            sol_sync_primitive_signal_condition(successor);
         }
     }
 }
-static void cvm_barrier_retain_reference(union cvm_sync_primitive* primitive)
+static void sol_barrier_retain_reference(union sol_sync_primitive* primitive)
 {
-    cvm_barrier_retain_references(&primitive->barrier, 1);
+    sol_barrier_retain_references(&primitive->barrier, 1);
 }
-static void cvm_barrier_release_reference(union cvm_sync_primitive* primitive)
+static void sol_barrier_release_reference(union sol_sync_primitive* primitive)
 {
-    cvm_barrier_release_references(&primitive->barrier, 1);
+    sol_barrier_release_references(&primitive->barrier, 1);
 }
 
-const static struct cvm_sync_primitive_functions barrier_sync_functions =
+const static struct sol_sync_primitive_functions barrier_sync_functions =
 {
-    .impose_condition  = &cvm_barrier_impose_condition,
-    .signal_condition  = &cvm_barrier_signal_condition,
-    .attach_successor  = &cvm_barrier_attach_successor,
-    .retain_reference  = &cvm_barrier_retain_reference,
-    .release_reference = &cvm_barrier_release_reference,
+    .impose_condition  = &sol_barrier_impose_condition,
+    .signal_condition  = &sol_barrier_signal_condition,
+    .attach_successor  = &sol_barrier_attach_successor,
+    .retain_reference  = &sol_barrier_retain_reference,
+    .release_reference = &sol_barrier_release_reference,
 };
 
-static void cvm_barrier_initialise(void* entry, void* data)
+static void sol_barrier_initialise(void* entry, void* data)
 {
-    struct cvm_barrier* barrier = entry;
-    struct cvm_barrier_pool* pool = data;
+    struct sol_barrier* barrier = entry;
+    struct sol_barrier_pool* pool = data;
 
     barrier->sync_functions = &barrier_sync_functions;
     barrier->pool = pool;
 
-    cvm_lockfree_hopper_initialise(&barrier->successor_hopper, &pool->successor_pool);
+    sol_lockfree_hopper_initialise(&barrier->successor_hopper, &pool->successor_pool);
 
     atomic_init(&barrier->condition_count, 0);
     atomic_init(&barrier->reference_count, 0);
 }
 
-void cvm_barrier_pool_initialise(struct cvm_barrier_pool* pool, size_t total_barrier_exponent, size_t total_successor_exponent)
+void sol_barrier_pool_initialise(struct sol_barrier_pool* pool, size_t total_barrier_exponent, size_t total_successor_exponent)
 {
-    cvm_lockfree_pool_initialise(&pool->barrier_pool, total_barrier_exponent, sizeof(struct cvm_barrier));
-    cvm_lockfree_pool_initialise(&pool->successor_pool, total_successor_exponent, sizeof(union cvm_sync_primitive**));
+    sol_lockfree_pool_initialise(&pool->barrier_pool, total_barrier_exponent, sizeof(struct sol_barrier));
+    sol_lockfree_pool_initialise(&pool->successor_pool, total_successor_exponent, sizeof(union sol_sync_primitive**));
 }
 
-void cvm_barrier_pool_terminate(struct cvm_barrier_pool* pool)
+void sol_barrier_pool_terminate(struct sol_barrier_pool* pool)
 {
-    cvm_lockfree_pool_terminate(&pool->successor_pool);
-    cvm_lockfree_pool_terminate(&pool->barrier_pool);
+    sol_lockfree_pool_terminate(&pool->successor_pool);
+    sol_lockfree_pool_terminate(&pool->barrier_pool);
 }
 
 
 
 
-void cvm_barrier_impose_conditions(struct cvm_barrier* barrier, uint_fast32_t count)
+void sol_barrier_impose_conditions(struct sol_barrier* barrier, uint_fast32_t count)
 {
     uint_fast32_t old_count = atomic_fetch_add_explicit(&barrier->condition_count, count, memory_order_relaxed);
     assert(old_count>0);/// should not be adding dependencies when none still exist (need held dependencies to addsetup more dependencies)
 }
 
-void cvm_barrier_signal_conditions(struct cvm_barrier* barrier, uint_fast32_t count)
+void sol_barrier_signal_conditions(struct sol_barrier* barrier, uint_fast32_t count)
 {
     uint_fast32_t old_count;
-    struct cvm_barrier_pool* pool;
-    union cvm_sync_primitive** successor_ptr;
+    struct sol_barrier_pool* pool;
+    union sol_sync_primitive** successor_ptr;
     uint32_t first_successor_index, successor_index;
 
     /// this is responsible for coalescing all modifications, but also for making them available to the next thread/atomic to recieve this memory (after the potential release in this function)
@@ -130,31 +131,31 @@ void cvm_barrier_signal_conditions(struct cvm_barrier* barrier, uint_fast32_t co
     {
         pool = barrier->pool;
 
-        successor_ptr = cvm_lockfree_hopper_lock(&barrier->successor_hopper, &pool->successor_pool, &first_successor_index);
+        successor_ptr = sol_lockfree_hopper_lock(&barrier->successor_hopper, &pool->successor_pool, &first_successor_index);
 
-        cvm_barrier_release_references(barrier, 1);
+        sol_barrier_release_references(barrier, 1);
 
         successor_index = first_successor_index;
 
         while(successor_ptr)
         {
-            cvm_sync_primitive_signal_condition(*successor_ptr);
-            successor_ptr = cvm_lockfree_hopper_iterate(&pool->successor_pool, &successor_index);
+            sol_sync_primitive_signal_condition(*successor_ptr);
+            successor_ptr = sol_lockfree_hopper_iterate(&pool->successor_pool, &successor_index);
         }
 
-        cvm_lockfree_hopper_relinquish_range(&pool->successor_pool, first_successor_index, successor_index);
+        sol_lockfree_hopper_relinquish_range(&pool->successor_pool, first_successor_index, successor_index);
     }
 }
 
 
 
-void cvm_barrier_retain_references(struct cvm_barrier * barrier, uint_fast32_t count)
+void sol_barrier_retain_references(struct sol_barrier * barrier, uint_fast32_t count)
 {
     uint_fast32_t old_count=atomic_fetch_add_explicit(&barrier->reference_count, count, memory_order_relaxed);
     assert(old_count!=0);/// should not be adding successors reservations when none still exist (need held successors reservations to addsetup more successors reservations)
 }
 
-void cvm_barrier_release_references(struct cvm_barrier * barrier, uint_fast32_t count)
+void sol_barrier_release_references(struct sol_barrier * barrier, uint_fast32_t count)
 {
     /// need to release to prevent reads/writes of successor/completion data being moved after this operation
     uint_fast32_t old_count=atomic_fetch_sub_explicit(&barrier->reference_count, count, memory_order_release);
@@ -163,17 +164,17 @@ void cvm_barrier_release_references(struct cvm_barrier * barrier, uint_fast32_t 
 
     if(old_count==count)
     {
-        cvm_lockfree_pool_relinquish_entry(&barrier->pool->barrier_pool, barrier);
+        sol_lockfree_pool_relinquish_entry(&barrier->pool->barrier_pool, barrier);
     }
 }
 
-struct cvm_barrier* cvm_barrier_prepare(struct cvm_barrier_pool* pool)
+struct sol_barrier* sol_barrier_prepare(struct sol_barrier_pool* pool)
 {
-    struct cvm_barrier* barrier;
+    struct sol_barrier* barrier;
 
-    barrier = cvm_lockfree_pool_acquire_entry(&pool->barrier_pool);
+    barrier = sol_lockfree_pool_acquire_entry(&pool->barrier_pool);
 
-    cvm_lockfree_hopper_reset(&barrier->successor_hopper);
+    sol_lockfree_hopper_reset(&barrier->successor_hopper);
 
     /// need to wait on "enqueue" op before beginning, ergo need one extra dependency for that (enqueue is really just a signal)
     atomic_store_explicit(&barrier->condition_count, 1, memory_order_relaxed);
@@ -183,10 +184,10 @@ struct cvm_barrier* cvm_barrier_prepare(struct cvm_barrier_pool* pool)
     return barrier;
 }
 
-void cvm_barrier_activate(struct cvm_barrier* barrier)
+void sol_barrier_activate(struct sol_barrier* barrier)
 {
     /// this is basically just called differently to account for the "hidden" wait counter added on barrier creation
-    cvm_barrier_signal_conditions(barrier, 1);
+    sol_barrier_signal_conditions(barrier, 1);
 }
 
 

@@ -17,17 +17,21 @@ You should have received a copy of the GNU Affero General Public License
 along with solipsix.  If not, see <https://www.gnu.org/licenses/>.
 */
 
-#include "cvm_coherent_structures.h"
+#pragma once
 
-#ifndef CVM_LOCKFREE_STACK_H
-#define CVM_LOCKFREE_STACK_H
+#include <stddef.h>
+#include <inttypes.h>
+#include <stdatomic.h>
+#include <stdbool.h>
 
-#define CVM_LOCKFREE_STACK_CHECK_MASK    ((uint_fast64_t)0xFFFFFFFFFF000000llu)
-#define CVM_LOCKFREE_STACK_ENTRY_MASK    ((uint_fast64_t)0x0000000000FFFFFFllu)
-#define CVM_LOCKFREE_STACK_INVALID_ENTRY ((uint_fast64_t)0x0000000000FFFFFFllu)
-#define CVM_LOCKFREE_STACK_CHECK_UNIT    ((uint_fast64_t)0x0000000001000000llu)
+typedef struct sol_lockfree_pool sol_lockfree_pool;
 
-typedef struct cvm_lockfree_stack
+#define SOL_LOCKFREE_STACK_CHECK_MASK    ((uint_fast64_t)0xFFFFFFFFFF000000llu)
+#define SOL_LOCKFREE_STACK_ENTRY_MASK    ((uint_fast64_t)0x0000000000FFFFFFllu)
+#define SOL_LOCKFREE_STACK_INVALID_ENTRY ((uint_fast64_t)0x0000000000FFFFFFllu)
+#define SOL_LOCKFREE_STACK_CHECK_UNIT    ((uint_fast64_t)0x0000000001000000llu)
+
+typedef struct sol_lockfree_stack
 {
     _Alignas(128) atomic_uint_fast64_t head;
 
@@ -36,24 +40,22 @@ typedef struct cvm_lockfree_stack
     char* entry_data;
     uint32_t* next_buffer;
 }
-cvm_lockfree_stack;
+sol_lockfree_stack;
 
 
 /// a stack uses a pool for backing
-void cvm_lockfree_stack_initialise(cvm_lockfree_stack* stack, cvm_lockfree_pool* pool);
-void cvm_lockfree_stack_terminate(cvm_lockfree_stack* stack);
+void sol_lockfree_stack_initialise(sol_lockfree_stack* stack, sol_lockfree_pool* pool);
+void sol_lockfree_stack_terminate(sol_lockfree_stack* stack);
 
 
-void cvm_lockfree_stack_push_index_range(cvm_lockfree_stack* stack, uint32_t first_entry_index, uint32_t last_entry_index);
-void cvm_lockfree_stack_push_index(cvm_lockfree_stack* stack, uint32_t entry_index);
+void sol_lockfree_stack_push_index_range(sol_lockfree_stack* stack, uint32_t first_entry_index, uint32_t last_entry_index);
+void sol_lockfree_stack_push_index(sol_lockfree_stack* stack, uint32_t entry_index);
 
 // (uint32_t)CVM_LOCKFREE_STACK_ENTRY_MASK returned to indicate failure
-uint32_t cvm_lockfree_stack_pull_index(cvm_lockfree_stack* stack);
+uint32_t sol_lockfree_stack_pull_index(sol_lockfree_stack* stack);
 
-void cvm_lockfree_stack_push_range(cvm_lockfree_stack* stack, void* first_entry, void* last_entry);
-void cvm_lockfree_stack_push(cvm_lockfree_stack* stack, void * entry);
+void sol_lockfree_stack_push_range(sol_lockfree_stack* stack, void* first_entry, void* last_entry);
+void sol_lockfree_stack_push(sol_lockfree_stack* stack, void * entry);
 
 // NULL returned to indicate failure
-void* cvm_lockfree_stack_pull(cvm_lockfree_stack* stack);
-
-#endif
+void* sol_lockfree_stack_pull(sol_lockfree_stack* stack);

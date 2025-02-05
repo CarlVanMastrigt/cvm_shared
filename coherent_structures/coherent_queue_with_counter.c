@@ -17,16 +17,19 @@ You should have received a copy of the GNU Affero General Public License
 along with solipsix.  If not, see <https://www.gnu.org/licenses/>.
 */
 
-#include "coherent_structures/coherent_queue_with_counter.h"
 #include <stdlib.h>
 #include <assert.h>
 
-/// these can support up to u32 sized queue and up to 2^31-1 fails tracked (need one more bit than count represents to handle wrapping properly)
-#define CVM_COHERENT_QUEUE_FENCE_MASK ((uint_fast64_t)0x00000001FFFFFFFF)
-#define CVM_COHERENT_QUEUE_COUNT_MASK ((uint_fast64_t)0xFFFFFFFE00000000)
-#define CVM_COHERENT_QUEUE_COUNT_UNIT ((uint_fast64_t)0x0000000200000000)
+#include "coherent_structures/coherent_queue_with_counter.h"
+#include "coherent_structures/lockfree_pool.h"
 
-void cvm_coherent_queue_with_counter_initialise(cvm_coherent_queue_with_counter* queue,cvm_lockfree_pool* pool)
+
+/// these can support up to u32 sized queue and up to 2^31-1 fails tracked (need one more bit than count represents to handle wrapping properly)
+#define SOL_COHERENT_QUEUE_FENCE_MASK ((uint_fast64_t)0x00000001FFFFFFFF)
+#define SOL_COHERENT_QUEUE_COUNT_MASK ((uint_fast64_t)0xFFFFFFFE00000000)
+#define SOL_COHERENT_QUEUE_COUNT_UNIT ((uint_fast64_t)0x0000000200000000)
+
+void sol_coherent_queue_with_counter_initialise(sol_coherent_queue_with_counter* queue,sol_lockfree_pool* pool)
 {
     queue->entry_data = pool->available_entries.entry_data;
     queue->entry_size = pool->available_entries.entry_size;
@@ -38,13 +41,13 @@ void cvm_coherent_queue_with_counter_initialise(cvm_coherent_queue_with_counter*
     atomic_init(&queue->get_index,0);
 }
 
-void cvm_coherent_queue_with_counter_terminate(cvm_coherent_queue_with_counter* queue)
+void sol_coherent_queue_with_counter_terminate(sol_coherent_queue_with_counter* queue)
 {
-    /// could/should check all atomics are equal (except fence which needs to have its comparisons masked by CVM_COHERENT_QUEUE_FENCE_MASK
+    /// could/should check all atomics are equal (except fence which needs to have its comparisons masked by SOL_COHERENT_QUEUE_FENCE_MASK
     free(queue->entry_indices);
 }
 
-void cvm_coherent_queue_with_counter_push(cvm_coherent_queue_with_counter* queue, void* entry)
+void sol_coherent_queue_with_counter_push(sol_coherent_queue_with_counter* queue, void* entry)
 {
     uint_fast64_t queue_index, fence_value, replacement_fence_value, counter;
     uint32_t entry_index;
@@ -59,19 +62,19 @@ void cvm_coherent_queue_with_counter_push(cvm_coherent_queue_with_counter* queue
     queue->entry_indices[queue_index & queue->entry_mask] = entry_index;
 
     ///assume no count by default
-    fence_value = (queue_index & CVM_COHERENT_QUEUE_FENCE_MASK);
-    replacement_fence_value = ((queue_index+1) & CVM_COHERENT_QUEUE_FENCE_MASK);
+    fence_value = (queue_index & SOL_COHERENT_QUEUE_FENCE_MASK);
+    replacement_fence_value = ((queue_index+1) & SOL_COHERENT_QUEUE_FENCE_MASK);
 
     while(!atomic_compare_exchange_weak_explicit(&queue->add_fence, &fence_value, replacement_fence_value, memory_order_release, memory_order_relaxed))
     {
         /// expected_fence_value has current fence value here
-        counter = (fence_value & CVM_COHERENT_QUEUE_COUNT_MASK);
-        fence_value = (queue_index & CVM_COHERENT_QUEUE_FENCE_MASK) | counter;
-        replacement_fence_value = ((queue_index+1) & CVM_COHERENT_QUEUE_FENCE_MASK) | counter;
+        counter = (fence_value & SOL_COHERENT_QUEUE_COUNT_MASK);
+        fence_value = (queue_index & SOL_COHERENT_QUEUE_FENCE_MASK) | counter;
+        replacement_fence_value = ((queue_index+1) & SOL_COHERENT_QUEUE_FENCE_MASK) | counter;
     }
 }
 
-void* cvm_coherent_queue_with_counter_pull(cvm_coherent_queue_with_counter* queue)
+void* sol_coherent_queue_with_counter_pull(sol_coherent_queue_with_counter* queue)
 {
     uint_fast64_t queue_index, fence_value;
     uint32_t entry_index;
@@ -81,7 +84,7 @@ void* cvm_coherent_queue_with_counter_pull(cvm_coherent_queue_with_counter* queu
     do
     {
         fence_value = atomic_load_explicit(&queue->add_fence, memory_order_acquire);
-        if((queue_index&CVM_COHERENT_QUEUE_FENCE_MASK) == (fence_value&CVM_COHERENT_QUEUE_FENCE_MASK))
+        if((queue_index&SOL_COHERENT_QUEUE_FENCE_MASK) == (fence_value&SOL_COHERENT_QUEUE_FENCE_MASK))
         {
             return NULL;
         }
@@ -92,7 +95,7 @@ void* cvm_coherent_queue_with_counter_pull(cvm_coherent_queue_with_counter* queu
     return queue->entry_data + entry_index*queue->entry_size;
 }
 
-bool cvm_coherent_queue_with_counter_push_and_decrement(cvm_coherent_queue_with_counter* queue, void* entry)
+bool sol_coherent_queue_with_counter_push_and_decrement(sol_coherent_queue_with_counter* queue, void* entry)
 {
     uint_fast64_t queue_index, fence_value, replacement_fence_value, counter;
     uint32_t entry_index;
@@ -110,24 +113,24 @@ bool cvm_coherent_queue_with_counter_push_and_decrement(cvm_coherent_queue_with_
     queue->entry_indices[queue_index & queue->entry_mask] = entry_index;
 
     ///assume no stalls by default
-    fence_value = (queue_index & CVM_COHERENT_QUEUE_FENCE_MASK);
-    replacement_fence_value = ((queue_index+1) & CVM_COHERENT_QUEUE_FENCE_MASK);
+    fence_value = (queue_index & SOL_COHERENT_QUEUE_FENCE_MASK);
+    replacement_fence_value = ((queue_index+1) & SOL_COHERENT_QUEUE_FENCE_MASK);
 
     while(!atomic_compare_exchange_weak_explicit(&queue->add_fence, &fence_value, replacement_fence_value, memory_order_release, memory_order_relaxed))
     {
         /// expected_fence_value has current fence value here
-        counter = (fence_value & CVM_COHERENT_QUEUE_COUNT_MASK);
-        fence_value = (queue_index & CVM_COHERENT_QUEUE_FENCE_MASK) | counter;
+        counter = (fence_value & SOL_COHERENT_QUEUE_COUNT_MASK);
+        fence_value = (queue_index & SOL_COHERENT_QUEUE_FENCE_MASK) | counter;
         nonzero_count = counter != 0;
-        assert(counter>=CVM_COHERENT_QUEUE_COUNT_UNIT || counter==0);
+        assert(counter>=SOL_COHERENT_QUEUE_COUNT_UNIT || counter==0);
 
-        replacement_fence_value = ((queue_index+1) & CVM_COHERENT_QUEUE_FENCE_MASK) | (counter - (nonzero_count ? CVM_COHERENT_QUEUE_COUNT_UNIT : 0));
+        replacement_fence_value = ((queue_index+1) & SOL_COHERENT_QUEUE_FENCE_MASK) | (counter - (nonzero_count ? SOL_COHERENT_QUEUE_COUNT_UNIT : 0));
     }
 
     return nonzero_count;
 }
 
-void* cvm_coherent_queue_with_counter_pull_or_increment(cvm_coherent_queue_with_counter* queue)
+void* sol_coherent_queue_with_counter_pull_or_increment(sol_coherent_queue_with_counter* queue)
 {
     uint_fast64_t queue_index, fence_value, replacement_fence_value;
     uint32_t entry_index;
@@ -138,10 +141,10 @@ void* cvm_coherent_queue_with_counter_pull_or_increment(cvm_coherent_queue_with_
     {
         fence_value = atomic_load_explicit(&queue->add_fence, memory_order_acquire);
 
-        while((queue_index&CVM_COHERENT_QUEUE_FENCE_MASK) == (fence_value&CVM_COHERENT_QUEUE_FENCE_MASK))
+        while((queue_index&SOL_COHERENT_QUEUE_FENCE_MASK) == (fence_value&SOL_COHERENT_QUEUE_FENCE_MASK))
         {
             /// despite being in a loop i'm unsure this should be weak or strong
-            replacement_fence_value = fence_value + CVM_COHERENT_QUEUE_COUNT_UNIT;
+            replacement_fence_value = fence_value + SOL_COHERENT_QUEUE_COUNT_UNIT;
             /// acquire only technically needed on failure as that represents external change to data that needs to be acquired, otherwise no changes need to be acquired
             if(atomic_compare_exchange_weak_explicit(&queue->add_fence, &fence_value, replacement_fence_value, memory_order_acquire, memory_order_acquire))
             {

@@ -63,11 +63,11 @@ typedef union widget widget; // find a better place to put this?
 #include "cvm_overlay.h"
 #include "cvm_widget.h"
 #include "cvm_transform.h"
-#include "cvm_camera.h"
+#include "sol_camera.h"
 #include "cvm_mesh.h"
-#include "cvm_coherent_structures.h"
+#include "sol_coherent_structures.h"
 #include "cvm_thread.h"
-#include "cvm_sync.h"
+#include "sol_sync.h"
 
 
 #include "cvm_debug_render.h"

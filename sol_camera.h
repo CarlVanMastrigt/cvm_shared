@@ -17,12 +17,9 @@ You should have received a copy of the GNU Affero General Public License
 along with solipsix.  If not, see <https://www.gnu.org/licenses/>.
 */
 
-#ifndef solipsix_H
-#include "solipsix.h"
-#endif
+#pragma once
 
-#ifndef CVM_CAMERA_H
-#define CVM_CAMERA_H
+#include "cvm_math.h"
 
 typedef enum
 {
@@ -34,13 +31,10 @@ typedef enum
 }
 frustrum_bound_names;
 
-typedef struct cvm_camera
+typedef struct sol_camera
 {
     rotor3f rotation;
     vec3f focal_point;///swap use w/ position
-
-
-
 
     vec3f position;
 
@@ -73,31 +67,28 @@ typedef struct cvm_camera
 //    GLfloat pixel_to_fov_angle_ratio;
 //    GLfloat inverse_screen_dimensions[2];///x,y
 }
-cvm_camera;
+sol_camera;
 
-void change_camera_azimuthal_angle(float delta,cvm_camera * c);
-void change_camera_zenith_angle(float delta,cvm_camera * c);
-void change_camera_zoom(int delta,cvm_camera * c);
-
-
-void initialise_camera(int screen_w,int screen_h,float fov,float near,int zoom_steps,cvm_camera * c);
-
-void update_camera(int screen_w,int screen_h,cvm_camera * c);
+void change_camera_azimuthal_angle(float delta,sol_camera * c);
+void change_camera_zenith_angle(float delta,sol_camera * c);
+void change_camera_zoom(int delta,sol_camera * c);
 
 
-static inline mat44f * get_view_matrix_pointer(cvm_camera * c)
+void initialise_camera(int screen_w,int screen_h,float fov,float near,int zoom_steps,sol_camera * c);
+
+void update_camera(int screen_w,int screen_h,sol_camera * c);
+
+
+static inline mat44f * get_view_matrix_pointer(sol_camera * c)
 {
     return &c->view_matrix;
 }
-static inline mat44f * get_view_matrix_inverse_pointer(cvm_camera * c)
+static inline mat44f * get_view_matrix_inverse_pointer(sol_camera * c)
 {
     return &c->view_matrix_inverse;
 }
-mat44f get_view_matrix(cvm_camera * c);
-mat44f get_view_matrix_inverse(cvm_camera * c);
+mat44f get_view_matrix(sol_camera * c);
+mat44f get_view_matrix_inverse(sol_camera * c);
 
-bool test_in_camera_bounds(vec3f position,float radius,cvm_camera * c);
+bool test_in_camera_bounds(vec3f position,float radius,sol_camera * c);
 
-
-
-#endif
