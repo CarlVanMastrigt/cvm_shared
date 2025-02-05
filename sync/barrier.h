@@ -30,8 +30,8 @@ along with barrier.  If not, see <https://www.gnu.org/licenses/>.
 
 struct sol_barrier_pool
 {
-    sol_lockfree_pool barrier_pool;
-    sol_lockfree_pool successor_pool;
+    struct sol_lockfree_pool barrier_pool;
+    struct sol_lockfree_pool successor_pool;
 };
 
 void sol_barrier_pool_initialise(struct sol_barrier_pool* pool, size_t total_barrier_exponent, size_t total_successor_exponent);
@@ -46,7 +46,7 @@ struct sol_barrier
     atomic_uint_fast32_t condition_count;
     atomic_uint_fast32_t reference_count;
 
-    sol_lockfree_hopper successor_hopper;
+    struct sol_lockfree_hopper successor_hopper;
 };
 
 

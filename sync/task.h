@@ -32,10 +32,10 @@ along with solipsix.  If not, see <https://www.gnu.org/licenses/>.
 
 struct sol_task_system
 {
-    sol_lockfree_pool task_pool;
-    sol_coherent_queue_with_counter pending_tasks;
+    struct sol_lockfree_pool task_pool;
+    struct sol_coherent_queue_with_counter pending_tasks;
 
-    sol_lockfree_pool successor_pool;///pool for storing successors (linked list/hopper per task)
+    struct sol_lockfree_pool successor_pool;///pool for storing successors (linked list/hopper per task)
 
     thrd_t* worker_threads;/// make this system extensible (to a degree) should stalled threads want to be switched to a worker thread (can perhaps do this without relying on scheduler though)
     uint32_t worker_thread_count;
@@ -83,7 +83,7 @@ struct sol_task
     atomic_uint_fast32_t condition_count;
     atomic_uint_fast32_t reference_count;
 
-    sol_lockfree_hopper successor_hopper;
+    struct sol_lockfree_hopper successor_hopper;
 };
 
 

@@ -22,7 +22,7 @@ along with solipsix.  If not, see <https://www.gnu.org/licenses/>.
 #include "coherent_structures/lockfree_pool.h"
 #include "coherent_structures/lockfree_stack.h"
 
-void sol_lockfree_stack_initialise(sol_lockfree_stack * stack, sol_lockfree_pool * pool)
+void sol_lockfree_stack_initialise(struct sol_lockfree_stack* stack, struct sol_lockfree_pool* pool)
 {
     atomic_init(&stack->head,SOL_LOCKFREE_STACK_INVALID_ENTRY);
     stack->next_buffer = pool->available_entries.next_buffer;
@@ -31,13 +31,13 @@ void sol_lockfree_stack_initialise(sol_lockfree_stack * stack, sol_lockfree_pool
     stack->capacity_exponent = pool->available_entries.capacity_exponent;
 }
 
-void sol_lockfree_stack_terminate(sol_lockfree_stack * stack)
+void sol_lockfree_stack_terminate(struct sol_lockfree_stack* stack)
 {
     assert((atomic_load_explicit(&stack->head, memory_order_relaxed) & SOL_LOCKFREE_STACK_ENTRY_MASK) == SOL_LOCKFREE_STACK_INVALID_ENTRY);/// stack should be empty upon termination
 }
 
 
-void sol_lockfree_stack_push_index_range(sol_lockfree_stack * stack, uint32_t first_entry_index, uint32_t last_entry_index)
+void sol_lockfree_stack_push_index_range(struct sol_lockfree_stack* stack, uint32_t first_entry_index, uint32_t last_entry_index)
 {
     uint_fast64_t current_head, replacement_head;
 
@@ -53,12 +53,12 @@ void sol_lockfree_stack_push_index_range(sol_lockfree_stack * stack, uint32_t fi
     while(!atomic_compare_exchange_weak_explicit(&stack->head, &current_head, replacement_head, memory_order_release, memory_order_relaxed));
 }
 
-void sol_lockfree_stack_push_index(sol_lockfree_stack * stack, uint32_t entry_index)
+void sol_lockfree_stack_push_index(struct sol_lockfree_stack* stack, uint32_t entry_index)
 {
     sol_lockfree_stack_push_index_range(stack, entry_index, entry_index);
 }
 
-uint32_t sol_lockfree_stack_pull_index(sol_lockfree_stack * stack)
+uint32_t sol_lockfree_stack_pull_index(struct sol_lockfree_stack* stack)
 {
     uint_fast64_t entry_index,current_head,replacement_head;
 
@@ -85,7 +85,7 @@ uint32_t sol_lockfree_stack_pull_index(sol_lockfree_stack * stack)
 }
 
 
-void sol_lockfree_stack_push_range(sol_lockfree_stack* stack, void* first_entry, void* last_entry)
+void sol_lockfree_stack_push_range(struct sol_lockfree_stack* stack, void* first_entry, void* last_entry)
 {
     uint32_t first_entry_index, last_entry_index;
 
@@ -101,7 +101,7 @@ void sol_lockfree_stack_push_range(sol_lockfree_stack* stack, void* first_entry,
     sol_lockfree_stack_push_index_range(stack, first_entry_index, last_entry_index);
 }
 
-void sol_lockfree_stack_push(sol_lockfree_stack* stack, void * entry)
+void sol_lockfree_stack_push(struct sol_lockfree_stack* stack, void * entry)
 {
     uint32_t entry_index;
 
@@ -113,7 +113,7 @@ void sol_lockfree_stack_push(sol_lockfree_stack* stack, void * entry)
     sol_lockfree_stack_push_index_range(stack, entry_index, entry_index);
 }
 
-void * sol_lockfree_stack_pull(sol_lockfree_stack* stack)
+void * sol_lockfree_stack_pull(struct sol_lockfree_stack* stack)
 {
     uint32_t entry_index;
 

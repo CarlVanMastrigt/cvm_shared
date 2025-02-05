@@ -23,7 +23,7 @@ along with solipsix.  If not, see <https://www.gnu.org/licenses/>.
 #include "coherent_structures/coherent_queue.h"
 #include "coherent_structures/lockfree_pool.h"
 
-void sol_coherent_queue_initialise(sol_coherent_queue* queue,sol_lockfree_pool* pool)
+void sol_coherent_queue_initialise(struct sol_coherent_queue* queue, struct sol_lockfree_pool* pool)
 {
     queue->entry_data = pool->available_entries.entry_data;
     queue->entry_size = pool->available_entries.entry_size;
@@ -35,13 +35,13 @@ void sol_coherent_queue_initialise(sol_coherent_queue* queue,sol_lockfree_pool* 
     atomic_init(&queue->get_index,0);
 }
 
-void sol_coherent_queue_terminate(sol_coherent_queue* queue)
+void sol_coherent_queue_terminate(struct sol_coherent_queue* queue)
 {
     /// could/should check all atomics are equal
     free(queue->entry_indices);
 }
 
-void sol_coherent_queue_push(sol_coherent_queue* queue, void* entry)
+void sol_coherent_queue_push(struct sol_coherent_queue* queue, void* entry)
 {
     uint_fast64_t queue_index,expected_queue_index;
     uint32_t entry_index;
@@ -59,7 +59,7 @@ void sol_coherent_queue_push(sol_coherent_queue* queue, void* entry)
     while(!atomic_compare_exchange_weak_explicit(&queue->add_fence,&expected_queue_index,queue_index+1,memory_order_release,memory_order_relaxed));
 }
 
-void* sol_coherent_queue_pull(sol_coherent_queue* queue)
+void* sol_coherent_queue_pull(struct sol_coherent_queue* queue)
 {
     uint_fast64_t queue_index,current_fence_value;
     uint32_t entry_index;

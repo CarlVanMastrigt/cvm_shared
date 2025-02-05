@@ -24,14 +24,14 @@ along with solipsix.  If not, see <https://www.gnu.org/licenses/>.
 #include <stdatomic.h>
 #include <stdbool.h>
 
-typedef struct sol_lockfree_pool sol_lockfree_pool;
+struct sol_lockfree_pool;
 
 #define SOL_LOCKFREE_STACK_CHECK_MASK    ((uint_fast64_t)0xFFFFFFFFFF000000llu)
 #define SOL_LOCKFREE_STACK_ENTRY_MASK    ((uint_fast64_t)0x0000000000FFFFFFllu)
 #define SOL_LOCKFREE_STACK_INVALID_ENTRY ((uint_fast64_t)0x0000000000FFFFFFllu)
 #define SOL_LOCKFREE_STACK_CHECK_UNIT    ((uint_fast64_t)0x0000000001000000llu)
 
-typedef struct sol_lockfree_stack
+struct sol_lockfree_stack
 {
     _Alignas(128) atomic_uint_fast64_t head;
 
@@ -39,23 +39,22 @@ typedef struct sol_lockfree_stack
     size_t capacity_exponent;
     char* entry_data;
     uint32_t* next_buffer;
-}
-sol_lockfree_stack;
+};
 
 
 /// a stack uses a pool for backing
-void sol_lockfree_stack_initialise(sol_lockfree_stack* stack, sol_lockfree_pool* pool);
-void sol_lockfree_stack_terminate(sol_lockfree_stack* stack);
+void sol_lockfree_stack_initialise(struct sol_lockfree_stack* stack, struct sol_lockfree_pool* pool);
+void sol_lockfree_stack_terminate(struct sol_lockfree_stack* stack);
 
 
-void sol_lockfree_stack_push_index_range(sol_lockfree_stack* stack, uint32_t first_entry_index, uint32_t last_entry_index);
-void sol_lockfree_stack_push_index(sol_lockfree_stack* stack, uint32_t entry_index);
+void sol_lockfree_stack_push_index_range(struct sol_lockfree_stack* stack, uint32_t first_entry_index, uint32_t last_entry_index);
+void sol_lockfree_stack_push_index(struct sol_lockfree_stack* stack, uint32_t entry_index);
 
 // (uint32_t)CVM_LOCKFREE_STACK_ENTRY_MASK returned to indicate failure
-uint32_t sol_lockfree_stack_pull_index(sol_lockfree_stack* stack);
+uint32_t sol_lockfree_stack_pull_index(struct sol_lockfree_stack* stack);
 
-void sol_lockfree_stack_push_range(sol_lockfree_stack* stack, void* first_entry, void* last_entry);
-void sol_lockfree_stack_push(sol_lockfree_stack* stack, void * entry);
+void sol_lockfree_stack_push_range(struct sol_lockfree_stack* stack, void* first_entry, void* last_entry);
+void sol_lockfree_stack_push(struct sol_lockfree_stack* stack, void * entry);
 
 // NULL returned to indicate failure
-void* sol_lockfree_stack_pull(sol_lockfree_stack* stack);
+void* sol_lockfree_stack_pull(struct sol_lockfree_stack* stack);

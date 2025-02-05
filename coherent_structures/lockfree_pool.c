@@ -22,7 +22,7 @@ along with solipsix.  If not, see <https://www.gnu.org/licenses/>.
 
 #include "coherent_structures/lockfree_pool.h"
 
-void sol_lockfree_pool_initialise(sol_lockfree_pool * pool, size_t capacity_exponent, size_t entry_size)
+void sol_lockfree_pool_initialise(struct sol_lockfree_pool* pool, size_t capacity_exponent, size_t entry_size)
 {
     size_t i,count;
     assert(capacity_exponent<=24);///requested more capacity than currently possible (consider increasing range, requires altering defines in lockfree_stack header)
@@ -43,33 +43,33 @@ void sol_lockfree_pool_initialise(sol_lockfree_pool * pool, size_t capacity_expo
     pool->available_entries.next_buffer[count-1] = (uint32_t)SOL_LOCKFREE_STACK_INVALID_ENTRY;
 }
 
-void sol_lockfree_pool_terminate(sol_lockfree_pool * pool)
+void sol_lockfree_pool_terminate(struct sol_lockfree_pool* pool)
 {
     free(pool->available_entries.next_buffer);
     free(pool->available_entries.entry_data);
 }
 
-void * sol_lockfree_pool_acquire_entry(sol_lockfree_pool * pool)
+void * sol_lockfree_pool_acquire_entry(struct sol_lockfree_pool* pool)
 {
     return sol_lockfree_stack_pull(&pool->available_entries);
 }
 
-void sol_lockfree_pool_relinquish_entry(sol_lockfree_pool * pool, void * entry)
+void sol_lockfree_pool_relinquish_entry(struct sol_lockfree_pool* pool, void * entry)
 {
     sol_lockfree_stack_push(&pool->available_entries, entry);
 }
 
-void sol_lockfree_pool_relinquish_entry_index(sol_lockfree_pool* pool, uint32_t entry_index)
+void sol_lockfree_pool_relinquish_entry_index(struct sol_lockfree_pool* pool, uint32_t entry_index)
 {
     sol_lockfree_stack_push_index_range(&pool->available_entries, entry_index, entry_index);
 }
 
-void sol_lockfree_pool_relinquish_entry_index_range(sol_lockfree_pool* pool, uint32_t first_entry_index, uint32_t last_entry_index)
+void sol_lockfree_pool_relinquish_entry_index_range(struct sol_lockfree_pool* pool, uint32_t first_entry_index, uint32_t last_entry_index)
 {
     sol_lockfree_stack_push_index_range(&pool->available_entries, first_entry_index, last_entry_index);
 }
 
-void sol_lockfree_pool_call_for_every_entry(sol_lockfree_pool * pool,void (*func)(void* entry, void* data), void* data)
+void sol_lockfree_pool_call_for_every_entry(struct sol_lockfree_pool* pool, void(*func)(void* entry, void* data), void* data)
 {
     size_t i,count;
     count = (size_t)1 << pool->available_entries.capacity_exponent;

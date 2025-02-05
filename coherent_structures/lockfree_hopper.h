@@ -23,7 +23,7 @@ along with solipsix.  If not, see <https://www.gnu.org/licenses/>.
 #include <stdatomic.h>
 #include <stdbool.h>
 
-typedef struct sol_lockfree_pool sol_lockfree_pool;
+struct sol_lockfree_pool;
 
 /** lockfree_hopper
  * a hopper is a simplified stack that supports atomic addition, but then must be locked before its entries are accessed
@@ -34,21 +34,20 @@ typedef struct sol_lockfree_pool sol_lockfree_pool;
 
 /// as this structure is intended to be as lightweight as possible the backing pool must be provided whenever its required
 
-typedef struct sol_lockfree_hopper
+struct sol_lockfree_hopper
 {
     // this could probably be an atomic pointer
     atomic_uint_fast64_t head;
-}
-sol_lockfree_hopper;
+};
 
 /// a hopper uses a pool for backing
-void sol_lockfree_hopper_initialise(sol_lockfree_hopper* hopper, sol_lockfree_pool* pool);
-void sol_lockfree_hopper_terminate(sol_lockfree_hopper* hopper);
+void sol_lockfree_hopper_initialise(struct sol_lockfree_hopper* hopper, struct sol_lockfree_pool* pool);
+void sol_lockfree_hopper_terminate(struct sol_lockfree_hopper* hopper);
 
-void sol_lockfree_hopper_reset(sol_lockfree_hopper * hopper);
+void sol_lockfree_hopper_reset(struct sol_lockfree_hopper* hopper);
 
-bool sol_lockfree_hopper_push(sol_lockfree_hopper* hopper, sol_lockfree_pool* pool, void* entry);/// returns true if it was added, false if not (fails if hopper is locked)
-bool sol_lockfree_hopper_check_if_locked(sol_lockfree_hopper * hopper);
+bool sol_lockfree_hopper_push(struct sol_lockfree_hopper* hopper, struct sol_lockfree_pool* pool, void* entry);/// returns true if it was added, false if not (fails if hopper is locked)
+bool sol_lockfree_hopper_check_if_locked(struct sol_lockfree_hopper* hopper);
 
 
 /** hopper locking
@@ -60,9 +59,9 @@ bool sol_lockfree_hopper_check_if_locked(sol_lockfree_hopper * hopper);
 */
 
 // locking also gets the first elemnt, and begins the process of emptying the hopper (which must be done)
-void* sol_lockfree_hopper_lock(sol_lockfree_hopper* hopper, sol_lockfree_pool* pool, uint32_t* first_entry_index);
+void* sol_lockfree_hopper_lock(struct sol_lockfree_hopper* hopper, struct sol_lockfree_pool* pool, uint32_t* first_entry_index);
 
 //returns NULL when there are no further entries, WITHOUT altering entry_index (will only change entry index if the new one is valid)
-void* sol_lockfree_hopper_iterate(sol_lockfree_pool* pool, uint32_t* entry_index);
+void* sol_lockfree_hopper_iterate(struct sol_lockfree_pool* pool, uint32_t* entry_index);
 
-void sol_lockfree_hopper_relinquish_range(sol_lockfree_pool* pool, uint32_t first_entry_index, uint32_t last_entry_index);
+void sol_lockfree_hopper_relinquish_range(struct sol_lockfree_pool* pool, uint32_t first_entry_index, uint32_t last_entry_index);

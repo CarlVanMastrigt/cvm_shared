@@ -29,7 +29,7 @@ along with solipsix.  If not, see <https://www.gnu.org/licenses/>.
 #define SOL_COHERENT_QUEUE_COUNT_MASK ((uint_fast64_t)0xFFFFFFFE00000000)
 #define SOL_COHERENT_QUEUE_COUNT_UNIT ((uint_fast64_t)0x0000000200000000)
 
-void sol_coherent_queue_with_counter_initialise(sol_coherent_queue_with_counter* queue,sol_lockfree_pool* pool)
+void sol_coherent_queue_with_counter_initialise(struct sol_coherent_queue_with_counter* queue, struct sol_lockfree_pool* pool)
 {
     queue->entry_data = pool->available_entries.entry_data;
     queue->entry_size = pool->available_entries.entry_size;
@@ -41,13 +41,13 @@ void sol_coherent_queue_with_counter_initialise(sol_coherent_queue_with_counter*
     atomic_init(&queue->get_index,0);
 }
 
-void sol_coherent_queue_with_counter_terminate(sol_coherent_queue_with_counter* queue)
+void sol_coherent_queue_with_counter_terminate(struct sol_coherent_queue_with_counter* queue)
 {
     /// could/should check all atomics are equal (except fence which needs to have its comparisons masked by SOL_COHERENT_QUEUE_FENCE_MASK
     free(queue->entry_indices);
 }
 
-void sol_coherent_queue_with_counter_push(sol_coherent_queue_with_counter* queue, void* entry)
+void sol_coherent_queue_with_counter_push(struct sol_coherent_queue_with_counter* queue, void* entry)
 {
     uint_fast64_t queue_index, fence_value, replacement_fence_value, counter;
     uint32_t entry_index;
@@ -74,7 +74,7 @@ void sol_coherent_queue_with_counter_push(sol_coherent_queue_with_counter* queue
     }
 }
 
-void* sol_coherent_queue_with_counter_pull(sol_coherent_queue_with_counter* queue)
+void* sol_coherent_queue_with_counter_pull(struct sol_coherent_queue_with_counter* queue)
 {
     uint_fast64_t queue_index, fence_value;
     uint32_t entry_index;
@@ -95,7 +95,7 @@ void* sol_coherent_queue_with_counter_pull(sol_coherent_queue_with_counter* queu
     return queue->entry_data + entry_index*queue->entry_size;
 }
 
-bool sol_coherent_queue_with_counter_push_and_decrement(sol_coherent_queue_with_counter* queue, void* entry)
+bool sol_coherent_queue_with_counter_push_and_decrement(struct sol_coherent_queue_with_counter* queue, void* entry)
 {
     uint_fast64_t queue_index, fence_value, replacement_fence_value, counter;
     uint32_t entry_index;
@@ -130,7 +130,7 @@ bool sol_coherent_queue_with_counter_push_and_decrement(sol_coherent_queue_with_
     return nonzero_count;
 }
 
-void* sol_coherent_queue_with_counter_pull_or_increment(sol_coherent_queue_with_counter* queue)
+void* sol_coherent_queue_with_counter_pull_or_increment(struct sol_coherent_queue_with_counter* queue)
 {
     uint_fast64_t queue_index, fence_value, replacement_fence_value;
     uint32_t entry_index;

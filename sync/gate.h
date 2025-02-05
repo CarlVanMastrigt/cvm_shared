@@ -29,7 +29,7 @@ along with solipsix.  If not, see <https://www.gnu.org/licenses/>.
 
 struct sol_gate_pool
 {
-    sol_lockfree_pool available_gates;
+    struct sol_lockfree_pool available_gates;
 };
 
 void sol_gate_pool_initialise(struct sol_gate_pool* pool, size_t capacity_exponent);

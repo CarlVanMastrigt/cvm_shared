@@ -22,9 +22,9 @@ along with solipsix.  If not, see <https://www.gnu.org/licenses/>.
 #include <inttypes.h>
 #include <stdatomic.h>
 
-typedef struct sol_lockfree_pool sol_lockfree_pool;
+struct sol_lockfree_pool;
 
-typedef struct sol_coherent_queue
+struct sol_coherent_queue
 {
     /// faster under contention, slower when not contended
     _Alignas(128) atomic_uint_fast64_t add_index; /// will contain the stall count information
@@ -35,12 +35,11 @@ typedef struct sol_coherent_queue
     char* entry_data;/// data stored by queue, poijnter managed by the pool
     size_t entry_size;
     size_t capacity_exponent;
-}
-sol_coherent_queue;
+};
 
 
-void sol_coherent_queue_initialise(sol_coherent_queue* queue,sol_lockfree_pool* pool);
-void sol_coherent_queue_terminate(sol_coherent_queue* queue);
+void sol_coherent_queue_initialise(struct sol_coherent_queue* queue, struct sol_lockfree_pool* pool);
+void sol_coherent_queue_terminate(struct sol_coherent_queue* queue);
 
-void  sol_coherent_queue_push(sol_coherent_queue* queue, void* entry);
-void* sol_coherent_queue_pull(sol_coherent_queue* queue);///returns NULL on failure (b/c no elements remain)
+void  sol_coherent_queue_push(struct sol_coherent_queue* queue, void* entry);
+void* sol_coherent_queue_pull(struct sol_coherent_queue* queue);///returns NULL on failure (b/c no elements remain)

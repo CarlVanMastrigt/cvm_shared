@@ -23,9 +23,9 @@ along with solipsix.  If not, see <https://www.gnu.org/licenses/>.
 #include <stdatomic.h>
 #include <stdbool.h>
 
-typedef struct sol_lockfree_pool sol_lockfree_pool;
+struct sol_lockfree_pool;
 
-typedef struct sol_coherent_queue_with_counter
+struct sol_coherent_queue_with_counter
 {
     /// faster under contention, slower when not contended
     _Alignas(128) atomic_uint_fast64_t add_index;
@@ -36,16 +36,15 @@ typedef struct sol_coherent_queue_with_counter
     char* entry_data;/// data stored by queue, poijnter managed by the pool
     size_t entry_size;
     size_t capacity_exponent;
-}
-sol_coherent_queue_with_counter;
+};
 
-void sol_coherent_queue_with_counter_initialise(sol_coherent_queue_with_counter* queue,sol_lockfree_pool* pool);
-void sol_coherent_queue_with_counter_terminate(sol_coherent_queue_with_counter* queue);
+void sol_coherent_queue_with_counter_initialise(struct sol_coherent_queue_with_counter* queue, struct sol_lockfree_pool* pool);
+void sol_coherent_queue_with_counter_terminate(struct sol_coherent_queue_with_counter* queue);
 
 /// these have no effect on the fail counter
-void  sol_coherent_queue_with_counter_push(sol_coherent_queue_with_counter* queue, void* entry);
-void* sol_coherent_queue_with_counter_pull(sol_coherent_queue_with_counter* queue);///returns NULL on failure (b/c no elements remain)
+void  sol_coherent_queue_with_counter_push(struct sol_coherent_queue_with_counter* queue, void* entry);
+void* sol_coherent_queue_with_counter_pull(struct sol_coherent_queue_with_counter* queue);///returns NULL on failure (b/c no elements remain)
 
 /// these will attempt to add/get and increment/decrement a counter which tracks getters that have been stalled waiting on new elements
-bool  sol_coherent_queue_with_counter_push_and_decrement(sol_coherent_queue_with_counter* queue, void* entry);///returns true if counter was nonzero, also decrements in this case
-void* sol_coherent_queue_with_counter_pull_or_increment(sol_coherent_queue_with_counter* queue);///returns NULL if no elements remain and increments counter, otherwise returns acquired element
+bool  sol_coherent_queue_with_counter_push_and_decrement(struct sol_coherent_queue_with_counter* queue, void* entry);///returns true if counter was nonzero, also decrements in this case
+void* sol_coherent_queue_with_counter_pull_or_increment(struct sol_coherent_queue_with_counter* queue);///returns NULL if no elements remain and increments counter, otherwise returns acquired element
