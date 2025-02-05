@@ -17,18 +17,18 @@ You should have received a copy of the GNU Affero General Public License
 along with solipsix.  If not, see <https://www.gnu.org/licenses/>.
 */
 
+#include <stddef.h>
 #include <assert.h>
 
 #include "coherent_structures/lockfree_hopper.h"
-#include "coherent_structures/lockfree_pool.h"
 
 #define SOL_LOCKFREE_HOPPER_LOCK_BIT  ((uint_fast64_t)0x8000000000000000llu)
 
 void sol_lockfree_hopper_initialise(struct sol_lockfree_hopper* hopper, struct sol_lockfree_pool* pool)
 {
-    assert(pool->available_entries.capacity_exponent <= 16);///capacities over 2^16 not supported by lockfree hopper as is
     atomic_init(&hopper->head, SOL_LOCKFREE_HOPPER_LOCK_BIT);
 }
+
 void sol_lockfree_hopper_terminate(struct sol_lockfree_hopper* hopper)
 {
     assert(atomic_load_explicit(&hopper->head, memory_order_relaxed) == SOL_LOCKFREE_HOPPER_LOCK_BIT);/// hopper should be locked/invalid upon termination
@@ -38,7 +38,7 @@ void sol_lockfree_hopper_reset(struct sol_lockfree_hopper* hopper)
 {
     uint_fast64_t prev_value;
 
-    prev_value = atomic_exchange_explicit(&hopper->head, SOL_LOCKFREE_STACK_INVALID_ENTRY, memory_order_relaxed);
+    prev_value = atomic_exchange_explicit(&hopper->head, SOL_LOCKFREE_POOL_INVALID_ENTRY, memory_order_relaxed);
 
     assert(prev_value == SOL_LOCKFREE_HOPPER_LOCK_BIT);/// hopper should be locked/invalid upon reset
 }
@@ -46,15 +46,14 @@ void sol_lockfree_hopper_reset(struct sol_lockfree_hopper* hopper)
 bool sol_lockfree_hopper_push(struct sol_lockfree_hopper* hopper, struct sol_lockfree_pool* pool, void* entry)
 {
     uint_fast64_t current_head, replacement_head;
-    ptrdiff_t entry_index;
+    uint32_t entry_index;
 
-    assert((char*)entry >= pool->available_entries.entry_data);
+    assert((char*)entry >= pool->entry_data);
+    assert((char*)entry < pool->entry_data + (pool->entry_size << pool->capacity_exponent));
 
-    entry_index = (ptrdiff_t)((char*)entry - pool->available_entries.entry_data) / pool->available_entries.entry_size;
+    entry_index = (uint32_t) (((char*)entry - pool->entry_data) / pool->entry_size);
 
-    assert(entry_index < ((uint_fast64_t)1 << pool->available_entries.capacity_exponent));
-
-    current_head=atomic_load_explicit(&hopper->head, memory_order_relaxed);
+    current_head = atomic_load_explicit(&hopper->head, memory_order_relaxed);
     do
     {
         if(current_head & SOL_LOCKFREE_HOPPER_LOCK_BIT)
@@ -63,9 +62,10 @@ bool sol_lockfree_hopper_push(struct sol_lockfree_hopper* hopper, struct sol_loc
             return false;
         }
 
-        assert((current_head & SOL_LOCKFREE_STACK_ENTRY_MASK) == current_head);
+        assert(current_head < (1 << pool->capacity_exponent) || current_head == SOL_LOCKFREE_POOL_INVALID_ENTRY);
 
-        pool->available_entries.next_buffer[entry_index] = (uint32_t)current_head;
+        pool->next_buffer[entry_index] = (uint32_t)current_head;
+
         replacement_head = entry_index;
     }
     while(!atomic_compare_exchange_weak_explicit(&hopper->head, &current_head, replacement_head, memory_order_release, memory_order_relaxed));
@@ -89,45 +89,45 @@ void * sol_lockfree_hopper_lock(struct sol_lockfree_hopper* hopper, struct sol_l
     }
     while(!atomic_compare_exchange_weak_explicit(&hopper->head, &entry_index, SOL_LOCKFREE_HOPPER_LOCK_BIT, memory_order_acquire, memory_order_relaxed));
 
-    assert((entry_index & SOL_LOCKFREE_STACK_ENTRY_MASK) == entry_index);
+    assert((entry_index & SOL_LOCKFREE_POOL_ENTRY_MASK) == entry_index);
 
     // need to know if the entry is invalid
     *first_entry_index = entry_index;
 
     /// if there are no entries in this hopper at all then return NULL
-    if(entry_index == SOL_LOCKFREE_STACK_INVALID_ENTRY)
+    if(entry_index == SOL_LOCKFREE_POOL_INVALID_ENTRY)
     {
         return NULL;
     }
 
-    assert(entry_index < ((uint_fast64_t)1 << pool->available_entries.capacity_exponent));
+    assert(entry_index < ((uint_fast64_t)1 << pool->capacity_exponent));
 
-    return pool->available_entries.entry_data + entry_index * pool->available_entries.entry_size;
+    return pool->entry_data + entry_index * pool->entry_size;
 }
 
 void* sol_lockfree_hopper_iterate(struct sol_lockfree_pool* pool, uint32_t* entry_index)
 {
     uint32_t next_entry_index;
 
-    next_entry_index = pool->available_entries.next_buffer[*entry_index];
+    next_entry_index = pool->next_buffer[*entry_index];
 
-    if(next_entry_index == SOL_LOCKFREE_STACK_INVALID_ENTRY)
+    if(next_entry_index == SOL_LOCKFREE_POOL_INVALID_ENTRY)
     {
         return NULL;
     }
     else
     {
         *entry_index = next_entry_index;
-        return pool->available_entries.entry_data + next_entry_index * pool->available_entries.entry_size;
+        return pool->entry_data + next_entry_index * pool->entry_size;
     }
 }
 
 void sol_lockfree_hopper_relinquish_range(struct sol_lockfree_pool* pool, uint32_t first_entry_index, uint32_t last_entry_index)
 {
     // could have been given an empty range by a hopper
-    if(first_entry_index == SOL_LOCKFREE_STACK_INVALID_ENTRY)
+    if(first_entry_index == SOL_LOCKFREE_POOL_INVALID_ENTRY)
     {
-        assert(last_entry_index == SOL_LOCKFREE_STACK_INVALID_ENTRY);
+        assert(last_entry_index == SOL_LOCKFREE_POOL_INVALID_ENTRY);
     }
     else
     {

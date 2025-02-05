@@ -27,8 +27,8 @@ along with solipsix.  If not, see <https://www.gnu.org/licenses/>.
 // typedef struct sol_lockfree_pool sol_lockfree_pool;
 // // struct sol_lockfree_pool;
 
-// #include "coherent_structures/lockfree_stack.h"
-// #include "coherent_structures/lockfree_pool.h"
-// #include "coherent_structures/lockfree_hopper.h"
-// #include "coherent_structures/coherent_queue.h"
-// #include "coherent_structures/coherent_queue_with_counter.h"
+#include "coherent_structures/lockfree_pool.h"
+#include "coherent_structures/lockfree_stack.h"
+#include "coherent_structures/lockfree_hopper.h"
+#include "coherent_structures/coherent_queue.h"
+#include "coherent_structures/coherent_queue_with_counter.h"

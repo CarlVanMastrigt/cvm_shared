@@ -19,16 +19,20 @@ along with solipsix.  If not, see <https://www.gnu.org/licenses/>.
 
 #include <assert.h>
 
-#include "coherent_structures/lockfree_pool.h"
 #include "coherent_structures/lockfree_stack.h"
+
+#define SOL_LOCKFREE_STACK_CHECK_MASK    ((uint_fast64_t)0xFFFFFFFFFF000000llu)
+#define SOL_LOCKFREE_STACK_ENTRY_MASK    ((uint_fast64_t)0x0000000000FFFFFFllu)
+#define SOL_LOCKFREE_STACK_INVALID_ENTRY ((uint_fast64_t)0x0000000000FFFFFFllu)
+#define SOL_LOCKFREE_STACK_CHECK_UNIT    ((uint_fast64_t)0x0000000001000000llu)
 
 void sol_lockfree_stack_initialise(struct sol_lockfree_stack* stack, struct sol_lockfree_pool* pool)
 {
     atomic_init(&stack->head,SOL_LOCKFREE_STACK_INVALID_ENTRY);
-    stack->next_buffer = pool->available_entries.next_buffer;
-    stack->entry_data = pool->available_entries.entry_data;
-    stack->entry_size = pool->available_entries.entry_size;
-    stack->capacity_exponent = pool->available_entries.capacity_exponent;
+    stack->next_buffer = pool->next_buffer;
+    stack->entry_data = pool->entry_data;
+    stack->entry_size = pool->entry_size;
+    stack->capacity_exponent = pool->capacity_exponent;
 }
 
 void sol_lockfree_stack_terminate(struct sol_lockfree_stack* stack)
@@ -101,7 +105,7 @@ void sol_lockfree_stack_push_range(struct sol_lockfree_stack* stack, void* first
     sol_lockfree_stack_push_index_range(stack, first_entry_index, last_entry_index);
 }
 
-void sol_lockfree_stack_push(struct sol_lockfree_stack* stack, void * entry)
+void sol_lockfree_stack_push(struct sol_lockfree_stack* stack, void* entry)
 {
     uint32_t entry_index;
 

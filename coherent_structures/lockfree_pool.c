@@ -25,58 +25,98 @@ along with solipsix.  If not, see <https://www.gnu.org/licenses/>.
 void sol_lockfree_pool_initialise(struct sol_lockfree_pool* pool, size_t capacity_exponent, size_t entry_size)
 {
     size_t i,count;
-    assert(capacity_exponent<=24);///requested more capacity than currently possible (consider increasing range, requires altering defines in lockfree_stack header)
+    assert(capacity_exponent<=24);///requested more capacity than currently possible (consider increasing range, see defines above)
 
-    /// the available entries will store the actual pointers rather than duplicates (like other stacks created from this pool)
-    atomic_init(&pool->available_entries.head,0);
-    pool->available_entries.next_buffer = malloc(sizeof(uint32_t)<<capacity_exponent);
-    pool->available_entries.entry_data = malloc(entry_size<<capacity_exponent);
-    pool->available_entries.entry_size = entry_size;
-    pool->available_entries.capacity_exponent = capacity_exponent;
+    /// the available entries will store the actual pointers rather than duplicates (like other pools created from this pool)
+    atomic_init(&pool->head,0);
+    pool->next_buffer = malloc(sizeof(uint32_t)<<capacity_exponent);
+    pool->entry_data = malloc(entry_size<<capacity_exponent);
+    pool->entry_size = entry_size;
+    pool->capacity_exponent = capacity_exponent;
 
     count=(size_t)1<<capacity_exponent;
 
     for(i=0; i<count-1; i++)
     {
-        pool->available_entries.next_buffer[i] = (uint32_t)(i + 1);
+        pool->next_buffer[i] = (uint32_t)(i + 1);
     }
-    pool->available_entries.next_buffer[count-1] = (uint32_t)SOL_LOCKFREE_STACK_INVALID_ENTRY;
+    pool->next_buffer[count-1] = (uint32_t)SOL_LOCKFREE_POOL_INVALID_ENTRY;
 }
 
 void sol_lockfree_pool_terminate(struct sol_lockfree_pool* pool)
 {
-    free(pool->available_entries.next_buffer);
-    free(pool->available_entries.entry_data);
+    free(pool->next_buffer);
+    free(pool->entry_data);
 }
 
 void * sol_lockfree_pool_acquire_entry(struct sol_lockfree_pool* pool)
 {
-    return sol_lockfree_stack_pull(&pool->available_entries);
+    uint_fast64_t current_head,replacement_head;
+    uint32_t entry_index;
+
+    current_head=atomic_load_explicit(&pool->head, memory_order_acquire);
+    do
+    {
+        entry_index = current_head & SOL_LOCKFREE_POOL_ENTRY_MASK;
+        /// if there are no more entries in this list then return NULL
+        if(entry_index == SOL_LOCKFREE_POOL_INVALID_ENTRY)
+        {
+            return NULL;
+        }
+
+        replacement_head = ((current_head & SOL_LOCKFREE_POOL_CHECK_MASK) + SOL_LOCKFREE_POOL_CHECK_UNIT) | (uint_fast64_t)(pool->next_buffer[entry_index]);
+    }
+    while(!atomic_compare_exchange_weak_explicit(&pool->head, &current_head, replacement_head, memory_order_acquire, memory_order_acquire));
+    /// success memory order could (conceptually) be relaxed here as we don't need to release/acquire any changes when that happens as nothing outside the atomic has changed
+    /// but fail must acquire as the "next" member of "first" element may have changed
+
+    assert(entry_index < ((uint_fast64_t)1 << pool->capacity_exponent));
+    assert(entry_index <= UINT32_MAX);
+
+    return pool->entry_data + entry_index * pool->entry_size;
 }
 
 void sol_lockfree_pool_relinquish_entry(struct sol_lockfree_pool* pool, void * entry)
 {
-    sol_lockfree_stack_push(&pool->available_entries, entry);
+    uint32_t entry_index;
+
+    assert((char*)entry >= pool->entry_data);
+    assert((char*)entry < pool->entry_data + (pool->entry_size << pool->capacity_exponent));
+
+    entry_index = (uint32_t) (((char*)entry - pool->entry_data) / pool->entry_size);
+
+    sol_lockfree_pool_relinquish_entry_index_range(pool, entry_index, entry_index);
 }
 
 void sol_lockfree_pool_relinquish_entry_index(struct sol_lockfree_pool* pool, uint32_t entry_index)
 {
-    sol_lockfree_stack_push_index_range(&pool->available_entries, entry_index, entry_index);
+    sol_lockfree_pool_relinquish_entry_index_range(pool, entry_index, entry_index);
 }
 
 void sol_lockfree_pool_relinquish_entry_index_range(struct sol_lockfree_pool* pool, uint32_t first_entry_index, uint32_t last_entry_index)
 {
-    sol_lockfree_stack_push_index_range(&pool->available_entries, first_entry_index, last_entry_index);
+    uint_fast64_t current_head, replacement_head;
+
+    assert(first_entry_index < ((uint_fast64_t)1 << pool->capacity_exponent));
+    assert(last_entry_index  < ((uint_fast64_t)1 << pool->capacity_exponent));
+
+    current_head = atomic_load_explicit(&pool->head, memory_order_relaxed);
+    do
+    {
+        pool->next_buffer[last_entry_index] = (uint32_t)(current_head & SOL_LOCKFREE_POOL_ENTRY_MASK);
+        replacement_head = ((current_head & SOL_LOCKFREE_POOL_CHECK_MASK) + SOL_LOCKFREE_POOL_CHECK_UNIT) | first_entry_index;
+    }
+    while(!atomic_compare_exchange_weak_explicit(&pool->head, &current_head, replacement_head, memory_order_release, memory_order_relaxed));
 }
 
 void sol_lockfree_pool_call_for_every_entry(struct sol_lockfree_pool* pool, void(*func)(void* entry, void* data), void* data)
 {
     size_t i,count;
-    count = (size_t)1 << pool->available_entries.capacity_exponent;
+    count = (size_t)1 << pool->capacity_exponent;
 
     for(i=0;i<count;i++)
     {
-        func(pool->available_entries.entry_data + i*pool->available_entries.entry_size, data);
+        func(pool->entry_data + i * pool->entry_size, data);
     }
 }
 

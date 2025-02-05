@@ -21,7 +21,6 @@ along with solipsix.  If not, see <https://www.gnu.org/licenses/>.
 #include <assert.h>
 
 #include "coherent_structures/coherent_queue_with_counter.h"
-#include "coherent_structures/lockfree_pool.h"
 
 
 /// these can support up to u32 sized queue and up to 2^31-1 fails tracked (need one more bit than count represents to handle wrapping properly)
@@ -31,11 +30,11 @@ along with solipsix.  If not, see <https://www.gnu.org/licenses/>.
 
 void sol_coherent_queue_with_counter_initialise(struct sol_coherent_queue_with_counter* queue, struct sol_lockfree_pool* pool)
 {
-    queue->entry_data = pool->available_entries.entry_data;
-    queue->entry_size = pool->available_entries.entry_size;
-    queue->capacity_exponent = pool->available_entries.capacity_exponent;
-    queue->entry_indices = malloc(sizeof(uint32_t) << pool->available_entries.capacity_exponent);
-    queue->entry_mask = ((uint_fast64_t)1 << pool->available_entries.capacity_exponent)-1;
+    queue->entry_data = pool->entry_data;
+    queue->entry_size = pool->entry_size;
+    queue->capacity_exponent = pool->capacity_exponent;
+    queue->entry_indices = malloc(sizeof(uint32_t) << pool->capacity_exponent);
+    queue->entry_mask = ((uint_fast64_t)1 << pool->capacity_exponent)-1;
     atomic_init(&queue->add_index,0);
     atomic_init(&queue->add_fence,0);
     atomic_init(&queue->get_index,0);
@@ -55,7 +54,7 @@ void sol_coherent_queue_with_counter_push(struct sol_coherent_queue_with_counter
     assert((char*)entry >= queue->entry_data);
     assert((char*)entry < queue->entry_data + (queue->entry_size << queue->capacity_exponent));
 
-    entry_index = (uint32_t) (((char*)entry - queue->entry_data) / (ptrdiff_t)queue->entry_size);
+    entry_index = (uint32_t) (((char*)entry - queue->entry_data) / queue->entry_size);
 
     queue_index = atomic_fetch_add_explicit(&queue->add_index, 1, memory_order_relaxed);
 
@@ -106,7 +105,7 @@ bool sol_coherent_queue_with_counter_push_and_decrement(struct sol_coherent_queu
     assert((char*)entry >= queue->entry_data);
     assert((char*)entry < queue->entry_data + (queue->entry_size << queue->capacity_exponent));
 
-    entry_index = (uint32_t) (((char*)entry - queue->entry_data) / (ptrdiff_t)queue->entry_size);
+    entry_index = (uint32_t) (((char*)entry - queue->entry_data) / queue->entry_size);
 
     queue_index = atomic_fetch_add_explicit(&queue->add_index, 1, memory_order_relaxed);
 

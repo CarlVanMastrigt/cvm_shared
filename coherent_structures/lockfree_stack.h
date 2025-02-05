@@ -24,12 +24,7 @@ along with solipsix.  If not, see <https://www.gnu.org/licenses/>.
 #include <stdatomic.h>
 #include <stdbool.h>
 
-struct sol_lockfree_pool;
-
-#define SOL_LOCKFREE_STACK_CHECK_MASK    ((uint_fast64_t)0xFFFFFFFFFF000000llu)
-#define SOL_LOCKFREE_STACK_ENTRY_MASK    ((uint_fast64_t)0x0000000000FFFFFFllu)
-#define SOL_LOCKFREE_STACK_INVALID_ENTRY ((uint_fast64_t)0x0000000000FFFFFFllu)
-#define SOL_LOCKFREE_STACK_CHECK_UNIT    ((uint_fast64_t)0x0000000001000000llu)
+#include "coherent_structures/lockfree_pool.h"
 
 struct sol_lockfree_stack
 {
@@ -54,7 +49,7 @@ void sol_lockfree_stack_push_index(struct sol_lockfree_stack* stack, uint32_t en
 uint32_t sol_lockfree_stack_pull_index(struct sol_lockfree_stack* stack);
 
 void sol_lockfree_stack_push_range(struct sol_lockfree_stack* stack, void* first_entry, void* last_entry);
-void sol_lockfree_stack_push(struct sol_lockfree_stack* stack, void * entry);
+void sol_lockfree_stack_push(struct sol_lockfree_stack* stack, void* entry);
 
 // NULL returned to indicate failure
 void* sol_lockfree_stack_pull(struct sol_lockfree_stack* stack);

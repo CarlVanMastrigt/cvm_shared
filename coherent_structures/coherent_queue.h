@@ -22,7 +22,7 @@ along with solipsix.  If not, see <https://www.gnu.org/licenses/>.
 #include <inttypes.h>
 #include <stdatomic.h>
 
-struct sol_lockfree_pool;
+#include "coherent_structures/lockfree_pool.h"
 
 struct sol_coherent_queue
 {

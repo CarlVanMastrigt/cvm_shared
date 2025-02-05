@@ -21,18 +21,28 @@ along with solipsix.  If not, see <https://www.gnu.org/licenses/>.
 
 #include <inttypes.h>
 #include <stdatomic.h>
-
-#include "coherent_structures/lockfree_stack.h"
+#include <assert.h>
 
 /** lockfree_pool
  * a pool is just a stack that has it's own internal backing and starts full
  * it's used for the memory backing of other types (stacks, queues and hoppers)
  * the interplay of pool and stack can be a little complicated to understand, but they are very powerful together*/
 
+// same as stack
+#define SOL_LOCKFREE_POOL_CHECK_MASK    ((uint_fast64_t)0xFFFFFFFFFF000000llu)
+#define SOL_LOCKFREE_POOL_ENTRY_MASK    ((uint_fast64_t)0x0000000000FFFFFFllu)
+#define SOL_LOCKFREE_POOL_INVALID_ENTRY ((uint_fast64_t)0x0000000000FFFFFFllu)
+#define SOL_LOCKFREE_POOL_CHECK_UNIT    ((uint_fast64_t)0x0000000001000000llu)
+
 /// declared in another struct for type protection
 struct sol_lockfree_pool
 {
-    struct sol_lockfree_stack available_entries;
+    _Alignas(128) atomic_uint_fast64_t head;
+
+    size_t entry_size;
+    size_t capacity_exponent;
+    char* entry_data;
+    uint32_t* next_buffer;
 };
 
 void sol_lockfree_pool_initialise(struct sol_lockfree_pool* pool, size_t capacity_exponent, size_t entry_size);
