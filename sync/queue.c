@@ -29,7 +29,7 @@ void sol_sync_queue_initialise(struct sol_sync_queue* queue)
 
 void sol_sync_queue_terminate(struct sol_sync_queue* queue)
 {
-    union sol_sync_primitive* end_primitive;
+    struct sol_sync_primitive* end_primitive;
 
     end_primitive = atomic_exchange_explicit(&queue->end_primitive, NULL, memory_order_relaxed);
 
@@ -39,9 +39,9 @@ void sol_sync_queue_terminate(struct sol_sync_queue* queue)
     }
 }
 
-void sol_sync_queue_enqueue_primitive_range(struct sol_sync_queue* queue, union sol_sync_primitive* first_primitive, union sol_sync_primitive* last_primitive)
+void sol_sync_queue_enqueue_primitive_range(struct sol_sync_queue* queue, struct sol_sync_primitive* first_primitive, struct sol_sync_primitive* last_primitive)
 {
-    union sol_sync_primitive* old_end_primitive;
+    struct sol_sync_primitive* old_end_primitive;
 
     sol_sync_primitive_retain_reference(last_primitive);/// move this to dedicated (static inline) function?
 
@@ -54,7 +54,7 @@ void sol_sync_queue_enqueue_primitive_range(struct sol_sync_queue* queue, union 
     }
 }
 
-void sol_sync_queue_enqueue_primitive(struct sol_sync_queue* queue, union sol_sync_primitive* primitive)
+void sol_sync_queue_enqueue_primitive(struct sol_sync_queue* queue, struct sol_sync_primitive* primitive)
 {
     sol_sync_queue_enqueue_primitive_range(queue, primitive, primitive);
 }

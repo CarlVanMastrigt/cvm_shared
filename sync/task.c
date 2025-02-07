@@ -20,7 +20,6 @@ along with solipsix.  If not, see <https://www.gnu.org/licenses/>.
 #include <stdlib.h>
 #include <assert.h>
 
-#include "sol_sync.h"
 #include "sync/task.h"
 
 static inline struct sol_task* sol_task_worker_thread_get_task(struct sol_task_system* task_system)
@@ -87,7 +86,7 @@ static int sol_task_worker_thread_function(void* in)
 {
     struct sol_task_system* task_system = in;
     struct sol_task* task;
-    union sol_sync_primitive** successor_ptr;
+    struct sol_sync_primitive** successor_ptr;
     uint32_t first_successor_index, successor_index;
 
     while((task = sol_task_worker_thread_get_task(task_system)))
@@ -113,65 +112,34 @@ static int sol_task_worker_thread_function(void* in)
     return 0;
 }
 
-static void sol_task_impose_condition(union sol_sync_primitive* primitive)
+static void sol_task_impose_condition_polymorphic(struct sol_sync_primitive* primitive)
 {
-    sol_task_impose_conditions(&primitive->task, 1);
+    sol_task_impose_conditions((struct sol_task*)primitive, 1);
 }
-static void sol_task_signal_condition(union sol_sync_primitive* primitive)
+static void sol_task_signal_condition_polymorphic(struct sol_sync_primitive* primitive)
 {
-    sol_task_signal_conditions(&primitive->task, 1);
+    sol_task_signal_conditions((struct sol_task*)primitive, 1);
 }
-static void sol_task_attach_successor(union sol_sync_primitive* primitive, union sol_sync_primitive* successor)
+static void sol_task_attach_successor_polymorphic(struct sol_sync_primitive* primitive, struct sol_sync_primitive* successor)
 {
-    struct sol_task* task;
-    struct sol_lockfree_pool* successor_pool;
-    union sol_sync_primitive** successor_ptr;
-
-    task = &primitive->task;
-
-    assert(atomic_load_explicit(&task->reference_count, memory_order_relaxed));
-    /// task must be retained to set up successors (can technically be satisfied illegally, using queue for re-use will make detection better but not infallible)
-
-    if(sol_lockfree_hopper_check_if_closed(&task->successor_hopper))
-    {
-        /// if hopper already locked then task has been completed, can signal
-        sol_sync_primitive_signal_condition(successor);
-    }
-    else
-    {
-        successor_pool = &task->task_system->successor_pool;
-
-        successor_ptr = sol_lockfree_pool_acquire_entry(successor_pool);
-        assert(successor_ptr);///ran out of successors
-
-        *successor_ptr = successor;
-
-        if(!sol_lockfree_hopper_push(&task->successor_hopper, successor_pool, successor_ptr))
-        {
-            // potential to run out of successors if thread stalls here, shouldn't be a problem unless system is under stress
-            //  ^ (max_worker_threads * max_successors) should be sufficient overhead
-            /// if we failed to add the successor then the task has already been completed, relinquish the storage and signal the successor
-            sol_lockfree_pool_relinquish_entry(successor_pool, successor_ptr);
-            sol_sync_primitive_signal_condition(successor);
-        }
-    }
+    sol_task_attach_successor((struct sol_task*)primitive, successor);
 }
-static void sol_task_retain_reference(union sol_sync_primitive* primitive)
+static void sol_task_retain_reference_polymorphic(struct sol_sync_primitive* primitive)
 {
-    sol_task_retain_references(&primitive->task, 1);
+    sol_task_retain_references((struct sol_task*)primitive, 1);
 }
-static void sol_task_release_reference(union sol_sync_primitive* primitive)
+static void sol_task_release_reference_polymorphic(struct sol_sync_primitive* primitive)
 {
-    sol_task_release_references(&primitive->task, 1);
+    sol_task_release_references((struct sol_task*)primitive, 1);
 }
 
 const static struct sol_sync_primitive_functions task_sync_functions =
 {
-    .impose_condition  = &sol_task_impose_condition,
-    .signal_condition  = &sol_task_signal_condition,
-    .attach_successor  = &sol_task_attach_successor,
-    .retain_reference  = &sol_task_retain_reference,
-    .release_reference = &sol_task_release_reference,
+    .impose_condition  = &sol_task_impose_condition_polymorphic,
+    .signal_condition  = &sol_task_signal_condition_polymorphic,
+    .attach_successor  = &sol_task_attach_successor_polymorphic,
+    .retain_reference  = &sol_task_retain_reference_polymorphic,
+    .release_reference = &sol_task_release_reference_polymorphic,
 };
 
 static void sol_task_initialise(void* entry, void* data)
@@ -179,7 +147,7 @@ static void sol_task_initialise(void* entry, void* data)
     struct sol_task* task = entry;
     struct sol_task_system* task_system = data;
 
-    task->sync_functions = &task_sync_functions;
+    task->primitive.sync_functions = &task_sync_functions;
     task->task_system = task_system;
 
     sol_lockfree_hopper_initialise(&task->successor_hopper,&task_system->successor_pool);
@@ -193,7 +161,7 @@ void sol_task_system_initialise(struct sol_task_system* task_system, uint32_t wo
     uint32_t i;
 
     sol_lockfree_pool_initialise(&task_system->task_pool, total_task_exponent, sizeof(struct sol_task));
-    sol_lockfree_pool_initialise(&task_system->successor_pool, total_successor_exponent, sizeof(union sol_sync_primitive**));
+    sol_lockfree_pool_initialise(&task_system->successor_pool, total_successor_exponent, sizeof(struct sol_sync_primitive**));
 
     sol_lockfree_pool_call_for_every_entry(&task_system->task_pool, &sol_task_initialise, task_system);
 
@@ -263,6 +231,34 @@ void sol_task_system_terminate(struct sol_task_system* task_system)
 
 
 
+struct sol_task* sol_task_prepare(struct sol_task_system* task_system, void(*task_function)(void*), void * data)
+{
+    struct sol_task* task;
+
+    task = sol_lockfree_pool_acquire_entry(&task_system->task_pool);
+    assert(task);//not enough tasks allocated
+
+    task->task_function=task_function;
+    task->task_function_data=data;
+
+    sol_lockfree_hopper_reset(&task->successor_hopper);
+
+    /// need to wait on "enqueue" op before beginning, ergo need one extra dependency for that (enqueue is really just a signal)
+    atomic_store_explicit(&task->condition_count, 1, memory_order_relaxed);
+    /// need to retain a reference until the successors are actually signalled, ergo one extra reference that will be released after completing the task
+    atomic_store_explicit(&task->reference_count, 1, memory_order_relaxed);
+
+    return task;
+}
+
+void sol_task_activate(struct sol_task* task)
+{
+    /// this is basically just called differently to account for the "hidden" wait counter added on task creation
+    sol_task_signal_conditions(task, 1);
+}
+
+
+
 
 void sol_task_impose_conditions(struct sol_task* task, uint_fast32_t count)
 {
@@ -324,31 +320,41 @@ void sol_task_release_references(struct sol_task * task, uint_fast32_t count)
     }
 }
 
-struct sol_task* sol_task_prepare(struct sol_task_system* task_system, void(*task_function)(void*), void * data)
+void sol_task_attach_successor(struct sol_task* task, struct sol_sync_primitive* successor)
 {
-    struct sol_task* task;
+    struct sol_lockfree_pool* successor_pool;
+    struct sol_sync_primitive** successor_ptr;
 
-    task = sol_lockfree_pool_acquire_entry(&task_system->task_pool);
-    assert(task);//not enough tasks allocated
+    sol_sync_primitive_impose_condition(successor);
 
-    task->task_function=task_function;
-    task->task_function_data=data;
+    assert(atomic_load_explicit(&task->reference_count, memory_order_relaxed));
+    /// task must be retained to set up successors (can technically be satisfied illegally, using queue for re-use will make detection better but not infallible)
 
-    sol_lockfree_hopper_reset(&task->successor_hopper);
+    if(sol_lockfree_hopper_check_if_closed(&task->successor_hopper))
+    {
+        /// if hopper already locked then task has been completed, can signal
+        sol_sync_primitive_signal_condition(successor);
+    }
+    else
+    {
+        successor_pool = &task->task_system->successor_pool;
 
-    /// need to wait on "enqueue" op before beginning, ergo need one extra dependency for that (enqueue is really just a signal)
-    atomic_store_explicit(&task->condition_count, 1, memory_order_relaxed);
-    /// need to retain a reference until the successors are actually signalled, ergo one extra reference that will be released after completing the task
-    atomic_store_explicit(&task->reference_count, 1, memory_order_relaxed);
+        successor_ptr = sol_lockfree_pool_acquire_entry(successor_pool);
+        assert(successor_ptr);///ran out of successors
 
-    return task;
+        *successor_ptr = successor;
+
+        if(!sol_lockfree_hopper_push(&task->successor_hopper, successor_pool, successor_ptr))
+        {
+            // potential to run out of successors if thread stalls here, shouldn't be a problem unless system is under stress
+            //  ^ (max_worker_threads * max_successors) should be sufficient overhead
+            /// if we failed to add the successor then the task has already been completed, relinquish the storage and signal the successor
+            sol_lockfree_pool_relinquish_entry(successor_pool, successor_ptr);
+            sol_sync_primitive_signal_condition(successor);
+        }
+    }
 }
 
-void sol_task_activate(struct sol_task* task)
-{
-    /// this is basically just called differently to account for the "hidden" wait counter added on task creation
-    sol_task_signal_conditions(task, 1);
-}
 
 
 

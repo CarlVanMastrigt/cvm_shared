@@ -17,44 +17,44 @@ You should have received a copy of the GNU Affero General Public License
 along with solipsix.  If not, see <https://www.gnu.org/licenses/>.
 */
 
-#include "sol_sync.h"
-#include "sync/gate.h"
+#include <stdbool.h>
 #include <assert.h>
+
+#include "sync/gate.h"
 
 #define SOL_GATE_WAITING_FLAG   ((uint_fast32_t)0x80000000)
 #define SOL_GATE_SIGNAL_STATUS  ((uint_fast32_t)0x80000001) /**would be last condition to signal AND thread is waiting*/
 #define SOL_GATE_CONDITION_MASK ((uint_fast32_t)0x7FFFFFFF)
 
 
-static void sol_gate_impose_condition(union sol_sync_primitive* primitive)
+static void sol_gate_impose_condition_polymorphic(struct sol_sync_primitive* primitive)
 {
-    sol_gate_impose_conditions(&primitive->gate, 1);
+    sol_gate_impose_conditions((struct sol_gate*)primitive, 1);
 }
-static void sol_gate_signal_condition(union sol_sync_primitive* primitive)
+static void sol_gate_signal_condition_polymorphic(struct sol_sync_primitive* primitive)
 {
-    sol_gate_signal_conditions(&primitive->gate, 1);
+    sol_gate_signal_conditions((struct sol_gate*)primitive, 1);
 }
-static void sol_gate_attach_successor(union sol_sync_primitive* primitive, union sol_sync_primitive* successor)
+static void sol_gate_attach_successor_polymorphic(struct sol_sync_primitive* primitive, struct sol_sync_primitive* successor)
 {
-    assert(false);// gate cannot have sucessors
-    sol_sync_primitive_signal_condition(successor);
+    assert(0);// gate cannot have sucessors
 }
-static void sol_gate_retain_reference(union sol_sync_primitive* primitive)
+static void sol_gate_retain_reference_polymorphic(struct sol_sync_primitive* primitive)
 {
-    assert(false);// gate cannot be retained
+    assert(0);// gate cannot be retained
 }
-static void sol_gate_release_reference(union sol_sync_primitive* primitive)
+static void sol_gate_release_reference_polymorphic(struct sol_sync_primitive* primitive)
 {
-    assert(false);// gate cannot be retained
+    assert(0);// gate cannot be retained
 }
 
 const static struct sol_sync_primitive_functions gate_sync_functions =
 {
-    .impose_condition  = &sol_gate_impose_condition,
-    .signal_condition  = &sol_gate_signal_condition,
-    .attach_successor  = &sol_gate_attach_successor,
-    .retain_reference  = &sol_gate_retain_reference,
-    .release_reference = &sol_gate_release_reference,
+    .impose_condition  = &sol_gate_impose_condition_polymorphic,
+    .signal_condition  = &sol_gate_signal_condition_polymorphic,
+    .attach_successor  = &sol_gate_attach_successor_polymorphic,
+    .retain_reference  = &sol_gate_retain_reference_polymorphic,
+    .release_reference = &sol_gate_release_reference_polymorphic,
 };
 
 static void sol_gate_initialise(void* entry, void* data)
@@ -62,7 +62,7 @@ static void sol_gate_initialise(void* entry, void* data)
     struct sol_gate* gate = entry;
     struct sol_gate_pool* pool = data;
 
-    gate->sync_functions = &gate_sync_functions;
+    gate->primitive.sync_functions = &gate_sync_functions;
     gate->pool = pool;
 
     gate->condition=NULL;

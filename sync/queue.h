@@ -23,11 +23,11 @@ along with solipsix.  If not, see <https://www.gnu.org/licenses/>.
 
 struct sol_sync_queue
 {
-    union sol_sync_primitive* _Atomic end_primitive;
+    struct sol_sync_primitive* _Atomic end_primitive;
 };
 
 void sol_sync_queue_initialise(struct sol_sync_queue* queue);
 void sol_sync_queue_terminate(struct sol_sync_queue* queue);
 
-void sol_sync_queue_enqueue_primitive(struct sol_sync_queue* queue, union sol_sync_primitive* primitive);
-void sol_sync_queue_enqueue_primitive_range(struct sol_sync_queue* queue, union sol_sync_primitive* first_primitive, union sol_sync_primitive* last_primitive);
+void sol_sync_queue_enqueue_primitive(struct sol_sync_queue* queue, struct sol_sync_primitive* primitive);
+void sol_sync_queue_enqueue_primitive_range(struct sol_sync_queue* queue, struct sol_sync_primitive* first_primitive, struct sol_sync_primitive* last_primitive);

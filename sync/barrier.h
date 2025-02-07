@@ -19,14 +19,14 @@ along with barrier.  If not, see <https://www.gnu.org/licenses/>.
 
 #pragma once
 
+#include <stddef.h>
 #include <inttypes.h>
 #include <stdatomic.h>
 
 #include "coherent_structures/lockfree_pool.h"
 #include "coherent_structures/lockfree_hopper.h"
 
-// struct sol_sync_primitive_functions;
-// union sol_sync_primitive;
+#include "sync/primitive.h"
 
 struct sol_barrier_pool
 {
@@ -39,7 +39,7 @@ void sol_barrier_pool_terminate(struct sol_barrier_pool* pool);
 
 struct sol_barrier
 {
-    const struct sol_sync_primitive_functions* sync_functions;
+    struct sol_sync_primitive primitive;
 
     struct sol_barrier_pool* pool;
 
@@ -54,9 +54,6 @@ struct sol_barrier
 struct sol_barrier* sol_barrier_prepare(struct sol_barrier_pool* pool);
 
 void sol_barrier_activate(struct sol_barrier* barrier);
-
-
-
 
 
 /// corresponds to the number of times a matching `sol_barrier_signal_conditions` must be called for the barrier before it can be executed
@@ -76,12 +73,5 @@ void sol_barrier_retain_references(struct sol_barrier* barrier, uint_fast32_t co
 void sol_barrier_release_references(struct sol_barrier* barrier, uint_fast32_t count);
 
 
-
-
-
-static inline union sol_sync_primitive* sol_barrier_as_sync_primitive(struct sol_barrier* barrier)
-{
-    return (union sol_sync_primitive*)barrier;
-}
-
-
+// onus on the use to ensure sucessor is a valid synchonization primitive
+void sol_barrier_attach_successor(struct sol_barrier* barrier, struct sol_sync_primitive* successor);

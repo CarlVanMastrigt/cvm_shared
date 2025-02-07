@@ -28,7 +28,7 @@ along with solipsix.  If not, see <https://www.gnu.org/licenses/>.
 #include "coherent_structures/coherent_queue_with_counter.h"
 #include "coherent_structures/lockfree_hopper.h"
 
-// struct sol_sync_primitive_functions;
+#include "sync/primitive.h"
 
 struct sol_task_system
 {
@@ -71,7 +71,7 @@ void sol_task_system_terminate(struct sol_task_system* task_system);
 
 struct sol_task
 {
-    const struct sol_sync_primitive_functions* sync_functions;
+    struct sol_sync_primitive primitive;
 
     struct sol_task_system* task_system;
 
@@ -95,7 +95,6 @@ struct sol_task* sol_task_prepare(struct sol_task_system* task_system, void(*tas
 void sol_task_activate(struct sol_task* task);//commit?
 
 
-
 // all conditions must be satisfied for a task to run
 
 /// corresponds to the number of times a matching `sol_task_signal_conditions` must be called for the task before it can be executed
@@ -114,8 +113,5 @@ void sol_task_retain_references(struct sol_task* task, uint_fast32_t count);
 void sol_task_release_references(struct sol_task* task, uint_fast32_t count);
 
 
-
-static inline union sol_sync_primitive* sol_task_as_sync_primitive(struct sol_task* task)
-{
-    return (union sol_sync_primitive*)task;
-}
+// onus on the use to ensure sucessor is a valid synchonization primitive
+void sol_task_attach_successor(struct sol_task* task, struct sol_sync_primitive* successor);

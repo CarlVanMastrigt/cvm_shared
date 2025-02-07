@@ -19,6 +19,7 @@ along with solipsix.  If not, see <https://www.gnu.org/licenses/>.
 
 #pragma once
 
+#include <stddef.h>
 #include <inttypes.h>
 #include <stdatomic.h>
 #include <assert.h>
