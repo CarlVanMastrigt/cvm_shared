@@ -37,7 +37,7 @@ static void sol_gate_signal_condition(union sol_sync_primitive* primitive)
 static void sol_gate_attach_successor(union sol_sync_primitive* primitive, union sol_sync_primitive* successor)
 {
     assert(false);// gate cannot have sucessors
-    successor->sync_functions->signal_condition(successor);
+    sol_sync_primitive_signal_condition(successor);
 }
 static void sol_gate_retain_reference(union sol_sync_primitive* primitive)
 {

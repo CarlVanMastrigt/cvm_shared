@@ -31,13 +31,13 @@ along with solipsix.  If not, see <https://www.gnu.org/licenses/>.
 // same as stack
 #define SOL_LOCKFREE_POOL_CHECK_MASK    ((uint_fast64_t)0xFFFFFFFFFF000000llu)
 #define SOL_LOCKFREE_POOL_ENTRY_MASK    ((uint_fast64_t)0x0000000000FFFFFFllu)
-#define SOL_LOCKFREE_POOL_INVALID_ENTRY ((uint_fast64_t)0x0000000000FFFFFFllu)
+#define SOL_LOCKFREE_POOL_INVALID_ENTRY ((uint32_t)0x00FFFFFFu)
 #define SOL_LOCKFREE_POOL_CHECK_UNIT    ((uint_fast64_t)0x0000000001000000llu)
 
 /// declared in another struct for type protection
 struct sol_lockfree_pool
 {
-    _Alignas(128) atomic_uint_fast64_t head;
+    atomic_uint_fast64_t head;
 
     size_t entry_size;
     size_t capacity_exponent;
@@ -49,9 +49,13 @@ void sol_lockfree_pool_initialise(struct sol_lockfree_pool* pool, size_t capacit
 void sol_lockfree_pool_terminate(struct sol_lockfree_pool* pool);
 
 void* sol_lockfree_pool_acquire_entry(struct sol_lockfree_pool* pool);
-void sol_lockfree_pool_relinquish_entry(struct sol_lockfree_pool* pool, void* entry);
+uint32_t sol_lockfree_pool_acquire_entry_index(struct sol_lockfree_pool* pool);
 
-void sol_lockfree_pool_relinquish_entry_index(struct sol_lockfree_pool* pool, uint32_t entry_index);
+void sol_lockfree_pool_relinquish_entry(struct sol_lockfree_pool* pool, void* entry);
 void sol_lockfree_pool_relinquish_entry_index_range(struct sol_lockfree_pool* pool, uint32_t first_entry_index, uint32_t last_entry_index);
+
+// following mostly for use with a lockfree hopper, iterate will return NULL when there are no remaining elements
+void* sol_lockfree_pool_get_entry_pointer(struct sol_lockfree_pool* pool, uint32_t entry_index);
+void* sol_lockfree_pool_iterate_range(struct sol_lockfree_pool* pool, uint32_t* entry_index);
 
 void sol_lockfree_pool_call_for_every_entry(struct sol_lockfree_pool* pool, void(*func)(void* entry, void* data), void* data);

@@ -40,7 +40,7 @@ static void sol_barrier_attach_successor(union sol_sync_primitive* primitive, un
     assert(atomic_load_explicit(&barrier->reference_count, memory_order_relaxed));
     /// barrier must be retained to set up successors (can technically be satisfied illegally, using queue for re-use will make detection better but not infallible)
 
-    if(sol_lockfree_hopper_check_if_locked(&barrier->successor_hopper))
+    if(sol_lockfree_hopper_check_if_closed(&barrier->successor_hopper))
     {
         /// if hopper already locked then barrier has had all conditions satisfied/signalled, so can signal this successor
         sol_sync_primitive_signal_condition(successor);
@@ -131,7 +131,8 @@ void sol_barrier_signal_conditions(struct sol_barrier* barrier, uint_fast32_t co
     {
         pool = barrier->pool;
 
-        successor_ptr = sol_lockfree_hopper_lock(&barrier->successor_hopper, &pool->successor_pool, &first_successor_index);
+        first_successor_index = sol_lockfree_hopper_close(&barrier->successor_hopper);
+        successor_ptr = sol_lockfree_pool_get_entry_pointer(&pool->successor_pool, first_successor_index);
 
         sol_barrier_release_references(barrier, 1);
 
@@ -140,10 +141,10 @@ void sol_barrier_signal_conditions(struct sol_barrier* barrier, uint_fast32_t co
         while(successor_ptr)
         {
             sol_sync_primitive_signal_condition(*successor_ptr);
-            successor_ptr = sol_lockfree_hopper_iterate(&pool->successor_pool, &successor_index);
+            successor_ptr = sol_lockfree_pool_iterate_range(&pool->successor_pool, &successor_index);
         }
 
-        sol_lockfree_hopper_relinquish_range(&pool->successor_pool, first_successor_index, successor_index);
+        sol_lockfree_pool_relinquish_entry_index_range(&pool->successor_pool, first_successor_index, successor_index);
     }
 }
 

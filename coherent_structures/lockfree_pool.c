@@ -40,7 +40,7 @@ void sol_lockfree_pool_initialise(struct sol_lockfree_pool* pool, size_t capacit
     {
         pool->next_buffer[i] = (uint32_t)(i + 1);
     }
-    pool->next_buffer[count-1] = (uint32_t)SOL_LOCKFREE_POOL_INVALID_ENTRY;
+    pool->next_buffer[count-1] = SOL_LOCKFREE_POOL_INVALID_ENTRY;
 }
 
 void sol_lockfree_pool_terminate(struct sol_lockfree_pool* pool)
@@ -49,19 +49,19 @@ void sol_lockfree_pool_terminate(struct sol_lockfree_pool* pool)
     free(pool->entry_data);
 }
 
-void * sol_lockfree_pool_acquire_entry(struct sol_lockfree_pool* pool)
+uint32_t sol_lockfree_pool_acquire_entry_index(struct sol_lockfree_pool* pool)
 {
-    uint_fast64_t current_head,replacement_head;
-    uint32_t entry_index;
+    uint_fast64_t entry_index, current_head, replacement_head;
 
-    current_head=atomic_load_explicit(&pool->head, memory_order_acquire);
+    current_head = atomic_load_explicit(&pool->head, memory_order_acquire);
+
     do
     {
         entry_index = current_head & SOL_LOCKFREE_POOL_ENTRY_MASK;
         /// if there are no more entries in this list then return NULL
-        if(entry_index == SOL_LOCKFREE_POOL_INVALID_ENTRY)
+        if(entry_index == (uint_fast64_t)SOL_LOCKFREE_POOL_INVALID_ENTRY)
         {
-            return NULL;
+            return SOL_LOCKFREE_POOL_INVALID_ENTRY;
         }
 
         replacement_head = ((current_head & SOL_LOCKFREE_POOL_CHECK_MASK) + SOL_LOCKFREE_POOL_CHECK_UNIT) | (uint_fast64_t)(pool->next_buffer[entry_index]);
@@ -71,10 +71,17 @@ void * sol_lockfree_pool_acquire_entry(struct sol_lockfree_pool* pool)
     /// but fail must acquire as the "next" member of "first" element may have changed
 
     assert(entry_index < ((uint_fast64_t)1 << pool->capacity_exponent));
-    assert(entry_index <= UINT32_MAX);
 
-    return pool->entry_data + entry_index * pool->entry_size;
+    return entry_index;
 }
+
+void * sol_lockfree_pool_acquire_entry(struct sol_lockfree_pool* pool)
+{
+    uint32_t entry_index = sol_lockfree_pool_acquire_entry_index(pool);
+
+    return sol_lockfree_pool_get_entry_pointer(pool, entry_index);
+}
+
 
 void sol_lockfree_pool_relinquish_entry(struct sol_lockfree_pool* pool, void * entry)
 {
@@ -88,19 +95,21 @@ void sol_lockfree_pool_relinquish_entry(struct sol_lockfree_pool* pool, void * e
     sol_lockfree_pool_relinquish_entry_index_range(pool, entry_index, entry_index);
 }
 
-void sol_lockfree_pool_relinquish_entry_index(struct sol_lockfree_pool* pool, uint32_t entry_index)
-{
-    sol_lockfree_pool_relinquish_entry_index_range(pool, entry_index, entry_index);
-}
-
 void sol_lockfree_pool_relinquish_entry_index_range(struct sol_lockfree_pool* pool, uint32_t first_entry_index, uint32_t last_entry_index)
 {
     uint_fast64_t current_head, replacement_head;
 
-    assert(first_entry_index < ((uint_fast64_t)1 << pool->capacity_exponent));
-    assert(last_entry_index  < ((uint_fast64_t)1 << pool->capacity_exponent));
+    if(first_entry_index == SOL_LOCKFREE_POOL_INVALID_ENTRY)
+    {
+        assert(last_entry_index == SOL_LOCKFREE_POOL_INVALID_ENTRY);
+        return;
+    }
+
+    assert((uint_fast64_t)first_entry_index < ((uint_fast64_t)1 << pool->capacity_exponent));
+    assert((uint_fast64_t)last_entry_index  < ((uint_fast64_t)1 << pool->capacity_exponent));
 
     current_head = atomic_load_explicit(&pool->head, memory_order_relaxed);
+
     do
     {
         pool->next_buffer[last_entry_index] = (uint32_t)(current_head & SOL_LOCKFREE_POOL_ENTRY_MASK);
@@ -108,6 +117,40 @@ void sol_lockfree_pool_relinquish_entry_index_range(struct sol_lockfree_pool* po
     }
     while(!atomic_compare_exchange_weak_explicit(&pool->head, &current_head, replacement_head, memory_order_release, memory_order_relaxed));
 }
+
+
+
+void* sol_lockfree_pool_get_entry_pointer(struct sol_lockfree_pool* pool, uint32_t entry_index)
+{
+    assert(entry_index < ((uint32_t)1 << pool->capacity_exponent) || entry_index == SOL_LOCKFREE_POOL_INVALID_ENTRY);
+
+    if((uint_fast64_t)entry_index == SOL_LOCKFREE_POOL_INVALID_ENTRY)
+    {
+        return NULL;
+    }
+    else
+    {
+        return pool->entry_data + entry_index * pool->entry_size;
+    }
+}
+
+void* sol_lockfree_pool_iterate_range(struct sol_lockfree_pool* pool, uint32_t* entry_index)
+{
+    uint32_t next_entry_index;
+
+    next_entry_index = pool->next_buffer[*entry_index];
+
+    if(next_entry_index == SOL_LOCKFREE_POOL_INVALID_ENTRY)
+    {
+        return NULL;
+    }
+    else
+    {
+        *entry_index = next_entry_index;
+        return pool->entry_data + next_entry_index * pool->entry_size;
+    }
+}
+
 
 void sol_lockfree_pool_call_for_every_entry(struct sol_lockfree_pool* pool, void(*func)(void* entry, void* data), void* data)
 {

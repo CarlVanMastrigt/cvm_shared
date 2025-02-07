@@ -28,7 +28,7 @@ along with solipsix.  If not, see <https://www.gnu.org/licenses/>.
 
 struct sol_lockfree_stack
 {
-    _Alignas(128) atomic_uint_fast64_t head;
+    atomic_uint_fast64_t head;
 
     size_t entry_size;
     size_t capacity_exponent;
@@ -42,14 +42,5 @@ void sol_lockfree_stack_initialise(struct sol_lockfree_stack* stack, struct sol_
 void sol_lockfree_stack_terminate(struct sol_lockfree_stack* stack);
 
 
-void sol_lockfree_stack_push_index_range(struct sol_lockfree_stack* stack, uint32_t first_entry_index, uint32_t last_entry_index);
-void sol_lockfree_stack_push_index(struct sol_lockfree_stack* stack, uint32_t entry_index);
-
-// (uint32_t)CVM_LOCKFREE_STACK_ENTRY_MASK returned to indicate failure
-uint32_t sol_lockfree_stack_pull_index(struct sol_lockfree_stack* stack);
-
-void sol_lockfree_stack_push_range(struct sol_lockfree_stack* stack, void* first_entry, void* last_entry);
 void sol_lockfree_stack_push(struct sol_lockfree_stack* stack, void* entry);
-
-// NULL returned to indicate failure
-void* sol_lockfree_stack_pull(struct sol_lockfree_stack* stack);
+void* sol_lockfree_stack_pull(struct sol_lockfree_stack* stack);// NULL returned to indicate failure

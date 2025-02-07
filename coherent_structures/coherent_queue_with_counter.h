@@ -28,12 +28,12 @@ along with solipsix.  If not, see <https://www.gnu.org/licenses/>.
 struct sol_coherent_queue_with_counter
 {
     /// faster under contention, slower when not contended
-    _Alignas(128) atomic_uint_fast64_t add_index;
-    _Alignas(128) atomic_uint_fast64_t add_fence;/// will contain the stall count information
-    _Alignas(128) atomic_uint_fast64_t get_index;
+    atomic_uint_fast64_t add_index;
+    atomic_uint_fast64_t add_fence;/// will contain the stall count information
+    atomic_uint_fast64_t get_index;
     uint32_t* entry_indices;
-    uint_fast64_t entry_mask;/// (2 ^ size factor) -1
-    char* entry_data;/// data stored by queue, poijnter managed by the pool
+    uint_fast64_t entry_mask;/// (2 ^ capacity_exponent) -1
+    char* entry_data;/// backing memory managed/owned by the pool used to init the queue
     size_t entry_size;
     size_t capacity_exponent;
 };

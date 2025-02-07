@@ -94,7 +94,8 @@ static int sol_task_worker_thread_function(void* in)
     {
         task->task_function(task->task_function_data);
 
-        successor_ptr = sol_lockfree_hopper_lock(&task->successor_hopper, &task_system->successor_pool, &first_successor_index);
+        first_successor_index = sol_lockfree_hopper_close(&task->successor_hopper);
+        successor_ptr = sol_lockfree_pool_get_entry_pointer(&task_system->successor_pool, first_successor_index);
 
         sol_task_release_references(task, 1);// the sucessors dont require the hopper anymore, task is done with, so can release
 
@@ -103,10 +104,10 @@ static int sol_task_worker_thread_function(void* in)
         while(successor_ptr)
         {
             sol_sync_primitive_signal_condition(*successor_ptr);
-            successor_ptr = sol_lockfree_hopper_iterate(&task_system->successor_pool, &successor_index);
+            successor_ptr = sol_lockfree_pool_iterate_range(&task_system->successor_pool, &successor_index);
         }
 
-        sol_lockfree_hopper_relinquish_range(&task_system->successor_pool, first_successor_index, successor_index);
+        sol_lockfree_pool_relinquish_entry_index_range(&task_system->successor_pool, first_successor_index, successor_index);
     }
 
     return 0;
@@ -131,7 +132,7 @@ static void sol_task_attach_successor(union sol_sync_primitive* primitive, union
     assert(atomic_load_explicit(&task->reference_count, memory_order_relaxed));
     /// task must be retained to set up successors (can technically be satisfied illegally, using queue for re-use will make detection better but not infallible)
 
-    if(sol_lockfree_hopper_check_if_locked(&task->successor_hopper))
+    if(sol_lockfree_hopper_check_if_closed(&task->successor_hopper))
     {
         /// if hopper already locked then task has been completed, can signal
         sol_sync_primitive_signal_condition(successor);

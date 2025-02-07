@@ -40,28 +40,26 @@ struct sol_lockfree_hopper
     atomic_uint_fast64_t head;
 };
 
-/// a hopper uses a pool for backing
+/// a hopper uses a pool for backing, and requires some extra communication with the pool
 void sol_lockfree_hopper_initialise(struct sol_lockfree_hopper* hopper, struct sol_lockfree_pool* pool);
 void sol_lockfree_hopper_terminate(struct sol_lockfree_hopper* hopper);
 
 void sol_lockfree_hopper_reset(struct sol_lockfree_hopper* hopper);
 
-bool sol_lockfree_hopper_push(struct sol_lockfree_hopper* hopper, struct sol_lockfree_pool* pool, void* entry);/// returns true if it was added, false if not (fails if hopper is locked)
-bool sol_lockfree_hopper_check_if_locked(struct sol_lockfree_hopper* hopper);
+/// returns true if it was added, false if not (fails if hopper is locked)
+bool sol_lockfree_hopper_push(struct sol_lockfree_hopper* hopper, struct sol_lockfree_pool* pool, void* entry);
+bool sol_lockfree_hopper_check_if_closed(struct sol_lockfree_hopper* hopper);
 
 
-/** hopper locking
- * usage pattern is:  lock -> iterate -> relinquish_range
+/** closing the range
+ * usage pattern is:  close -> iterate -> relinquish_range
  *
- * MUST call `sol_lockfree_pool_relinquish_entry_index_range` after locking and processing & iterating hopper contents with:
- * `first_entry_index` with the value of `first_entry_index` from the initial `sol_lockfree_hopper_lock` call
- * `last_enrty_index` with the value of `entry_index` from failing (NULL return) `sol_lockfree_hopper_iterate` call
+ * closing the hopper prevents further additions and returns the first elemnt, and begins the process of emptying the hopper (which must be done via pool actions)
+ * further additions to a hopper will fail and return false
+ *
+ * MUST call `sol_lockfree_pool_relinquish_entry_index_range` after closing and processing & iterating hopper contents with:
+ * `first_entry_index` with the value of `first_entry_index` from the initial `sol_lockfree_hopper_close` call
+ * `last_enrty_index` with the value of `entry_index` from failing (NULL return) `sol_lockfree_pool_iterate_closed_range` call
 */
 
-// locking also gets the first elemnt, and begins the process of emptying the hopper (which must be done)
-void* sol_lockfree_hopper_lock(struct sol_lockfree_hopper* hopper, struct sol_lockfree_pool* pool, uint32_t* first_entry_index);
-
-//returns NULL when there are no further entries, WITHOUT altering entry_index (will only change entry index if the new one is valid)
-void* sol_lockfree_hopper_iterate(struct sol_lockfree_pool* pool, uint32_t* entry_index);
-
-void sol_lockfree_hopper_relinquish_range(struct sol_lockfree_pool* pool, uint32_t first_entry_index, uint32_t last_entry_index);
+uint32_t sol_lockfree_hopper_close(struct sol_lockfree_hopper* hopper);
