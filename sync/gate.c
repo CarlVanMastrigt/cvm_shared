@@ -27,40 +27,40 @@ along with solipsix.  If not, see <https://www.gnu.org/licenses/>.
 #define SOL_GATE_CONDITION_MASK ((uint_fast32_t)0x7FFFFFFF)
 
 
-static void sol_gate_impose_condition_polymorphic(struct sol_sync_primitive* primitive)
+static void sol_sync_gate_impose_condition_polymorphic(struct sol_sync_primitive* primitive)
 {
-    sol_gate_impose_conditions((struct sol_gate*)primitive, 1);
+    sol_sync_gate_impose_conditions((struct sol_sync_gate*)primitive, 1);
 }
-static void sol_gate_signal_condition_polymorphic(struct sol_sync_primitive* primitive)
+static void sol_sync_gate_signal_condition_polymorphic(struct sol_sync_primitive* primitive)
 {
-    sol_gate_signal_conditions((struct sol_gate*)primitive, 1);
+    sol_sync_gate_signal_conditions((struct sol_sync_gate*)primitive, 1);
 }
-static void sol_gate_attach_successor_polymorphic(struct sol_sync_primitive* primitive, struct sol_sync_primitive* successor)
+static void sol_sync_gate_attach_successor_polymorphic(struct sol_sync_primitive* primitive, struct sol_sync_primitive* successor)
 {
     assert(0);// gate cannot have sucessors
 }
-static void sol_gate_retain_reference_polymorphic(struct sol_sync_primitive* primitive)
+static void sol_sync_gate_retain_reference_polymorphic(struct sol_sync_primitive* primitive)
 {
     assert(0);// gate cannot be retained
 }
-static void sol_gate_release_reference_polymorphic(struct sol_sync_primitive* primitive)
+static void sol_sync_gate_release_reference_polymorphic(struct sol_sync_primitive* primitive)
 {
     assert(0);// gate cannot be retained
 }
 
 const static struct sol_sync_primitive_functions gate_sync_functions =
 {
-    .impose_condition  = &sol_gate_impose_condition_polymorphic,
-    .signal_condition  = &sol_gate_signal_condition_polymorphic,
-    .attach_successor  = &sol_gate_attach_successor_polymorphic,
-    .retain_reference  = &sol_gate_retain_reference_polymorphic,
-    .release_reference = &sol_gate_release_reference_polymorphic,
+    .impose_condition  = &sol_sync_gate_impose_condition_polymorphic,
+    .signal_condition  = &sol_sync_gate_signal_condition_polymorphic,
+    .attach_successor  = &sol_sync_gate_attach_successor_polymorphic,
+    .retain_reference  = &sol_sync_gate_retain_reference_polymorphic,
+    .release_reference = &sol_sync_gate_release_reference_polymorphic,
 };
 
-static void sol_gate_initialise(void* entry, void* data)
+static void sol_sync_gate_initialise(void* entry, void* data)
 {
-    struct sol_gate* gate = entry;
-    struct sol_gate_pool* pool = data;
+    struct sol_sync_gate* gate = entry;
+    struct sol_sync_gate_pool* pool = data;
 
     gate->primitive.sync_functions = &gate_sync_functions;
     gate->pool = pool;
@@ -70,23 +70,23 @@ static void sol_gate_initialise(void* entry, void* data)
     atomic_init(&gate->status, 0);
 }
 
-static void sol_gate_terminate(void* entry, void* data)
+static void sol_sync_gate_terminate(void* entry, void* data)
 {
-    struct sol_gate* gate = entry;
+    struct sol_sync_gate* gate = entry;
     assert(gate->mutex==NULL);
     assert(gate->condition==NULL);
 }
 
 
-void sol_gate_pool_initialise(struct sol_gate_pool* pool, size_t capacity_exponent)
+void sol_sync_gate_pool_initialise(struct sol_sync_gate_pool* pool, size_t capacity_exponent)
 {
-    sol_lockfree_pool_initialise(&pool->available_gates,capacity_exponent,sizeof(struct sol_gate));
-    sol_lockfree_pool_call_for_every_entry(&pool->available_gates, &sol_gate_initialise, pool);
+    sol_lockfree_pool_initialise(&pool->available_gates,capacity_exponent,sizeof(struct sol_sync_gate));
+    sol_lockfree_pool_call_for_every_entry(&pool->available_gates, &sol_sync_gate_initialise, pool);
 }
 
-void sol_gate_pool_terminate(struct sol_gate_pool* pool)
+void sol_sync_gate_pool_terminate(struct sol_sync_gate_pool* pool)
 {
-    sol_lockfree_pool_call_for_every_entry(&pool->available_gates, &sol_gate_terminate, NULL);
+    sol_lockfree_pool_call_for_every_entry(&pool->available_gates, &sol_sync_gate_terminate, NULL);
     sol_lockfree_pool_terminate(&pool->available_gates);
 }
 
@@ -94,19 +94,19 @@ void sol_gate_pool_terminate(struct sol_gate_pool* pool)
 
 
 
-struct sol_gate * sol_gate_prepare(struct sol_gate_pool* pool)
+struct sol_sync_gate * sol_sync_gate_prepare(struct sol_sync_gate_pool* pool)
 {
-    struct sol_gate* gate;
+    struct sol_sync_gate* gate;
 
     gate = sol_lockfree_pool_acquire_entry(&pool->available_gates);
     assert(atomic_load(&gate->status) == 0);
-    /// this is 0 dependencies and in the non-waiting state, this could be made some high count with a fetch sub in `sol_gate_wait` if error checking is desirable
+    /// this is 0 dependencies and in the non-waiting state, this could be made some high count with a fetch sub in `sol_sync_gate_wait` if error checking is desirable
 
     return gate;
 }
 
 // could have a system to execute tasks while waiting, but waiting is really undesirable anyway so avoid it flat out
-void sol_gate_wait(struct sol_gate * gate)
+void sol_sync_gate_wait(struct sol_sync_gate * gate)
 {
     mtx_t mutex;
     cnd_t condition;
@@ -157,7 +157,7 @@ void sol_gate_wait(struct sol_gate * gate)
     sol_lockfree_pool_relinquish_entry(&gate->pool->available_gates,gate);
 }
 
-void sol_gate_impose_conditions(struct sol_gate * gate, uint_fast32_t count)
+void sol_sync_gate_impose_conditions(struct sol_sync_gate * gate, uint_fast32_t count)
 {
     uint_fast32_t old_status = atomic_fetch_add_explicit(&gate->status, count, memory_order_relaxed);
     assert(!(old_status & SOL_GATE_WAITING_FLAG) || (old_status & SOL_GATE_CONDITION_MASK) > 0);
@@ -165,7 +165,7 @@ void sol_gate_impose_conditions(struct sol_gate * gate, uint_fast32_t count)
     /// ADDING dependencies shouldn't incurr memory ordering restrictions
 }
 
-void sol_gate_signal_conditions(struct sol_gate* gate, uint_fast32_t count)
+void sol_sync_gate_signal_conditions(struct sol_sync_gate* gate, uint_fast32_t count)
 {
     uint_fast32_t current_status, replacement_status;
     bool locked;

@@ -1,5 +1,5 @@
 /**
-Copyright 2024 Carl van Mastrigt
+Copyright 2024,2025 Carl van Mastrigt
 
 This file is part of solipsix.
 
@@ -134,7 +134,7 @@ void* sol_lockfree_pool_get_entry_pointer(struct sol_lockfree_pool* pool, uint32
     }
 }
 
-void* sol_lockfree_pool_iterate_range(struct sol_lockfree_pool* pool, uint32_t* entry_index)
+void* sol_lockfree_pool_iterate(struct sol_lockfree_pool* pool, uint32_t* entry_index)
 {
     uint32_t next_entry_index;
 

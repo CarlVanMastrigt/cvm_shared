@@ -30,7 +30,7 @@ along with solipsix.  If not, see <https://www.gnu.org/licenses/>.
 
 #include "sync/primitive.h"
 
-struct sol_task_system
+struct sol_sync_task_system
 {
     struct sol_lockfree_pool task_pool;
     struct sol_coherent_queue_with_counter pending_tasks;
@@ -53,27 +53,27 @@ struct sol_task_system
     /// is above too much to expose to user? maybe take expected pool size and quarter it?
 };
 
-void sol_task_system_initialise(struct sol_task_system* task_system, uint32_t worker_thread_count, size_t total_task_exponent, size_t total_successor_exponent);
+void sol_sync_task_system_initialise(struct sol_sync_task_system* task_system, uint32_t worker_thread_count, size_t total_task_exponent, size_t total_successor_exponent);
 
 /// invalid to add tasks *that don't depend on other tasks* after this has been called
 /// this CAN be called inside a task!
-void sol_task_system_begin_shutdown(struct sol_task_system* task_system);
+void sol_sync_task_system_begin_shutdown(struct sol_sync_task_system* task_system);
 
 /// waits for all tasks to complete and worker threads to join before returning, as such cannot be called inside a task
 /// any outstanding tasks will be executed before this returns
 /// as such any task still in flight must not have dependencies that would only be satisfied after this function has returned
-void sol_task_system_end_shutdown(struct sol_task_system* task_system);
+void sol_sync_task_system_end_shutdown(struct sol_sync_task_system* task_system);
 
 /// cleans up allocations
-void sol_task_system_terminate(struct sol_task_system* task_system);
+void sol_sync_task_system_terminate(struct sol_sync_task_system* task_system);
 
 
 
-struct sol_task
+struct sol_sync_task
 {
     struct sol_sync_primitive primitive;
 
-    struct sol_task_system* task_system;
+    struct sol_sync_task_system* task_system;
 
     void(*task_function)(void*);
     void* task_function_data;
@@ -87,31 +87,31 @@ struct sol_task
 };
 
 
-// task starts inert/unactivated and cannot run (so that order of execution relative to other primitives can be established) `sol_task_activate` must be called for it to run
-struct sol_task* sol_task_prepare(struct sol_task_system* task_system, void(*task_function)(void*), void* data);
+// task starts inert/unactivated and cannot run (so that order of execution relative to other primitives can be established) `sol_sync_task_activate` must be called for it to run
+struct sol_sync_task* sol_sync_task_prepare(struct sol_sync_task_system* task_system, void(*task_function)(void*), void* data);
 
 /// allows a task to be executed
 /// must either add all associated dependencies/condition before calling this OR impose conditions and retain references the task as necessary to set up dependencies later
-void sol_task_activate(struct sol_task* task);//commit?
+void sol_sync_task_activate(struct sol_sync_task* task);//commit?
 
 
 // all conditions must be satisfied for a task to run
 
-/// corresponds to the number of times a matching `sol_task_signal_conditions` must be called for the task before it can be executed
+/// corresponds to the number of times a matching `sol_sync_task_signal_conditions` must be called for the task before it can be executed
 /// at least one condition must be unsignalled in order to set up another condition to that task if it has already been enqueued
-void sol_task_impose_conditions(struct sol_task* task, uint_fast32_t count);
+void sol_sync_task_impose_conditions(struct sol_sync_task* task, uint_fast32_t count);
 
-/// use this to signal that some set of data and/or dependencies required by the task have been set up, total must be matched to the count provided to sol_task_impose_conditions
-void sol_task_signal_conditions(struct sol_task* task, uint_fast32_t count);
+/// use this to signal that some set of data and/or dependencies required by the task have been set up, total must be matched to the count provided to sol_sync_task_impose_conditions
+void sol_sync_task_signal_conditions(struct sol_sync_task* task, uint_fast32_t count);
 
 
-/// corresponds to the number of times a matching `sol_task_release_reference` must be called for the task before it can be cleaned up
+/// corresponds to the number of times a matching `sol_sync_task_release_reference` must be called for the task before it can be cleaned up
 /// at least one retainer must be held in order to set up a successor to that task if it has already been enqueued
-void sol_task_retain_references(struct sol_task* task, uint_fast32_t count);
+void sol_sync_task_retain_references(struct sol_sync_task* task, uint_fast32_t count);
 
 /// signal that we are done setting up things that must happen before cleanup (e.g. setting up successors)
-void sol_task_release_references(struct sol_task* task, uint_fast32_t count);
+void sol_sync_task_release_references(struct sol_sync_task* task, uint_fast32_t count);
 
 
 // onus on the use to ensure sucessor is a valid synchonization primitive
-void sol_task_attach_successor(struct sol_task* task, struct sol_sync_primitive* successor);
+void sol_sync_task_attach_successor(struct sol_sync_task* task, struct sol_sync_primitive* successor);

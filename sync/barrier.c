@@ -21,40 +21,40 @@ along with solipsix.  If not, see <https://www.gnu.org/licenses/>.
 
 #include "sync/barrier.h"
 
-static void sol_barrier_impose_condition_polymorphic(struct sol_sync_primitive* primitive)
+static void sol_sync_barrier_impose_condition_polymorphic(struct sol_sync_primitive* primitive)
 {
-    sol_barrier_impose_conditions((struct sol_barrier*)primitive, 1);
+    sol_sync_barrier_impose_conditions((struct sol_sync_barrier*)primitive, 1);
 }
-static void sol_barrier_signal_condition_polymorphic(struct sol_sync_primitive* primitive)
+static void sol_sync_barrier_signal_condition_polymorphic(struct sol_sync_primitive* primitive)
 {
-    sol_barrier_signal_conditions((struct sol_barrier*)primitive, 1);
+    sol_sync_barrier_signal_conditions((struct sol_sync_barrier*)primitive, 1);
 }
-static void sol_barrier_attach_successor_polymorphic(struct sol_sync_primitive* primitive, struct sol_sync_primitive* successor)
+static void sol_sync_barrier_attach_successor_polymorphic(struct sol_sync_primitive* primitive, struct sol_sync_primitive* successor)
 {
-    sol_barrier_attach_successor((struct sol_barrier*)primitive, successor);
+    sol_sync_barrier_attach_successor((struct sol_sync_barrier*)primitive, successor);
 }
-static void sol_barrier_retain_reference_polymorphic(struct sol_sync_primitive* primitive)
+static void sol_sync_barrier_retain_reference_polymorphic(struct sol_sync_primitive* primitive)
 {
-    sol_barrier_retain_references((struct sol_barrier*)primitive, 1);
+    sol_sync_barrier_retain_references((struct sol_sync_barrier*)primitive, 1);
 }
-static void sol_barrier_release_reference_polymorphic(struct sol_sync_primitive* primitive)
+static void sol_sync_barrier_release_reference_polymorphic(struct sol_sync_primitive* primitive)
 {
-    sol_barrier_release_references((struct sol_barrier*)primitive, 1);
+    sol_sync_barrier_release_references((struct sol_sync_barrier*)primitive, 1);
 }
 
 const static struct sol_sync_primitive_functions barrier_sync_functions =
 {
-    .impose_condition  = &sol_barrier_impose_condition_polymorphic,
-    .signal_condition  = &sol_barrier_signal_condition_polymorphic,
-    .attach_successor  = &sol_barrier_attach_successor_polymorphic,
-    .retain_reference  = &sol_barrier_retain_reference_polymorphic,
-    .release_reference = &sol_barrier_release_reference_polymorphic,
+    .impose_condition  = &sol_sync_barrier_impose_condition_polymorphic,
+    .signal_condition  = &sol_sync_barrier_signal_condition_polymorphic,
+    .attach_successor  = &sol_sync_barrier_attach_successor_polymorphic,
+    .retain_reference  = &sol_sync_barrier_retain_reference_polymorphic,
+    .release_reference = &sol_sync_barrier_release_reference_polymorphic,
 };
 
-static void sol_barrier_initialise(void* entry, void* data)
+static void sol_sync_barrier_initialise(void* entry, void* data)
 {
-    struct sol_barrier* barrier = entry;
-    struct sol_barrier_pool* pool = data;
+    struct sol_sync_barrier* barrier = entry;
+    struct sol_sync_barrier_pool* pool = data;
 
     barrier->primitive.sync_functions = &barrier_sync_functions;
     barrier->pool = pool;
@@ -65,13 +65,13 @@ static void sol_barrier_initialise(void* entry, void* data)
     atomic_init(&barrier->reference_count, 0);
 }
 
-void sol_barrier_pool_initialise(struct sol_barrier_pool* pool, size_t total_barrier_exponent, size_t total_successor_exponent)
+void sol_sync_barrier_pool_initialise(struct sol_sync_barrier_pool* pool, size_t total_barrier_exponent, size_t total_successor_exponent)
 {
-    sol_lockfree_pool_initialise(&pool->barrier_pool, total_barrier_exponent, sizeof(struct sol_barrier));
+    sol_lockfree_pool_initialise(&pool->barrier_pool, total_barrier_exponent, sizeof(struct sol_sync_barrier));
     sol_lockfree_pool_initialise(&pool->successor_pool, total_successor_exponent, sizeof(struct sol_sync_primitive**));
 }
 
-void sol_barrier_pool_terminate(struct sol_barrier_pool* pool)
+void sol_sync_barrier_pool_terminate(struct sol_sync_barrier_pool* pool)
 {
     sol_lockfree_pool_terminate(&pool->successor_pool);
     sol_lockfree_pool_terminate(&pool->barrier_pool);
@@ -79,9 +79,9 @@ void sol_barrier_pool_terminate(struct sol_barrier_pool* pool)
 
 
 
-struct sol_barrier* sol_barrier_prepare(struct sol_barrier_pool* pool)
+struct sol_sync_barrier* sol_sync_barrier_prepare(struct sol_sync_barrier_pool* pool)
 {
-    struct sol_barrier* barrier;
+    struct sol_sync_barrier* barrier;
 
     barrier = sol_lockfree_pool_acquire_entry(&pool->barrier_pool);
 
@@ -95,23 +95,23 @@ struct sol_barrier* sol_barrier_prepare(struct sol_barrier_pool* pool)
     return barrier;
 }
 
-void sol_barrier_activate(struct sol_barrier* barrier)
+void sol_sync_barrier_activate(struct sol_sync_barrier* barrier)
 {
     /// this is basically just called differently to account for the "hidden" wait counter added on barrier creation
-    sol_barrier_signal_conditions(barrier, 1);
+    sol_sync_barrier_signal_conditions(barrier, 1);
 }
 
 
-void sol_barrier_impose_conditions(struct sol_barrier* barrier, uint_fast32_t count)
+void sol_sync_barrier_impose_conditions(struct sol_sync_barrier* barrier, uint_fast32_t count)
 {
     uint_fast32_t old_count = atomic_fetch_add_explicit(&barrier->condition_count, count, memory_order_relaxed);
     assert(old_count>0);/// should not be adding dependencies when none still exist (need held dependencies to addsetup more dependencies)
 }
 
-void sol_barrier_signal_conditions(struct sol_barrier* barrier, uint_fast32_t count)
+void sol_sync_barrier_signal_conditions(struct sol_sync_barrier* barrier, uint_fast32_t count)
 {
     uint_fast32_t old_count;
-    struct sol_barrier_pool* pool;
+    struct sol_sync_barrier_pool* pool;
     struct sol_sync_primitive** successor_ptr;
     uint32_t first_successor_index, successor_index;
 
@@ -126,14 +126,14 @@ void sol_barrier_signal_conditions(struct sol_barrier* barrier, uint_fast32_t co
         first_successor_index = sol_lockfree_hopper_close(&barrier->successor_hopper);
         successor_ptr = sol_lockfree_pool_get_entry_pointer(&pool->successor_pool, first_successor_index);
 
-        sol_barrier_release_references(barrier, 1);
+        sol_sync_barrier_release_references(barrier, 1);
 
         successor_index = first_successor_index;
 
         while(successor_ptr)
         {
             sol_sync_primitive_signal_condition(*successor_ptr);
-            successor_ptr = sol_lockfree_pool_iterate_range(&pool->successor_pool, &successor_index);
+            successor_ptr = sol_lockfree_pool_iterate(&pool->successor_pool, &successor_index);
         }
 
         sol_lockfree_pool_relinquish_entry_index_range(&pool->successor_pool, first_successor_index, successor_index);
@@ -141,13 +141,13 @@ void sol_barrier_signal_conditions(struct sol_barrier* barrier, uint_fast32_t co
 }
 
 
-void sol_barrier_retain_references(struct sol_barrier * barrier, uint_fast32_t count)
+void sol_sync_barrier_retain_references(struct sol_sync_barrier * barrier, uint_fast32_t count)
 {
     uint_fast32_t old_count=atomic_fetch_add_explicit(&barrier->reference_count, count, memory_order_relaxed);
     assert(old_count!=0);/// should not be adding successors reservations when none still exist (need held successors reservations to addsetup more successors reservations)
 }
 
-void sol_barrier_release_references(struct sol_barrier * barrier, uint_fast32_t count)
+void sol_sync_barrier_release_references(struct sol_sync_barrier * barrier, uint_fast32_t count)
 {
     /// need to release to prevent reads/writes of successor/completion data being moved after this operation
     uint_fast32_t old_count=atomic_fetch_sub_explicit(&barrier->reference_count, count, memory_order_release);
@@ -161,7 +161,7 @@ void sol_barrier_release_references(struct sol_barrier * barrier, uint_fast32_t 
 }
 
 
-void sol_barrier_attach_successor(struct sol_barrier* barrier, struct sol_sync_primitive* successor)
+void sol_sync_barrier_attach_successor(struct sol_sync_barrier* barrier, struct sol_sync_primitive* successor)
 {
     struct sol_lockfree_pool* successor_pool;
     struct sol_sync_primitive** successor_ptr;

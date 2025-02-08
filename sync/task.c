@@ -22,9 +22,9 @@ along with solipsix.  If not, see <https://www.gnu.org/licenses/>.
 
 #include "sync/task.h"
 
-static inline struct sol_task* sol_task_worker_thread_get_task(struct sol_task_system* task_system)
+static inline struct sol_sync_task* sol_sync_task_worker_thread_get_task(struct sol_sync_task_system* task_system)
 {
-    struct sol_task* task;
+    struct sol_sync_task* task;
 
     while(true)
     {
@@ -82,28 +82,28 @@ static inline struct sol_task* sol_task_worker_thread_get_task(struct sol_task_s
 }
 
 
-static int sol_task_worker_thread_function(void* in)
+static int sol_sync_task_worker_thread_function(void* in)
 {
-    struct sol_task_system* task_system = in;
-    struct sol_task* task;
+    struct sol_sync_task_system* task_system = in;
+    struct sol_sync_task* task;
     struct sol_sync_primitive** successor_ptr;
     uint32_t first_successor_index, successor_index;
 
-    while((task = sol_task_worker_thread_get_task(task_system)))
+    while((task = sol_sync_task_worker_thread_get_task(task_system)))
     {
         task->task_function(task->task_function_data);
 
         first_successor_index = sol_lockfree_hopper_close(&task->successor_hopper);
         successor_ptr = sol_lockfree_pool_get_entry_pointer(&task_system->successor_pool, first_successor_index);
 
-        sol_task_release_references(task, 1);// the sucessors dont require the hopper anymore, task is done with, so can release
+        sol_sync_task_release_references(task, 1);// the sucessors dont require the hopper anymore, task is done with, so can release
 
         successor_index = first_successor_index;
 
         while(successor_ptr)
         {
             sol_sync_primitive_signal_condition(*successor_ptr);
-            successor_ptr = sol_lockfree_pool_iterate_range(&task_system->successor_pool, &successor_index);
+            successor_ptr = sol_lockfree_pool_iterate(&task_system->successor_pool, &successor_index);
         }
 
         sol_lockfree_pool_relinquish_entry_index_range(&task_system->successor_pool, first_successor_index, successor_index);
@@ -112,40 +112,40 @@ static int sol_task_worker_thread_function(void* in)
     return 0;
 }
 
-static void sol_task_impose_condition_polymorphic(struct sol_sync_primitive* primitive)
+static void sol_sync_task_impose_condition_polymorphic(struct sol_sync_primitive* primitive)
 {
-    sol_task_impose_conditions((struct sol_task*)primitive, 1);
+    sol_sync_task_impose_conditions((struct sol_sync_task*)primitive, 1);
 }
-static void sol_task_signal_condition_polymorphic(struct sol_sync_primitive* primitive)
+static void sol_sync_task_signal_condition_polymorphic(struct sol_sync_primitive* primitive)
 {
-    sol_task_signal_conditions((struct sol_task*)primitive, 1);
+    sol_sync_task_signal_conditions((struct sol_sync_task*)primitive, 1);
 }
-static void sol_task_attach_successor_polymorphic(struct sol_sync_primitive* primitive, struct sol_sync_primitive* successor)
+static void sol_sync_task_attach_successor_polymorphic(struct sol_sync_primitive* primitive, struct sol_sync_primitive* successor)
 {
-    sol_task_attach_successor((struct sol_task*)primitive, successor);
+    sol_sync_task_attach_successor((struct sol_sync_task*)primitive, successor);
 }
-static void sol_task_retain_reference_polymorphic(struct sol_sync_primitive* primitive)
+static void sol_sync_task_retain_reference_polymorphic(struct sol_sync_primitive* primitive)
 {
-    sol_task_retain_references((struct sol_task*)primitive, 1);
+    sol_sync_task_retain_references((struct sol_sync_task*)primitive, 1);
 }
-static void sol_task_release_reference_polymorphic(struct sol_sync_primitive* primitive)
+static void sol_sync_task_release_reference_polymorphic(struct sol_sync_primitive* primitive)
 {
-    sol_task_release_references((struct sol_task*)primitive, 1);
+    sol_sync_task_release_references((struct sol_sync_task*)primitive, 1);
 }
 
 const static struct sol_sync_primitive_functions task_sync_functions =
 {
-    .impose_condition  = &sol_task_impose_condition_polymorphic,
-    .signal_condition  = &sol_task_signal_condition_polymorphic,
-    .attach_successor  = &sol_task_attach_successor_polymorphic,
-    .retain_reference  = &sol_task_retain_reference_polymorphic,
-    .release_reference = &sol_task_release_reference_polymorphic,
+    .impose_condition  = &sol_sync_task_impose_condition_polymorphic,
+    .signal_condition  = &sol_sync_task_signal_condition_polymorphic,
+    .attach_successor  = &sol_sync_task_attach_successor_polymorphic,
+    .retain_reference  = &sol_sync_task_retain_reference_polymorphic,
+    .release_reference = &sol_sync_task_release_reference_polymorphic,
 };
 
-static void sol_task_initialise(void* entry, void* data)
+static void sol_sync_task_initialise(void* entry, void* data)
 {
-    struct sol_task* task = entry;
-    struct sol_task_system* task_system = data;
+    struct sol_sync_task* task = entry;
+    struct sol_sync_task_system* task_system = data;
 
     task->primitive.sync_functions = &task_sync_functions;
     task->task_system = task_system;
@@ -156,14 +156,14 @@ static void sol_task_initialise(void* entry, void* data)
     atomic_init(&task->reference_count, 0);
 }
 
-void sol_task_system_initialise(struct sol_task_system* task_system, uint32_t worker_thread_count, size_t total_task_exponent, size_t total_successor_exponent)
+void sol_sync_task_system_initialise(struct sol_sync_task_system* task_system, uint32_t worker_thread_count, size_t total_task_exponent, size_t total_successor_exponent)
 {
     uint32_t i;
 
-    sol_lockfree_pool_initialise(&task_system->task_pool, total_task_exponent, sizeof(struct sol_task));
+    sol_lockfree_pool_initialise(&task_system->task_pool, total_task_exponent, sizeof(struct sol_sync_task));
     sol_lockfree_pool_initialise(&task_system->successor_pool, total_successor_exponent, sizeof(struct sol_sync_primitive**));
 
-    sol_lockfree_pool_call_for_every_entry(&task_system->task_pool, &sol_task_initialise, task_system);
+    sol_lockfree_pool_call_for_every_entry(&task_system->task_pool, &sol_sync_task_initialise, task_system);
 
     sol_coherent_queue_with_counter_initialise(&task_system->pending_tasks, &task_system->task_pool);
 
@@ -182,12 +182,12 @@ void sol_task_system_initialise(struct sol_task_system* task_system, uint32_t wo
     /// will need setup mutex locked here if we want to wait on all workers to start before progressing (maybe useful to have, but I can't think of a reason)
     for(i=0; i<worker_thread_count; i++)
     {
-        thrd_create(task_system->worker_threads+i, sol_task_worker_thread_function, task_system);
+        thrd_create(task_system->worker_threads+i, sol_sync_task_worker_thread_function, task_system);
     }
 }
 
 
-void sol_task_system_begin_shutdown(struct sol_task_system* task_system)
+void sol_sync_task_system_begin_shutdown(struct sol_sync_task_system* task_system)
 {
     mtx_lock(&task_system->worker_thread_mutex);
     task_system->shutdown_initiated=true;
@@ -197,7 +197,7 @@ void sol_task_system_begin_shutdown(struct sol_task_system* task_system)
 /// ^ this is also necessary/useful for queues i believe,
 ///     ^ have to wait till all tasks that would use a queue have completed before attempting to terminate the queue, best/safest way to do this is to have the queue outlive the task system
 
-void sol_task_system_end_shutdown(struct sol_task_system* task_system)
+void sol_sync_task_system_end_shutdown(struct sol_sync_task_system* task_system)
 {
     uint32_t i;
     mtx_lock(&task_system->worker_thread_mutex);
@@ -216,7 +216,7 @@ void sol_task_system_end_shutdown(struct sol_task_system* task_system)
     assert(task_system->stalled_thread_count==0);/// make sure everyone woke up okay
 }
 
-void sol_task_system_terminate(struct sol_task_system* task_system)
+void sol_sync_task_system_terminate(struct sol_sync_task_system* task_system)
 {
     free(task_system->worker_threads);
 
@@ -231,9 +231,9 @@ void sol_task_system_terminate(struct sol_task_system* task_system)
 
 
 
-struct sol_task* sol_task_prepare(struct sol_task_system* task_system, void(*task_function)(void*), void * data)
+struct sol_sync_task* sol_sync_task_prepare(struct sol_sync_task_system* task_system, void(*task_function)(void*), void * data)
 {
-    struct sol_task* task;
+    struct sol_sync_task* task;
 
     task = sol_lockfree_pool_acquire_entry(&task_system->task_pool);
     assert(task);//not enough tasks allocated
@@ -251,26 +251,26 @@ struct sol_task* sol_task_prepare(struct sol_task_system* task_system, void(*tas
     return task;
 }
 
-void sol_task_activate(struct sol_task* task)
+void sol_sync_task_activate(struct sol_sync_task* task)
 {
     /// this is basically just called differently to account for the "hidden" wait counter added on task creation
-    sol_task_signal_conditions(task, 1);
+    sol_sync_task_signal_conditions(task, 1);
 }
 
 
 
 
-void sol_task_impose_conditions(struct sol_task* task, uint_fast32_t count)
+void sol_sync_task_impose_conditions(struct sol_sync_task* task, uint_fast32_t count)
 {
     uint_fast32_t old_count=atomic_fetch_add_explicit(&task->condition_count, count, memory_order_relaxed);
     assert(old_count>0);/// should not be adding dependencies when none still exist (need held dependencies to addsetup more dependencies)
 }
 
-void sol_task_signal_conditions(struct sol_task* task, uint_fast32_t count)
+void sol_sync_task_signal_conditions(struct sol_sync_task* task, uint_fast32_t count)
 {
     uint_fast32_t old_count;
     bool unstall_worker;
-    struct sol_task_system* task_system = task->task_system;
+    struct sol_sync_task_system* task_system = task->task_system;
 
     /// this is responsible for coalescing all modifications, but also for making them available to the next thread/atomic to recieve this memory (after the potential release in this function)
     old_count=atomic_fetch_sub_explicit(&task->condition_count, count, memory_order_acq_rel);
@@ -300,13 +300,13 @@ void sol_task_signal_conditions(struct sol_task* task, uint_fast32_t count)
 
 
 
-void sol_task_retain_references(struct sol_task * task, uint_fast32_t count)
+void sol_sync_task_retain_references(struct sol_sync_task * task, uint_fast32_t count)
 {
     uint_fast32_t old_count=atomic_fetch_add_explicit(&task->reference_count, count, memory_order_relaxed);
     assert(old_count!=0);/// should not be adding successors reservations when none still exist (need held successors reservations to addsetup more successors reservations)
 }
 
-void sol_task_release_references(struct sol_task * task, uint_fast32_t count)
+void sol_sync_task_release_references(struct sol_sync_task * task, uint_fast32_t count)
 {
     /// need to release to prevent reads/writes of successor/completion data being moved after this operation
     uint_fast32_t old_count=atomic_fetch_sub_explicit(&task->reference_count, count, memory_order_release);
@@ -320,7 +320,7 @@ void sol_task_release_references(struct sol_task * task, uint_fast32_t count)
     }
 }
 
-void sol_task_attach_successor(struct sol_task* task, struct sol_sync_primitive* successor)
+void sol_sync_task_attach_successor(struct sol_sync_task* task, struct sol_sync_primitive* successor)
 {
     struct sol_lockfree_pool* successor_pool;
     struct sol_sync_primitive** successor_ptr;

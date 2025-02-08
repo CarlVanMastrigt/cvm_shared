@@ -27,19 +27,19 @@ along with solipsix.  If not, see <https://www.gnu.org/licenses/>.
 
 #include "sync/primitive.h"
 
-struct sol_gate_pool
+struct sol_sync_gate_pool
 {
     struct sol_lockfree_pool available_gates;
 };
 
-void sol_gate_pool_initialise(struct sol_gate_pool* pool, size_t capacity_exponent);
-void sol_gate_pool_terminate(struct sol_gate_pool* pool);
+void sol_sync_gate_pool_initialise(struct sol_sync_gate_pool* pool, size_t capacity_exponent);
+void sol_sync_gate_pool_terminate(struct sol_sync_gate_pool* pool);
 
-struct sol_gate
+struct sol_sync_gate
 {
     struct sol_sync_primitive primitive;
 
-    struct sol_gate_pool* pool;
+    struct sol_sync_gate_pool* pool;
 
     atomic_uint_fast32_t status;
 
@@ -47,16 +47,16 @@ struct sol_gate
     cnd_t* condition;
 };
 
-struct sol_gate* sol_gate_prepare(struct sol_gate_pool* pool);
+struct sol_sync_gate* sol_sync_gate_prepare(struct sol_sync_gate_pool* pool);
 
 /// MUST be called at some point as this will clean up the acquired gate
-void sol_gate_wait(struct sol_gate* gate);
+void sol_sync_gate_wait(struct sol_sync_gate* gate);
 
 
-/// used to set up dependencies (calls to sol_gate_signal_conditions) to wait on (dont return from wait until all signals happen)
+/// used to set up dependencies (calls to sol_sync_gate_signal_conditions) to wait on (dont return from wait until all signals happen)
 /// must know that an gate has at least one outstanding dependency and/or that the gate hasn't been waited on for calling this to be legal
-void sol_gate_impose_conditions(struct sol_gate* gate, uint_fast32_t count);
+void sol_sync_gate_impose_conditions(struct sol_sync_gate* gate, uint_fast32_t count);
 
-/// must be called once for every dependency added by a call to sol_gate_impose_conditions
-void sol_gate_signal_conditions(struct sol_gate* gate, uint_fast32_t count);
+/// must be called once for every dependency added by a call to sol_sync_gate_impose_conditions
+void sol_sync_gate_signal_conditions(struct sol_sync_gate* gate, uint_fast32_t count);
 
