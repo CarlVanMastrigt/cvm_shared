@@ -21,19 +21,25 @@ along with solipsix.  If not, see <https://www.gnu.org/licenses/>.
 
 #include <inttypes.h>
 #include <stdbool.h>
-#include <stdatomic.h>
 #include <threads.h>
 
+#include "cvm_data_structures.h"
 #include "coherent_structures/lockfree_pool.h"
-#include "coherent_structures/coherent_queue_with_counter.h"
 #include "coherent_structures/lockfree_hopper.h"
 
 #include "sync/primitive.h"
 
+struct sol_sync_task;
+
+CVM_QUEUE(struct sol_sync_task*, sol_task, 16)
+
 struct sol_sync_task_system
 {
     struct sol_lockfree_pool task_pool;
-    struct sol_coherent_queue_with_counter pending_tasks;
+
+    /// must be manged with the mutex
+    struct sol_task_queue pending_task_queue;
+
 
     struct sol_lockfree_pool successor_pool;///pool for storing successors (linked list/hopper per task)
 
@@ -43,7 +49,6 @@ struct sol_sync_task_system
     cnd_t worker_thread_condition;/// multipurpose, used for setup, shutdown and for handling stalled threads
     mtx_t worker_thread_mutex;
 
-    uint32_t signalled_unstalls;
     uint32_t stalled_thread_count;
 
     bool shutdown_completed;

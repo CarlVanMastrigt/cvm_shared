@@ -317,7 +317,7 @@ static inline void name##_bin_heap_del( name##_bin_heap * h )                   
                                                                                 \
 typedef struct name##_queue                                                     \
 {                                                                               \
-    type * data;                                                                \
+    type* data;                                                                 \
     uint_fast32_t space;                                                        \
     uint_fast32_t count;                                                        \
     uint_fast32_t front;                                                        \
@@ -325,7 +325,7 @@ typedef struct name##_queue                                                     
 name##_queue;                                                                   \
                                                                                 \
                                                                                 \
-static inline void name##_queue_initialise( name##_queue * q )                  \
+static inline void name##_queue_initialise( name##_queue* q )                   \
 {                                                                               \
     assert(( (start_size) & ( (start_size) - 1 )) == 0);                        \
     q->data=malloc( sizeof( type ) * start_size );                              \
@@ -334,7 +334,7 @@ static inline void name##_queue_initialise( name##_queue * q )                  
     q->front=0;                                                                 \
 }                                                                               \
                                                                                 \
-static inline uint32_t name##_queue_new_index( name##_queue * q )               \
+static inline uint32_t name##_queue_new_index( name##_queue* q )                \
 {                                                                               \
     uint_fast32_t front_offset, move_count;                                     \
     type * src;                                                                 \
@@ -358,17 +358,17 @@ static inline uint32_t name##_queue_new_index( name##_queue * q )               
     return q->front + q->count++;                                               \
 }                                                                               \
                                                                                 \
-static inline type * name##_queue_get_ptr( name##_queue * q , uint32_t index )  \
+static inline type * name##_queue_get_ptr( name##_queue* q , uint32_t index )   \
 {                                                                               \
     return q->data + (index & (q->space - 1));                                  \
 }                                                                               \
                                                                                 \
-static inline type * name##_queue_new( name##_queue * q )                       \
+static inline type * name##_queue_new( name##_queue* q )                        \
 {                                                                               \
     return q->data + ( name##_queue_new_index(q) & (q->space - 1));             \
 }                                                                               \
                                                                                 \
-static inline uint32_t name##_queue_enqueue( name##_queue * q , type value )    \
+static inline uint32_t name##_queue_enqueue( name##_queue* q , type value )     \
 {                                                                               \
     uint_fast32_t i;                                                            \
     i = name##_queue_new_index(q);                                              \
@@ -376,7 +376,7 @@ static inline uint32_t name##_queue_enqueue( name##_queue * q , type value )    
     return i;                                                                   \
 }                                                                               \
                                                                                 \
-static inline bool name##_queue_dequeue( name##_queue * q , type * value )      \
+static inline bool name##_queue_dequeue( name##_queue* q , type* value )        \
 {                                                                               \
     if(q->count == 0)                                                           \
     {                                                                           \
@@ -391,7 +391,7 @@ static inline bool name##_queue_dequeue( name##_queue * q , type * value )      
     return true;                                                                \
 }                                                                               \
                                                                                 \
-static inline type * name##_queue_dequeue_ptr( name##_queue * q )               \
+static inline type * name##_queue_dequeue_ptr( name##_queue* q )                \
 {                                                                               \
     type * ptr;                                                                 \
     if(q->count == 0)                                                           \
@@ -404,12 +404,12 @@ static inline type * name##_queue_dequeue_ptr( name##_queue * q )               
     return ptr;                                                                 \
 }                                                                               \
                                                                                 \
-static inline void name##_queue_terminate( name##_queue * q )                   \
+static inline void name##_queue_terminate( name##_queue* q )                    \
 {                                                                               \
     free(q->data);                                                              \
 }                                                                               \
                                                                                 \
-static inline type * name##_queue_get_front_ptr( name##_queue * q )             \
+static inline type * name##_queue_get_front_ptr( name##_queue* q )              \
 {                                                                               \
     if(q->count == 0)                                                           \
     {                                                                           \
@@ -418,7 +418,7 @@ static inline type * name##_queue_get_front_ptr( name##_queue * q )             
     return q->data + (q->front & (q->space - 1));                               \
 }                                                                               \
                                                                                 \
-static inline type * name##_queue_get_back_ptr( name##_queue * q )              \
+static inline type * name##_queue_get_back_ptr( name##_queue* q )               \
 {                                                                               \
     if(q->count == 0)                                                           \
     {                                                                           \
@@ -427,12 +427,12 @@ static inline type * name##_queue_get_back_ptr( name##_queue * q )              
     return q->data + ((q->front + q->count - 1) & (q->space - 1));              \
 }                                                                               \
                                                                                 \
-static inline uint32_t name##_queue_front_index( name##_queue * q )             \
+static inline uint32_t name##_queue_front_index( name##_queue* q )              \
 {                                                                               \
     return q->front;                                                            \
 }                                                                               \
                                                                                 \
-static inline uint32_t name##_queue_back_index( name##_queue * q )              \
+static inline uint32_t name##_queue_back_index( name##_queue* q )               \
 {                                                                               \
     return q->front + q->count - 1;                                             \
 }                                                                               \
@@ -455,7 +455,8 @@ iterating a queue
 for(i=0;i<q->count;i++) queue_get_ptr(q, q->front + i)
 */
 
-CVM_QUEUE(uint32_t,u32,16)
+// CVM_QUEUE(uint32_t,u32,16)
+
 
 
 

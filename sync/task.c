@@ -26,59 +26,39 @@ static inline struct sol_sync_task* sol_sync_task_worker_thread_get_task(struct 
 {
     struct sol_sync_task* task;
 
-    while(true)
+    mtx_lock(&task_system->worker_thread_mutex);
+
+    while(!sol_task_queue_dequeue(&task_system->pending_task_queue, &task))
     {
-        task = sol_coherent_queue_with_counter_pull(&task_system->pending_tasks);
-        if(task)
+        assert(task_system->stalled_thread_count < task_system->worker_thread_count);
+        task_system->stalled_thread_count++;
+
+        /// if all threads are stalled (there is no work left to do) and we've asked the system to shut down (this requires there are no more tasks being created) then we can finalise shutdown
+        if(task_system->shutdown_initiated && (task_system->stalled_thread_count == task_system->worker_thread_count))
         {
-            return task;
+            task_system->stalled_thread_count--;
+            task_system->shutdown_completed = true;
+            cnd_broadcast(&task_system->worker_thread_condition);/// wake up all stalled threads so that they can exit
+            mtx_unlock(&task_system->worker_thread_mutex);
+            return NULL;
         }
 
-        /// there were no more tasks to perform
-        mtx_lock(&task_system->worker_thread_mutex);
+        /// wait untill more workers are needed or we're shutting down (with appropriate checks in case of spurrious wakeup)
+        cnd_wait(&task_system->worker_thread_condition, &task_system->worker_thread_mutex);
 
-        /// this will increment local stall counter if it fails (which note: is inside the mutex lock)
-        /// needs to be inside mutex lock such that when we add a task we KNOW there is a worker thread (at least this one) that has already stalled by the time that queue addition tries to wake a worker
-        ///     ^ (queue addition wakes workers inside this mutex)
-        task = sol_coherent_queue_with_counter_pull_or_increment(&task_system->pending_tasks);
-        if(task)
+        assert(task_system->stalled_thread_count > 0);
+        task_system->stalled_thread_count--;
+
+        if(task_system->shutdown_completed)
         {
             mtx_unlock(&task_system->worker_thread_mutex);
-            return task;
+            return NULL;
         }
-
-        /// if this thread was going to sleep but something else grabbed the mutex first and requested a wakeup it makes sense to snatch that first and never actually wait
-        ///     ^ and let a later wakeup be treated as spurrious
-        while(task_system->signalled_unstalls==0)
-        {
-            task_system->stalled_thread_count++;
-
-            /// if all threads are stalled (there is no work left to do) and we've asked the system to shut down (this requires there are no more tasks being created) then we can finalise shutdown
-            if(task_system->shutdown_initiated && (task_system->stalled_thread_count == task_system->worker_thread_count))
-            {
-                task_system->stalled_thread_count--;
-                task_system->shutdown_completed = true;
-                cnd_broadcast(&task_system->worker_thread_condition);/// wake up all stalled threads so that they can exit
-                mtx_unlock(&task_system->worker_thread_mutex);
-                return NULL;
-            }
-
-            /// wait untill more workers are needed or we're shutting down (with appropriate checks in case of spurrious wakeup)
-            cnd_wait(&task_system->worker_thread_condition, &task_system->worker_thread_mutex);
-
-            task_system->stalled_thread_count--;
-
-            if(task_system->shutdown_completed)
-            {
-                mtx_unlock(&task_system->worker_thread_mutex);
-                return NULL;
-            }
-        }
-
-        task_system->signalled_unstalls--;/// we have unstalled successfully
-
-        mtx_unlock(&task_system->worker_thread_mutex);
     }
+
+    mtx_unlock(&task_system->worker_thread_mutex);
+
+    return task;
 }
 
 
@@ -165,7 +145,7 @@ void sol_sync_task_system_initialise(struct sol_sync_task_system* task_system, u
 
     sol_lockfree_pool_call_for_every_entry(&task_system->task_pool, &sol_sync_task_initialise, task_system);
 
-    sol_coherent_queue_with_counter_initialise(&task_system->pending_tasks, &task_system->task_pool);
+    sol_task_queue_initialise(&task_system->pending_task_queue);
 
     task_system->worker_threads = malloc(sizeof(thrd_t) * worker_thread_count);
     task_system->worker_thread_count = worker_thread_count;
@@ -177,7 +157,6 @@ void sol_sync_task_system_initialise(struct sol_sync_task_system* task_system, u
     task_system->shutdown_initiated = false;
 
     task_system->stalled_thread_count = 0;
-    task_system->signalled_unstalls = 0;
 
     /// will need setup mutex locked here if we want to wait on all workers to start before progressing (maybe useful to have, but I can't think of a reason)
     for(i=0; i<worker_thread_count; i++)
@@ -225,7 +204,7 @@ void sol_sync_task_system_terminate(struct sol_sync_task_system* task_system)
 
     sol_lockfree_pool_terminate(&task_system->successor_pool);
 
-    sol_coherent_queue_with_counter_terminate(&task_system->pending_tasks);
+    sol_task_queue_terminate(&task_system->pending_task_queue);
     sol_lockfree_pool_terminate(&task_system->task_pool);
 }
 
@@ -278,23 +257,17 @@ void sol_sync_task_signal_conditions(struct sol_sync_task* task, uint_fast32_t c
 
     if(old_count==count)/// this is the last dependency this task was waiting on, put it on list of available tasks and make sure there's a worker thread to satisfy it
     {
-        /// acquire stall count here?
-        unstall_worker=sol_coherent_queue_with_counter_push_and_decrement(&task_system->pending_tasks, task);
+        mtx_lock(&task_system->worker_thread_mutex);
 
-        if(unstall_worker)
+        sol_task_queue_enqueue(&task_system->pending_task_queue, task);
+
+        if(task_system->stalled_thread_count)
         {
-            mtx_lock(&task_system->worker_thread_mutex);
-
             assert(!task_system->shutdown_completed);/// shouldnt have stopped running if tasks have yet to complete
-            assert(task_system->stalled_thread_count > 0);/// weren't actually any stalled workers!
-            assert(task_system->signalled_unstalls < task_system->stalled_thread_count);///invalid unstall request
-
-            task_system->signalled_unstalls++;/// required for preventing spurrious wakeup
-
             cnd_signal(&task_system->worker_thread_condition);
-
-            mtx_unlock(&task_system->worker_thread_mutex);
         }
+
+        mtx_unlock(&task_system->worker_thread_mutex);
     }
 }
 
