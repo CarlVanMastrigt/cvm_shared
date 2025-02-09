@@ -19,7 +19,7 @@ along with solipsix.  If not, see <https://www.gnu.org/licenses/>.
 
 #include <assert.h>
 
-#include "coherent_structures/lockfree_stack.h"
+#include "lockfree/stack.h"
 
 void sol_lockfree_stack_initialise(struct sol_lockfree_stack* stack, struct sol_lockfree_pool* pool)
 {

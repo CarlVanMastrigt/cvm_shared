@@ -20,7 +20,7 @@ along with solipsix.  If not, see <https://www.gnu.org/licenses/>.
 #include <stdlib.h>
 #include <assert.h>
 
-#include "coherent_structures/lockfree_pool.h"
+#include "lockfree/pool.h"
 
 void sol_lockfree_pool_initialise(struct sol_lockfree_pool* pool, size_t capacity_exponent, size_t entry_size)
 {

@@ -20,7 +20,7 @@ along with solipsix.  If not, see <https://www.gnu.org/licenses/>.
 #include <stddef.h>
 #include <assert.h>
 
-#include "coherent_structures/lockfree_hopper.h"
+#include "lockfree/hopper.h"
 
 #define SOL_LOCKFREE_HOPPER_CLOSED_BIT  ((uint_fast64_t)0x8000000000000000llu)
 

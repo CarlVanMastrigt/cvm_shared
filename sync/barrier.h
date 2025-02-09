@@ -23,8 +23,8 @@ along with barrier.  If not, see <https://www.gnu.org/licenses/>.
 #include <inttypes.h>
 #include <stdatomic.h>
 
-#include "coherent_structures/lockfree_pool.h"
-#include "coherent_structures/lockfree_hopper.h"
+#include "lockfree/pool.h"
+#include "lockfree/hopper.h"
 
 #include "sync/primitive.h"
 

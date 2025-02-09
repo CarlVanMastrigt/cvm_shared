@@ -23,7 +23,7 @@ along with solipsix.  If not, see <https://www.gnu.org/licenses/>.
 #include <stdatomic.h>
 #include <stdbool.h>
 
-#include "coherent_structures/lockfree_pool.h"
+#include "lockfree/pool.h"
 
 /** lockfree_hopper
  * a hopper is a simplified stack that supports atomic addition, but then must be locked before its entries are accessed

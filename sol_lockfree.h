@@ -19,6 +19,6 @@ along with solipsix.  If not, see <https://www.gnu.org/licenses/>.
 
 #pragma once
 
-#include "coherent_structures/lockfree_pool.h"
-#include "coherent_structures/lockfree_stack.h"
-#include "coherent_structures/lockfree_hopper.h"
+#include "lockfree/pool.h"
+#include "lockfree/stack.h"
+#include "lockfree/hopper.h"

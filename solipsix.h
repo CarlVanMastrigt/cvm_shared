@@ -65,7 +65,7 @@ typedef union widget widget; // find a better place to put this?
 #include "cvm_transform.h"
 #include "sol_camera.h"
 #include "cvm_mesh.h"
-#include "sol_coherent_structures.h"
+#include "sol_lockfree.h"
 #include "cvm_thread.h"
 #include "sol_sync.h"
 

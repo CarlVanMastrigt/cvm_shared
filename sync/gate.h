@@ -23,7 +23,7 @@ along with solipsix.  If not, see <https://www.gnu.org/licenses/>.
 #include <stdatomic.h>
 #include <threads.h>
 
-#include "coherent_structures/lockfree_pool.h"
+#include "lockfree/pool.h"
 
 #include "sync/primitive.h"
 

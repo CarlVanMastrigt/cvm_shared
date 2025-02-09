@@ -24,8 +24,8 @@ along with solipsix.  If not, see <https://www.gnu.org/licenses/>.
 #include <threads.h>
 
 #include "cvm_data_structures.h"
-#include "coherent_structures/lockfree_pool.h"
-#include "coherent_structures/lockfree_hopper.h"
+#include "lockfree/pool.h"
+#include "lockfree/hopper.h"
 
 #include "sync/primitive.h"
 
