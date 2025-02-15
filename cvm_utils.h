@@ -63,6 +63,8 @@ static inline uint64_t cvm_po2_64_gte(uint64_t v){ return 64-__builtin_clzl(v-1)
 static inline uint64_t cvm_po2_64_gt(uint64_t v){ return 64-__builtin_clzl(v); }
 static inline uint64_t cvm_po2_64_lt(uint64_t v){ return 63-__builtin_clzl(v-1); }
 
+
+// sol_u32_po2_gte ??
 static inline uint32_t cvm_po2_32_gte(uint32_t v){ return 32-__builtin_clz(v-1); }
 static inline uint32_t cvm_po2_32_gt(uint32_t v){ return 32-__builtin_clz(v); }
 static inline uint32_t cvm_po2_32_lt(uint32_t v){ return 31-__builtin_clz(v-1); }

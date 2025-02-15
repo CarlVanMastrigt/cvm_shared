@@ -149,7 +149,7 @@ struct overlay_theme
     /// spacing between panel and sides of content
     int x_panel_offset;
     int y_panel_offset;
-    /// spaving when against the edge of the screen
+    /// spacing when against the edge of the screen
     int x_panel_offset_side;
     int y_panel_offset_side;
 

@@ -26,25 +26,25 @@ along with solipsix.  If not, see <https://www.gnu.org/licenses/>.
 
 
 
-#define BLANK_WIDGET_STATUS         0x00000000
-#define WIDGET_ACTIVE               0x00000001
-#define WIDGET_REQUIRES_RENDERING   0x00000002 /** used to specify completely transparent widgets overlaid over more complex game elements */
-#define WIDGET_CLOSE_POPUP_TREE     0x00000004 /** does not collapse parent popup hierarchy upon interaction (e.g. toggle buttons, popup triggering buttons, enterboxes, scrollbars and slider_bars)  */
-#define WIDGET_IS_ROOT              0x00000010 /** used for validation in various places*/
-#define WIDGET_IS_AUTO_CLOSE_POPUP  0x00000020
-#define WIDGET_IS_CONTIGUOUS_BOX    0x00000040
-#define WIDGET_DO_NOT_DELETE        0x00000080 /** must only be deleted by specialised method, which will set this to false before executing, REMOVE THIS! */
-// could have one that is essentiually "was allocated" that determines if to free upon deletion
+#define BLANK_WIDGET_STATUS         0x0000
+#define WIDGET_ACTIVE               0x0001
+#define WIDGET_REQUIRES_RENDERING   0x0002 /** used to specify completely transparent widgets overlaid over more complex game elements */
+#define WIDGET_CLOSE_POPUP_TREE     0x0004 /** does not collapse parent popup hierarchy upon interaction (e.g. toggle buttons, popup triggering buttons, enterboxes, scrollbars and slider_bars)  */
+#define WIDGET_IS_ROOT              0x0010 /** used for validation in various places*/
+#define WIDGET_IS_AUTO_CLOSE_POPUP  0x0020
+#define WIDGET_IS_CONTIGUOUS_BOX    0x0040 /* why is this relevant!? remove if/when contiguous box gets removed*/
+#define WIDGET_DO_NOT_DELETE        0x0080 /** must only be deleted by specialised method, which will set this to false before executing, REMOVE THIS! */
+#warning remove WIDGET_DO_NOT_DELETE, replace conceptually with reference counts
 
-#define WIDGET_H_FIRST  0x10000000
-#define WIDGET_H_LAST   0x20000000
-#define WIDGET_V_FIRST  0x40000000
-#define WIDGET_V_LAST   0x80000000
+#define WIDGET_H_FIRST  0x1000
+#define WIDGET_H_LAST   0x2000
+#define WIDGET_V_FIRST  0x4000
+#define WIDGET_V_LAST   0x8000
 
-#define WIDGET_POS_FLAGS_CLEAR  0x0FFFFFFF
-#define WIDGET_POS_FLAGS_H      0x30000000
-#define WIDGET_POS_FLAGS_V      0xC0000000
-#define WIDGET_POS_FLAGS        0xF0000000
+#define WIDGET_POS_FLAGS_CLEAR  0x0FFF
+#define WIDGET_POS_FLAGS_H      0x3000
+#define WIDGET_POS_FLAGS_V      0xC000
+#define WIDGET_POS_FLAGS        0xF000
 
 #warning make this a non-pointer declaration
 // for optionally provoking behaviour on widgets, will always be paired with a data variable, however that means widget type always needs to be known
@@ -61,6 +61,10 @@ struct widget_function_data_pair
 typedef struct widget_appearence_function_set
 {
     #warning move theme to widget context
+
+    #warning  perhaps structure widget polymorphism more like sync polymorphism?
+
+    #warning perhaps move x_offset/y_offset to render widget? (require "render_widget" to be the way every widget is called, rather than function pointer directly)
     void    (*const render) (overlay_theme*,widget*,int16_t,int16_t,struct cvm_overlay_render_batch*,rectangle);
     widget* (*const select) (overlay_theme*,widget*,int16_t,int16_t);
     void    (*const min_w)  (overlay_theme*,widget*);
@@ -121,14 +125,14 @@ typedef struct widget_behaviour_function_set
 }
 widget_behaviour_function_set;
 
-typedef enum
+typedef enum widget_layout
 {
     WIDGET_HORIZONTAL=0,
     WIDGET_VERTICAL
 }
 widget_layout;
 
-typedef enum
+typedef enum widget_distribution
 {
     WIDGET_FIRST_DISTRIBUTED=0,
     WIDGET_LAST_DISTRIBUTED,
@@ -138,7 +142,7 @@ typedef enum
 }
 widget_distribution;
 
-typedef enum
+typedef enum widget_text_alignment
 {
     WIDGET_TEXT_LEFT_ALIGNED=0,
     WIDGET_TEXT_RIGHT_ALIGNED
@@ -161,6 +165,7 @@ struct widget_context
     overlay_theme* theme;
     /// put settings here?? make it a pointer!
 
+    // widgets created but not (completely) destroyed
     uint32_t registered_widget_count;//for debug
 
 
@@ -186,7 +191,8 @@ typedef struct widget_base
 {
     struct widget_context* context;
 
-    uint32_t status;
+    uint16_t status;// make u16
+    uint16_t references;
 
     int16_t min_w;
     int16_t min_h;
@@ -224,23 +230,25 @@ widget_base;
 
 union widget
 {
-    widget_base                 base;
+    widget_base              base;
 
-    widget_button               button;
-    widget_anchor               anchor;
-    widget_textbox              textbox;
-    widget_enterbox             enterbox;
-    widget_slider_bar           slider_bar;
-    widget_text_bar             text_bar;
+    widget_button            button;
+    widget_anchor            anchor;
+    widget_textbox           textbox;
+    widget_enterbox          enterbox;
+    widget_slider_bar        slider_bar;
+    widget_text_bar          text_bar;
 
-    widget_container            container;
-    widget_contiguous_box       contiguous_box;
-    widget_panel                panel;
-    widget_resize_constraint    resize_constraint;
-    widget_popup                popup;
-    widget_file_list            file_list;
+    widget_container         container;
+    widget_contiguous_box    contiguous_box;
+    widget_panel             panel;
+    widget_resize_constraint resize_constraint;
+    widget_popup             popup;
+    widget_file_list         file_list;
 
-    widget_tab_folder           tab_folder;
+    widget_tab_folder        tab_folder;
+
+    widget_multibox          multibox;
 };
 
 
@@ -324,6 +332,9 @@ bool handle_widget_overlay_text_edit(widget* root_widget,char * text,int start,i
 widget* add_child_to_parent(widget * parent,widget * child);
 void remove_child_from_parent(widget * child);
 void delete_widget(widget * w);
+
+void retain_widget(widget * w);
+void release_widget(widget * w);
 
 
 

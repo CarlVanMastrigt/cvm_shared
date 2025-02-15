@@ -414,6 +414,7 @@ void create_self_deleting_dialogue(struct widget_context* context, widget* root_
 
 /** remove
 widget_contiguous_box
+    ^ this may have utility for widgets
 widget_file_list
 
 make text_bar more dynamic or create a new widget type
@@ -422,17 +423,227 @@ make text_bar more dynamic or create a new widget type
 
 
 /// widget(multibox), x_off, y_off, render_batch, bounds, element/entry index
-void cvm_directory_multibox_entry_render(widget* multibox, int16_t x_off, int16_t y_off, struct cvm_overlay_render_batch* render_batch, rectangle bounds, uint32_t entry_index)
+static void sol_directory_multibox_entry_render(widget* multibox, int16_t x_off, int16_t y_off, struct cvm_overlay_render_batch* render_batch, rectangle bounds, uint32_t entry_index)
 {
+    //     rectangle r=rectangle_add_offset(w->base.r, x_off, y_off);
+    // theme->h_bar_render(render_batch, theme, bounds, r, w->base.status, OVERLAY_ALTERNATE_MAIN_COLOUR);
+
+    // overlay_text_single_line_render_data text_render_data=
+    // {
+    //     .flags=0,
+    //     .x=r.x1+theme->h_bar_text_offset,
+    //     .y=(r.y1+r.y2-theme->font.glyph_size)>>1,
+    //     .text=w->anchor.text,
+    //     .bounds=bounds,
+    //     .colour=OVERLAY_TEXT_COLOUR_0
+    // };
+
+    // overlay_text_single_line_render(render_batch, theme, &text_render_data);
+
+
+
+    #warning should really try to minimise specailised work to render elements, sould be trivial to implement multibox for specialised purposes
+    #warning probably want some extra metadata for directory RENDERING on top of the directory data itself (icons, min glyph count &c.)
+    // file_list_entry * fle;
+    // rectangle icon_r,r;
+    // const file_list_type * file_types;
+    // int32_t y,y_end,index,y_text_off;
+    // const char * icon_glyph;
+
+    // file_types=w->file_list.file_types;
+
+    // r=rectangle_add_offset(w->base.r,x_off,y_off);
+
+    // theme->box_render(render_batch, theme, bounds, r, w->base.status, OVERLAY_MAIN_COLOUR);
+
+
+    // y_end=r.y2-theme->contiguous_box_y_offset;
+    // index=w->file_list.offset/theme->base_contiguous_unit_h;
+    // y=r.y1+index*theme->base_contiguous_unit_h-w->file_list.offset+theme->contiguous_box_y_offset;
+    // y_text_off=(theme->base_contiguous_unit_h-theme->font.glyph_size)>>1;
+
+    // ///make fade and constrained
+    // overlay_text_single_line_render_data text_render_data=
+    // {
+    //     .flags=OVERLAY_TEXT_RENDER_BOX_CONSTRAINED|OVERLAY_TEXT_RENDER_FADING,
+    //     .x=r.x1+theme->h_bar_text_offset+ w->file_list.render_type_icons*(theme->h_bar_icon_text_offset+theme->base_contiguous_unit_w),///base_contiguous_unit_w used for icon space/sizing
+    //     //.y=,
+    //     //.text=,
+    //     .bounds=bounds,
+    //     .colour=OVERLAY_TEXT_COLOUR_0,
+    //     .box_r=r,
+    //     .box_status=w->base.status,
+    //     //.text_length=,
+    // };
+
+    // text_render_data.text_area=(rectangle){.x1=text_render_data.x,.y1=r.y1,.x2=r.x2-theme->h_bar_text_offset,.y2=r.y2};
+
+    // icon_r.x1=r.x1+theme->h_bar_text_offset;
+    // icon_r.x2=r.x1+theme->h_bar_text_offset+theme->base_contiguous_unit_w;
+
+    // while(y<y_end && index<(int32_t)w->file_list.valid_entry_count)
+    // {
+    //     if(index==w->file_list.selected_entry_index)/// && is_currently_active_widget(w) not sure the currently selected widget thing is desirable, probably not, other programs don't do it
+    //     {
+    //         theme->h_bar_box_constrained_render(render_batch,theme,bounds,((rectangle){.x1=r.x1,.y1=y,.x2=r.x2,.y2=y+theme->base_contiguous_unit_h}),w->base.status,OVERLAY_HIGHLIGHTING_COLOUR,r,w->base.status);
+    //     }
+
+    //     fle=w->file_list.entries+index;
+
+    //     if(w->file_list.render_type_icons)
+    //     {
+    //         ///render icon
+    //         icon_r.y1=y;
+    //         icon_r.y2=y+theme->base_contiguous_unit_h;
+
+    //         if(fle->type_id==CVM_FL_DIRECTORY_TYPE_ID) icon_glyph="🗀";
+    //         else if(fle->type_id==CVM_FL_MISCELLANEOUS_TYPE_ID) icon_glyph="🗎";
+    //         else icon_glyph=file_types[fle->type_id-CVM_FL_CUSTOM_TYPE_OFFSET].icon;
+
+    //         overlay_text_centred_glyph_box_constrained_render(render_batch,theme,bounds,icon_r,icon_glyph,OVERLAY_TEXT_COLOUR_0,r,w->base.status);
+    //     }
+
+
+    //     text_render_data.y=y+y_text_off;
+
+    //     text_render_data.text=fle->filename;
+
+    //     if(!fle->text_length_calculated)
+    //     {
+    //         fle->text_length=overlay_text_single_line_get_pixel_length(&theme->font,text_render_data.text);
+    //         fle->text_length_calculated=true;
+    //     }
+
+    //     text_render_data.text_length=fle->text_length;
+
+    //     overlay_text_single_line_render(render_batch,theme,&text_render_data);
+
+    //     y+=theme->base_contiguous_unit_h;
+    //     index++;
+    // }
 }
 
+static int16_t sol_directory_multibox_entry_min_w(widget* multibox)
+{
+    struct overlay_theme* theme = multibox->base.context->theme;
+    return 2 * theme->h_bar_text_offset + 16 * theme->font.max_advance;// require at least 16 visible characters
+}
+
+static int16_t sol_directory_multibox_entry_min_h(widget* multibox)
+{
+    struct overlay_theme* theme = multibox->base.context->theme;
+    return theme->base_contiguous_unit_h;
+}
 
 
 // directory multibox functions
 const struct multibox_functions directory_multibox_functions = (struct multibox_functions)
 {
-    .entry_render = &cvm_directory_multibox_entry_render,
+    .entry_render = &sol_directory_multibox_entry_render,
+    .entry_min_w  = &sol_directory_multibox_entry_min_w,
+    .entry_min_h  = &sol_directory_multibox_entry_min_h,
 };
 
 
+
+
 // multibox specific
+
+static void multibox_widget_render(overlay_theme * theme, widget * w, int16_t x_off, int16_t y_off, struct cvm_overlay_render_batch * restrict render_batch, rectangle bounds)
+{
+    rectangle r = rectangle_add_offset(w->base.r, x_off, y_off);
+    theme->box_render(render_batch, theme, bounds, r, w->base.status, OVERLAY_MAIN_COLOUR);
+
+    // render entries at theme->x_box_offset. theme->y_box_offset
+
+}
+
+static widget * multibox_widget_select(overlay_theme * theme,widget * w,int16_t x_in,int16_t y_in)
+{
+    rectangle r = rectangle_subtract_offset(w->base.r, x_in, y_in);
+    if(theme->box_select(theme, r, w->base.status))
+    {
+        return w;
+    }
+    return NULL;
+}
+
+static void multibox_widget_min_w(overlay_theme * theme,widget * w)
+{
+    int16_t entry_w = w->multibox.functions->entry_min_w(w);
+
+    if(w->multibox.min_displayed_count_x)
+    {
+        w->base.min_w = entry_w * w->multibox.min_displayed_count_x;
+    }
+    else
+    {
+        w->base.min_w = entry_w;
+    }
+
+    #warning could use dimensions directly, then have something to force overlap ?
+    // unsure regarding this
+    w->base.min_w += theme->contiguous_box_x_offset * 2;
+}
+
+static void multibox_widget_min_h(overlay_theme * theme,widget * w)
+{
+    int16_t entry_h = w->multibox.functions->entry_min_h(w);
+
+    if(w->multibox.min_displayed_count_y)
+    {
+        w->base.min_h = entry_h * w->multibox.min_displayed_count_y;
+    }
+    else
+    {
+        w->base.min_h = entry_h;
+    }
+
+    // unsure regarding this
+    w->base.min_h += theme->contiguous_box_y_offset * 2;
+}
+
+static void multibox_widget_set_h(overlay_theme * theme,widget * w)
+{
+    // w->textbox.wheel_delta= -theme->font.line_spacing;///w->textbox.font_index
+    // w->textbox.visible_size= w->base.r.y2-w->base.r.y1-2*theme->y_box_offset;
+
+    // if(w->textbox.min_visible_lines)
+    // {
+    //     w->textbox.max_offset=(w->textbox.text_block.line_count-1)*theme->font.line_spacing+theme->font.glyph_size - w->textbox.visible_size;
+    //     if(w->textbox.max_offset < 0)w->textbox.max_offset=0;
+    //     if(w->textbox.y_offset > w->textbox.max_offset)w->textbox.y_offset = w->textbox.max_offset;
+    // }
+}
+
+
+static widget_appearence_function_set textbox_appearence_functions=
+{
+    .render = multibox_widget_render,
+    .select = multibox_widget_select,
+    .min_w  = multibox_widget_min_w,
+    .min_h  = multibox_widget_min_h,
+    .set_w  = blank_widget_set_w,
+    .set_h  = multibox_widget_set_h
+};
+
+
+
+
+#warning tabs are a good use case for contiguous box though (CONTIGUOUS BOX INCOMPLETE, WTH!)
+
+#warning is there a way to COMBINE contiguous box and multibox?  -- NO!
+/** ^^^
+ * button would need: awareness of EVERY entry or every entry would actually need to exist!
+ * ^ could do specialised button for file entries, basically need to anyway, then we just have button * count
+ *   ^ HOWEVER as entry count is so dynamic it would be REALLY difficult to make it act as if static
+ *     ^ for tab bar; scrollable box container it's actually quite simple in concept, the contents hold the complexity, so is actually okay?
+ *       ^ similarly applicable logic for file list; as long as its simple, an indexed multibox is fine, contents hold the complexity
+ *
+ *      better to provide solid foundations and instead have custom BS where necessary
+*/
+
+#warning retain/release widget references simplifies context held widgets and deletion!
+
+#warning deletion should be a function passed in anongside `void* data` something custom for applicable custom data
+// ^ allows retain/release instead of flat out free

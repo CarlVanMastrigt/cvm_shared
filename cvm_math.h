@@ -266,6 +266,56 @@ static inline vec2i v2i_clamp(vec2i v,vec2i min,vec2i max)
 
 
 
+typedef struct rectangle
+{
+    int16_t x1;
+    int16_t y1;
+    int16_t x2;
+    int16_t y2;
+}
+rectangle;
+
+///rectangle
+static inline rectangle rectangle_ini(int16_t x1,int16_t y1,int16_t x2,int16_t y2)
+{
+    return (rectangle){.x1=x1,.y1=y1,.x2=x2,.y2=y2};
+}
+static inline rectangle get_rectangle_overlap(rectangle r1,rectangle r2)
+{
+    r1.x1+=(r2.x1>r1.x1)*(r2.x1-r1.x1);
+    r1.y1+=(r2.y1>r1.y1)*(r2.y1-r1.y1);
+
+    r1.x2+=(r2.x2<r1.x2)*(r2.x2-r1.x2);
+    r1.y2+=(r2.y2<r1.y2)*(r2.y2-r1.y2);
+
+    return r1;
+}
+static inline bool rectangle_has_positive_area(rectangle r)
+{
+    return r.x2 > r.x1 && r.y2 > r.y1;
+}
+static inline rectangle rectangle_add_offset(rectangle r,int16_t x,int16_t y)
+{
+    return (rectangle){.x1=r.x1+x,.y1=r.y1+y,.x2=r.x2+x,.y2=r.y2+y};
+}
+static inline rectangle rectangle_subtract_offset(rectangle r,int16_t x,int16_t y)
+{
+    return (rectangle){.x1=r.x1-x,.y1=r.y1-y,.x2=r.x2-x,.y2=r.y2-y};
+}
+static inline bool rectangle_surrounds_point(rectangle r,vec2i p)
+{
+    return ((r.x1 <= p.x)&&(r.y1 <= p.y)&&(r.x2 > p.x)&&(r.y2> p.y));
+}
+static inline bool rectangle_surrounds_origin(rectangle r)
+{
+    return ((r.x1 <= 0)&&(r.y1 <= 0)&&(r.x2 > 0)&&(r.y2> 0));
+}
+static inline bool rectangles_overlap(rectangle r1,rectangle r2)
+{
+    return r1.x1<r2.x2 && r2.x1<r1.x2 && r1.y1<r2.y2 && r2.y1<r1.y2;
+}
+
+
 
 
 
@@ -364,57 +414,6 @@ static inline vec3i v3i_clamp(vec3i v,vec3i min,vec3i max)
 static inline vec3i v3i_clamp_range(vec3i v,int32_t min,int32_t max)
 {
     return (vec3i){.v=_mm_min_epi32(_mm_max_epi32(v.v,_mm_set1_epi32(min)),_mm_set1_epi32(max))};
-}
-
-
-
-typedef union rectangle
-{
-    __m64 r;
-    struct
-    {
-        int16_t x1;
-        int16_t y1;
-        int16_t x2;
-        int16_t y2;
-    };
-}
-rectangle;
-
-///rectangle
-static inline rectangle rectangle_ini(int16_t x1,int16_t y1,int16_t x2,int16_t y2)
-{
-    return (rectangle){.r=_mm_set_pi16(y2,x2,y1,x1)};
-}
-static inline rectangle get_rectangle_overlap(rectangle r1,rectangle r2)
-{
-    return (rectangle){.r=_mm_unpacklo_pi32(_mm_max_pi16(r1.r,r2.r),_mm_srli_si64(_mm_min_pi16(r1.r,r2.r),32))};
-}
-static inline bool rectangle_has_positive_area(rectangle r)
-{
-    return (_mm_cvtsi64_si32(_mm_sub_pi16(r.r,_mm_srli_si64(r.r,32)))&0x80008000)==0x80008000;
-}
-static inline rectangle rectangle_add_offset(rectangle r,int16_t x,int16_t y)
-{
-    return (rectangle){.r=_mm_add_pi16(r.r,_mm_set_pi16(y,x,y,x))};
-}
-static inline rectangle rectangle_subtract_offset(rectangle r,int16_t x,int16_t y)
-{
-    return (rectangle){.r=_mm_sub_pi16(r.r,_mm_set_pi16(y,x,y,x))};
-}
-static inline bool rectangle_surrounds_origin(rectangle r)
-{
-    return (_mm_cvtm64_si64(_mm_sub_pi16(r.r,_mm_set1_pi16(1)))&0x8000800080008000)==0x0000000080008000;///check "sign" bits
-}
-static inline bool rectangle_surrounds_point(rectangle r,vec2i p)
-{
-    return rectangle_surrounds_origin(rectangle_subtract_offset(r,p.x,p.y));
-}
-static inline bool rectangles_overlap(rectangle r1,rectangle r2)
-{
-    __m64 sr2=_mm_add_pi16(_mm_shuffle_pi16(r2.r,0x4E),_mm_set_pi16(1,1,0,0));
-    ///need to add 1 above as we're subtracting and the result cannot be positive for these ones when they're equal (otherwise they'd errantly pass)
-    return (_mm_cvtm64_si64(_mm_sub_pi16(r1.r,sr2))&0x8000800080008000)==0x0000000080008000;///check "sign" bits
 }
 
 
@@ -1093,55 +1092,6 @@ static inline vec3i v3i_clamp_range(vec3i v,int32_t min,int32_t max)
 }
 
 
-
-typedef struct rectangle
-{
-    int16_t x1;
-    int16_t y1;
-    int16_t x2;
-    int16_t y2;
-}
-rectangle;
-
-///rectangle
-static inline rectangle rectangle_ini(int16_t x1,int16_t y1,int16_t x2,int16_t y2)
-{
-    return (rectangle){.x1=x1,.y1=y1,.x2=x2,.y2=y2};
-}
-static inline rectangle get_rectangle_overlap(rectangle r1,rectangle r2)
-{
-    r1.x1+=(r2.x1>r1.x1)*(r2.x1-r1.x1);
-    r1.y1+=(r2.y1>r1.y1)*(r2.y1-r1.y1);
-
-    r1.x2+=(r2.x2<r1.x2)*(r2.x2-r1.x2);
-    r1.y2+=(r2.y2<r1.y2)*(r2.y2-r1.y2);
-
-    return r1;
-}
-static inline bool rectangle_has_positive_area(rectangle r)
-{
-    return r.x2 > r.x1 && r.y2 > r.y1;
-}
-static inline rectangle rectangle_add_offset(rectangle r,int16_t x,int16_t y)
-{
-    return (rectangle){.x1=r.x1+x,.y1=r.y1+y,.x2=r.x2+x,.y2=r.y2+y};
-}
-static inline rectangle rectangle_subtract_offset(rectangle r,int16_t x,int16_t y)
-{
-    return (rectangle){.x1=r.x1-x,.y1=r.y1-y,.x2=r.x2-x,.y2=r.y2-y};
-}
-static inline bool rectangle_surrounds_point(rectangle r,vec2i p)
-{
-    return ((r.x1 <= p.x)&&(r.y1 <= p.y)&&(r.x2 > p.x)&&(r.y2> p.y));
-}
-static inline bool rectangle_surrounds_origin(rectangle r)
-{
-    return ((r.x1 <= 0)&&(r.y1 <= 0)&&(r.x2 > 0)&&(r.y2> 0));
-}
-static inline bool rectangles_overlap(rectangle r1,rectangle r2)
-{
-    return r1.x1<r2.x2 && r2.x1<r1.x2 && r1.y1<r2.y2 && r2.y1<r1.y2;
-}
 
 
 

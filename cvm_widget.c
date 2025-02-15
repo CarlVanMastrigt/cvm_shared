@@ -45,6 +45,8 @@ void widget_context_terminate(struct widget_context* context)
 
     assert(context->currently_active_widget == NULL);
     assert(context->only_interactable_widget == NULL);
+
+
 }
 
 /// one level below root
@@ -223,6 +225,7 @@ void widget_base_initialise(widget_base* base, struct widget_context* context, c
     {
         .context = context,
         .status = WIDGET_ACTIVE,
+        .references = 1,
         .min_w = 0,
         .min_h = 0,
         .r = rectangle_ini(0,0,0,0),
@@ -232,6 +235,8 @@ void widget_base_initialise(widget_base* base, struct widget_context* context, c
         .appearence_functions = appearence_functions,
         .behaviour_functions = behaviour_functions,
     };
+
+    context->registered_widget_count++;
 }
 
 widget * create_widget(struct widget_context* context, size_t size)
@@ -802,13 +807,28 @@ void delete_widget(widget * w)
 
     #warning links to other widgets in popup.trigger_widget and any button that toggles another widget prevents deletion from being a clean process! (deletion of any widget in this kind of structure may cause a segfault)
 
-    w->base.behaviour_functions->wid_delete(w);
-
     remove_child_from_parent(w);
 
-    free(w);
+    release_widget(w);
 }
 
+
+void retain_widget(widget * w)
+{
+    w->base.references++;
+}
+
+void release_widget(widget * w)
+{
+    w->base.references--;
+
+    if(w->base.references == 0)
+    {
+        w->base.context->registered_widget_count--;
+        w->base.behaviour_functions->wid_delete(w);
+        free(w);
+    }
+}
 
 
 

@@ -106,8 +106,10 @@ static void panel_widget_set_w(overlay_theme * theme,widget * w)
 
 static void panel_widget_set_h(overlay_theme * theme,widget * w)
 {
-	organise_widget_vertically(w->panel.contents, theme, ((w->base.status&WIDGET_V_FIRST)?theme->y_panel_offset_side:theme->y_panel_offset),
-            w->base.r.y2 - w->base.r.y1 -((w->base.status&WIDGET_V_FIRST)?theme->y_panel_offset_side:theme->y_panel_offset) - ((w->base.status&WIDGET_V_LAST)?theme->y_panel_offset_side:theme->y_panel_offset));
+    int16_t top_offset    = (w->base.status&WIDGET_V_FIRST) ? theme->y_panel_offset_side : theme->y_panel_offset;
+    int16_t bottom_offset = (w->base.status&WIDGET_V_LAST)  ? theme->y_panel_offset_side : theme->y_panel_offset;
+    int16_t height = w->base.r.y2 - w->base.r.y1 - top_offset - bottom_offset;
+	organise_widget_vertically(w->panel.contents, theme, top_offset, height);
 }
 
 

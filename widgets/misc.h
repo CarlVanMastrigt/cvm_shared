@@ -77,6 +77,7 @@ struct multibox_functions // appearance?
 
     /// widget(multibox), x_off, y_off, render_batch, bounds, element/entry index
     void    (*const entry_render) (widget*,int16_t,int16_t,struct cvm_overlay_render_batch*,rectangle,uint32_t);
+    /// these should be called only when assessing multibox width and height and should apply to all contents of the multibox
     int16_t (*const entry_min_w ) (widget*);
     int16_t (*const entry_min_h ) (widget*);
 
@@ -89,6 +90,7 @@ struct multibox_functions // appearance?
 };
 
 // way to support grid, h-list, v-list?
+// could/should make grid by default? communicate h/v list by 0 min count?
 typedef struct widget_multibox
 {
     widget_base base;
@@ -97,7 +99,8 @@ typedef struct widget_multibox
 
     const struct multibox_functions* functions;
 
-    uint32_t selected_widget;
+    uint32_t selected_entry;
+    // also need a highlighted entry?
 
     /**
      * layout - horizontal, vertical, grid
@@ -119,15 +122,32 @@ typedef struct widget_multibox
     // render same as `widget_appearence_function_set` with the entry number included
 
 
-    // behaviour functions WAY more complex!
+    // behaviour functions WAY more complex for this!, need general good solution long term...
+
+    enum widget_layout layout;
+
+    // distribution requires entry sizing, which goes against idea of things being purely indexed (uint), also somewhat disallows entry deactivation
+    enum widget_distribution entry_distribution;
 
     // for rendering purposes, need x and y to account for grid capabilities
-    // affect widget w/h which are int16
+    // affect widget min w/h which are int16 <- this cannot inform grid layout (horizontal vs vertical)
     int16_t min_displayed_count_x;
     int16_t min_displayed_count_y;
+
+    // offset of contents relative to capabilities
+    int32_t offset_x;
+    int32_t offset_y;
+
+    // visible size retrieved from base
+
+    // how is max offset/ remainder of bar retrieved ?
+
+
+    /// should be using accessor functions so no need to store current size separately
 }
 widget_multibox;
-
+// how does hover behave in this scheme?
+// does this even make sense as a concept over something more ad-hoc?
 
 
 

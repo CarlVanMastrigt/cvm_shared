@@ -59,7 +59,7 @@ struct cvm_overlay_target_resources
     cvm_vk_timeline_semaphore_moment last_use_moment;
 };
 
-CVM_QUEUE(struct cvm_overlay_target_resources, cvm_overlay_target_resources, 8)
+SOL_QUEUE(struct cvm_overlay_target_resources, cvm_overlay_target_resources, 8)
 /// queue as is done above might not be best if it's desirable to maintain multiple targets as renderable
 
 /// resources used in a per cycle/frame fashion
@@ -72,7 +72,7 @@ struct cvm_overlay_transient_resources
     cvm_vk_timeline_semaphore_moment last_use_moment;
 };
 
-CVM_QUEUE(struct cvm_overlay_transient_resources*,cvm_overlay_transient_resources,8)
+SOL_QUEUE(struct cvm_overlay_transient_resources*,cvm_overlay_transient_resources,8)
 
 /// fixed sized queue of these?
 /// queue init at runtime? (custom size)

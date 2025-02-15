@@ -44,7 +44,7 @@ struct cvm_vk_staging_buffer_segment
     VkDeviceSize size;/// must be greater than or equal to start (can be greater than buffer_size)
 };
 
-CVM_QUEUE(struct cvm_vk_staging_buffer_segment, cvm_vk_staging_buffer_segment, 16)
+SOL_QUEUE(struct cvm_vk_staging_buffer_segment, cvm_vk_staging_buffer_segment, 16)
 
 struct cvm_vk_staging_buffer_
 {

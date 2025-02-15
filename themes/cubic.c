@@ -1241,6 +1241,7 @@ overlay_theme * create_cubic_theme(const FT_Library * freetype_library)
 
     theme->x_box_offset=16;/// for now only text offset? any other uses?
     theme->y_box_offset=3;/// ??? figure out what this should be
+    #warning above have misleading names, "content offsets" instead??
 
     theme->icon_bar_extra_w=32;///16(icon_size)+ text_offset(16) e.g. same offset as text bar
     theme->separator_w=8;

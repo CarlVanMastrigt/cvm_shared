@@ -33,6 +33,7 @@ struct sol_sync_primitive_functions
     void(*const attach_successor )(struct sol_sync_primitive*, struct sol_sync_primitive*);//primitive, successor
 };
 
+/// struct sol_sync_primitive MUST be the first element of any synchronization primitive
 struct sol_sync_primitive
 {
     const struct sol_sync_primitive_functions* sync_functions;

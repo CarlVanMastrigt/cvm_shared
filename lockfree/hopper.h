@@ -47,6 +47,7 @@ void sol_lockfree_hopper_terminate(struct sol_lockfree_hopper* hopper);
 void sol_lockfree_hopper_reset(struct sol_lockfree_hopper* hopper);
 
 /// returns true if it was added, false if not (fails if hopper is locked)
+/// hopper is meant to be space efficient, requiring pool to push helps reduce metadata storage per hopper
 bool sol_lockfree_hopper_push(struct sol_lockfree_hopper* hopper, struct sol_lockfree_pool* pool, void* entry);
 bool sol_lockfree_hopper_check_if_closed(struct sol_lockfree_hopper* hopper);
 
