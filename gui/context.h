@@ -21,13 +21,18 @@ along with solipsix.  If not, see <https://www.gnu.org/licenses/>.
 
 #include <inttypes.h>
 
-
+#include "math/rect_s16.h"
 
 struct sol_gui_object;
 
+/** context
+ * outside ofgui setup/creation usually want to pass around context for rendering, input management &c.
+*/
+
 struct sol_gui_context
 {
-	// good deal of this could be improved architecturally
+    // should be position and size of containing system window
+    rect_s16 range;
 
 	// shouldnt be able to modify the theme's data from
     const struct sol_gui_theme* theme;
@@ -36,7 +41,7 @@ struct sol_gui_context
 
     uint32_t registered_object_count;//for debug
 
-    uint32_t double_click_time;//move to settings
+    // uint32_t double_click_time;//move to settings
 
 
     // not sure if a separation of "currently clicked"(selected) and "clicked but held onto"(active) is desirable
@@ -48,14 +53,17 @@ struct sol_gui_context
     struct sol_gui_object* previously_clicked_object;
     uint32_t previously_clicked_time;
 
-    struct sol_gui_object* root_object;// this should not change
+    struct sol_gui_object* root_container;// this should not change
 };
 
 // also creates and returns the root object
 struct sol_gui_object* sol_gui_context_initialise(struct sol_gui_context* context, const struct sol_gui_theme* theme);
 void                   sol_gui_context_terminate (struct sol_gui_context* context);
 
+void sol_gui_context_update_range(struct sol_gui_context* context, rect_s16 range);
+
 // actually not sure how to handle these, they WILL retain objects though
+void sol_gui_context_set_selected_object    (struct sol_gui_context* context, struct sol_gui_object* obj);
 void sol_gui_context_set_active_object      (struct sol_gui_context* context, struct sol_gui_object* obj);
 void sol_gui_context_set_interactable_object(struct sol_gui_context* context, struct sol_gui_object* obj);
 

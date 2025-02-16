@@ -17,9 +17,34 @@ You should have received a copy of the GNU Affero General Public License
 along with solipsix.  If not, see <https://www.gnu.org/licenses/>.
 */
 
-#pragma once
+#include <stdlib.h>
 
-#include "gui/object.h"
+#include "gui/theme.h"
 
-#include "gui/container.h"
-#include "gui/button.h"
+
+
+
+
+
+
+void sol_gui_theme_simple_initialise(struct sol_gui_theme* theme)
+{
+}
+
+void sol_gui_theme_simple_terminate(struct sol_gui_theme* theme)
+{
+	// nothing to be done? (is just rendering boxes!)
+}
+
+struct sol_gui_theme* sol_gui_theme_simple_create(void)
+{
+	struct sol_gui_theme* theme = malloc(sizeof(struct sol_gui_theme));
+	sol_gui_theme_simple_initialise(theme);
+	return theme;
+}
+
+void sol_gui_theme_simple_destroy(struct sol_gui_theme* theme)
+{
+	sol_gui_theme_simple_terminate(theme);
+	free(theme);
+}

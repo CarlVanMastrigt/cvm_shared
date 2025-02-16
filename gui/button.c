@@ -23,14 +23,7 @@ along with solipsix.  If not, see <https://www.gnu.org/licenses/>.
 #include "gui/button.h"
 
 
-static const struct sol_gui_object_structure_functions sol_gui_button_structure_functions =
-{
-	#warning can/should probably remove this (structure dependent on type)
-};
 
-#warning possibly do need return type? to handle setting widget as active &c.
-
-#warning does this need to travese up the stack? (call same with parent) OR do that at top level (as that would avoid stack use)
 bool sol_gui_button_default_input_action(struct sol_gui_object* obj, const struct sol_gui_input* input)
 {
 	struct sol_gui_button* button = (struct sol_gui_button*)obj;
@@ -50,7 +43,6 @@ void sol_gui_button_construct(struct sol_gui_button* button, struct sol_gui_cont
 {
 	sol_gui_object_construct(&button->base, context);
 
-	button->base.structure_functions = &sol_gui_button_structure_functions;
 	button->base.input_action = &sol_gui_button_default_input_action;
 
 	button->select_action = select_action;
@@ -76,33 +68,28 @@ static inline void* sol_gui_button_get_buffer(struct sol_gui_button* button)
 
 
 
-
-
-static void sol_gui_text_button_render(struct sol_gui_object* obj, vec2_s16 offset, rect_s16 bounds, struct cvm_overlay_render_batch* batch)
+static void sol_gui_text_button_render(struct sol_gui_object* obj, vec2_s16 offset, struct cvm_overlay_render_batch* batch)
 {
 	struct sol_gui_button* button = (struct sol_gui_button*)obj;
 	char* text = sol_gui_button_get_buffer(button);
 	exit('!');
 }
-
-static struct sol_gui_object* sol_gui_text_button_select(struct sol_gui_object* obj, vec2_s16 location)
+static struct sol_gui_object* sol_gui_text_button_search(struct sol_gui_object* obj, vec2_s16 location)
 {
 	exit('!');
 	return obj;
 }
-
-static void sol_gui_text_button_set_min_size(struct sol_gui_object* obj)
+static vec2_s16 sol_gui_text_button_min_size(struct sol_gui_object* obj)
 {
 	exit('!');
+	return (vec2_s16){0,0};
 }
-
 static const struct sol_gui_object_structure_functions sol_gui_text_button_structure_functions =
 {
-	.render        = &sol_gui_text_button_render,
-	.select        = &sol_gui_text_button_select,
-	.set_min_size  = &sol_gui_text_button_set_min_size,
+	.render   = &sol_gui_text_button_render,
+	.search   = &sol_gui_text_button_search,
+	.min_size = &sol_gui_text_button_min_size,
 };
-
 struct sol_gui_object* sol_gui_text_button_create(struct sol_gui_context* context, void(*select_action)(void*), void* data, char* text)
 {
 	size_t text_len = strlen(text) + 1;
@@ -120,37 +107,28 @@ struct sol_gui_object* sol_gui_text_button_create(struct sol_gui_context* contex
 
 
 
-
-
-
-
-
-
-static void sol_gui_utf8_icon_button_render(struct sol_gui_object* obj, vec2_s16 offset, rect_s16 bounds, struct cvm_overlay_render_batch* batch)
+static void sol_gui_utf8_icon_button_render(struct sol_gui_object* obj, vec2_s16 offset, struct cvm_overlay_render_batch* batch)
 {
 	struct sol_gui_button* button = (struct sol_gui_button*)obj;
 	char* utf8_icon = sol_gui_button_get_buffer(button);
 	exit('!');
 }
-
-static struct sol_gui_object* sol_gui_utf8_icon_button_select(struct sol_gui_object* obj, vec2_s16 location)
+static struct sol_gui_object* sol_gui_utf8_icon_button_search(struct sol_gui_object* obj, vec2_s16 location)
 {
 	exit('!');
 	return obj;
 }
-
-static void sol_gui_utf8_icon_button_set_min_size(struct sol_gui_object* obj)
+static vec2_s16 sol_gui_utf8_icon_button_min_size(struct sol_gui_object* obj)
 {
 	exit('!');
+	return (vec2_s16){0,0};
 }
-
 static const struct sol_gui_object_structure_functions sol_gui_utf8_icon_button_structure_functions =
 {
-	.render        = &sol_gui_utf8_icon_button_render,
-	.select        = &sol_gui_utf8_icon_button_select,
-	.set_min_size  = &sol_gui_utf8_icon_button_set_min_size,
+	.render   = &sol_gui_utf8_icon_button_render,
+	.search   = &sol_gui_utf8_icon_button_search,
+	.min_size = &sol_gui_utf8_icon_button_min_size,
 };
-
 struct sol_gui_object* sol_gui_utf8_icon_button_create(struct sol_gui_context* context, void(*select_action)(void*), void* data, char* utf8_icon)
 {
 	size_t utf8_icon_len = strlen(utf8_icon) + 1;

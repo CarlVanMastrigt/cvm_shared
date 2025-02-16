@@ -41,5 +41,21 @@ static inline vec2_s16 vec2_s16_sub(vec2_s16 lhs, vec2_s16 rhs)
 {
     return (vec2_s16){.x=lhs.x-rhs.x, .y=lhs.y-rhs.y};
 }
+static inline vec2_s16 vec2_s16_min(vec2_s16 lhs, vec2_s16 rhs)
+{
+    return (vec2_s16)
+    {
+        .x = lhs.x<rhs.x ? lhs.x : rhs.x,
+        .y = lhs.y<rhs.y ? lhs.y : rhs.y,
+    };
+}
+static inline vec2_s16 vec2_s16_max(vec2_s16 lhs, vec2_s16 rhs)
+{
+    return (vec2_s16)
+    {
+        .x = lhs.x>rhs.x ? lhs.x : rhs.x,
+        .y = lhs.y>rhs.y ? lhs.y : rhs.y,
+    };
+}
 
 

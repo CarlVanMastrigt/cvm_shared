@@ -17,9 +17,12 @@ You should have received a copy of the GNU Affero General Public License
 along with solipsix.  If not, see <https://www.gnu.org/licenses/>.
 */
 
-#pragma once
+#include <ft2build.h>
 
-#include "gui/object.h"
+struct sol_gui_theme;
 
-#include "gui/container.h"
-#include "gui/button.h"
+void sol_gui_theme_simple_initialise(struct sol_gui_theme* theme, const FT_Library * freetype_library);
+void sol_gui_theme_simple_terminate(struct sol_gui_theme* theme);
+
+struct sol_gui_theme* sol_gui_theme_simple_create(const FT_Library * freetype_library);
+void sol_gui_theme_simple_destroy(struct sol_gui_theme* theme);

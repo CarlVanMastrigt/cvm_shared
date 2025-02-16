@@ -22,7 +22,7 @@ along with solipsix.  If not, see <https://www.gnu.org/licenses/>.
 #include <inttypes.h>
 
 #include "math/vec2_s16.h"
-#include "math/rectangle_s16.h"
+#include "math/rect_s16.h"
 
 /** size classes:
  * size classes allow the creation of boxes that neatly fit inside one another and can fulfill different purposes
@@ -33,7 +33,7 @@ along with solipsix.  If not, see <https://www.gnu.org/licenses/>.
 
 struct cvm_overlay_render_batch;
 
-typedef int overlay_colour;
+enum overlay_colour;
 #warning remove above, include necessary header to get colour
 
 struct sol_gui_theme
@@ -62,14 +62,14 @@ struct sol_gui_theme
     */
 
     // should this even use bounds? limited render should be managed with constrained renders
-    void     (*box_render)        (struct sol_gui_theme* theme, uint32_t flags, rect_s16 box, struct cvm_overlay_render_batch * restrict render_batch, overlay_colour colour);
+    void     (*box_render)        (struct sol_gui_theme* theme, uint32_t flags, rect_s16 box, struct cvm_overlay_render_batch * restrict render_batch, enum overlay_colour colour);
     bool     (*box_select)        (struct sol_gui_theme* theme, uint32_t flags, rect_s16 box);
     rect_s16 (*box_place_content) (struct sol_gui_theme* theme, uint32_t flags, rect_s16 box, bool border);
     vec2_s16 (*box_size)          (struct sol_gui_theme* theme, uint32_t flags, vec2_s16 contents_size, bool border);
 
     // box render with scroll information ?? (for localised scroll, can be extra)
 
-    void     (*panel_render)        (struct sol_gui_theme* theme, uint32_t flags, rect_s16 box, struct cvm_overlay_render_batch * restrict render_batch, overlay_colour colour);
+    void     (*panel_render)        (struct sol_gui_theme* theme, uint32_t flags, rect_s16 box, struct cvm_overlay_render_batch * restrict render_batch, enum overlay_colour colour);
     bool     (*panel_select)        (struct sol_gui_theme* theme, uint32_t flags, rect_s16 box);
     rect_s16 (*panel_place_content) (struct sol_gui_theme* theme, uint32_t flags, rect_s16 box, bool border);
     vec2_s16 (*panel_size)          (struct sol_gui_theme* theme, uint32_t flags, vec2_s16 contents_size, bool border);

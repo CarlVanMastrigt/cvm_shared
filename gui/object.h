@@ -23,7 +23,7 @@ along with solipsix.  If not, see <https://www.gnu.org/licenses/>.
 #include <inttypes.h>
 
 #include "math/vec2_s16.h"
-#include "math/rectangle_s16.h"
+#include "math/rect_s16.h"
 
 #include "gui/enums.h"
 #include "gui/context.h"
@@ -52,19 +52,16 @@ struct sol_gui_object_structure_functions
 	// appearance
 
 	// put in the batch to be passed into overlay rendererer
-    void (*const render) (struct sol_gui_object* obj, vec2_s16 offset, rect_s16 bounds, struct cvm_overlay_render_batch* batch);
-
-#warning how do we allow selection out of bounds? need a way to allow selection to override other widgets! (could be easily possible in specific case of resizing...)
-    // ^ maybe do just this for simplicity? -- is honestly a decent generic way to handle
+    void (*const render) (struct sol_gui_object* obj, vec2_s16 offset, struct cvm_overlay_render_batch* batch);
 
     // used to recursively find the gui_object under the pixel location provided
-    struct sol_gui_object* (*const select) (struct sol_gui_object* obj, vec2_s16 location);
+    struct sol_gui_object* (*const search) (struct sol_gui_object* obj, vec2_s16 location);
 
     // sets the min_size of the gui_object to inform parents of their minimum size
-    void (*const set_min_size) (struct sol_gui_object* obj);
+    vec2_s16 (*const min_size) (struct sol_gui_object* obj);
 
     // fills out any data affected by the position(size and location) of this object (which must have been set by the gui_object's parent) and decides how to distribute that space amongst its children if it has them
-    void (*const place_content) (struct sol_gui_object* obj);
+    void (*const place_content) (struct sol_gui_object* obj, rect_s16 content_rect);
 
     // adds a child to this widget, will error if widget cannot accept children
     void (*const add_child) (struct sol_gui_object* obj, struct sol_gui_object* child);
@@ -102,25 +99,27 @@ struct sol_gui_object
 /// construct should be used when more data is needed, will instantiate the base object data in an existing object
 void sol_gui_object_construct(struct sol_gui_object* obj, struct sol_gui_context* context);
 
-void sol_gui_object_destroy_recursively(struct sol_gui_object* obj); // will destroy object and all its children
+void sol_gui_object_recursive_destroy(struct sol_gui_object* obj); // will (attempt to) destroy object and all its children
 
 
 void sol_gui_object_retain(struct sol_gui_object* obj);
 void sol_gui_object_release(struct sol_gui_object* obj);
 
+// basically gets parent and then calls `sol_gui_object_remove_child`
+void sol_gui_object_remove_from_parent(struct sol_gui_object* obj);
+
+
 
 
 // these perform any meta operations on objects and call their internal functions if present
-void                   sol_gui_object_render       (struct sol_gui_object* obj, vec2_s16 offset, rect_s16 bounds, struct cvm_overlay_render_batch* batch);
-struct sol_gui_object* sol_gui_object_select       (struct sol_gui_object* obj, vec2_s16 location);
-void                   sol_gui_object_set_min_size (struct sol_gui_object* obj);
-void                   sol_gui_object_place_content(struct sol_gui_object* obj);
+void                   sol_gui_object_render       (struct sol_gui_object* obj, vec2_s16 offset, struct cvm_overlay_render_batch* batch);
+struct sol_gui_object* sol_gui_object_search       (struct sol_gui_object* obj, vec2_s16 location);
+vec2_s16               sol_gui_object_min_size     (struct sol_gui_object* obj);
+void                   sol_gui_object_place_content(struct sol_gui_object* obj, rect_s16 content_rect);
 void                   sol_gui_object_add_child    (struct sol_gui_object* obj, struct sol_gui_object* child);
 void                   sol_gui_object_remove_child (struct sol_gui_object* obj, struct sol_gui_object* child);
 
 
-// basically gets parent and then calls `sol_gui_object_remove_child`
-void sol_gui_object_remove_from_parent(struct sol_gui_object* obj);
 
 // perhaps handle active widget if necessary? also searches for
 bool sol_gui_handle_input(struct sol_gui_context* context, const struct sol_gui_input* input);

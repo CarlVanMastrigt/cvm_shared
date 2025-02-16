@@ -27,53 +27,46 @@ along with solipsix.  If not, see <https://www.gnu.org/licenses/>.
 
 typedef struct rect_s16
 {
-    int16_t x1;
-    int16_t y1;
-    int16_t x2;
-    int16_t y2;
+    vec2_s16 start;
+    vec2_s16 end;
 }
 rect_s16;
 
-///rectangle
-static inline rect_s16 rect_s16_set(int16_t x1,int16_t y1,int16_t x2,int16_t y2)
-{
-    return (rect_s16){.x1=x1, .y1=y1, .x2=x2, .y2=y2};
-}
 static inline rect_s16 rect_s16_intersect(rect_s16 r1, rect_s16 r2)
 {
 	/// this doesnt work with inverted rects
-    r1.x1 += (r2.x1 > r1.x1) ? (r2.x1 - r1.x1) : 0;
-    r1.y1 += (r2.y1 > r1.y1) ? (r2.y1 - r1.y1) : 0;
+    r1.start.x += (r2.start.x > r1.start.x) ? (r2.start.x - r1.start.x) : 0;
+    r1.start.y += (r2.start.y > r1.start.y) ? (r2.start.y - r1.start.y) : 0;
 
-    r1.x2 += (r2.x2 < r1.x2) ? (r2.x2 - r1.x2) : 0;
-    r1.y2 += (r2.y2 < r1.y2) ? (r2.y2 - r1.y2) : 0;
+    r1.end.x += (r2.end.x < r1.end.x) ? (r2.end.x - r1.end.x) : 0;
+    r1.end.y += (r2.end.y < r1.end.y) ? (r2.end.y - r1.end.y) : 0;
 
     return r1;
 }
 static inline bool rect_s16_positive_area(rect_s16 r)
 {
-    return r.x2 > r.x1 && r.y2 > r.y1;
+    return r.end.x > r.start.x && r.end.y > r.start.y;
 }
 static inline rect_s16 rect_s16_add_offset(rect_s16 r, vec2_s16 o)
 {
-    return (rect_s16){.x1=r.x1+o.x, .y1=r.y1+o.y, .x2=r.x2+o.x, .y2=r.y2+o.y};
+    return (rect_s16){.start.x=r.start.x+o.x, .start.y=r.start.y+o.y, .end.x=r.end.x+o.x, .end.y=r.end.y+o.y};
 }
 static inline rect_s16 rect_s16_sub_offset(rect_s16 r, vec2_s16 o)
 {
-    return (rect_s16){.x1=r.x1-o.x, .y1=r.y1-o.y,.x2=r.x2-o.x, .y2=r.y2-o.y};
+    return (rect_s16){.start.x=r.start.x-o.x, .start.y=r.start.y-o.y,.end.x=r.end.x-o.x, .end.y=r.end.y-o.y};
 }
 static inline bool rect_s16_contains_point(rect_s16 r, vec2_s16 p)
 {
 	/// this doesnt work with inverted rects
-    return ((r.x1 <= p.x)&&(r.y1 <= p.y)&&(r.x2 > p.x)&&(r.y2> p.y));
+    return ((r.start.x <= p.x)&&(r.start.y <= p.y)&&(r.end.x > p.x)&&(r.end.y> p.y));
 }
 static inline bool rect_s16_contains_origin(rect_s16 r)
 {
 	/// this doesnt work with inverted rects
-    return ((r.x1 <= 0)&&(r.y1 <= 0)&&(r.x2 > 0)&&(r.y2> 0));
+    return ((r.start.x <= 0)&&(r.start.y <= 0)&&(r.end.x > 0)&&(r.end.y> 0));
 }
 static inline bool rect_s16_have_overlap(rect_s16 lhs, rect_s16 rhs)
 {
 	/// this doesnt work with inverted rects
-    return lhs.x1<rhs.x2 && rhs.x1<lhs.x2 && lhs.y1<rhs.y2 && rhs.y1<lhs.y2;
+    return lhs.start.x<rhs.end.x && rhs.start.x<lhs.end.x && lhs.start.y<rhs.end.y && rhs.start.y<lhs.end.y;
 }

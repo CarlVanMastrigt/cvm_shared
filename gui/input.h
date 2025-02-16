@@ -69,6 +69,9 @@ struct sol_gui_input
 		struct
 		{
 			vec2_s16 global_pixel_location;
+			// how to handle double click/double select? :
+			// int repeats; // ?
+			// int priority; // ? (higher if multiple?)
 		}
 		select;// begin, end
 
