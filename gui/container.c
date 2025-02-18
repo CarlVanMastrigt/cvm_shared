@@ -137,7 +137,7 @@ void sol_gui_container_destroy(struct sol_gui_object* obj)
 	for(child = container->first_child; child; child = next)
 	{
 		next = child->next;// after destroy child may be invalid, so must call this here
-		sol_gui_object_recursive_destroy(child);
+		sol_gui_object_release(child);
 		assert(next == container->first_child);// child must remove itself from the parent as part of above function
 	}
 }

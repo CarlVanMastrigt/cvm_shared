@@ -20,6 +20,7 @@ along with solipsix.  If not, see <https://www.gnu.org/licenses/>.
 #pragma once
 
 #include <inttypes.h>
+#include <stdbool.h>
 
 typedef struct vec2_s16
 {
@@ -56,6 +57,46 @@ static inline vec2_s16 vec2_s16_max(vec2_s16 lhs, vec2_s16 rhs)
         .x = lhs.x>rhs.x ? lhs.x : rhs.x,
         .y = lhs.y>rhs.y ? lhs.y : rhs.y,
     };
+}
+static inline bool vec2_s16_cmp_all_eq(vec2_s16 lhs, vec2_s16 rhs)
+{
+    return lhs.x == rhs.x && lhs.y == rhs.y;
+}
+static inline bool vec2_s16_cmp_all_lt(vec2_s16 lhs, vec2_s16 rhs)
+{
+    return lhs.x < rhs.x && lhs.y < rhs.y;
+}
+static inline bool vec2_s16_cmp_all_lte(vec2_s16 lhs, vec2_s16 rhs)
+{
+    return lhs.x <= rhs.x && lhs.y <= rhs.y;
+}
+static inline bool vec2_s16_cmp_all_gt(vec2_s16 lhs, vec2_s16 rhs)
+{
+    return lhs.x > rhs.x && lhs.y > rhs.y;
+}
+static inline bool vec2_s16_cmp_all_gte(vec2_s16 lhs, vec2_s16 rhs)
+{
+    return lhs.x >= rhs.x && lhs.y >= rhs.y;
+}
+static inline bool vec2_s16_cmp_any_eq(vec2_s16 lhs, vec2_s16 rhs)
+{
+    return lhs.x == rhs.x || lhs.y == rhs.y;
+}
+static inline bool vec2_s16_cmp_any_lt(vec2_s16 lhs, vec2_s16 rhs)
+{
+    return lhs.x < rhs.x || lhs.y < rhs.y;
+}
+static inline bool vec2_s16_cmp_any_lte(vec2_s16 lhs, vec2_s16 rhs)
+{
+    return lhs.x <= rhs.x || lhs.y <= rhs.y;
+}
+static inline bool vec2_s16_cmp_any_gt(vec2_s16 lhs, vec2_s16 rhs)
+{
+    return lhs.x > rhs.x || lhs.y > rhs.y;
+}
+static inline bool vec2_s16_cmp_any_gte(vec2_s16 lhs, vec2_s16 rhs)
+{
+    return lhs.x >= rhs.x || lhs.y >= rhs.y;
 }
 
 

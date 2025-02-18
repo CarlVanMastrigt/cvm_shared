@@ -30,12 +30,16 @@ along with solipsix.  If not, see <https://www.gnu.org/licenses/>.
 enum sol_gui_input_type
 {
 	// usually deactivates active widget, should only do something if there's an active widget (b button, escape key, click away)
+	// if returning null should probably NOT defocus this object (perhaps that's undesirable though), would need to force this on shutdown (do manually?)
 	SOL_GUI_INPUT_CANCEL,
 
-	/// basically ui click, then actions happening after something was selected
-	/// may need variants based on button that was pressed (r button different to l-button)
-	SOL_GUI_INPUT_SELECT_BEGIN,
-	SOL_GUI_INPUT_SELECT_END,
+	/// basically left click or equivalent, then actions happening after something was selected
+	SOL_GUI_INPUT_PRIMARY_SELECT_BEGIN,
+	SOL_GUI_INPUT_PRIMARY_SELECT_END,
+
+	// basically right click or equivalent, then actions happening after something was selected
+	SOL_GUI_INPUT_CONTEXT_SELECT_BEGIN,
+	SOL_GUI_INPUT_CONTEXT_SELECT_END,
 
 	/// should know if somthing can be dropped (needn't be a GUI object, can be something independent, e.g. game object)
 	SOL_GUI_INPUT_DROP_QUERY,// can this item be dropped into with the currently active object (NOT NECESSARILY GUI)
@@ -57,11 +61,9 @@ struct sol_gui_input
 {
 	enum sol_gui_input_type type;
 
-	// time since app start
-	uint32_t time_rel_msec;
 	// unix time
-	uint32_t time_abs_nsec;
-	uint64_t time_abs_sec;
+	uint32_t time_nsec;
+	uint64_t time_sec;
 
 
 	union
@@ -72,6 +74,7 @@ struct sol_gui_input
 			// how to handle double click/double select? :
 			// int repeats; // ?
 			// int priority; // ? (higher if multiple?)
+			// can should change active widget in some circumstances?
 		}
 		select;// begin, end
 

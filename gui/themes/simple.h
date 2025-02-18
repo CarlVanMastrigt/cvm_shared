@@ -18,6 +18,10 @@ along with solipsix.  If not, see <https://www.gnu.org/licenses/>.
 */
 
 #include <ft2build.h>
+#include <freetype/freetype.h>
+
+#warning massively dislike having to include freetype here, have custom wrapper if possible?
+/// ^ sol_gui_text_library ???
 
 struct sol_gui_theme;
 

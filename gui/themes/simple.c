@@ -21,25 +21,35 @@ along with solipsix.  If not, see <https://www.gnu.org/licenses/>.
 
 #include "gui/theme.h"
 
+#include "cvm_overlay_text.h"
 
 
 
 
 
 
-void sol_gui_theme_simple_initialise(struct sol_gui_theme* theme)
+void sol_gui_theme_simple_initialise(struct sol_gui_theme* theme, const FT_Library * freetype_library)
 {
+	*theme = (struct sol_gui_theme)
+	{
+		#warning replace cvm_overlay_font, and its use here
+		.font = malloc(sizeof(struct cvm_overlay_font)),
+	};
+
+
+
+	cvm_overlay_create_font(theme->font, freetype_library,"resources/Comfortaa-Regular.ttf",16);
 }
 
 void sol_gui_theme_simple_terminate(struct sol_gui_theme* theme)
 {
-	// nothing to be done? (is just rendering boxes!)
+	#warning need to destroy font, but this can be solved later
 }
 
-struct sol_gui_theme* sol_gui_theme_simple_create(void)
+struct sol_gui_theme* sol_gui_theme_simple_create(const FT_Library * freetype_library)
 {
 	struct sol_gui_theme* theme = malloc(sizeof(struct sol_gui_theme));
-	sol_gui_theme_simple_initialise(theme);
+	sol_gui_theme_simple_initialise(theme, freetype_library);
 	return theme;
 }
 

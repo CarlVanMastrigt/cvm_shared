@@ -60,7 +60,7 @@ enum sol_gui_alignment
 
 
 #define SOL_GUI_OBJECT_STATUS_BIT_COUNT 16
-#define SOL_GUI_OBJECT_STATUS_ACTIVE     0x00000001 /* inactive objects are not rendered or selected, used to quickly "remove" objects without actually altering structure */
+#define SOL_GUI_OBJECT_STATUS_ACTIVE     0x00000001 /* inactive objects are not visible or selectable and take up no space, used to quickly "remove" objects without having substantively alter "tree" */
 #define SOL_GUI_OBJECT_STATUS_IS_ROOT    0x00000002 /** used for validation in various places*/
 #define SOL_GUI_OBJECT_STATUS_REGISTERED 0x00008000 /** used for validation, ensures the object base is only registered and constructed once */
 // #define SOL_GUI_OBJECT_MINIMIZE_SPACE     0x00000004 /* always uses minimum space, forces it's parent to ignore this object when distributing space; everything that this does can probably be done better */

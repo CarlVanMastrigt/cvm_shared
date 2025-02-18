@@ -99,9 +99,6 @@ struct sol_gui_object
 /// construct should be used when more data is needed, will instantiate the base object data in an existing object
 void sol_gui_object_construct(struct sol_gui_object* obj, struct sol_gui_context* context);
 
-void sol_gui_object_recursive_destroy(struct sol_gui_object* obj); // will (attempt to) destroy object and all its children
-
-
 void sol_gui_object_retain(struct sol_gui_object* obj);
 void sol_gui_object_release(struct sol_gui_object* obj);
 
@@ -122,9 +119,10 @@ void                   sol_gui_object_remove_child (struct sol_gui_object* obj, 
 
 
 // perhaps handle active widget if necessary? also searches for
-bool sol_gui_handle_input(struct sol_gui_context* context, const struct sol_gui_input* input);
+bool sol_gui_object_handle_input(struct sol_gui_object* obj, const struct sol_gui_input* input);
 
 
 
-
+// this should be used with the utmost care (prefer calling context reorganization function)
+// void sol_gui_object_reorganise(struct sol_gui_object* obj, rect_s16 rect);
 

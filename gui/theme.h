@@ -39,7 +39,7 @@ enum overlay_colour;
 struct sol_gui_theme
 {
     struct cvm_overlay_font* font;
-    // warning would like a way to handle multiple fonts
+    #warning would like a way to handle multiple fonts, perhaps an array and index into them? enum? should probably do same as colours!
 
     // vec2_s16 box_base_size;
     // vec2_s16 box_offset;
@@ -85,3 +85,9 @@ struct sol_gui_theme
     #warning how do we handle text box that has parts coming in from both sides? (custom job?)
     // rectangle   (*get_sliderbar_offsets)(overlay_theme * theme,uint32_t status);///returns offsets from each respective side
 };
+
+//
+static inline struct cvm_overlay_font* sol_gui_theme_get_font(struct sol_gui_theme* theme)
+{
+    return theme->font;
+}

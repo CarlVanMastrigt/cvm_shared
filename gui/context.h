@@ -21,8 +21,9 @@ along with solipsix.  If not, see <https://www.gnu.org/licenses/>.
 
 #include <inttypes.h>
 
-#include "math/rect_s16.h"
+#include "math/vec2_s16.h"
 
+struct sol_gui_input;
 struct sol_gui_object;
 
 /** context
@@ -32,7 +33,9 @@ struct sol_gui_object;
 struct sol_gui_context
 {
     // should be position and size of containing system window
-    rect_s16 range;
+    vec2_s16 window_offset;
+    vec2_s16 window_size;
+    vec2_s16 window_min_size;
 
 	// shouldnt be able to modify the theme's data from
     const struct sol_gui_theme* theme;
@@ -40,14 +43,12 @@ struct sol_gui_context
     /// put settings here?? make it a pointer!?
 
     uint32_t registered_object_count;//for debug
+    bool content_fit;
 
     // uint32_t double_click_time;//move to settings
 
-
-    // not sure if a separation of "currently clicked"(selected) and "clicked but held onto"(active) is desirable
-    struct sol_gui_object* selected_object;// highlighted when using directional (arrows/joystick) navigation
-    struct sol_gui_object* active_object;
-    struct sol_gui_object* interactable_object;// limit interaction to only this object and its children
+    struct sol_gui_object* prominent_object;// highlighted when using directional (arrows/joystick) navigation, can/should probably change with mouse motion?
+    struct sol_gui_object* focused_object;// limit interaction to only this object and its children, click away/cancel called when defocused?
 
     /// used for double click detection
     struct sol_gui_object* previously_clicked_object;
@@ -57,13 +58,23 @@ struct sol_gui_context
 };
 
 // also creates and returns the root object
-struct sol_gui_object* sol_gui_context_initialise(struct sol_gui_context* context, const struct sol_gui_theme* theme);
+struct sol_gui_object* sol_gui_context_initialise(struct sol_gui_context* context, const struct sol_gui_theme* theme, vec2_s16 window_offset, vec2_s16 window_size);
 void                   sol_gui_context_terminate (struct sol_gui_context* context);
 
-void sol_gui_context_update_range(struct sol_gui_context* context, rect_s16 range);
-
 // actually not sure how to handle these, they WILL retain objects though
-void sol_gui_context_set_selected_object    (struct sol_gui_context* context, struct sol_gui_object* obj);
-void sol_gui_context_set_active_object      (struct sol_gui_context* context, struct sol_gui_object* obj);
-void sol_gui_context_set_interactable_object(struct sol_gui_context* context, struct sol_gui_object* obj);
+void sol_gui_context_set_prominent_object(struct sol_gui_context* context, struct sol_gui_object* obj);
+void sol_gui_context_set_focused_object  (struct sol_gui_context* context, struct sol_gui_object* obj);
+
+
+/**
+ * on failure should use context's window_min_size to ensure window is big enough before calling next
+ * otherwise if min_size is null will supress errors and FORCE it to work
+ *  this will result in content escaping the screen range, and will set content_fits to false
+ * */
+bool sol_gui_context_update_window(struct sol_gui_context* context, vec2_s16 window_offset, vec2_s16 window_size);
+// call this when contents of all widgets may have changed, e.g. at crteation time, after theme change, if a single widget in root has changed, instead try to be more precise
+bool sol_gui_context_reorganise_root(struct sol_gui_context* context);
+
+bool sol_gui_context_handle_input(struct sol_gui_context* context, const struct sol_gui_input* input);
+
 

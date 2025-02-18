@@ -37,11 +37,6 @@ void sol_gui_object_construct(struct sol_gui_object* obj, struct sol_gui_context
 	context->registered_object_count++;
 }
 
-void sol_gui_object_recursive_destroy(struct sol_gui_object* obj)
-{
-	sol_gui_object_release(obj);
-}
-
 void sol_gui_object_retain(struct sol_gui_object* obj)
 {
 	assert(obj->reference_count > 0);
@@ -162,5 +157,20 @@ void sol_gui_object_remove_child(struct sol_gui_object* obj, struct sol_gui_obje
 }
 
 
+
+// this should be used with the utmost care (prefer calling context reorganization function)
+// void sol_gui_object_reorganise(struct sol_gui_object* obj, rect_s16 rect)
+// {
+// 	vec2_s16 min_size = sol_gui_object_min_size(obj);
+// 	assert( vec2_s16_cmp_all_lte(min_size, rect_s16_size(rect)) );// provided rect must have enough space for
+// 	sol_gui_object_place_content(obj, rect);
+// }
+
+
+// perhaps handle active widget if necessary? also searches for
+bool sol_gui_object_handle_input(struct sol_gui_object* obj, const struct sol_gui_input* input)
+{
+	return obj->input_action(obj, input);
+}
 
 

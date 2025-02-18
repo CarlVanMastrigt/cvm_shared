@@ -32,20 +32,15 @@ typedef struct rect_s16
 }
 rect_s16;
 
-static inline rect_s16 rect_s16_intersect(rect_s16 r1, rect_s16 r2)
+static inline rect_s16 rect_s16_intersect(rect_s16 lhs, rect_s16 rhs)
 {
-	/// this doesnt work with inverted rects
-    r1.start.x += (r2.start.x > r1.start.x) ? (r2.start.x - r1.start.x) : 0;
-    r1.start.y += (r2.start.y > r1.start.y) ? (r2.start.y - r1.start.y) : 0;
+    lhs.start.x += (rhs.start.x > lhs.start.x) ? (rhs.start.x - lhs.start.x) : 0;
+    lhs.start.y += (rhs.start.y > lhs.start.y) ? (rhs.start.y - lhs.start.y) : 0;
 
-    r1.end.x += (r2.end.x < r1.end.x) ? (r2.end.x - r1.end.x) : 0;
-    r1.end.y += (r2.end.y < r1.end.y) ? (r2.end.y - r1.end.y) : 0;
+    lhs.end.x += (rhs.end.x < lhs.end.x) ? (rhs.end.x - lhs.end.x) : 0;
+    lhs.end.y += (rhs.end.y < lhs.end.y) ? (rhs.end.y - lhs.end.y) : 0;
 
-    return r1;
-}
-static inline bool rect_s16_positive_area(rect_s16 r)
-{
-    return r.end.x > r.start.x && r.end.y > r.start.y;
+    return lhs;
 }
 static inline rect_s16 rect_s16_add_offset(rect_s16 r, vec2_s16 o)
 {
@@ -57,16 +52,21 @@ static inline rect_s16 rect_s16_sub_offset(rect_s16 r, vec2_s16 o)
 }
 static inline bool rect_s16_contains_point(rect_s16 r, vec2_s16 p)
 {
-	/// this doesnt work with inverted rects
     return ((r.start.x <= p.x)&&(r.start.y <= p.y)&&(r.end.x > p.x)&&(r.end.y> p.y));
 }
 static inline bool rect_s16_contains_origin(rect_s16 r)
 {
-	/// this doesnt work with inverted rects
     return ((r.start.x <= 0)&&(r.start.y <= 0)&&(r.end.x > 0)&&(r.end.y> 0));
 }
 static inline bool rect_s16_have_overlap(rect_s16 lhs, rect_s16 rhs)
 {
-	/// this doesnt work with inverted rects
-    return lhs.start.x<rhs.end.x && rhs.start.x<lhs.end.x && lhs.start.y<rhs.end.y && rhs.start.y<lhs.end.y;
+    return lhs.start.x<rhs.end.x && lhs.end.x>rhs.start.x && lhs.start.y<rhs.end.y && lhs.end.y>rhs.start.y;
+}
+static inline vec2_s16 rect_s16_size(rect_s16 r)
+{
+    return vec2_s16_sub(r.end, r.start);
+}
+static inline bool rect_s16_valid(rect_s16 r)
+{
+    return r.start.x<=r.end.x && r.start.y<=r.end.y;
 }
